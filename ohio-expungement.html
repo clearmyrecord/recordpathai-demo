@@ -3,577 +3,78 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ohio Record Sealing & Expungement | RecordPathAI</title>
-
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    :root {
-      --bg: #f5f7fc;
-      --card: #ffffff;
-      --text: #1f2d3d;
-      --muted: #5f6f8e;
-      --line: #dbe4f2;
-      --blue: #2c5cff;
-      --blue-dark: #1f46d8;
-      --blue-soft: #eaf2ff;
-      --green-soft: #e9f8ef;
-      --green: #1f9d55;
-      --shadow: 0 14px 40px rgba(31, 45, 61, 0.10);
-      --radius: 20px;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    .container {
-      width: min(1120px, 92%);
-      margin: 0 auto;
-    }
-
-    header {
-      padding: 22px 0;
-    }
-
-    .nav {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .brand {
-      font-weight: 800;
-      font-size: 21px;
-      color: var(--blue);
-      letter-spacing: -0.03em;
-    }
-
-    .nav-cta {
-      background: var(--blue);
-      color: white;
-      padding: 11px 16px;
-      border-radius: 999px;
-      font-size: 14px;
-      font-weight: 700;
-    }
-
-    .hero {
-      padding: 44px 0 34px;
-    }
-
-    .hero-grid {
-      display: grid;
-      grid-template-columns: 1.08fr 0.92fr;
-      gap: 34px;
-      align-items: center;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--blue-soft);
-      color: var(--blue-dark);
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 800;
-      margin-bottom: 16px;
-    }
-
-    h1 {
-      font-size: clamp(38px, 5vw, 62px);
-      line-height: 1.02;
-      margin: 0 0 18px;
-      letter-spacing: -0.06em;
-    }
-
-    .hero-copy {
-      font-size: 18px;
-      line-height: 1.65;
-      color: var(--muted);
-      margin: 0 0 22px;
-      max-width: 640px;
-    }
-
-    .hero-points {
-      display: grid;
-      gap: 10px;
-      margin-top: 22px;
-    }
-
-    .point {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      color: #32465f;
-      font-weight: 700;
-    }
-
-    .check {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: var(--green-soft);
-      color: var(--green);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex: 0 0 22px;
-      font-size: 14px;
-      font-weight: 900;
-    }
-
-    .card {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 26px;
-      box-shadow: var(--shadow);
-    }
-
-    .card h2 {
-      margin: 0 0 8px;
-      font-size: 25px;
-      letter-spacing: -0.04em;
-    }
-
-    .card p {
-      margin: 0 0 20px;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-
-    .form-group {
-      margin-bottom: 14px;
-    }
-
-    label {
-      display: block;
-      font-size: 13px;
-      font-weight: 800;
-      color: #31445f;
-      margin-bottom: 7px;
-    }
-
-    input,
-    select {
-      width: 100%;
-      padding: 14px 13px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      font-size: 15px;
-      background: white;
-      color: var(--text);
-      outline: none;
-    }
-
-    input:focus,
-    select:focus {
-      border-color: var(--blue);
-      box-shadow: 0 0 0 4px rgba(44, 92, 255, 0.10);
-    }
-
-    .cta {
-      width: 100%;
-      border: none;
-      background: var(--blue);
-      color: white;
-      padding: 15px 18px;
-      border-radius: 13px;
-      font-size: 16px;
-      font-weight: 800;
-      cursor: pointer;
-      margin-top: 4px;
-    }
-
-    .cta:hover {
-      background: var(--blue-dark);
-    }
-
-    .trust {
-      margin-top: 12px;
-      font-size: 12px;
-      color: #7b8aa5;
-      line-height: 1.5;
-      text-align: center;
-    }
-
-    section {
-      padding: 54px 0;
-    }
-
-    .section-head {
-      max-width: 720px;
-      margin-bottom: 28px;
-    }
-
-    .section-head h2 {
-      font-size: 34px;
-      margin: 0 0 10px;
-      letter-spacing: -0.05em;
-    }
-
-    .section-head p {
-      color: var(--muted);
-      line-height: 1.6;
-      margin: 0;
-      font-size: 17px;
-    }
-
-    .steps {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 18px;
-    }
-
-    .step {
-      background: white;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 22px;
-      box-shadow: 0 10px 26px rgba(31, 45, 61, 0.06);
-    }
-
-    .step-number {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      background: var(--blue-soft);
-      color: var(--blue-dark);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 900;
-      margin-bottom: 14px;
-    }
-
-    .step h3 {
-      margin: 0 0 8px;
-      font-size: 19px;
-    }
-
-    .step p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.55;
-    }
-
-    .info-box {
-      background: white;
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 26px;
-      box-shadow: 0 10px 26px rgba(31, 45, 61, 0.06);
-    }
-
-    .info-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 18px;
-    }
-
-    .info-box h3 {
-      margin-top: 0;
-      font-size: 22px;
-    }
-
-    .info-box ul {
-      padding-left: 20px;
-      margin-bottom: 0;
-      color: var(--muted);
-      line-height: 1.75;
-    }
-
-    .final-cta {
-      background: linear-gradient(135deg, #1f2d3d, #284f9f);
-      color: white;
-      border-radius: 24px;
-      padding: 36px;
-      text-align: center;
-    }
-
-    .final-cta h2 {
-      margin: 0 0 10px;
-      font-size: 34px;
-      letter-spacing: -0.05em;
-    }
-
-    .final-cta p {
-      margin: 0 auto 22px;
-      max-width: 640px;
-      color: rgba(255,255,255,0.78);
-      line-height: 1.6;
-    }
-
-    .final-cta button {
-      width: auto;
-      min-width: 260px;
-      background: white;
-      color: var(--blue-dark);
-    }
-
-    footer {
-      padding: 30px 0 42px;
-      text-align: center;
-      color: #7b8aa5;
-      font-size: 12px;
-      line-height: 1.6;
-    }
-
-    @media (max-width: 850px) {
-      .hero-grid,
-      .steps,
-      .info-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .nav-cta {
-        display: none;
-      }
-
-      .hero {
-        padding-top: 24px;
-      }
-
-      .card {
-        padding: 22px;
-      }
-    }
-  </style>
+  <title>Ohio Expungement & Record Sealing Guide | RecordPathAI</title>
+  <meta name="description" content="Learn Ohio expungement and record sealing eligibility, waiting periods, and filing workflow with RecordPathAI." />
+  <link rel="canonical" href="https://recordpathai.com/ohio-expungement.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Ohio Expungement & Record Sealing Guide | RecordPathAI" />
+  <meta property="og:description" content="Ohio criminal record relief guidance and printable court packet workflow." />
+  <meta property="og:url" content="https://recordpathai.com/ohio-expungement.html" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Ohio Expungement & Record Sealing Guide | RecordPathAI" />
+  <meta name="twitter:description" content="Ohio criminal record relief guidance and printable court packet workflow." />
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
-
 <body>
-
-  <header>
-    <div class="container nav">
-      <a class="brand" href="index.html">RecordPathAI</a>
-      <a class="nav-cta" href="#eligibility-form">Check Eligibility</a>
+  <header class="site-header">
+    <div class="container">
+      <div class="header-shell">
+        <div class="header-inner">
+          <a href="index.html" class="brand"><span class="brand-icon" aria-hidden="true"></span><span>RecordPathAI</span></a>
+          <nav class="nav">
+            <a href="index.html" data-i18n="nav.home">Home</a>
+            <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
+            <a href="eligibility.html" data-i18n="nav.eligibility">Eligibility</a>
+            <a href="record-details.html" data-i18n="nav.recordDetails">Record Details</a>
+            <a href="eligibility.html" class="nav-cta" data-i18n="nav.checkEligibility">Check Eligibility</a>
+          </nav>
+        </div>
+      </div>
     </div>
   </header>
 
   <main>
-
-    <section class="hero">
-      <div class="container hero-grid">
-
-        <div>
-          <div class="eyebrow">Ohio Record Relief</div>
-
-          <h1>Clear or seal your Ohio record faster.</h1>
-
-          <p class="hero-copy">
-            RecordPathAI helps you check eligibility, collect the right case information,
-            and generate a printable Ohio court filing packet without getting lost in the process.
-          </p>
-
-          <div class="hero-points">
-            <div class="point">
-              <span class="check">✓</span>
-              <span>Built for Ohio sealing and expungement workflows</span>
-            </div>
-
-            <div class="point">
-              <span class="check">✓</span>
-              <span>Guided intake so your information carries into the next steps</span>
-            </div>
-
-            <div class="point">
-              <span class="check">✓</span>
-              <span>Printable court packet generated after your record details are entered</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" id="eligibility-form">
-          <h2>Start your Ohio eligibility check</h2>
-          <p>
-            Answer a few quick questions. Your answers will carry into the RecordPathAI eligibility and packet flow.
-          </p>
-
-          <div class="form-group">
-            <label for="name">Full Name</label>
-            <input type="text" id="name" placeholder="Your full legal name" />
-          </div>
-
-          <div class="form-group">
-            <label for="email">Email Address</label>
-            <input type="email" id="email" placeholder="you@example.com" />
-          </div>
-
-          <div class="form-group">
-            <label for="caseType">Case Type</label>
-            <select id="caseType">
-              <option value="">Select case type</option>
-              <option value="Dismissed / Not Guilty">Dismissed / Not Guilty</option>
-              <option value="Misdemeanor">Misdemeanor</option>
-              <option value="Felony">Felony</option>
-              <option value="Not Sure">Not Sure</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="years">Years Since Case Closed</label>
-            <select id="years">
-              <option value="">Select timeframe</option>
-              <option value="Less than 1 year">Less than 1 year</option>
-              <option value="1-3 years">1-3 years</option>
-              <option value="3-5 years">3-5 years</option>
-              <option value="5+ years">5+ years</option>
-              <option value="Not Sure">Not Sure</option>
-            </select>
-          </div>
-
-          <button class="cta" onclick="startProcess()">Check Eligibility Now</button>
-
-          <div class="trust">
-            RecordPathAI is not a law firm and does not provide legal advice.
-            We help generate printable court-ready filing packets.
-          </div>
-        </div>
-
-      </div>
-    </section>
-
     <section>
-      <div class="container">
-        <div class="section-head">
-          <h2>How RecordPathAI works</h2>
-          <p>
-            A simple guided process that moves you from basic eligibility questions to case details and packet generation.
-          </p>
-        </div>
-
-        <div class="steps">
-          <div class="step">
-            <div class="step-number">1</div>
-            <h3>Eligibility Intake</h3>
-            <p>
-              We collect your basic information and confirm that your case state is Ohio.
-            </p>
-          </div>
-
-          <div class="step">
-            <div class="step-number">2</div>
-            <h3>Record Details</h3>
-            <p>
-              You enter case-specific information like county, court, charge, case number, and disposition date.
-            </p>
-          </div>
-
-          <div class="step">
-            <div class="step-number">3</div>
-            <h3>Packet Generation</h3>
-            <p>
-              RecordPathAI uses your answers to generate a printable Ohio filing packet.
-            </p>
-          </div>
+      <div class="container section-card">
+        <h1>Ohio Expungement & Record Sealing</h1>
+        <p>This informational page outlines Ohio criminal record relief workflows for county courts, municipal courts, and courts of common pleas where applicable.</p>
+        <h2>Ohio law and eligibility overview</h2>
+        <p>Eligibility can depend on offense level, disposition, prior record, statutory waiting periods, and the filing court.</p>
+        <h2>Waiting periods and filing workflow</h2>
+        <ul>
+          <li>Review Ohio eligibility factors for sealing and expungement.</li>
+          <li>Collect case numbers, court names, and charge outcomes.</li>
+          <li>Prepare printable filing packets for the appropriate Ohio court.</li>
+        </ul>
+        <p><strong>Legal disclaimer:</strong> RecordPathAI is not a law firm and does not provide legal advice. Some users may need a licensed attorney depending on case complexity.</p>
+        <div class="hero-actions">
+          <a class="btn" href="eligibility.html">See If You Qualify</a>
+          <a class="btn secondary" href="how-it-works.html">Start Your Record Relief Workflow</a>
         </div>
       </div>
     </section>
-
-    <section>
-      <div class="container info-grid">
-        <div class="info-box">
-          <h3>Ohio cases that may qualify</h3>
-          <ul>
-            <li>Dismissed cases</li>
-            <li>Not guilty or acquitted cases</li>
-            <li>Certain misdemeanors</li>
-            <li>Some non-violent felonies</li>
-            <li>Older eligible convictions after waiting periods</li>
-          </ul>
-        </div>
-
-        <div class="info-box">
-          <h3>What affects eligibility</h3>
-          <ul>
-            <li>Case outcome</li>
-            <li>Offense level or degree</li>
-            <li>Disposition or discharge date</li>
-            <li>Open cases or pending charges</li>
-            <li>Ohio court and county requirements</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="container">
-        <div class="final-cta">
-          <h2>Start with Ohio. Build your packet next.</h2>
-          <p>
-            Most people never file because the process is confusing. RecordPathAI turns the process into a guided workflow.
-          </p>
-          <button class="cta" onclick="scrollToForm()">Check Eligibility Now</button>
-        </div>
-      </div>
-    </section>
-
   </main>
 
-  <footer>
+  <footer class="site-footer">
     <div class="container">
-      RecordPathAI generates printable court filing packets. Filing requirements vary by court.
-      E-filing is not currently available. This platform does not provide legal advice.
+      <div class="footer-shell">
+        <div>
+          <div class="footer-brand">RecordPathAI</div>
+          <div class="footer-copy" data-i18n="footer.copy">Guided record relief workflow and court packet preparation.</div>
+          <div class="footer-disclaimer" data-i18n="footer.legal">RecordPathAI is not a law firm and does not provide legal advice. Documents are generated based on user input and publicly available forms.</div>
+        </div>
+        <div class="footer-links">
+          <a href="index.html" data-i18n="nav.home">Home</a>
+          <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
+          <a href="eligibility.html" data-i18n="nav.eligibility">Eligibility</a>
+          <a href="terms.html" data-i18n="footer.terms">Terms</a>
+          <a href="privacy.html" data-i18n="footer.privacy">Privacy</a>
+          <a href="disclaimer.html" data-i18n="footer.disclaimer">Disclaimer</a>
+        </div>
+      </div>
     </div>
   </footer>
 
-  <script>
-    function startProcess() {
-      const fullName = document.getElementById("name").value.trim();
-      const email = document.getElementById("email").value.trim();
-      const caseType = document.getElementById("caseType").value;
-      const yearsSinceCaseClosed = document.getElementById("years").value;
-
-      if (!fullName || !email || !caseType || !yearsSinceCaseClosed) {
-        alert("Please complete all fields before continuing.");
-        return;
-      }
-
-      const landingData = {
-        sourcePage: "ohio-expungement.html",
-        sourceState: "Ohio",
-        caseState: "Ohio",
-        residenceState: "",
-        fullName: fullName,
-        email: email,
-        caseType: caseType,
-        yearsSinceCaseClosed: yearsSinceCaseClosed,
-        startedAt: new Date().toISOString()
-      };
-
-      localStorage.setItem("recordPathLeadSource", "google_ads_ohio");
-      localStorage.setItem("recordPathLandingData", JSON.stringify(landingData));
-
-      localStorage.setItem("fullName", fullName);
-      localStorage.setItem("email", email);
-      localStorage.setItem("caseState", "Ohio");
-      localStorage.setItem("state", "Ohio");
-      localStorage.setItem("caseType", caseType);
-      localStorage.setItem("yearsSinceCaseClosed", yearsSinceCaseClosed);
-
-      window.location.href = "eligibility.html";
-    }
-
-    function scrollToForm() {
-      document.getElementById("eligibility-form").scrollIntoView({
-        behavior: "smooth",
-        block: "start"
-      });
-    }
-  </script>
-
+  <script src="js/i18n.js" defer></script>
 </body>
-</html></html>
+</html>
