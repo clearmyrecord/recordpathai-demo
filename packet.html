@@ -404,6 +404,11 @@
       border-left-color: #d97706;
       border-color: #f1ddac;
     }
+    .callout.danger {
+      background: var(--red-soft);
+      border-left-color: var(--red);
+      border-color: #f8d0d0;
+    }
 
     .callout.success {
       background: #eaf7ef;
@@ -885,6 +890,22 @@
 
             <div id="paymentCallout" class="callout warning" data-i18n="packet.lockedWarning">
               Packet is locked until payment is complete. Your eligibility summary and filing checklist remain visible.
+            </div>
+            <div id="eligibilityReminderCard" class="callout warning" style="display:none;">
+              <h3 style="margin:0 0 8px;" data-i18n="packet.reminder.title">Not Yet Eligible</h3>
+              <p style="margin:0 0 14px;" data-i18n="packet.reminder.message">You may not be eligible yet based on the information provided. Save a reminder so you know when to come back.</p>
+              <div class="summary-list" style="margin-bottom:12px;">
+                <div class="summary-row"><strong data-i18n="packet.estimatedEligibleDate">Estimated Eligible Date</strong><span id="reminderEligibleDate">—</span></div>
+                <div class="summary-row"><strong data-i18n="packet.caseState">Case State</strong><span id="reminderCaseState">—</span></div>
+                <div class="summary-row"><strong data-i18n="packet.county">County</strong><span id="reminderCounty">—</span></div>
+                <div class="summary-row"><strong data-i18n="packet.charge">Charge</strong><span id="reminderOffense">—</span></div>
+              </div>
+              <div class="sig-actions">
+                <button type="button" class="sig-small-btn" id="saveEligibilityReminderBtn" data-i18n="packet.reminder.save">Save Eligibility Reminder</button>
+                <button type="button" class="sig-small-btn" id="downloadEligibilityReminderBtn" data-i18n="packet.reminder.download">Download Reminder</button>
+              </div>
+              <p id="reminderStatusText" class="meta-note" style="margin-bottom:0;"></p>
+              <p class="meta-note" data-i18n="packet.reminder.localNote">Reminder data is stored locally on your device.</p>
             </div>
 
             <div id="stateConflictCallout" class="callout warning" style="display:none;">
@@ -2253,6 +2274,60 @@ document.addEventListener("DOMContentLoaded", function () {
           paymentCallout.innerHTML = message;
         }
       }
+      function buildReminderData(normalizedData, eligibilityMode = "not_eligible") {
+        return {
+          fullName: safe(normalizedData?.petitioner?.full_name),
+          email: safe(normalizedData?.petitioner?.email),
+          caseState: safe(normalizedData?.court?.state),
+          county: safe(normalizedData?.court?.county),
+          offense: safe(normalizedData?.charges?.[0]?.offense_name || normalizedData?.charges?.[0]?.charge_name),
+          estimatedEligibilityDate: safe(normalizedData?.eligibility?.estimated_eligible_on),
+          createdAt: new Date().toISOString(),
+          eligibilityStatus: eligibilityMode
+        };
+      }
+      function renderReminderCard(normalizedData, showCard) {
+        const card = document.getElementById("eligibilityReminderCard");
+        if (!card) return;
+        card.style.display = showCard ? "block" : "none";
+        if (!showCard) return;
+        document.getElementById("reminderEligibleDate").textContent = formatDateForDisplay(normalizedData?.eligibility?.estimated_eligible_on) || "—";
+        document.getElementById("reminderCaseState").textContent = safe(normalizedData?.court?.state, "—");
+        document.getElementById("reminderCounty").textContent = safe(normalizedData?.court?.county, "—");
+        document.getElementById("reminderOffense").textContent = safe(normalizedData?.charges?.[0]?.offense_name || normalizedData?.charges?.[0]?.charge_name, "—");
+      }
+      function maybeRequestNotificationPermission() {
+        if (!("Notification" in window)) return;
+        if (Notification.permission === "default") Notification.requestPermission().catch(() => {});
+      }
+      function setReminderFeedback(message, mode = "normal") {
+        const el = document.getElementById("reminderStatusText");
+        if (!el) return;
+        el.textContent = message;
+        el.style.color = mode === "error" ? "#b42318" : "#258344";
+      }
+      function saveEligibilityReminder(normalizedData, eligibilityMode = "not_eligible") {
+        try {
+          const reminder = buildReminderData(normalizedData, eligibilityMode);
+          localStorage.setItem("eligibilityReminder", JSON.stringify(reminder));
+          maybeRequestNotificationPermission();
+          setReminderFeedback(t("packet.reminder.saved"));
+        } catch (error) {
+          setReminderFeedback(error.message || "Unable to save reminder.", "error");
+        }
+      }
+      function downloadEligibilityReminder(normalizedData, eligibilityMode = "not_eligible") {
+        const reminder = buildReminderData(normalizedData, eligibilityMode);
+        const blob = new Blob([JSON.stringify(reminder, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "recordpathai-reminder.json";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2500);
+      }
 
       function getCheckoutEndpoint() {
         const host = window.location.hostname || "";
@@ -2290,7 +2365,7 @@ document.addEventListener("DOMContentLoaded", function () {
               dischargeDate: safe(normalizedData?.charges?.[0]?.discharge_date),
               court: safe(normalizedData?.court?.name),
               county: safe(normalizedData?.court?.county),
-              estimatedEligibleDate: safe(normalizedData?.eligibility?.estimatedEligibleDate)
+              estimatedEligibleDate: safe(normalizedData?.eligibility?.estimated_eligible_on)
             },
             eligibility: {
               status: safe(normalizedData?.eligibility?.status),
@@ -2348,17 +2423,48 @@ document.addEventListener("DOMContentLoaded", function () {
 
       loadAndRenderCourtInstructions(normalizedData, paymentSuccess);
 
-      if (paymentSuccess) {
+      const nowDate = new Date();
+      const estimatedDate = normalizedData?.eligibility?.estimated_eligible_on ? new Date(`${normalizedData.eligibility.estimated_eligible_on}T12:00:00`) : null;
+      const isEstimatedDateValid = estimatedDate && !Number.isNaN(estimatedDate.getTime());
+      const eligibleNow = Boolean(isEstimatedDateValid && nowDate >= estimatedDate);
+      const hasDisqualifying = Boolean(normalizedData?.eligibility?.manualReview);
+      const eligibilityMode = hasDisqualifying ? "unclear" : (eligibleNow ? "eligible" : "not_eligible");
+      const paymentBtn = document.getElementById("payAndSubmitBtn");
+      const paymentCallout = document.getElementById("paymentCallout");
+      const reminderCardShouldShow = eligibilityMode === "not_eligible";
+      renderReminderCard(normalizedData, reminderCardShouldShow);
+      if (eligibilityMode === "unclear" && paymentCallout) {
+        paymentCallout.className = "callout warning";
+        paymentCallout.innerHTML = t("packet.eligibilityUnclearWarning");
+      }
+      if (eligibilityMode === "not_eligible") {
+        if (paymentBtn) paymentBtn.style.display = "none";
+        if (paymentCallout) {
+          paymentCallout.className = "callout danger";
+          paymentCallout.innerHTML = t("packet.reminder.notYetEligibleCallout");
+        }
+      }
+      if (paymentSuccess && eligibilityMode === "eligible") {
         localStorage.setItem(PAYMENT_STORAGE_KEY, "true");
         setPacketLockState(true, t("packet.paymentReceivedUnlocked"));
         setStatus(t("packet.unlockedReadyGenerate"));
-      } else if (paymentCancelled) {
+      } else if (paymentCancelled && eligibilityMode === "eligible") {
         setPacketLockState(false, t("packet.paymentCancelledSaved"));
         setStatus(t("packet.paymentCancelledLocked"));
-      } else {
+      } else if (eligibilityMode === "eligible") {
         setPacketLockState(false, t("packet.lockedWarning"));
         setStatus(t("packet.lockedUntilPayment"));
+      } else if (eligibilityMode === "unclear") {
+        if (paymentBtn) paymentBtn.style.display = "";
+        setPacketLockState(false, t("packet.eligibilityUnclearWarning"));
+      } else {
+        document.getElementById("generateSealingBtn").disabled = true;
+        setStatus(t("packet.reminder.notYetEligibleCallout"));
       }
+      const saveReminderBtn = document.getElementById("saveEligibilityReminderBtn");
+      const downloadReminderBtn = document.getElementById("downloadEligibilityReminderBtn");
+      if (saveReminderBtn) saveReminderBtn.addEventListener("click", () => saveEligibilityReminder(normalizedData, eligibilityMode));
+      if (downloadReminderBtn) downloadReminderBtn.addEventListener("click", () => downloadEligibilityReminder(normalizedData, eligibilityMode));
 
       setTypedSignature();
     });
