@@ -2281,7 +2281,7 @@ document.addEventListener("DOMContentLoaded", function () {
           caseState: safe(normalizedData?.court?.state),
           county: safe(normalizedData?.court?.county),
           offense: safe(normalizedData?.charges?.[0]?.offense_name || normalizedData?.charges?.[0]?.charge_name),
-          estimatedEligibilityDate: safe(normalizedData?.eligibility?.estimatedEligibleDate),
+          estimatedEligibilityDate: safe(normalizedData?.eligibility?.estimated_eligible_on),
           createdAt: new Date().toISOString(),
           eligibilityStatus: eligibilityMode
         };
@@ -2291,7 +2291,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!card) return;
         card.style.display = showCard ? "block" : "none";
         if (!showCard) return;
-        document.getElementById("reminderEligibleDate").textContent = formatDateForDisplay(normalizedData?.eligibility?.estimatedEligibleDate) || "—";
+        document.getElementById("reminderEligibleDate").textContent = formatDateForDisplay(normalizedData?.eligibility?.estimated_eligible_on) || "—";
         document.getElementById("reminderCaseState").textContent = safe(normalizedData?.court?.state, "—");
         document.getElementById("reminderCounty").textContent = safe(normalizedData?.court?.county, "—");
         document.getElementById("reminderOffense").textContent = safe(normalizedData?.charges?.[0]?.offense_name || normalizedData?.charges?.[0]?.charge_name, "—");
@@ -2365,7 +2365,7 @@ document.addEventListener("DOMContentLoaded", function () {
               dischargeDate: safe(normalizedData?.charges?.[0]?.discharge_date),
               court: safe(normalizedData?.court?.name),
               county: safe(normalizedData?.court?.county),
-              estimatedEligibleDate: safe(normalizedData?.eligibility?.estimatedEligibleDate)
+              estimatedEligibleDate: safe(normalizedData?.eligibility?.estimated_eligible_on)
             },
             eligibility: {
               status: safe(normalizedData?.eligibility?.status),
@@ -2424,7 +2424,7 @@ document.addEventListener("DOMContentLoaded", function () {
       loadAndRenderCourtInstructions(normalizedData, paymentSuccess);
 
       const nowDate = new Date();
-      const estimatedDate = normalizedData?.eligibility?.estimatedEligibleDate ? new Date(`${normalizedData.eligibility.estimatedEligibleDate}T12:00:00`) : null;
+      const estimatedDate = normalizedData?.eligibility?.estimated_eligible_on ? new Date(`${normalizedData.eligibility.estimated_eligible_on}T12:00:00`) : null;
       const isEstimatedDateValid = estimatedDate && !Number.isNaN(estimatedDate.getTime());
       const eligibleNow = Boolean(isEstimatedDateValid && nowDate >= estimatedDate);
       const hasDisqualifying = Boolean(normalizedData?.eligibility?.manualReview);
