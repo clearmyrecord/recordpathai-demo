@@ -12,7 +12,7 @@
       'nav.eligibility': 'Eligibility',
       'nav.recordDetails': 'Record Details',
       'nav.packet': 'Packet',
-      'nav.checkEligibility': 'Check Eligibility Free',
+      'nav.checkEligibility': 'Start Free Eligibility Check',
 
       'index.hero.title': 'Court record relief, automated.',
       'index.hero.seeHow': 'See How It Works',
@@ -128,7 +128,7 @@
       'nav.eligibility': 'Elegibilidad',
       'nav.recordDetails': 'Detalles del registro',
       'nav.packet': 'Paquete',
-      'nav.checkEligibility': 'Verificar elegibilidad gratis',
+      'nav.checkEligibility': 'Comenzar revisión gratuita de elegibilidad',
 
       'index.hero.title': 'Alivio de antecedentes judiciales, automatizado.',
       'index.hero.seeHow': 'Ver cómo funciona',
