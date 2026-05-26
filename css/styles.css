@@ -1230,3 +1230,25 @@ footer {
     width: 100%;
   }
 }
+
+/* Fix dark CTA headline text on blue CTA sections */
+.cta h2,
+.cta-card h2,
+.bottom-cta h2,
+.section-card.cta h2 {
+  color: #ffffff !important;
+}
+
+/* Keep CTA supporting text readable on dark blue */
+.cta p,
+.cta-card p,
+.bottom-cta p {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Optional: make the CTA button stay bright and readable */
+.cta .btn,
+.cta-card .btn,
+.bottom-cta .btn {
+  color: #ffffff !important;
+}
