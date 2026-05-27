@@ -1240,24 +1240,23 @@ footer {
   }
 }
 
-/* Fix dark CTA headline text on blue CTA sections */
-.cta h2,
-.cta-card h2,
+/* Homepage CTA card should stay readable on white background */
+body.home-page .cta h2,
+body.home-page .cta .section-card h2 {
+  color: var(--text, #203761) !important;
+}
+
+/* Dark blue CTA sections should use white text */
+.bottom-cta .cta-card h2,
+.bottom-cta .cta-card p,
 .bottom-cta h2,
-.section-card.cta h2 {
+.bottom-cta p {
   color: #ffffff !important;
 }
 
-/* Keep CTA supporting text readable on dark blue */
-.cta p,
-.cta-card p,
-.bottom-cta p {
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-/* Optional: make the CTA button stay bright and readable */
-.cta .btn,
-.cta-card .btn,
-.bottom-cta .btn {
+/* CTA button text should stay white */
+.bottom-cta .cta-card .btn,
+.bottom-cta .btn,
+body.home-page .cta .btn {
   color: #ffffff !important;
 }
