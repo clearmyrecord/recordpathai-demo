@@ -157,6 +157,15 @@ header {
   border: 1px solid var(--line);
 }
 
+
+/* Homepage-specific header weight tuning to prevent nav wrap */
+body.home-page .nav,
+body.home-page .nav a,
+body.home-page .nav-cta,
+body.home-page .language-access label {
+  font-weight: 500;
+}
+
 /* BUTTONS */
 
 .btn,
