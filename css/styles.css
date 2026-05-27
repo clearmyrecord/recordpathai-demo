@@ -992,6 +992,36 @@ footer {
   }
 }
 
+@media (min-width: 761px) {
+  .header-inner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .nav,
+  .main-nav,
+  .nav-links {
+    flex-wrap: nowrap;
+    justify-content: center;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .nav a,
+  .main-nav a,
+  .nav-links a {
+    white-space: nowrap;
+  }
+
+  .language-access {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 760px) {
   .site-header,
   header {
