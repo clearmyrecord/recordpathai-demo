@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RecordWatch Dashboard | RecordPathAI</title>
+  <meta name="description" content="Monitor saved RecordWatch cases, eligibility estimates, missing requirements, risk flags, and post-relief correction tasks." />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="recordwatch-page">
+  <header class="site-header"><div class="container"><div class="header-shell"><div class="header-inner"><a href="index.html" class="brand"><span class="brand-icon"></span><span>RecordPathAI</span></a><nav class="nav" aria-label="Primary navigation"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="record-details.html">Record Details</a><a href="recordwatch.html" class="nav-cta">RecordWatch</a></nav><div class="language-access"><label for="language-selector">Language Access</label><select id="language-selector"><option>English</option><option>Español</option></select></div></div></div></div></header>
+  <main>
+    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Layer 3 · Monitoring Engine</span><h1>RecordWatch Dashboard</h1><p id="welcomeText">Track case status, eligibility estimates, missing requirements, and correction tasks.</p><div class="hero-actions"><a class="btn" href="recordwatch-intake.html">Add New Case</a><a class="btn secondary" href="recordwatch-relief.html">Relief Actions</a><button class="btn secondary" id="exportBtn" type="button">Export RecordWatch Data JSON</button><button class="btn secondary" id="clearBtn" type="button">Clear Demo Data</button></div></div></section>
+    <section><div class="container"><div class="recordwatch-stat-grid" id="statsGrid"></div></div></section>
+    <section><div class="container section-card"><h2>Saved Cases</h2><div id="caseList" class="recordwatch-card-list"></div></div></section>
+    <section><div class="container"><div class="recordwatch-disclaimer"><strong>Disclaimer:</strong> RecordWatch provides organization, estimated eligibility calculations, document preparation, and tracking tools. It is not legal advice. Eligibility rules vary by state, county, court, charge type, disposition, and personal history. Calculations must be verified before filing. RecordWatch does not guarantee record sealing, expungement, correction, deletion, removal, employment, housing approval, or background-check results.</div></div></section>
+  </main>
+  <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><p class="footer-copy">Guided record relief workflow and court packet preparation.</p></div><div class="footer-links"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="recordwatch.html">RecordWatch</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
+  <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-monitor.js"></script>
+  <script>
+    (function () {
+      const rules = window.RecordWatchRules;
+      const monitor = window.RecordWatchMonitor;
+      const profile = monitor.loadProfile();
+      let cases = monitor.loadCases();
+      const caseList = document.getElementById("caseList");
+      document.getElementById("welcomeText").textContent = `${profile.fullLegalName || "RecordWatch user"}: track case status, eligibility estimates, missing requirements, and correction tasks.`;
+
+      function renderStats() {
+        const eligibleNow = cases.filter(c => rules.calculateCaseStatus(c) === "Eligible now").length;
+        const futureEligible = cases.filter(c => rules.calculateCaseStatus(c) === "Eligible on future date").length;
+        const moreInfo = cases.filter(c => rules.calculateCaseStatus(c) === "More information needed").length;
+        const riskFlags = cases.reduce((sum, c) => sum + rules.getRiskFlags(c).length, 0);
+        const stats = [["Total cases", cases.length], ["Eligible now", eligibleNow], ["Future eligible", futureEligible], ["More info needed", moreInfo], ["Risk flags", riskFlags]];
+        document.getElementById("statsGrid").innerHTML = stats.map(([label, value]) => `<article class="recordwatch-stat"><strong>${value}</strong><span>${label}</span></article>`).join("");
+      }
+
+      function renderCases() {
+        if (!cases.length) {
+          caseList.innerHTML = `<div class="recordwatch-empty"><h3>No RecordWatch cases yet</h3><p>Start intake to create your first local case file.</p><a class="btn" href="recordwatch-intake.html">Start Intake</a></div>`;
+          return;
+        }
+        caseList.innerHTML = cases.map(renderCaseCard).join("");
+        caseList.querySelectorAll("input[data-task]").forEach(input => {
+          input.addEventListener("change", () => {
+            monitor.updateTask(input.dataset.caseId, input.dataset.task, input.checked);
+            cases = monitor.loadCases();
+            renderStats();
+            renderCases();
+          });
+        });
+      }
+
+      function renderCaseCard(caseData) {
+        const tasks = monitor.getCaseTasks(caseData.id);
+        const status = rules.calculateCaseStatus(caseData);
+        const eligibilityDate = rules.calculateEligibilityDate(caseData);
+        const missing = rules.getMissingRequirements(caseData);
+        const risks = rules.getRiskFlags(caseData);
+        const monitoringStatus = monitor.calculateMonitoringStatus(caseData, tasks);
+        const days = eligibilityDate ? rules.daysUntil(eligibilityDate) : null;
+        const charges = (caseData.charges || []).map(c => `${escapeHTML(c.chargeName || "Unnamed charge")} (${escapeHTML(c.chargeLevel || "Unknown")})`).join(", ") || "No charges listed";
+        return `<article class="recordwatch-case-card">
+          <div class="recordwatch-case-header"><div><span class="recordwatch-kicker">${escapeHTML(caseData.court?.county || "Unknown county")}, ${escapeHTML(caseData.court?.caseState || "Unknown state")}</span><h3>${escapeHTML(caseData.court?.caseNumber || "No case number")}</h3></div><span class="recordwatch-badge ${slug(monitoringStatus)}">${monitoringStatus}</span></div>
+          <div class="recordwatch-detail-grid">
+            ${detail("Court", caseData.court?.courtName)}${detail("Outcome", caseData.outcome?.outcome)}${detail("Charges", charges)}${detail("Eligibility status", status)}${detail("Estimated eligibility date", eligibilityDate ? rules.formatDate(eligibilityDate) : "Not available")}${detail("Days until eligibility", days === null ? "Not available" : days <= 0 ? "Eligible now" : `${days} days`)}
+          </div>
+          <h3>Missing requirements</h3>${listOrNone(missing)}
+          <h3>Risk flags</h3>${listOrNone(risks)}
+          <p><strong>Recommended next action:</strong> ${escapeHTML(rules.getRecommendedStatus(caseData))}</p>
+          <h3>Monitoring checklist</h3><div class="recordwatch-checklist">${monitor.TASK_KEYS.map(key => `<label><input type="checkbox" data-case-id="${caseData.id}" data-task="${key}" ${tasks[key] ? "checked" : ""}>${monitor.TASK_LABELS[key]}</label>`).join("")}</div>
+        </article>`;
+      }
+
+      function detail(label, value) { return `<div class="recordwatch-detail"><span>${label}</span><strong>${value || "Not provided"}</strong></div>`; }
+      function listOrNone(items) { return items.length ? `<ul class="recordwatch-inline-list">${items.map(item => `<li>${escapeHTML(item)}</li>`).join("")}</ul>` : `<p>None identified.</p>`; }
+      function slug(value) { return String(value).toLowerCase().replaceAll(" ", "-"); }
+      function escapeHTML(value) { return String(value || "").replace(/[&<>"]/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[char])); }
+      function downloadJSON(filename, data) { const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+
+      document.getElementById("exportBtn").addEventListener("click", () => downloadJSON("recordwatch-data.json", monitor.exportRecordWatchData()));
+      document.getElementById("clearBtn").addEventListener("click", () => { if (confirm("Clear RecordWatch demo data from this browser?")) { ["recordwatchProfile", "recordwatchCases", "recordwatchTasks", "recordwatchReliefPlan"].forEach(key => localStorage.removeItem(key)); cases = []; renderStats(); renderCases(); } });
+      renderStats();
+      renderCases();
+    })();
+  </script>
+</body>
+</html>
