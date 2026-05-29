@@ -281,11 +281,59 @@
     }
 
     .record-card {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+
+
+    .intake-form {
+      display: grid;
+      gap: 22px;
+    }
+
+    .intake-section {
       background: var(--surface-soft);
       border: 1px solid var(--line);
       border-radius: 24px;
       padding: 24px;
       box-shadow: var(--shadow);
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+
+    .section-head h2,
+    .charge-header h3 {
+      margin: 0 0 6px;
+      color: var(--text);
+      font-size: 24px;
+      line-height: 1.15;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .section-head p,
+    .section-helper {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .charge-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 18px;
     }
 
     .record-card-head {
@@ -579,6 +627,8 @@
       }
 
       .record-card-head,
+      .section-head,
+      .charge-header,
       .toolbar,
       .actions,
       .footer-shell {
@@ -679,7 +729,7 @@
           <span class="eyebrow" data-i18n="record.eyebrow">Step 2 of the workflow</span>
           <h1 class="page-title" data-i18n="record.pageTitle">Enter Your Record Details</h1>
           <p class="page-subtitle" data-i18n="record.pageSubtitle">
-            Add each offense with the exact charge, statute, court, dates, and case state. RecordPathAI will use this information later on the packet page to determine packet logic, court output, and eligibility handling.
+            Enter the case once using the unified RecordWatch-style sections. RecordPathAI will use the same saved data for packet generation, eligibility timing, dashboard tracking, and relief actions.
           </p>
         </div>
       </div>
@@ -689,36 +739,113 @@
       <div class="container">
         <section class="page-card">
           <div class="case-banner" data-i18n="record.notice">
-            <strong>Important:</strong> The <strong>case state</strong> is the state where the case was filed. If you live in Nevada but the case is in Ohio, choose <strong>Ohio</strong> for that offense.
+            <strong>Important:</strong> This is now the unified case intake for both court packet generation and RecordWatch tracking. Enter the case once here; RecordPathAI will carry it into <code>packet.html</code> and RecordWatch.
           </div>
 
-          <div class="toolbar">
-            <button type="button" class="btn btn-soft" id="addOffenseBtn" data-i18n="record.addOffense">+ Add Offense</button>
-            <div class="record-status" id="recordStatus">1 offense added</div>
-          </div>
+          <form id="recordDetailsForm" class="intake-form" onsubmit="return false;">
+            <section class="intake-section" aria-labelledby="personalSectionTitle">
+              <div class="section-head">
+                <div>
+                  <h2 id="personalSectionTitle">1. Personal Information</h2>
+                  <p>Prefilled from eligibility when available and saved back to RecordWatch profile data.</p>
+                </div>
+              </div>
+              <div class="record-grid">
+                <div class="field"><label for="firstName">First Name</label><input id="firstName" data-path="petitioner.first_name" type="text" placeholder="First name" /></div>
+                <div class="field"><label for="lastName">Last Name</label><input id="lastName" data-path="petitioner.last_name" type="text" placeholder="Last name" /></div>
+                <div class="field"><label for="fullName">Full Legal Name</label><input id="fullName" data-path="petitioner.full_name" type="text" placeholder="Full legal name" /></div>
+                <div class="field"><label for="dateOfBirth">Date of Birth</label><input id="dateOfBirth" data-path="petitioner.dob" type="date" /></div>
+                <div class="field"><label for="email">Email</label><input id="email" data-path="petitioner.email" type="email" placeholder="Email address" /></div>
+                <div class="field"><label for="phone">Phone</label><input id="phone" data-path="petitioner.phone" type="text" placeholder="Phone number" /></div>
+                <div class="field"><label for="residenceState">Residence State</label><select id="residenceState" data-path="petitioner.address.state"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option></select></div>
+              </div>
+            </section>
 
-          <div class="record-list" id="offenseList"></div>
+            <section class="intake-section" aria-labelledby="arrestSectionTitle">
+              <div class="section-head"><div><h2 id="arrestSectionTitle">2. Arrest / Booking Information</h2><p>Optional details for RecordWatch monitoring and agency tracking.</p></div></div>
+              <div class="record-grid">
+                <div class="field"><label for="arrestDate">Arrest Date</label><input id="arrestDate" type="date" /></div>
+                <div class="field"><label for="arrestingAgency">Arresting Agency</label><input id="arrestingAgency" placeholder="Arresting agency" /></div>
+                <div class="field"><label for="bookingNumber">Booking Number</label><input id="bookingNumber" placeholder="Booking number" /></div>
+                <div class="field"><label for="detentionFacility">Jail / Detention Facility</label><input id="detentionFacility" placeholder="Jail or detention facility" /></div>
+                <div class="field"><label for="arrestCounty">Arrest County</label><input id="arrestCounty" list="countySuggestions" /></div>
+                <div class="field"><label for="arrestState">Arrest State</label><select id="arrestState"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option></select></div>
+              </div>
+            </section>
 
-          <div class="actions">
-            <a href="eligibility.html" class="btn btn-secondary">Back</a>
-            <button type="button" id="continueBtn" data-i18n="record.continue" class="btn btn-primary">Save &amp; Continue</button>
-          </div>
+            <section class="intake-section" aria-labelledby="courtSectionTitle">
+              <div class="section-head"><div><h2 id="courtSectionTitle">3. Court / Case Information</h2><p>These fields drive court routing, packet generation, RecordWatch duplicate matching, and dashboard status.</p></div></div>
+              <div class="record-grid">
+                <div class="field"><label for="caseState">Case State</label><select id="caseState"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option></select><div class="helper">The case state is where the case was filed.</div></div>
+                <div class="field"><label for="county">County</label><input id="county" list="countySuggestions" placeholder="County" /></div>
+                <div class="field"><label for="courtName">Court Name</label><input id="courtName" list="courtSuggestions" placeholder="Court name" /></div>
+                <div class="field"><label for="caseNumber">Case Number</label><input id="caseNumber" placeholder="Case number" /></div>
+                <div class="field"><label for="judgeName">Judge</label><input id="judgeName" placeholder="Judge name" /></div>
+                <div class="field"><label for="prosecutorAgency">Prosecutor / Filing Agency</label><input id="prosecutorAgency" placeholder="Prosecutor or filing agency" /></div>
+                <div class="field"><label for="defenseAttorney">Defense Attorney</label><input id="defenseAttorney" placeholder="Defense attorney" /></div>
+                <div class="field"><label for="filingDate">Filing Date</label><input id="filingDate" type="date" /></div>
+              </div>
+            </section>
 
+            <section class="intake-section" aria-labelledby="chargesSectionTitle">
+              <div class="section-head">
+                <div>
+                  <h2 id="chargesSectionTitle">4. Charges</h2>
+                  <p>Add one card for each charge tied to this case.</p>
+                </div>
+                <button type="button" class="btn btn-soft" id="addOffenseBtn" data-i18n="record.addOffense">+ Add Charge</button>
+              </div>
+              <div class="record-status" id="recordStatus">1 charge added</div>
+              <div class="record-list" id="offenseList"></div>
+            </section>
 
+            <section class="intake-section" aria-labelledby="outcomeSectionTitle">
+              <div class="section-head"><div><h2 id="outcomeSectionTitle">5. Outcome / Disposition</h2><p>Use the final disposition and dates from the court docket or certified disposition.</p></div></div>
+              <div class="record-grid">
+                <div class="field"><label for="finalDisposition">Outcome</label><select id="finalDisposition"><option value="">Select</option><option value="Convicted">Convicted</option><option value="Dismissed">Dismissed</option><option value="Not Guilty">Not Guilty</option><option value="Acquitted">Acquitted</option><option value="No Bill">No Bill</option><option value="Pardon">Pardon</option><option value="Intervention in Lieu">Intervention in Lieu</option><option value="Pending">Pending</option><option value="Sealed">Sealed</option><option value="Expunged">Expunged</option></select></div>
+                <div class="field"><label for="dispositionDate">Disposition Date</label><input id="dispositionDate" type="date" /></div>
+                <div class="field"><label for="sentencingDate">Sentencing Date</label><input id="sentencingDate" type="date" /></div>
+                <div class="field"><label for="caseClosedDate">Case Closed Date</label><input id="caseClosedDate" type="date" /></div>
+                <div class="field"><label for="dischargeDate">Final Discharge Date</label><input id="dischargeDate" type="date" /><div class="helper">Use final discharge, release, or probation completion date when applicable.</div></div>
+              </div>
+            </section>
+
+            <section class="intake-section" aria-labelledby="sentencingSectionTitle">
+              <div class="section-head"><div><h2 id="sentencingSectionTitle">6. Sentencing / Completion</h2><p>Completion details improve both packet screening and RecordWatch requirements tracking.</p></div></div>
+              <div class="record-grid">
+                <div class="field"><label for="releaseDate">Jail / Prison Release Date</label><input id="releaseDate" type="date" /></div>
+                <div class="field"><label for="probationStartDate">Probation Start Date</label><input id="probationStartDate" type="date" /></div>
+                <div class="field"><label for="probationEndDate">Probation End Date</label><input id="probationEndDate" type="date" /></div>
+                <div class="field"><label for="communityControlEndDate">Community Control End Date</label><input id="communityControlEndDate" type="date" /></div>
+                <div class="field"><label for="finePaidDate">Fine Paid Date</label><input id="finePaidDate" type="date" /></div>
+                <div class="field"><label for="restitutionPaidDate">Restitution Paid Date</label><input id="restitutionPaidDate" type="date" /></div>
+                <div class="field"><label for="courtCostsPaid">Court Costs Paid?</label><select id="courtCostsPaid"><option value="Unknown">Unknown</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+                <div class="field"><label for="finesPaid">Fines Paid?</label><select id="finesPaid"><option value="Unknown">Unknown</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+                <div class="field"><label for="restitutionPaid">Restitution Paid?</label><select id="restitutionPaid"><option value="Unknown">Unknown</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+                <div class="field"><label for="fineAmountDue">Fine Amount Due</label><input id="fineAmountDue" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+                <div class="field"><label for="restitutionDue">Restitution Due</label><input id="restitutionDue" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+              </div>
+            </section>
+
+            <div class="actions">
+              <a href="eligibility.html" class="btn btn-secondary">Back</a>
+              <button type="button" id="continueBtn" class="btn btn-primary">Continue to Packet</button>
+            </div>
+          </form>
 
           <aside class="recordwatch-panel" aria-live="polite">
             <h3>RecordWatch background tracking</h3>
-            <p class="section-copy">Your saved case details automatically update the RecordWatch tracking layer.</p>
+            <p class="section-copy">This unified intake updates your court packet data and RecordWatch tracking from the same saved case.</p>
             <div class="recordwatch-panel-grid">
               <div class="recordwatch-panel-item"><strong>Tracking</strong><span id="rwTrackingStatus">Enabled</span></div>
               <div class="recordwatch-panel-item"><strong>Estimated eligibility</strong><span id="rwEligibilityStatus">More information needed</span></div>
               <div class="recordwatch-panel-item"><strong>Missing requirements</strong><span id="rwMissingRequirements">Case details</span></div>
-              <div class="recordwatch-panel-item"><strong>Next action</strong><span id="rwNextAction">Save record details to update RecordWatch.</span></div>
+              <div class="recordwatch-panel-item"><strong>Next action</strong><span id="rwNextAction">Complete intake, then continue to packet.</span></div>
             </div>
             <a href="recordwatch-dashboard.html">Open full RecordWatch dashboard</a>
           </aside>
           <p class="note" data-i18n="record.note">
-            This page stores case data only. Eligibility results should be shown on <code>packet.html</code>, not here.
+            RecordPathAI stores this information locally in your browser for packet generation and RecordWatch tracking. Eligibility results are still finalized on <code>packet.html</code>.
           </p>
         </section>
       </div>
@@ -755,376 +882,285 @@
   <script src="js/translate.js"></script>
   <script>
     (function () {
+      "use strict";
+
       const offenseList = document.getElementById("offenseList");
       const addOffenseBtn = document.getElementById("addOffenseBtn");
       const continueBtn = document.getElementById("continueBtn");
       const recordStatus = document.getElementById("recordStatus");
-
       let offenseCounter = 0;
 
-      function updateStatus() {
-        const count = offenseList.querySelectorAll(".record-card").length;
-        const lang=(window.RecordPathI18n&&window.RecordPathI18n.getLanguage?window.RecordPathI18n.getLanguage():"en");
-        if(lang==="es") recordStatus.textContent = count===1?"1 delito agregado":`${count} delitos agregados`;
-        else recordStatus.textContent = count===1?"1 offense added":`${count} offenses added`;
+      function value(id) {
+        const field = document.getElementById(id);
+        return field ? String(field.value || "").trim() : "";
       }
 
-      function renumberOffenses() {
-        offenseList.querySelectorAll(".record-card").forEach((card, index) => {
-          const heading = card.querySelector("h2");
-          if (heading) heading.textContent = `${(window.RecordPathI18n&&window.RecordPathI18n.t?window.RecordPathI18n.t("record.offense"):"Offense")} ${index + 1}`;
-        });
-      }
-
-      function buildOffenseCard(index) {
-        const card = document.createElement("section");
-        card.className = "record-card";
-
-        card.innerHTML = `
-          <div class="record-card-head">
-            <h2>${(window.RecordPathI18n&&window.RecordPathI18n.t?window.RecordPathI18n.t("record.offense"):"Offense")} ${index + 1}</h2>
-            <button type="button" class="btn btn-secondary remove-offense-btn" data-i18n="record.remove">Remove</button>
-          </div>
-
-          <div class="record-grid">
-            <div class="field">
-              <label data-i18n="packet.charge">Charge Name</label>
-              <input data-field="charge_name" list="chargeNameSuggestions" data-i18n-placeholder="record.chargeNamePlaceholder" placeholder="Charge name" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="packet.offenseCode">Statute / Offense Code</label>
-              <input data-field="charge_code" list="offenseCodeSuggestions" data-i18n-placeholder="record.statuteCodePlaceholder" placeholder="Statute code" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="packet.outcome">Outcome</label>
-              <select data-field="final_disposition">
-                <option value="" data-i18n="common.select">Select</option>
-                <option value="Convicted" data-i18n="record.disposition.convicted">Convicted</option>
-                <option value="Dismissed" data-i18n="record.disposition.dismissed">Dismissed</option>
-                <option value="Not Guilty" data-i18n="record.disposition.notGuilty">Not Guilty</option>
-                <option value="Acquitted" data-i18n="record.disposition.acquitted">Acquitted</option>
-                <option value="No Bill" data-i18n="record.disposition.noBill">No Bill</option>
-                <option value="Pardon" data-i18n="record.disposition.pardon">Pardon</option>
-                <option value="Intervention in Lieu" data-i18n="record.disposition.interventionInLieu">Intervention in Lieu</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label data-i18n="packet.level">Level / Degree</label>
-              <select data-field="level">
-                <option value="" data-i18n="common.select">Select</option>
-                <option value="MM">Minor Misdemeanor</option>
-                <option value="M">Misdemeanor</option>
-                <option value="F5">Felony 5</option>
-                <option value="F4">Felony 4</option>
-                <option value="F3">Felony 3</option>
-                <option value="F2">Felony 2</option>
-                <option value="F1">Felony 1</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.caseNumber">Case Number</label>
-              <input data-field="case_number" data-i18n-placeholder="record.caseNumberPlaceholder" placeholder="Case number" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="packet.dispositionDate">Disposition Date</label>
-              <input type="date" data-field="disposition_date" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.dischargeClosed">Discharge / Case Closed Date</label>
-              <input type="date" data-field="discharge_date" />
-              <div class="helper" data-i18n="record.helper.dischargeDate">Use the final discharge, release, or probation completion date when applicable.</div>
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.arrestOffenseDate">Arrest / Offense Date</label>
-              <input type="date" data-field="offense_date" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="packet.court">Court</label>
-              <input data-field="court_name" list="courtSuggestions" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.judgeName">Judge Name</label>
-              <input data-field="judge_name" data-i18n-placeholder="record.judgeNamePlaceholder" placeholder="Judge name" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="packet.county">County</label>
-              <input data-field="court_county" list="countySuggestions" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.caseState">Case State</label>
-              <select data-field="case_state">
-                <option value="" data-i18n="common.select">Select</option>
-                <option value="OH">Ohio</option>
-                <option value="NV">Nevada</option>
-                <option value="CA">California</option>
-                <option value="AZ">Arizona</option>
-                <option value="TX">Texas</option>
-                <option value="FL">Florida</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.arrestingAgency">Arresting Agency</label>
-              <input data-field="arresting_agency" data-i18n-placeholder="record.arrestingAgencyPlaceholder" placeholder="Arresting agency" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.prosecutorAgency">Prosecutor / Filing Agency</label>
-              <input data-field="prosecutor_agency" data-i18n-placeholder="record.prosecutorAgencyPlaceholder" placeholder="Prosecutor or filing agency" />
-            </div>
-
-            <div class="flag-box">
-              <h3 class="flag-title" data-i18n="record.dispositionFlags">Disposition Flags</h3>
-              <div class="check-grid">
-                <label class="check">
-                  <input type="checkbox" data-field="is_dismissed" />
-                  <span data-i18n="record.disposition.dismissed">Dismissed</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="is_convicted" />
-                  <span data-i18n="record.disposition.convicted">Convicted</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="pendingCharges" />
-                  <span data-i18n="record.pendingChargesOpenCase">Pending charges or open case</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="isTraffic" />
-                  <span data-i18n="record.trafficOffense">Traffic offense</span>
-                </label>
-              </div>
-            </div>
-
-            <div class="flag-box">
-              <h3 class="flag-title" data-i18n="record.flaggedOffenseQuestions">Flagged Offense Questions</h3>
-              <div class="check-grid">
-                <label class="check">
-                  <input type="checkbox" data-field="isTheftInOffice" />
-                  <span data-i18n="record.flag.theftInOffice">Theft in office</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="isFirstOrSecondDegreeFelony" />
-                  <span data-i18n="record.flag.firstSecondDegreeFelony">1st or 2nd degree felony</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="isSexOffenseRegistry" />
-                  <span data-i18n="record.flag.sexOffenseRegistryRelated">Sex offense registry related</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="victimUnder13" />
-                  <span data-i18n="record.flag.victimUnder13">Victim under 13</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="isFelonyViolenceNonSex" />
-                  <span data-i18n="record.flag.felonyViolenceNonSex">Felony violence offense (non-sex)</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="isDomesticViolenceConviction" />
-                  <span data-i18n="record.flag.domesticViolenceConviction">Domestic violence conviction</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="dvMisdemeanorSealable" />
-                  <span data-i18n="record.flag.dvMisdemeanorSealable">Domestic violence misdemeanor sealable</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="isCrimeAgainstChild" />
-                  <span data-i18n="record.flag.crimeAgainstChild">Crime against child</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="isSexOffense" />
-                  <span data-i18n="record.flag.sexOffense">Sex offense</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="isFelonyDUI" />
-                  <span data-i18n="record.flag.felonyDui">Felony DUI</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" data-field="isHomeInvasionDeadlyWeapon" />
-                  <span data-i18n="record.flag.homeInvasionDeadlyWeapon">Home invasion with deadly weapon</span>
-                </label>
-              </div>
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.totalFeloniesOnRecord">Total Felonies on Record</label>
-              <input type="number" min="0" data-field="totalFelonies" data-i18n-placeholder="record.numberPlaceholder" placeholder="0" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.totalF3Felonies">Total F3 Felonies</label>
-              <input type="number" min="0" data-field="totalF3" data-i18n-placeholder="record.numberPlaceholder" placeholder="0" />
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.nevadaCategory">Nevada Category</label>
-              <select data-field="nvCategory">
-                <option value="" data-i18n="common.select">Select</option>
-                <option value="standard_misdemeanor" data-i18n="record.nv.standardMisdemeanor">Standard misdemeanor</option>
-                <option value="listed_misdemeanor" data-i18n="record.nv.listedMisdemeanor">Listed misdemeanor</option>
-                <option value="dui_or_dv" data-i18n="record.nv.duiOrDv">DUI or domestic violence</option>
-                <option value="felony" data-i18n="record.nv.felony">Felony</option>
-                <option value="violent_or_category_a" data-i18n="record.nv.violentCategoryA">Violent or Category A</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.arizonaClass">Arizona Class</label>
-              <select data-field="azClass">
-                <option value="" data-i18n="common.select">Select</option>
-                <option value="AZ_F2" data-i18n="record.az.class2Felony">Class 2 felony</option>
-                <option value="AZ_F3" data-i18n="record.az.class3Felony">Class 3 felony</option>
-                <option value="AZ_F4" data-i18n="record.az.class4Felony">Class 4 felony</option>
-                <option value="AZ_F5" data-i18n="record.az.class5Felony">Class 5 felony</option>
-                <option value="AZ_F6" data-i18n="record.az.class6Felony">Class 6 felony</option>
-                <option value="AZ_M1" data-i18n="record.az.class1Misdemeanor">Class 1 misdemeanor</option>
-                <option value="AZ_M2" data-i18n="record.az.class2Misdemeanor">Class 2 misdemeanor</option>
-                <option value="AZ_M3" data-i18n="record.az.class3Misdemeanor">Class 3 misdemeanor</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.californiaReliefTrack">California Relief Track</label>
-              <select data-field="caReliefTrack">
-                <option value="" data-i18n="common.select">Select</option>
-                <option value="1203.4">1203.4</option>
-                <option value="1203.42">1203.42</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label data-i18n="record.californiaNoProbation">California No Probation</label>
-              <select data-field="caNoProbation">
-                <option value="" data-i18n="common.select">Select</option>
-                <option value="true" data-i18n="common.yes">Yes</option>
-                <option value="false" data-i18n="common.no">No</option>
-              </select>
-            </div>
-
-            <div class="field field-full">
-              <label data-i18n="common.notes">Notes</label>
-              <textarea data-field="notes" data-i18n-placeholder="record.notesPlaceholder" placeholder="Add anything important about this offense, filing track, or special facts."></textarea>
-            </div>
-          </div>
-        `;
-
-        card.querySelector(".remove-offense-btn").addEventListener("click", function () {
-          card.remove();
-          renumberOffenses();
-          updateStatus();
-        });
-
-        return card;
+      function setValue(id, nextValue) {
+        const field = document.getElementById(id);
+        if (field && nextValue !== undefined && nextValue !== null && String(nextValue) !== "") field.value = nextValue;
       }
 
       function normalizeBooleanValue(value) {
         if (typeof value === "boolean") return value;
         if (typeof value === "number") return value !== 0;
-        if (typeof value === "string") {
-          const v = value.trim().toLowerCase();
-          return v === "true" || v === "1" || v === "yes";
-        }
-        return false;
+        const v = String(value || "").trim().toLowerCase();
+        return v === "true" || v === "1" || v === "yes";
       }
 
-      function setInputValue(input, value) {
+      function setInputValue(input, nextValue) {
         if (input.type === "checkbox") {
-          input.checked = normalizeBooleanValue(value);
+          input.checked = normalizeBooleanValue(nextValue);
           return;
         }
-        input.value = value == null ? "" : value;
+        input.value = nextValue == null ? "" : nextValue;
+      }
+
+      function collectProfile() {
+        let firstName = value("firstName");
+        let lastName = value("lastName");
+        const fullName = value("fullName") || [firstName, lastName].filter(Boolean).join(" ").trim();
+        if (fullName && (!firstName || !lastName)) {
+          const parts = fullName.split(/\s+/);
+          if (!firstName) firstName = parts[0] || "";
+          if (!lastName && parts.length > 1) lastName = parts.slice(1).join(" ");
+        }
+        return {
+          firstName,
+          lastName,
+          fullName,
+          dateOfBirth: value("dateOfBirth"),
+          email: value("email"),
+          phone: value("phone"),
+          residenceState: value("residenceState")
+        };
+      }
+
+      function collectSharedCaseData() {
+        return {
+          arrest_date: value("arrestDate"),
+          arresting_agency: value("arrestingAgency"),
+          booking_number: value("bookingNumber"),
+          detention_facility: value("detentionFacility"),
+          arrest_county: value("arrestCounty"),
+          arrest_state: value("arrestState"),
+          case_state: value("caseState") || "OH",
+          court_county: value("county"),
+          court_name: value("courtName"),
+          case_number: value("caseNumber"),
+          judge_name: value("judgeName"),
+          prosecutor_agency: value("prosecutorAgency"),
+          defense_attorney: value("defenseAttorney"),
+          filing_date: value("filingDate"),
+          final_disposition: value("finalDisposition"),
+          disposition: value("finalDisposition"),
+          disposition_date: value("dispositionDate"),
+          sentencing_date: value("sentencingDate"),
+          case_closed_date: value("caseClosedDate"),
+          discharge_date: value("dischargeDate"),
+          release_date: value("releaseDate"),
+          probation_start_date: value("probationStartDate"),
+          probation_end_date: value("probationEndDate"),
+          community_control_end_date: value("communityControlEndDate"),
+          fine_paid_date: value("finePaidDate"),
+          restitution_paid_date: value("restitutionPaidDate"),
+          courtCostsPaid: value("courtCostsPaid"),
+          finesPaid: value("finesPaid"),
+          restitutionPaid: value("restitutionPaid"),
+          fine_amount_due: value("fineAmountDue"),
+          restitution_due: value("restitutionDue")
+        };
+      }
+
+      function buildChargeCard(index) {
+        const card = document.createElement("section");
+        card.className = "record-card";
+        card.innerHTML = `
+          <div class="charge-header">
+            <div><h3>Charge ${index + 1}</h3><p class="section-helper">Charge-specific information for this case.</p></div>
+            <button type="button" class="btn btn-secondary remove-offense-btn" data-i18n="record.remove">Remove</button>
+          </div>
+          <div class="record-grid">
+            <div class="field"><label data-i18n="packet.charge">Charge Name</label><input data-field="charge_name" list="chargeNameSuggestions" placeholder="Charge name" /></div>
+            <div class="field"><label data-i18n="packet.offenseCode">Statute / Offense Code</label><input data-field="charge_code" list="offenseCodeSuggestions" placeholder="Statute code" /></div>
+            <div class="field"><label data-i18n="packet.level">Charge Level</label><select data-field="level"><option value="">Select</option><option value="MM">Minor Misdemeanor</option><option value="M">Misdemeanor</option><option value="F5">Felony 5</option><option value="F4">Felony 4</option><option value="F3">Felony 3</option><option value="F2">Felony 2</option><option value="F1">Felony 1</option></select></div>
+            <div class="field"><label>Degree</label><select data-field="degree"><option value="">Select</option><option value="MM">MM</option><option value="M1">M1</option><option value="M2">M2</option><option value="M3">M3</option><option value="M4">M4</option><option value="F1">F1</option><option value="F2">F2</option><option value="F3">F3</option><option value="F4">F4</option><option value="F5">F5</option></select></div>
+            <div class="field"><label>Offense Date</label><input type="date" data-field="offense_date" /></div>
+            <div class="field field-full"><label>Charge Notes</label><textarea data-field="notes" placeholder="Optional notes about this charge"></textarea></div>
+            <div class="flag-box"><h3 class="flag-title">Charge Flags</h3><div class="check-grid">
+              <label class="check"><input type="checkbox" data-field="isTraffic" /> Traffic offense</label>
+              <label class="check"><input type="checkbox" data-field="isSexOffense" /> Sex offense</label>
+              <label class="check"><input type="checkbox" data-field="isDomesticViolenceConviction" /> Domestic violence related</label>
+              <label class="check"><input type="checkbox" data-field="isViolentOffense" /> Violent offense</label>
+            </div></div>
+          </div>`;
+
+        card.querySelector(".remove-offense-btn").addEventListener("click", function () {
+          if (offenseList.querySelectorAll(".record-card").length > 1) {
+            card.remove();
+            renumberOffenses();
+            updateStatus();
+            saveDraft(false);
+          }
+        });
+
+        card.addEventListener("change", function () { saveDraft(false); });
+        card.addEventListener("blur", function () { saveDraft(false); }, true);
+        return card;
       }
 
       function addOffense(data = null) {
         const index = offenseCounter++;
-        const card = buildOffenseCard(index);
+        const card = buildChargeCard(index);
+        card._existingCharge = data && typeof data === "object" ? Object.assign({}, data) : {};
         offenseList.appendChild(card);
-
         if (data) {
           card.querySelectorAll("[data-field]").forEach((input) => {
             const key = input.dataset.field;
-            if (Object.prototype.hasOwnProperty.call(data, key)) {
-              setInputValue(input, data[key]);
-            }
+            if (Object.prototype.hasOwnProperty.call(data, key)) setInputValue(input, data[key]);
           });
         }
-
         updateStatus();
       }
 
+      function renumberOffenses() {
+        offenseList.querySelectorAll(".record-card").forEach((card, index) => {
+          const heading = card.querySelector(".charge-header h3");
+          if (heading) heading.textContent = `Charge ${index + 1}`;
+        });
+      }
+
+      function updateStatus() {
+        const count = offenseList.querySelectorAll(".record-card").length;
+        recordStatus.textContent = count === 1 ? "1 charge added" : `${count} charges added`;
+      }
+
       function collectCharges() {
+        const shared = collectSharedCaseData();
         const charges = [];
-
         offenseList.querySelectorAll(".record-card").forEach((card) => {
-          const charge = {};
-
+          const charge = Object.assign({}, card._existingCharge || {}, shared);
           card.querySelectorAll("[data-field]").forEach((input) => {
             const key = input.dataset.field;
-
-            if (input.type === "checkbox") {
-              charge[key] = input.checked;
-            } else if (input.type === "number") {
-              charge[key] = input.value === "" ? "" : Number(input.value);
-            } else if (key === "caNoProbation") {
-              if (input.value === "true") charge[key] = true;
-              else if (input.value === "false") charge[key] = false;
-              else charge[key] = "";
-            } else {
-              charge[key] = input.value.trim();
-            }
+            if (input.type === "checkbox") charge[key] = input.checked;
+            else charge[key] = String(input.value || "").trim();
           });
-
-          if (!charge.charge_name && !charge.case_number && !charge.charge_code) {
-            return;
-          }
-
+          if (!charge.charge_name && !charge.case_number && !charge.charge_code) return;
+          const outcome = String(charge.final_disposition || "").toLowerCase();
+          charge.is_dismissed = outcome === "dismissed" || outcome === "not guilty" || outcome === "acquitted" || outcome === "no bill";
+          charge.is_convicted = outcome === "convicted";
+          charge.pendingCharges = outcome === "pending" || charge.pendingCharges === true;
+          charge.pending_charges = charge.pendingCharges;
+          charge.sex_offense_registry = charge.isSexOffense || charge.sex_offense_registry;
+          charge.felony_violence_offense = charge.isViolentOffense || charge.felony_violence_offense;
+          charge.chargeLevel = charge.level;
           charges.push(charge);
         });
-
         return charges;
       }
 
-      function loadExisting() {
-        const data = RecordPathDataBridge.loadPacketData();
+      function hydrateStaticFields(data) {
+        const petitioner = data.petitioner || {};
+        const address = petitioner.address || {};
+        const first = (Array.isArray(data.charges) && data.charges[0]) || {};
+        const court = data.court || {};
 
-        if (Array.isArray(data.charges) && data.charges.length) {
-          data.charges.forEach((charge) => addOffense(charge));
+        setValue("firstName", petitioner.first_name || localStorage.getItem("firstName"));
+        setValue("lastName", petitioner.last_name || localStorage.getItem("lastName"));
+        setValue("fullName", petitioner.full_name || localStorage.getItem("fullName"));
+        setValue("dateOfBirth", petitioner.dob || localStorage.getItem("dateOfBirth"));
+        setValue("email", petitioner.email || localStorage.getItem("email"));
+        setValue("phone", petitioner.phone || localStorage.getItem("phone"));
+        setValue("residenceState", address.state || localStorage.getItem("residenceState"));
+
+        setValue("arrestDate", first.arrest_date);
+        setValue("arrestingAgency", first.arresting_agency);
+        setValue("bookingNumber", first.booking_number);
+        setValue("detentionFacility", first.detention_facility);
+        setValue("arrestCounty", first.arrest_county || first.court_county);
+        setValue("arrestState", first.arrest_state || first.case_state);
+        setValue("caseState", first.case_state || court.state || localStorage.getItem("caseState") || localStorage.getItem("state") || "OH");
+        setValue("county", first.court_county || court.county || localStorage.getItem("county"));
+        setValue("courtName", first.court_name || court.name || localStorage.getItem("court"));
+        setValue("caseNumber", first.case_number || court.case_number || localStorage.getItem("caseNumber"));
+        setValue("judgeName", first.judge_name || court.judge_name || data.judge_name);
+        setValue("prosecutorAgency", first.prosecutor_agency);
+        setValue("defenseAttorney", first.defense_attorney);
+        setValue("filingDate", first.filing_date || (data.case && data.case.filing_date));
+        setValue("finalDisposition", first.final_disposition || first.disposition || localStorage.getItem("outcome"));
+        setValue("dispositionDate", first.disposition_date || localStorage.getItem("dispositionDate"));
+        setValue("sentencingDate", first.sentencing_date);
+        setValue("caseClosedDate", first.case_closed_date);
+        setValue("dischargeDate", first.discharge_date || localStorage.getItem("dischargeDate"));
+        setValue("releaseDate", first.release_date);
+        setValue("probationStartDate", first.probation_start_date);
+        setValue("probationEndDate", first.probation_end_date);
+        setValue("communityControlEndDate", first.community_control_end_date);
+        setValue("finePaidDate", first.fine_paid_date);
+        setValue("restitutionPaidDate", first.restitution_paid_date);
+        setValue("courtCostsPaid", first.courtCostsPaid || "Unknown");
+        setValue("finesPaid", first.finesPaid || "Unknown");
+        setValue("restitutionPaid", first.restitutionPaid || "Unknown");
+        setValue("fineAmountDue", first.fine_amount_due);
+        setValue("restitutionDue", first.restitution_due);
+      }
+
+      function hydrateCharges(data) {
+        const charges = Array.isArray(data.charges) ? data.charges : [];
+        offenseList.innerHTML = "";
+        offenseCounter = 0;
+        if (charges.length) {
+          charges.forEach(addOffense);
         } else {
           addOffense();
         }
       }
 
-      addOffenseBtn.addEventListener("click", function () {
-        addOffense();
-        renderRecordWatchPanel();
-      });
+      function saveLegacyKeys(profile, shared, charges) {
+        const first = charges[0] || {};
+        const legacy = {
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          fullName: profile.fullName,
+          dateOfBirth: profile.dateOfBirth,
+          email: profile.email,
+          phone: profile.phone,
+          residenceState: profile.residenceState,
+          caseState: shared.case_state,
+          state: shared.case_state,
+          county: shared.court_county,
+          court: shared.court_name,
+          caseNumber: shared.case_number,
+          offense: first.charge_name,
+          offenseCode: first.charge_code,
+          outcome: shared.final_disposition,
+          dispositionDate: shared.disposition_date,
+          dischargeDate: shared.discharge_date
+        };
+        Object.keys(legacy).forEach((key) => {
+          if (legacy[key] !== undefined && legacy[key] !== null && String(legacy[key]) !== "") localStorage.setItem(key, legacy[key]);
+        });
+      }
 
-      continueBtn.addEventListener("click", function () {
+      function saveDraft(syncRecordWatchCase) {
         const data = RecordPathDataBridge.loadPacketData();
+        const profile = collectProfile();
+        const shared = collectSharedCaseData();
         const charges = collectCharges();
 
-        if (!charges.length) {
-          alert("Add at least one offense.");
-          return;
-        }
-
-        data.charges = charges;
+        if (!data.petitioner) data.petitioner = {};
+        if (!data.petitioner.address) data.petitioner.address = {};
+        data.petitioner.first_name = profile.firstName;
+        data.petitioner.last_name = profile.lastName;
+        data.petitioner.full_name = profile.fullName;
+        data.petitioner.dob = profile.dateOfBirth;
+        data.petitioner.email = profile.email;
+        data.petitioner.phone = profile.phone;
+        data.petitioner.address.state = profile.residenceState;
 
         if (!data.court) data.court = {};
         if (!data.meta) data.meta = {};
-
-        const first = charges[0] || {};
-        data.court.state = first.case_state || data.court.state || "";
+        const first = charges[0] || shared;
+        data.court.state = first.case_state || data.court.state || "OH";
         data.court.county = first.court_county || data.court.county || "";
         data.court.name = first.court_name || data.court.name || "";
         data.court.case_number = first.case_number || data.court.case_number || "";
@@ -1132,17 +1168,21 @@
         data.judge_name = first.judge_name || data.judge_name || "";
         data.meta.source_state = first.case_state || data.meta.source_state || "";
         data.meta.source_county = first.court_county || data.meta.source_county || "";
+        data.charges = charges;
 
         RecordPathDataBridge.derivePacketData(data);
         RecordPathDataBridge.savePacketData(data);
+        saveLegacyKeys(profile, shared, charges);
 
-        if (window.RecordWatchBridge && typeof RecordWatchBridge.saveCaseFromRecordDetails === "function") {
-          RecordWatchBridge.saveCaseFromRecordDetails({ charges: charges });
-          renderRecordWatchPanel();
+        if (window.RecordWatchBridge && typeof RecordWatchBridge.saveProfileFromEligibility === "function") {
+          RecordWatchBridge.saveProfileFromEligibility(profile);
+          if (syncRecordWatchCase && charges.length && typeof RecordWatchBridge.saveCaseFromRecordDetails === "function") {
+            RecordWatchBridge.saveCaseFromRecordDetails({ charges: charges });
+          }
         }
-
-        window.location.href = "packet.html";
-      });
+        renderRecordWatchPanel();
+        return { data, charges };
+      }
 
       function renderRecordWatchPanel() {
         if (!window.RecordWatchBridge) return;
@@ -1154,64 +1194,41 @@
         setText("rwNextAction", summary.nextRecommendedAction || "Continue to packet generation.");
       }
 
-      function setText(id, value) {
+      function setText(id, text) {
         const node = document.getElementById(id);
-        if (node) node.textContent = value;
+        if (node) node.textContent = text;
       }
 
-      loadExisting();
-      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
-        RecordWatchBridge.syncExistingRecordPathData();
+      function init() {
+        const data = RecordPathDataBridge.loadPacketData();
+        hydrateStaticFields(data);
+        hydrateCharges(data);
+        if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
+          RecordWatchBridge.syncExistingRecordPathData();
+        }
+        renderRecordWatchPanel();
+
+        addOffenseBtn.addEventListener("click", function () {
+          addOffense();
+          saveDraft(false);
+        });
+
+        continueBtn.addEventListener("click", function () {
+          const result = saveDraft(true);
+          if (!result.charges.length) {
+            alert("Add at least one charge or case number before continuing.");
+            return;
+          }
+          window.location.href = "packet.html";
+        });
+
+        document.getElementById("recordDetailsForm").addEventListener("change", function () { saveDraft(false); });
+        document.getElementById("recordDetailsForm").addEventListener("blur", function () { saveDraft(false); }, true);
       }
-      renderRecordWatchPanel();
-    })();
+
+      init();
+    }());
   </script>
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      RecordPathDataBridge.initPage(document);
-    });
-  </script>
-  <script>
-document.addEventListener("DOMContentLoaded", function () {
-  const caseStateField = document.querySelector("#caseState, #state");
-
-  if (caseStateField) {
-    caseStateField.value = localStorage.getItem("caseState") || "Ohio";
-  }
-
-  const savedFields = [
-    "fullName",
-    "email",
-    "caseState",
-    "state",
-    "caseType",
-    "yearsSinceCaseClosed"
-  ];
-
-  savedFields.forEach(key => {
-    const field = document.getElementById(key);
-    const savedValue = localStorage.getItem(key);
-
-    if (field && savedValue) {
-      field.value = savedValue;
-    }
-  });
-});
-
-function continueToPacket() {
-  const fields = document.querySelectorAll("input, select, textarea");
-
-  fields.forEach(field => {
-    if (field.id) {
-      localStorage.setItem(field.id, field.value);
-    }
-  });
-
-  localStorage.setItem("caseState", "Ohio");
-
-  window.location.href = "packet.html";
-}
-</script>
   <script src="js/i18n.js"></script>
 </body>
 </html>

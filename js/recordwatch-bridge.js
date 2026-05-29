@@ -170,8 +170,10 @@
       arrest: {
         arrestDate: firstValue(first, ["arrest_date", "offense_date"]),
         arrestingAgency: firstValue(first, ["arresting_agency", "arrestingAgency"]),
-        arrestState: firstValue(first, ["case_state", "caseState"]),
-        arrestCounty: firstValue(first, ["court_county", "county"])
+        bookingNumber: firstValue(first, ["booking_number", "bookingNumber"]),
+        detentionFacility: firstValue(first, ["detention_facility", "detentionFacility"]),
+        arrestState: firstValue(first, ["arrest_state", "case_state", "caseState"]),
+        arrestCounty: firstValue(first, ["arrest_county", "court_county", "county"])
       },
       charges: charges.map(mapChargeFromRecordPath).filter(function (charge) {
         return charge.chargeName || charge.statuteCode || charge.degree || charge.chargeLevel;
@@ -183,7 +185,12 @@
         caseClosedDate: firstValue(first, ["caseClosedDate", "case_closed_date", "discharge_date"])
       },
       sentencing: {
+        releaseDate: firstValue(first, ["release_date", "releaseDate"]),
+        probationStartDate: firstValue(first, ["probation_start_date", "probationStartDate"]),
         probationEndDate: firstValue(first, ["probation_end_date", "probationEndDate"]),
+        communityControlEndDate: firstValue(first, ["community_control_end_date", "communityControlEndDate"]),
+        finePaidDate: firstValue(first, ["fine_paid_date", "finePaidDate"]),
+        restitutionPaidDate: firstValue(first, ["restitution_paid_date", "restitutionPaidDate"]),
         finesPaid: firstValue(first, ["finesPaid", "fines_paid", "all_fines_paid"]),
         restitutionPaid: firstValue(first, ["restitutionPaid", "restitution_paid"]),
         courtCostsPaid: firstValue(first, ["courtCostsPaid", "court_costs_paid"])
