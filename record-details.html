@@ -478,6 +478,49 @@
     }
 
     /* MOBILE */
+
+
+    .recordwatch-panel {
+      margin-top: 24px;
+      background: #f8fbff;
+      border: 1px solid #d7e3fb;
+      border-radius: 22px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .recordwatch-panel h3 {
+      margin: 0 0 10px;
+      color: #233d70;
+      font-size: 20px;
+    }
+
+    .recordwatch-panel-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+
+    .recordwatch-panel-item {
+      background: #ffffff;
+      border: 1px solid #dbe3f0;
+      border-radius: 16px;
+      padding: 12px 14px;
+      color: #40577e;
+      line-height: 1.45;
+    }
+
+    .recordwatch-panel-item strong {
+      display: block;
+      color: #233d70;
+      margin-bottom: 4px;
+    }
+
+    .recordwatch-panel a {
+      color: var(--blue-dark);
+      font-weight: 800;
+    }
     @media (max-width: 760px) {
       .site-header {
         padding-top: 14px;
@@ -661,6 +704,19 @@
             <button type="button" id="continueBtn" data-i18n="record.continue" class="btn btn-primary">Save &amp; Continue</button>
           </div>
 
+
+
+          <aside class="recordwatch-panel" aria-live="polite">
+            <h3>RecordWatch background tracking</h3>
+            <p class="section-copy">Your saved case details automatically update the RecordWatch tracking layer.</p>
+            <div class="recordwatch-panel-grid">
+              <div class="recordwatch-panel-item"><strong>Tracking</strong><span id="rwTrackingStatus">Enabled</span></div>
+              <div class="recordwatch-panel-item"><strong>Estimated eligibility</strong><span id="rwEligibilityStatus">More information needed</span></div>
+              <div class="recordwatch-panel-item"><strong>Missing requirements</strong><span id="rwMissingRequirements">Case details</span></div>
+              <div class="recordwatch-panel-item"><strong>Next action</strong><span id="rwNextAction">Save record details to update RecordWatch.</span></div>
+            </div>
+            <a href="recordwatch-dashboard.html">Open full RecordWatch dashboard</a>
+          </aside>
           <p class="note" data-i18n="record.note">
             This page stores case data only. Eligibility results should be shown on <code>packet.html</code>, not here.
           </p>
@@ -694,6 +750,8 @@
 </footer>
 
   <script src="js/packet-data-bridge.js"></script>
+  <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-bridge.js"></script>
   <script src="js/translate.js"></script>
   <script>
     (function () {
@@ -1048,6 +1106,7 @@
 
       addOffenseBtn.addEventListener("click", function () {
         addOffense();
+        renderRecordWatchPanel();
       });
 
       continueBtn.addEventListener("click", function () {
@@ -1077,10 +1136,34 @@
         RecordPathDataBridge.derivePacketData(data);
         RecordPathDataBridge.savePacketData(data);
 
+        if (window.RecordWatchBridge && typeof RecordWatchBridge.saveCaseFromRecordDetails === "function") {
+          RecordWatchBridge.saveCaseFromRecordDetails({ charges: charges });
+          renderRecordWatchPanel();
+        }
+
         window.location.href = "packet.html";
       });
 
+      function renderRecordWatchPanel() {
+        if (!window.RecordWatchBridge) return;
+        const summary = RecordWatchBridge.getRecordWatchSummary();
+        const missing = summary.missingRequirements && summary.missingRequirements.length ? summary.missingRequirements.join(", ") : "None recorded";
+        setText("rwTrackingStatus", summary.trackingEnabled ? "Enabled" : "Not enabled");
+        setText("rwEligibilityStatus", summary.estimatedEligibilityStatus || "More information needed");
+        setText("rwMissingRequirements", missing);
+        setText("rwNextAction", summary.nextRecommendedAction || "Continue to packet generation.");
+      }
+
+      function setText(id, value) {
+        const node = document.getElementById(id);
+        if (node) node.textContent = value;
+      }
+
       loadExisting();
+      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
+        RecordWatchBridge.syncExistingRecordPathData();
+      }
+      renderRecordWatchPanel();
     })();
   </script>
   <script>

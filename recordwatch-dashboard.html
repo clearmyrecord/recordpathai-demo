@@ -22,7 +22,9 @@
 
   <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">RecordPathAI is not a law firm and does not provide legal advice.</div></div><div class="footer-links"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
 
+  <script src="js/packet-data-bridge.js"></script>
   <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-bridge.js"></script>
   <script src="js/recordwatch-monitor.js"></script>
   <script>
     (function () {
@@ -52,7 +54,7 @@
         ].map(function (item) { return '<article class="summary-card"><p class="eyebrow-mini">' + esc(item[0]) + '</p><h3>' + esc(item[1]) + '</h3></article>'; }).join("");
 
         if (!cases.length) {
-          casesContainer.innerHTML = '<div class="empty-state"><h2>No RecordWatch cases yet</h2><p>Start intake to add a case and see eligibility, monitoring, and relief recommendations.</p><a class="btn" href="recordwatch-intake.html">Start Intake</a></div>';
+          casesContainer.innerHTML = '<div class="empty-state"><h2>No RecordWatch cases yet</h2><p>Start at eligibility, continue through record details, or use optional Advanced Case Intake for extra fields.</p><a class="btn" href="recordwatch-intake.html">Advanced Case Intake</a></div>';
           return;
         }
 
@@ -87,10 +89,13 @@
       });
       document.getElementById("clearData").addEventListener("click", function () {
         if (confirm("Clear RecordWatch demo profile, cases, tasks, and relief plan from this browser?")) {
-          ["recordwatchProfile", "recordwatchCases", "recordwatchTasks", "recordwatchReliefPlan"].forEach(function (key) { localStorage.removeItem(key); });
+          ["recordwatchProfile", "recordwatchCases", "recordwatchTasks", "recordwatchReliefPlan", "recordwatchActiveCaseId"].forEach(function (key) { localStorage.removeItem(key); });
           render();
         }
       });
+      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
+        RecordWatchBridge.syncExistingRecordPathData();
+      }
       render();
     }());
   </script>
