@@ -1059,14 +1059,13 @@
 
  <script>
 document.addEventListener("DOMContentLoaded", function () {
-      function renderRecordWatchPanel() {
-        if (!window.RecordWatchBridge) return;
-        const summary = RecordWatchBridge.getRecordWatchSummary();
-        const missing = summary.missingRequirements && summary.missingRequirements.length ? summary.missingRequirements.join(", ") : "None recorded";
-        setText("rwTrackingStatus", summary.trackingEnabled ? "Enabled" : "Not enabled");
-        setText("rwEligibilityStatus", summary.estimatedEligibilityStatus || "More information needed");
+      function renderRecordWatchPanel(eligibilityResult) {
+        const result = eligibilityResult || calculatePacketEligibility(buildNormalizedPacketData(readPacketData()));
+        const missing = result.flags && result.flags.length ? result.flags.join(", ") : "None recorded";
+        setText("rwTrackingStatus", "Enabled");
+        setText("rwEligibilityStatus", result.statusLabel || "More information needed");
         setText("rwMissingRequirements", missing);
-        setText("rwNextAction", summary.nextRecommendedAction || "Review your packet and dashboard.");
+        setText("rwNextAction", result.isEligibleNow ? "Generate court packet." : "Wait until eligibility date or review flagged details.");
       }
 
       function setText(id, value) {
@@ -1122,6 +1121,139 @@ document.addEventListener("DOMContentLoaded", function () {
           FLORIDA: "FL"
         };
         return map[v] || v;
+      }
+
+      function isDevelopmentMode() {
+        return ["localhost", "127.0.0.1", ""].includes(window.location.hostname) ||
+          window.location.protocol === "file:" ||
+          new URLSearchParams(window.location.search).has("debugEligibility");
+      }
+
+      function parsePacketDate(value) {
+        if (!value) return null;
+        const raw = String(value).trim();
+        if (!raw) return null;
+
+        let match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (match) {
+          const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12);
+          return Number.isNaN(parsed.getTime()) ? null : parsed;
+        }
+
+        match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+        if (match) {
+          const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
+          const parsed = new Date(year, Number(match[1]) - 1, Number(match[2]), 12);
+          return Number.isNaN(parsed.getTime()) ? null : parsed;
+        }
+
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return null;
+        return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 12);
+      }
+
+      function toIsoDate(value) {
+        const parsed = value instanceof Date ? value : parsePacketDate(value);
+        if (!parsed || Number.isNaN(parsed.getTime())) return "";
+        return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+      }
+
+      function addYearsIso(isoDate, yearsToAdd) {
+        const base = parsePacketDate(isoDate);
+        if (!base) return "";
+        base.setFullYear(base.getFullYear() + yearsToAdd);
+        return toIsoDate(base);
+      }
+
+      function getSelectedPacketRecord(data) {
+        return Array.isArray(data?.charges) && data.charges.length ? data.charges[0] : {};
+      }
+
+      function calculatePacketEligibility(data) {
+        const record = getSelectedPacketRecord(data);
+        const eligibility = data?.eligibility || {};
+        const state = normalizeState(record.case_state || data?.court?.state || eligibility.state_ruleset || "");
+        const dischargeSource = record.probation_end_date || record.probationEndDate || record.discharge_date || record.dischargeDate || record.final_discharge_date || record.finalDischargeDate || record.case_closed_date || record.caseClosedDate || "";
+        const parsedDischargeDate = parsePacketDate(dischargeSource);
+        const parsedDischargeIso = toIsoDate(parsedDischargeDate);
+        const levelRaw = safe(record.level || record.degree || record.charge_level || record.offense_classification || "").toUpperCase();
+        const chargeText = `${safe(record.charge_name || record.offense_name)} ${safe(record.charge_code)}`.toLowerCase();
+        const flags = [];
+        let waitYears = 1;
+        let requiredPeriod = "1 year";
+
+        if (!parsedDischargeDate) flags.push("Missing discharge date");
+        if (/\bF1\b|\bF2\b/.test(levelRaw) || /felony\s*(1|2|first|second)/i.test(levelRaw)) flags.push("F1/F2 disqualifying level");
+        if (Boolean(eligibility.has_pending_cases || record.pending_charges)) flags.push("Pending charges");
+        if (/traffic/i.test(`${safe(record.charge_name)} ${safe(record.charge_code)}`)) flags.push("Traffic offense");
+        if (Number(record.f3_felony_count || eligibility.f3_felony_count || 0) >= 3) flags.push("Three or more F3 felonies");
+        if (/domestic\s+violence/i.test(safe(record.charge_name))) flags.push("Domestic violence");
+        if (Boolean(record.sex_offense_registry || eligibility.sex_offense_registry)) flags.push("Sex offense registry");
+        if (Boolean(record.victim_under_13 || eligibility.victim_under_13)) flags.push("Victim under 13");
+        if (Boolean(record.felony_violence_offense || eligibility.felony_violence_offense)) flags.push("Felony violence offense");
+
+        if (/2921\.43/.test(chargeText) || /soliciting improper compensation/.test(chargeText)) {
+          waitYears = 7;
+          requiredPeriod = "7 years";
+        } else if (/\bF3\b/.test(levelRaw)) {
+          waitYears = 3;
+          requiredPeriod = t("packet.threeYears") === "packet.threeYears" ? "3 years" : t("packet.threeYears");
+        }
+
+        const estimatedEligibleDate = parsedDischargeIso ? addYearsIso(parsedDischargeIso, waitYears) : "";
+        const estimatedDateObj = parsePacketDate(estimatedEligibleDate);
+        const today = new Date();
+        today.setHours(12, 0, 0, 0);
+        const waitingPeriodSatisfied = Boolean(estimatedDateObj) && today >= estimatedDateObj;
+        const blockingFlags = flags.filter((flag) => flag !== "Missing discharge date");
+        const needsReview = Boolean(flags.length && (flags.includes("Missing discharge date") || blockingFlags.length));
+        const isEligibleNow = Boolean(estimatedEligibleDate) && waitingPeriodSatisfied && !blockingFlags.length;
+        const isNotYetEligible = Boolean(estimatedEligibleDate) && !waitingPeriodSatisfied && !blockingFlags.length;
+        const mode = isEligibleNow ? "eligible" : (isNotYetEligible ? "not_eligible" : "unclear");
+        const statusLabel = isEligibleNow ? "Eligible now" : (isNotYetEligible ? "Not yet eligible" : "Needs Review");
+
+        const result = {
+          record,
+          state,
+          dischargeSource,
+          parsedDischargeDate,
+          parsedDischargeIso,
+          waitingPeriodYears: waitYears,
+          waitingPeriodText: requiredPeriod,
+          estimatedEligibleDate,
+          waitingPeriodSatisfied,
+          isEligibleNow,
+          isNotYetEligible,
+          needsReview,
+          mode,
+          statusLabel,
+          reliefType: state === "OH" ? "Ohio Record Sealing" : safe(eligibility.relief_type || eligibility.filing_type || "Record relief"),
+          reason: isEligibleNow
+            ? "Waiting period appears satisfied and no blocking flags were found for the selected record."
+            : (isNotYetEligible ? "The selected record's waiting period has not ended yet." : "Review the selected record before filing."),
+          flags
+        };
+
+        if (data?.eligibility) {
+          data.eligibility.estimated_eligible_on = result.estimatedEligibleDate;
+          data.eligibility.required_waiting_period = result.waitingPeriodText;
+          data.eligibility.is_eligible = result.isEligibleNow;
+          data.eligibility.eligibility_status = result.statusLabel;
+          data.eligibility.eligibility_reason = result.reason;
+          data.eligibility.flags = result.flags;
+        }
+
+        if (isDevelopmentMode()) {
+          console.groupCollapsed("[Packet Eligibility] selected record result");
+          console.log("selected packet record", record);
+          console.log("parsed discharge date", result.parsedDischargeIso || null, result.parsedDischargeDate);
+          console.log("waiting period", result.waitingPeriodText, result.waitingPeriodYears);
+          console.log("estimated eligible date", result.estimatedEligibleDate || null);
+          console.log("final eligibility status", result.statusLabel, { isEligibleNow: result.isEligibleNow, mode: result.mode, flags: result.flags });
+          console.groupEnd();
+        }
+
+        return result;
       }
 
 
@@ -1412,8 +1544,8 @@ document.addEventListener("DOMContentLoaded", function () {
           disposition_date: formatDateForCourt(charge.disposition_date || ""),
           sentencing_date: formatDateForCourt(charge.sentencing_date || ""),
           release_date: formatDateForCourt(charge.release_date || ""),
-          probation_end_date: formatDateForCourt(charge.probation_end_date || charge.discharge_date || ""),
-          discharge_date: formatDateForCourt(charge.discharge_date || charge.probation_end_date || ""),
+          probation_end_date: formatDateForCourt(charge.probation_end_date || charge.probationEndDate || charge.discharge_date || charge.dischargeDate || ""),
+          discharge_date: formatDateForCourt(charge.discharge_date || charge.dischargeDate || charge.probation_end_date || charge.probationEndDate || ""),
           waiting_period_end_date: formatDateForCourt(charge.waiting_period_end_date || ""),
           case_number: charge.case_number || "",
           court_name: charge.court_name || "",
@@ -1842,176 +1974,56 @@ document.addEventListener("DOMContentLoaded", function () {
         }).join("");
       }
 
-      function updateEligibilitySection(data) {
-        const charge = data.charges[0] || {};
-        const eligibility = data.eligibility || {};
-        const today = new Date();
+      function updateEligibilitySection(data, eligibilityResult = calculatePacketEligibility(data)) {
+        const charge = getSelectedPacketRecord(data);
+        const result = eligibilityResult;
 
-        function toIsoDate(value) {
-          if (!value) return "";
-          const parsed = new Date(String(value).includes("/") ? value : `${value}T12:00:00`);
-          if (Number.isNaN(parsed.getTime())) return "";
-          return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
-        }
-
-        function addYearsIso(isoDate, yearsToAdd) {
-          const base = new Date(`${isoDate}T12:00:00`);
-          if (Number.isNaN(base.getTime())) return "";
-          base.setFullYear(base.getFullYear() + yearsToAdd);
-          return toIsoDate(base.toISOString().slice(0, 10));
-        }
-
-        function computeOhioEligibility(record) {
-          const finalDischarge = toIsoDate(record.probation_end_date || record.discharge_date || record.case_closed_date || "");
-          const levelRaw = safe(record.level || record.charge_level || record.offense_classification || "").toUpperCase();
-          const chargeText = `${safe(record.charge_name)} ${safe(record.charge_code)}`.toLowerCase();
-          const flags = [];
-
-          if (!finalDischarge) {
-            flags.push("Missing discharge date");
-            return {
-              relief_type: t("packet.ohioRecordSealing"),
-              required_waiting_period: "",
-              estimated_eligible_on: "",
-              is_eligible: false,
-              eligibility_status: "Needs Review",
-              eligibility_reason: t("packet.finalDischargeMissing"),
-              flags
-            };
-          }
-
-          if (/\bF1\b|\bF2\b/.test(levelRaw) || /felony\s*(1|2|first|second)/i.test(levelRaw)) {
-            flags.push("F1/F2 disqualifying level");
-            return {
-              relief_type: t("packet.ohioRecordSealing"),
-              required_waiting_period: "",
-              estimated_eligible_on: "",
-              is_eligible: false,
-              eligibility_status: "Needs Review",
-              eligibility_reason: t("packet.f1f2ManualReview"),
-              flags
-            };
-          }
-
-          let waitYears = 1;
-          let requiredPeriod = "1 year";
-          if (/2921\.43/.test(chargeText) || /soliciting improper compensation/.test(chargeText)) {
-            waitYears = 7;
-            requiredPeriod = "7 years";
-          } else if (/\bF3\b/.test(levelRaw)) {
-            waitYears = 3;
-            requiredPeriod = t("packet.threeYears");
-          }
-
-          const estimatedEligible = addYearsIso(finalDischarge, waitYears);
-          const eligibleDateObj = estimatedEligible ? new Date(`${estimatedEligible}T12:00:00`) : null;
-          const waitingSatisfied = Boolean(eligibleDateObj) && !Number.isNaN(eligibleDateObj.getTime()) && today >= eligibleDateObj;
-
-          return {
-            relief_type: t("packet.ohioRecordSealing"),
-            required_waiting_period: requiredPeriod,
-            estimated_eligible_on: estimatedEligible,
-            is_eligible: Boolean(estimatedEligible) && waitingSatisfied,
-            eligibility_status: waitingSatisfied ? "Likely Eligible" : "Not Eligible",
-            eligibility_reason: waitingSatisfied ? t("packet.waitingPeriodAppearsSatisfied") : t("packet.waitingPeriodNotSatisfied"),
-            flags
-          };
-        }
-
-        const computed = computeOhioEligibility(charge);
-        const merged = {
-          ...eligibility,
-          relief_type: eligibility.relief_type || computed.relief_type,
-          required_waiting_period: eligibility.required_waiting_period || computed.required_waiting_period,
-          estimated_eligible_on: eligibility.estimated_eligible_on || computed.estimated_eligible_on,
-          is_eligible: typeof eligibility.is_eligible === "boolean" ? eligibility.is_eligible : computed.is_eligible,
-          eligibility_status: eligibility.eligibility_status || computed.eligibility_status,
-          eligibility_reason: eligibility.eligibility_reason || computed.eligibility_reason,
-          flags: Array.isArray(eligibility.flags) ? eligibility.flags : computed.flags
-        };
-
-        const dischargeRaw = charge.probation_end_date || charge.discharge_date || charge.case_closed_date || "";
-        const eligibleRaw = merged.estimated_eligible_on || charge.waiting_period_end_date || "";
-        const reliefRaw = safe(merged.relief_type || merged.filing_type || "").toLowerCase();
-        const reliefType = reliefRaw.includes("expung")
-          ? t("packet.ohioExpungement")
-          : reliefRaw.includes("seal")
-            ? t("packet.ohioRecordSealing")
-            : t("packet.needsReview");
-
-        const waitingPeriodText = (() => {
-          if (safe(merged.required_waiting_period)) return merged.required_waiting_period;
-          if (dischargeRaw && eligibleRaw) {
-            const start = new Date(String(dischargeRaw).includes('/') ? dischargeRaw : dischargeRaw + 'T12:00:00');
-            const end = new Date(String(eligibleRaw).includes('/') ? eligibleRaw : eligibleRaw + 'T12:00:00');
-            if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
-              const years = Math.round(((end - start) / (1000 * 60 * 60 * 24 * 365.25)) * 10) / 10;
-              return years >= 1 ? t("packet.yearsLabel", { years }) : t("packet.lessThanOneYear");
-            }
-          }
-          return t("packet.needsReview");
-        })();
-
-        document.getElementById("reliefTypeValue").textContent = reliefType;
-        document.getElementById("dischargeDateValue").textContent = formatDateForDisplay(dischargeRaw);
-        document.getElementById("waitingPeriodValue").textContent = waitingPeriodText;
-        document.getElementById("eligibleDateValue").textContent = formatDateForDisplay(eligibleRaw);
+        document.getElementById("reliefTypeValue").textContent = result.reliefType || "—";
+        document.getElementById("dischargeDateValue").textContent = formatDateForDisplay(result.parsedDischargeIso || result.dischargeSource);
+        document.getElementById("waitingPeriodValue").textContent = result.waitingPeriodText || "—";
+        document.getElementById("eligibleDateValue").textContent = formatDateForDisplay(result.estimatedEligibleDate);
 
         const nowEl = document.getElementById("eligibilityNowValue");
-        const eligibleDateObj = eligibleRaw ? new Date(String(eligibleRaw).includes('/') ? eligibleRaw : eligibleRaw + 'T12:00:00') : null;
-        nowEl.textContent = eligibleDateObj && !Number.isNaN(eligibleDateObj.getTime()) && today >= eligibleDateObj
-          ? t("packet.eligibleNow")
-          : "";
+        nowEl.textContent = result.isEligibleNow ? "Eligible now" : "";
 
         const pill = document.getElementById("statusPill");
         const headline = document.getElementById("eligibilityHeadline");
         const summary = document.getElementById("eligibilitySummary");
         const reasonList = document.getElementById("eligibilityReasons");
 
-        const computedFlagSet = new Set(Array.isArray(merged.flags) ? merged.flags : []);
-        const flags = [
-          [t("packet.flag.missingDischargeDate"), computedFlagSet.has("Missing discharge date")],
-          [t("packet.flag.f1f2"), computedFlagSet.has("F1/F2 disqualifying level")],
-          [t("packet.flag.pendingCharges"), Boolean(eligibility.has_pending_cases || charge.pending_charges)],
-          [t("packet.flag.trafficOffense"), /traffic/i.test(safe(charge.charge_name) + " " + safe(charge.charge_code))],
-          [t("packet.flag.firstSecondDegreeFelony"), /f[12]\b|felony\s*(1|2|first|second)/i.test(safe(charge.level || charge.offense_classification))],
-          [t("packet.flag.threePlusF3"), Number(charge.f3_felony_count || eligibility.f3_felony_count || 0) >= 3],
-          [t("packet.flag.domesticViolence"), /domestic\s+violence/i.test(safe(charge.charge_name))],
-          [t("packet.flag.sexRegistry"), Boolean(charge.sex_offense_registry || eligibility.sex_offense_registry)],
-          [t("packet.flag.victimUnder13"), Boolean(charge.victim_under_13 || eligibility.victim_under_13)],
-          [t("packet.flag.felonyViolence"), Boolean(charge.felony_violence_offense || eligibility.felony_violence_offense)]
-        ];
+        const flagLabels = {
+          "Missing discharge date": t("packet.flag.missingDischargeDate"),
+          "F1/F2 disqualifying level": t("packet.flag.f1f2"),
+          "Pending charges": t("packet.flag.pendingCharges"),
+          "Traffic offense": t("packet.flag.trafficOffense"),
+          "Three or more F3 felonies": t("packet.flag.threePlusF3"),
+          "Domestic violence": t("packet.flag.domesticViolence"),
+          "Sex offense registry": t("packet.flag.sexRegistry"),
+          "Victim under 13": t("packet.flag.victimUnder13"),
+          "Felony violence offense": t("packet.flag.felonyViolence")
+        };
+        const checks = Object.keys(flagLabels).map((flag) => [flagLabels[flag], result.flags.includes(flag)]);
 
-        const hasComputedNeedsReviewFlag = computedFlagSet.has("Missing discharge date") || computedFlagSet.has("F1/F2 disqualifying level");
-        const hasDisqualifyingFlag = flags.some(([, flagged]) => flagged);
-        const waitingPeriodSatisfied = eligibleDateObj && !Number.isNaN(eligibleDateObj.getTime()) && today >= eligibleDateObj;
-        const isEligible = waitingPeriodSatisfied && !hasDisqualifyingFlag;
-
-        if (hasComputedNeedsReviewFlag) {
-          pill.className = "status-pill review";
-          pill.textContent = t("packet.needsReview");
-          headline.textContent = t("packet.screeningNeedsReview");
-          summary.textContent = computedFlagSet.has("Missing discharge date")
-            ? t("packet.needsReviewMissingDischarge")
-            : t("packet.needsReviewF1F2Detected");
-        } else if (waitingPeriodSatisfied && hasDisqualifyingFlag) {
-          pill.className = "status-pill review";
-          pill.textContent = t("packet.needsReview");
-          headline.textContent = t("packet.screeningNeedsReview");
-          summary.textContent = merged.eligibility_reason || t("packet.waitingPeriodSatisfiedFlagsMayAffect");
-        } else if (isEligible) {
+        if (result.isEligibleNow) {
           pill.className = "status-pill eligible";
-          pill.textContent = t("packet.likelyEligible");
-          headline.textContent = t("packet.screeningResultForCase", { state: data.court.state || t("packet.thisCase") });
-          summary.textContent = merged.eligibility_reason || t("packet.waitingSatisfiedNoFlags");
+          pill.textContent = "Likely Eligible";
+          headline.textContent = `Screening result for ${escapeHtml(data.court.state || "this case")}`;
+          summary.textContent = result.reason || t("packet.waitingSatisfiedNoFlags");
+        } else if (result.isNotYetEligible) {
+          pill.className = "status-pill review";
+          pill.textContent = "Not Yet Eligible";
+          headline.textContent = "Waiting period not yet complete";
+          summary.textContent = result.reason;
         } else {
           pill.className = "status-pill review";
-          pill.textContent = t("packet.eligibilityNeedsReview");
-          headline.textContent = t("packet.screeningNeedsReview");
-          summary.textContent = merged.eligibility_reason || t("packet.reviewChecklistBeforeFiling");
+          pill.textContent = "Needs Review";
+          headline.textContent = "Screening Needs Review";
+          summary.textContent = result.flags.includes("Missing discharge date")
+            ? t("packet.needsReviewMissingDischarge")
+            : (charge.ineligible_reason || result.reason || t("packet.reviewChecklistBeforeFiling"));
         }
 
-        reasonList.innerHTML = flags.map(([label, flagged]) => `<li>${escapeHtml(label)}: <strong>${flagged ? t("common.yes") : t("common.no")}</strong></li>`).join("");
+        reasonList.innerHTML = checks.map(([label, flagged]) => `<li>${escapeHtml(label)}: <strong>${flagged ? "Yes" : "No"}</strong></li>`).join("");
       }
 
       async function updateTemplateCallout() {
@@ -2085,12 +2097,15 @@ document.addEventListener("DOMContentLoaded", function () {
           setStatus("Generating PDF packet...");
 
           if (!window.PDFLib) throw new Error("pdf-lib failed to load.");
-          if (localStorage.getItem(PAYMENT_STORAGE_KEY) !== "true") {
-            throw new Error("Packet is locked until payment is complete.");
-          }
 
           const raw = readPacketData();
           const data = buildNormalizedPacketData(raw);
+          const packetEligibility = calculatePacketEligibility(data);
+          if (!packetEligibility.isEligibleNow) {
+            throw new Error(packetEligibility.isNotYetEligible
+              ? `You are not yet eligible based on this screening. Estimated eligible date: ${formatDateForDisplay(packetEligibility.estimatedEligibleDate)}.`
+              : "Eligibility needs review before packet generation.");
+          }
 
           const typedSignature = document.getElementById("typedSignature");
           if (!signatureImageBytes) {
@@ -2247,8 +2262,8 @@ document.addEventListener("DOMContentLoaded", function () {
           });
         } catch (error) {
           console.error("PDF generation failed:", error);
-          setStatus("Unable to generate the PDF packet. Please try again.", "error");
-          alert("Unable to generate the PDF packet. Please try again.");
+          setStatus(error.message || "Unable to generate the PDF packet. Please try again.", "error");
+          alert(error.message || "Unable to generate the PDF packet. Please try again.");
         }
       }
 
@@ -2340,24 +2355,24 @@ document.addEventListener("DOMContentLoaded", function () {
           paymentCallout.innerHTML = message;
         }
       }
-      function buildReminderData(normalizedData, eligibilityMode = "not_eligible") {
+      function buildReminderData(normalizedData, eligibilityMode = "not_eligible", eligibilityResult = calculatePacketEligibility(normalizedData)) {
         return {
           fullName: safe(normalizedData?.petitioner?.full_name),
           email: safe(normalizedData?.petitioner?.email),
           caseState: safe(normalizedData?.court?.state),
           county: safe(normalizedData?.court?.county),
           offense: safe(normalizedData?.charges?.[0]?.offense_name || normalizedData?.charges?.[0]?.charge_name),
-          estimatedEligibilityDate: safe(normalizedData?.eligibility?.estimated_eligible_on),
+          estimatedEligibilityDate: safe(eligibilityResult.estimatedEligibleDate || normalizedData?.eligibility?.estimated_eligible_on),
           createdAt: new Date().toISOString(),
           eligibilityStatus: eligibilityMode
         };
       }
-      function renderReminderCard(normalizedData, showCard) {
+      function renderReminderCard(normalizedData, showCard, eligibilityResult = calculatePacketEligibility(normalizedData)) {
         const card = document.getElementById("eligibilityReminderCard");
         if (!card) return;
         card.style.display = showCard ? "block" : "none";
         if (!showCard) return;
-        document.getElementById("reminderEligibleDate").textContent = formatDateForDisplay(normalizedData?.eligibility?.estimated_eligible_on) || "—";
+        document.getElementById("reminderEligibleDate").textContent = formatDateForDisplay(eligibilityResult.estimatedEligibleDate || normalizedData?.eligibility?.estimated_eligible_on) || "—";
         document.getElementById("reminderCaseState").textContent = safe(normalizedData?.court?.state, "—");
         document.getElementById("reminderCounty").textContent = safe(normalizedData?.court?.county, "—");
         document.getElementById("reminderOffense").textContent = safe(normalizedData?.charges?.[0]?.offense_name || normalizedData?.charges?.[0]?.charge_name, "—");
@@ -2374,7 +2389,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       function saveEligibilityReminder(normalizedData, eligibilityMode = "not_eligible") {
         try {
-          const reminder = buildReminderData(normalizedData, eligibilityMode);
+          const reminder = buildReminderData(normalizedData, eligibilityMode, calculatePacketEligibility(normalizedData));
           localStorage.setItem("eligibilityReminder", JSON.stringify(reminder));
           maybeRequestNotificationPermission();
           setReminderFeedback(t("packet.reminder.saved"));
@@ -2383,7 +2398,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
       function downloadEligibilityReminder(normalizedData, eligibilityMode = "not_eligible") {
-        const reminder = buildReminderData(normalizedData, eligibilityMode);
+        const reminder = buildReminderData(normalizedData, eligibilityMode, calculatePacketEligibility(normalizedData));
         const blob = new Blob([JSON.stringify(reminder, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -2468,6 +2483,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const raw = readPacketData();
       const normalizedData = buildNormalizedPacketData(raw);
+      const packetEligibility = calculatePacketEligibility(normalizedData);
 
       document.getElementById("testPdfBtn").addEventListener("click", testPdfAccess);
       document.getElementById("generateSealingBtn").addEventListener("click", generateSealingPdf);
@@ -2481,56 +2497,49 @@ document.addEventListener("DOMContentLoaded", function () {
       setupSignaturePad();
       updateSummary(normalizedData);
       renderAllRecords(normalizedData);
-      updateEligibilitySection(normalizedData);
+      updateEligibilitySection(normalizedData, packetEligibility);
       updateTemplateCallout(normalizedData);
-      renderRecordWatchPanel();
+      renderRecordWatchPanel(packetEligibility);
 
       const sigInput = document.getElementById("typedSignature");
       if (sigInput) sigInput.value = normalizedData.petitioner.full_name || "";
 
       const params = new URLSearchParams(window.location.search);
       const paymentSuccess = params.get("payment") === "success" || localStorage.getItem(PAYMENT_STORAGE_KEY) === "true";
-      const paymentCancelled = params.get("payment") === "cancelled";
 
-      loadAndRenderCourtInstructions(normalizedData, paymentSuccess);
-
-      const nowDate = new Date();
-      const estimatedDate = normalizedData?.eligibility?.estimated_eligible_on ? new Date(`${normalizedData.eligibility.estimated_eligible_on}T12:00:00`) : null;
-      const isEstimatedDateValid = estimatedDate && !Number.isNaN(estimatedDate.getTime());
-      const eligibleNow = Boolean(isEstimatedDateValid && nowDate >= estimatedDate);
-      const hasDisqualifying = Boolean(normalizedData?.eligibility?.manualReview);
-      const eligibilityMode = hasDisqualifying ? "unclear" : (eligibleNow ? "eligible" : "not_eligible");
+      const eligibilityMode = packetEligibility.mode;
       const paymentBtn = document.getElementById("payAndSubmitBtn");
       const paymentCallout = document.getElementById("paymentCallout");
-      const reminderCardShouldShow = eligibilityMode === "not_eligible";
-      renderReminderCard(normalizedData, reminderCardShouldShow);
-      if (eligibilityMode === "unclear" && paymentCallout) {
-        paymentCallout.className = "callout warning";
-        paymentCallout.innerHTML = t("packet.eligibilityUnclearWarning");
-      }
-      if (eligibilityMode === "not_eligible") {
+      const generateBtn = document.getElementById("generateSealingBtn");
+      const reminderCardShouldShow = packetEligibility.isNotYetEligible;
+      renderReminderCard(normalizedData, reminderCardShouldShow, packetEligibility);
+
+      if (packetEligibility.isEligibleNow) {
         if (paymentBtn) paymentBtn.style.display = "none";
+        if (generateBtn) generateBtn.disabled = false;
+        if (paymentCallout) {
+          paymentCallout.className = "callout success";
+          paymentCallout.innerHTML = "Eligible now — packet ready to generate.";
+        }
+        setStatus("Eligible now — packet ready to generate.");
+        if (paymentSuccess) localStorage.setItem(PAYMENT_STORAGE_KEY, "true");
+        loadAndRenderCourtInstructions(normalizedData, paymentSuccess || packetEligibility.isEligibleNow);
+      } else if (packetEligibility.isNotYetEligible) {
+        if (paymentBtn) paymentBtn.style.display = "none";
+        if (generateBtn) generateBtn.disabled = true;
         if (paymentCallout) {
           paymentCallout.className = "callout danger";
-          paymentCallout.innerHTML = t("packet.reminder.notYetEligibleCallout");
+          paymentCallout.innerHTML = `You are not yet eligible based on this screening. Estimated eligible date: <strong>${escapeHtml(formatDateForDisplay(packetEligibility.estimatedEligibleDate))}</strong>.`;
         }
-      }
-      if (paymentSuccess && eligibilityMode === "eligible") {
-        localStorage.setItem(PAYMENT_STORAGE_KEY, "true");
-        setPacketLockState(true, t("packet.paymentReceivedUnlocked"));
-        setStatus(t("packet.unlockedReadyGenerate"));
-      } else if (paymentCancelled && eligibilityMode === "eligible") {
-        setPacketLockState(false, t("packet.paymentCancelledSaved"));
-        setStatus(t("packet.paymentCancelledLocked"));
-      } else if (eligibilityMode === "eligible") {
-        setPacketLockState(false, t("packet.lockedWarning"));
-        setStatus(t("packet.lockedUntilPayment"));
-      } else if (eligibilityMode === "unclear") {
-        if (paymentBtn) paymentBtn.style.display = "";
-        setPacketLockState(false, t("packet.eligibilityUnclearWarning"));
+        setStatus("You are not yet eligible based on this screening.", "error");
       } else {
-        document.getElementById("generateSealingBtn").disabled = true;
-        setStatus(t("packet.reminder.notYetEligibleCallout"));
+        if (paymentBtn) paymentBtn.style.display = "";
+        if (generateBtn) generateBtn.disabled = true;
+        if (paymentCallout) {
+          paymentCallout.className = "callout warning";
+          paymentCallout.innerHTML = t("packet.eligibilityUnclearWarning") === "packet.eligibilityUnclearWarning" ? "Eligibility needs review before packet generation." : t("packet.eligibilityUnclearWarning");
+        }
+        setStatus("Eligibility needs review before packet generation.", "error");
       }
       const saveReminderBtn = document.getElementById("saveEligibilityReminderBtn");
       const downloadReminderBtn = document.getElementById("downloadEligibilityReminderBtn");
