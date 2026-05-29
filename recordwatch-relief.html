@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RecordWatch Relief Actions | RecordPathAI</title>
+  <meta name="description" content="Generate RecordWatch action plans, court packet prefill data, and background-check or data-broker dispute packets." />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="recordwatch-relief-page">
+  <header class="site-header"><div class="container"><div class="header-shell"><div class="header-inner"><a href="index.html" class="brand"><span class="brand-icon" aria-hidden="true"></span><span>RecordPathAI</span></a><nav class="nav" aria-label="Primary navigation"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="record-details.html">Record Details</a><a href="recordwatch.html">RecordWatch</a><a href="eligibility.html" class="nav-cta">Start Free Eligibility Check</a></nav></div></div></div></header>
+
+  <main>
+    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Layer 4: Automated Relief Engine</span><h1>Relief Actions</h1><p>Use saved intake data and rules-engine results to generate recommended next actions, court-packet prefill values, and dispute/correction requests.</p><div class="hero-actions"><a class="btn secondary" href="recordwatch-dashboard.html">Back to Dashboard</a><a class="btn secondary" href="recordwatch-intake.html">Add New Case</a></div></div></section>
+    <section class="recordwatch-section"><div class="container recordwatch-stack">
+      <div id="planSummary" class="section-card"></div>
+      <div class="recordwatch-actions"><button class="btn secondary" type="button" id="downloadPlan">Download Action Plan JSON</button><a class="btn secondary" href="recordwatch-dashboard.html">Back to Dashboard</a></div>
+      <div id="reliefCases" class="recordwatch-stack"></div>
+      <div class="disclaimer-box"><strong>Disclaimer:</strong> RecordWatch provides organization, estimated eligibility calculations, document preparation, and tracking tools. It is not legal advice. Eligibility rules vary by state, county, court, charge type, disposition, and personal history. Calculations must be verified before filing. RecordWatch does not guarantee record sealing, expungement, correction, deletion, removal, employment, housing approval, or background-check results.</div>
+    </div></section>
+  </main>
+
+  <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">RecordPathAI is not a law firm and does not provide legal advice.</div></div><div class="footer-links"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="recordwatch.html">RecordWatch</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
+
+  <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-monitor.js"></script>
+  <script src="js/recordwatch-relief.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      var profile = RecordWatchMonitor.loadProfile();
+      var cases = RecordWatchMonitor.loadCases();
+      var plan = RecordWatchRelief.saveReliefPlan(RecordWatchRelief.buildReliefPlan(profile, cases));
+      var planSummary = document.getElementById("planSummary");
+      var reliefCases = document.getElementById("reliefCases");
+
+      function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
+      function list(items) { return items && items.length ? "<ul>" + items.map(function (item) { return "<li>" + esc(item) + "</li>"; }).join("") + "</ul>" : "<span class='muted'>None recorded</span>"; }
+      function row(label, value) { return '<div class="detail-row"><strong>' + esc(label) + '</strong><span>' + (String(value || "").charAt(0) === "<" ? value : esc(value || "Not entered")) + '</span></div>'; }
+
+      function render() {
+        planSummary.innerHTML = '<h2>Relief action plan summary</h2><p class="muted">Generated locally on ' + esc(new Date(plan.createdAt).toLocaleString()) + ' and saved under <code>recordwatchReliefPlan</code>.</p><div class="summary-grid"><article class="summary-card"><p class="eyebrow-mini">Total cases</p><h3>' + plan.summary.totalCases + '</h3></article><article class="summary-card"><p class="eyebrow-mini">Eligible now</p><h3>' + plan.summary.eligibleNow + '</h3></article><article class="summary-card"><p class="eyebrow-mini">Needs info</p><h3>' + plan.summary.needsInformation + '</h3></article><article class="summary-card"><p class="eyebrow-mini">Post-relief monitoring</p><h3>' + plan.summary.postReliefMonitoring + '</h3></article></div>';
+        if (!cases.length) {
+          reliefCases.innerHTML = '<div class="empty-state"><h2>No cases available</h2><p>Complete RecordWatch intake before generating relief actions.</p><a class="btn" href="recordwatch-intake.html">Start Intake</a></div>';
+          return;
+        }
+        reliefCases.innerHTML = cases.map(function (caseData) {
+          var status = RecordWatchRules.calculateCaseStatus(caseData);
+          var date = RecordWatchRules.calculateEligibilityDate(caseData);
+          var nextAction = RecordWatchRelief.getNextAction(caseData);
+          var packet = RecordWatchRelief.getPacketRecommendation(caseData);
+          var missingDocs = RecordWatchRules.getMissingRequirements(caseData);
+          var postRelief = ["Generate background-check dispute packet", "Generate data-broker correction packet", "Mark case as verified corrected"];
+          return '<article class="action-card" data-case-id="' + esc(caseData.id) + '"><div class="case-header"><div><p class="eyebrow-mini">Case-by-case next steps</p><h3>' + esc(caseData.court && caseData.court.caseNumber || "No case number") + '</h3></div><span class="badge">' + esc(status) + '</span></div><div class="detail-list">' +
+            row("Court", caseData.court && caseData.court.courtName) + row("County / State", [caseData.court && caseData.court.county, caseData.court && caseData.court.caseState].filter(Boolean).join(", ")) + row("Outcome", caseData.outcome && caseData.outcome.outcome) + row("Eligibility status", status) + row("Estimated eligibility date", RecordWatchRules.formatDate(date)) + row("Recommended next action", nextAction) + row("Recommended packet type", packet) + row("Missing documents", list(missingDocs)) + row("Post-relief correction/dispute options", list(postRelief)) +
+            '</div><div class="case-actions"><button class="btn generate-court" type="button">Generate Court Packet</button><button class="btn secondary generate-dispute" type="button">Generate Dispute Packet</button><button class="btn secondary mark-complete" type="button">Mark Step Complete</button><a class="btn secondary" href="recordwatch-dashboard.html">Back to Dashboard</a></div></article>';
+        }).join("");
+      }
+
+      function findCaseFromButton(button) {
+        var id = button.closest("[data-case-id]").dataset.caseId;
+        return cases.find(function (caseData) { return caseData.id === id; });
+      }
+
+      reliefCases.addEventListener("click", function (event) {
+        if (event.target.matches(".generate-court")) {
+          RecordWatchRelief.prefillCourtPacket(findCaseFromButton(event.target), profile);
+        }
+        if (event.target.matches(".generate-dispute")) {
+          var caseData = findCaseFromButton(event.target);
+          var content = RecordWatchRelief.generateDisputePacket(caseData, profile);
+          RecordWatchRelief.downloadTextFile("recordwatch-dispute-" + (caseData.court && caseData.court.caseNumber || caseData.id) + ".txt", content);
+          RecordWatchMonitor.updateTask(caseData.id, "disputePacketGenerated", true);
+        }
+        if (event.target.matches(".mark-complete")) {
+          var selectedCase = findCaseFromButton(event.target);
+          RecordWatchMonitor.updateTask(selectedCase.id, "correctedVerified", true);
+          event.target.textContent = "Marked Verified";
+        }
+      });
+      document.getElementById("downloadPlan").addEventListener("click", function () { RecordWatchRelief.downloadActionPlanJSON(plan); });
+      render();
+    }());
+  </script>
+</body>
+</html>
