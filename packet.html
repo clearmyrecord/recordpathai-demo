@@ -1142,9 +1142,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       function isPacketPaymentComplete() {
-        const params = new URLSearchParams(window.location.search);
-        return params.get("payment") === "success" ||
-          localStorage.getItem(PAYMENT_STORAGE_KEY) === "true" ||
+        return localStorage.getItem(PAYMENT_STORAGE_KEY) === "true" ||
           isPacketPaymentBypassEnabled();
       }
 
