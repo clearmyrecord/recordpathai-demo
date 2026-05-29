@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RecordWatch Intake | RecordPathAI</title>
+  <meta name="description" content="RecordWatch intake captures personal, arrest, court, charge, outcome, and completion details for record relief tracking." />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="recordwatch-intake-page">
+  <header class="site-header"><div class="container"><div class="header-shell"><div class="header-inner"><a href="index.html" class="brand"><span class="brand-icon" aria-hidden="true"></span><span>RecordPathAI</span></a><nav class="nav" aria-label="Primary navigation"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="record-details.html">Record Details</a><a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a><a href="eligibility.html" class="nav-cta">Start Free Eligibility Check</a></nav></div></div></div></header>
+
+  <main>
+    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Layer 1: Record Intake Engine</span><h1>RecordWatch Intake</h1><p>Collect structured criminal case data as early as arrest, booking, filing, conviction, dismissal, discharge, sealing, or expungement.</p><div class="hero-actions"><a class="btn secondary" href="recordwatch-dashboard.html">View Dashboard</a><a class="btn secondary" href="recordwatch-relief.html">Start Relief Actions</a></div></div></section>
+
+    <section class="recordwatch-section"><div class="container recordwatch-stack">
+      <div id="saveMessage" class="success-message" role="status">Case saved locally. Your RecordWatch data will remain available after refresh in this browser.</div>
+      <form id="recordwatchIntakeForm" class="recordwatch-stack">
+        <section class="recordwatch-form-section"><h2>Section A — Personal Information</h2><div class="form-grid">
+          <div class="form-field"><label for="fullName">Full legal name</label><input id="fullName" name="fullName" autocomplete="name" /></div>
+          <div class="form-field"><label for="dateOfBirth">Date of birth</label><input id="dateOfBirth" name="dateOfBirth" type="date" /></div>
+          <div class="form-field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" /></div>
+          <div class="form-field"><label for="phone">Phone</label><input id="phone" name="phone" autocomplete="tel" /></div>
+          <div class="form-field"><label for="residenceState">Residence state</label><input id="residenceState" name="residenceState" /></div>
+        </div></section>
+
+        <section class="recordwatch-form-section"><h2>Section B — Arrest / Booking Information</h2><div class="form-grid">
+          <div class="form-field"><label for="arrestDate">Arrest date</label><input id="arrestDate" name="arrestDate" type="date" /></div>
+          <div class="form-field"><label for="arrestingAgency">Arresting agency</label><input id="arrestingAgency" name="arrestingAgency" /></div>
+          <div class="form-field"><label for="bookingNumber">Booking number</label><input id="bookingNumber" name="bookingNumber" /></div>
+          <div class="form-field"><label for="detentionFacility">Jail / detention facility</label><input id="detentionFacility" name="detentionFacility" /></div>
+          <div class="form-field"><label for="arrestCounty">Arrest county</label><input id="arrestCounty" name="arrestCounty" /></div>
+          <div class="form-field"><label for="arrestState">Arrest state</label><input id="arrestState" name="arrestState" /></div>
+        </div></section>
+
+        <section class="recordwatch-form-section"><h2>Section C — Court / Case Information</h2><div class="form-grid">
+          <div class="form-field"><label for="caseState">Case state</label><input id="caseState" name="caseState" /></div>
+          <div class="form-field"><label for="county">County</label><input id="county" name="county" /></div>
+          <div class="form-field"><label for="courtName">Court name</label><input id="courtName" name="courtName" /></div>
+          <div class="form-field"><label for="caseNumber">Case number</label><input id="caseNumber" name="caseNumber" /></div>
+          <div class="form-field"><label for="judge">Judge</label><input id="judge" name="judge" /></div>
+          <div class="form-field"><label for="prosecutor">Prosecutor</label><input id="prosecutor" name="prosecutor" /></div>
+          <div class="form-field"><label for="defenseAttorney">Defense attorney</label><input id="defenseAttorney" name="defenseAttorney" /></div>
+          <div class="form-field"><label for="filingDate">Filing date</label><input id="filingDate" name="filingDate" type="date" /></div>
+          <div class="form-field"><label for="arraignmentDate">Arraignment date</label><input id="arraignmentDate" name="arraignmentDate" type="date" /></div>
+        </div></section>
+
+        <section class="recordwatch-form-section"><div class="charge-header"><div><h2>Section D — Charges</h2><p class="muted">Add one card for each charge in this case.</p></div><button class="btn secondary small" type="button" id="addChargeTop">Add Another Charge</button></div><div id="chargesContainer" class="recordwatch-stack"></div></section>
+
+        <section class="recordwatch-form-section"><h2>Section E — Outcome / Disposition</h2><div class="form-grid">
+          <div class="form-field"><label for="outcome">Outcome</label><select id="outcome" name="outcome"><option value="">Select outcome</option><option>Pending</option><option>Dismissed</option><option>Not guilty</option><option>Acquitted</option><option>No bill</option><option>Convicted</option><option>Plea</option><option>Diversion / intervention</option><option>Pardon</option><option>Set aside</option><option>Sealed</option><option>Expunged</option></select></div>
+          <div class="form-field"><label for="dispositionDate">Disposition date</label><input id="dispositionDate" name="dispositionDate" type="date" /></div>
+          <div class="form-field"><label for="sentencingDate">Sentencing date</label><input id="sentencingDate" name="sentencingDate" type="date" /></div>
+          <div class="form-field"><label for="caseClosedDate">Case closed date</label><input id="caseClosedDate" name="caseClosedDate" type="date" /></div>
+          <div class="form-field"><label for="finalDischargeDate">Final discharge date</label><input id="finalDischargeDate" name="finalDischargeDate" type="date" /></div>
+        </div></section>
+
+        <section class="recordwatch-form-section"><h2>Section F — Sentencing / Completion</h2><div class="form-grid">
+          <div class="form-field"><label for="releaseDate">Jail/prison release date</label><input id="releaseDate" name="releaseDate" type="date" /></div>
+          <div class="form-field"><label for="probationStartDate">Probation start date</label><input id="probationStartDate" name="probationStartDate" type="date" /></div>
+          <div class="form-field"><label for="probationEndDate">Probation end date</label><input id="probationEndDate" name="probationEndDate" type="date" /></div>
+          <div class="form-field"><label for="communityControlEndDate">Community control end date</label><input id="communityControlEndDate" name="communityControlEndDate" type="date" /></div>
+          <div class="form-field"><label for="finePaidDate">Fine paid date</label><input id="finePaidDate" name="finePaidDate" type="date" /></div>
+          <div class="form-field"><label for="restitutionPaidDate">Restitution paid date</label><input id="restitutionPaidDate" name="restitutionPaidDate" type="date" /></div>
+          <div class="form-field"><label for="courtCostsPaid">Court costs paid?</label><select id="courtCostsPaid" name="courtCostsPaid"><option>Unknown</option><option>Yes</option><option>No</option></select></div>
+          <div class="form-field"><label for="finesPaid">Fines paid?</label><select id="finesPaid" name="finesPaid"><option>Unknown</option><option>Yes</option><option>No</option></select></div>
+          <div class="form-field"><label for="restitutionPaid">Restitution paid?</label><select id="restitutionPaid" name="restitutionPaid"><option>Unknown</option><option>Yes</option><option>No</option></select></div>
+        </div></section>
+
+        <section class="recordwatch-form-section"><div class="recordwatch-actions"><button class="btn" type="submit">Save Case</button><button class="btn secondary" type="button" id="addChargeBottom">Add Another Charge</button><a class="btn secondary" href="recordwatch-dashboard.html">View Dashboard</a><a class="btn secondary" href="recordwatch-relief.html">Start Relief Actions</a></div></section>
+      </form>
+      <div class="disclaimer-box"><strong>Disclaimer:</strong> RecordWatch provides organization, estimated eligibility calculations, document preparation, and tracking tools. It is not legal advice. Eligibility rules vary by state, county, court, charge type, disposition, and personal history. Calculations must be verified before filing. RecordWatch does not guarantee record sealing, expungement, correction, deletion, removal, employment, housing approval, or background-check results.</div>
+    </div></section>
+  </main>
+
+  <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">RecordPathAI is not a law firm and does not provide legal advice.</div></div><div class="footer-links"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
+
+  <script>
+    (function () {
+      "use strict";
+      var form = document.getElementById("recordwatchIntakeForm");
+      var chargesContainer = document.getElementById("chargesContainer");
+      var saveMessage = document.getElementById("saveMessage");
+      var editingCaseId = null;
+
+      function readJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (error) { return fallback; } }
+      function value(id) { return document.getElementById(id).value.trim(); }
+      function setValue(id, nextValue) { var field = document.getElementById(id); if (field) field.value = nextValue || ""; }
+
+      function addCharge(charge) {
+        var index = chargesContainer.children.length + 1;
+        var card = document.createElement("div");
+        card.className = "charge-card";
+        card.innerHTML = '<div class="charge-header"><h3>Charge ' + index + '</h3><button class="btn secondary small remove-charge" type="button">Remove</button></div>' +
+          '<div class="form-grid">' +
+          field("chargeName", "Charge name") + field("statuteCode", "Statute / offense code") +
+          selectField("chargeLevel", "Charge level", ["Infraction", "Minor misdemeanor", "Misdemeanor", "Felony", "Unknown"]) +
+          selectField("degree", "Degree", ["MM", "M1", "M2", "M3", "M4", "F1", "F2", "F3", "F4", "F5", "Unknown"]) +
+          selectField("violentOffense", "Violent offense?", ["No", "Yes", "Unknown"]) +
+          selectField("sexOffense", "Sex offense?", ["No", "Yes", "Unknown"]) +
+          selectField("trafficOffense", "Traffic offense?", ["No", "Yes", "Unknown"]) +
+          selectField("drugOffense", "Drug offense?", ["No", "Yes", "Unknown"]) +
+          selectField("domesticViolence", "Domestic violence related?", ["No", "Yes", "Unknown"]) +
+          '</div>';
+        chargesContainer.appendChild(card);
+        card.querySelector(".remove-charge").addEventListener("click", function () { if (chargesContainer.children.length > 1) card.remove(); });
+        if (charge) Object.keys(charge).forEach(function (key) { var input = card.querySelector('[data-charge-field="' + key + '"]'); if (input) input.value = charge[key] || ""; });
+      }
+
+      function field(name, label) { return '<div class="form-field"><label>' + label + '</label><input data-charge-field="' + name + '" /></div>'; }
+      function selectField(name, label, options) { return '<div class="form-field"><label>' + label + '</label><select data-charge-field="' + name + '">' + options.map(function (option) { return '<option>' + option + '</option>'; }).join("") + '</select></div>'; }
+
+      function collectCharges() {
+        return Array.from(chargesContainer.children).map(function (card) {
+          var charge = {};
+          card.querySelectorAll("[data-charge-field]").forEach(function (field) { charge[field.dataset.chargeField] = field.value.trim(); });
+          return charge;
+        });
+      }
+
+      function buildCase() {
+        var now = new Date().toISOString();
+        var profile = { fullName: value("fullName"), dateOfBirth: value("dateOfBirth"), email: value("email"), phone: value("phone"), residenceState: value("residenceState") };
+        return {
+          id: editingCaseId || "rw-case-" + Date.now(), createdAt: editingCaseId ? (readJSON("recordwatchCases", []).find(function (item) { return item.id === editingCaseId; }) || {}).createdAt || now : now, updatedAt: now,
+          personal: profile,
+          arrest: { arrestDate: value("arrestDate"), arrestingAgency: value("arrestingAgency"), bookingNumber: value("bookingNumber"), detentionFacility: value("detentionFacility"), arrestCounty: value("arrestCounty"), arrestState: value("arrestState") },
+          court: { caseState: value("caseState"), county: value("county"), courtName: value("courtName"), caseNumber: value("caseNumber"), judge: value("judge"), prosecutor: value("prosecutor"), defenseAttorney: value("defenseAttorney"), filingDate: value("filingDate"), arraignmentDate: value("arraignmentDate") },
+          charges: collectCharges(),
+          outcome: { outcome: value("outcome"), dispositionDate: value("dispositionDate"), sentencingDate: value("sentencingDate"), caseClosedDate: value("caseClosedDate"), finalDischargeDate: value("finalDischargeDate") },
+          sentencing: { releaseDate: value("releaseDate"), probationStartDate: value("probationStartDate"), probationEndDate: value("probationEndDate"), communityControlEndDate: value("communityControlEndDate"), finePaidDate: value("finePaidDate"), restitutionPaidDate: value("restitutionPaidDate"), courtCostsPaid: value("courtCostsPaid"), finesPaid: value("finesPaid"), restitutionPaid: value("restitutionPaid") }
+        };
+      }
+
+      function populateLatest() {
+        var profile = readJSON("recordwatchProfile", {});
+        Object.keys(profile).forEach(function (key) { setValue(key, profile[key]); });
+        var startBlankCase = new URLSearchParams(window.location.search).get("new") === "1";
+        var cases = readJSON("recordwatchCases", []);
+        var latest = cases[cases.length - 1];
+        if (startBlankCase || !latest) { editingCaseId = null; addCharge(); return; }
+        editingCaseId = latest.id;
+        [latest.arrest, latest.court, latest.outcome, latest.sentencing, latest.personal].forEach(function (group) { Object.keys(group || {}).forEach(function (key) { setValue(key, group[key]); }); });
+        chargesContainer.innerHTML = "";
+        (latest.charges && latest.charges.length ? latest.charges : [{}]).forEach(addCharge);
+      }
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var caseData = buildCase();
+        var cases = readJSON("recordwatchCases", []);
+        var existingIndex = cases.findIndex(function (item) { return item.id === caseData.id; });
+        if (existingIndex >= 0) cases[existingIndex] = caseData; else cases.push(caseData);
+        localStorage.setItem("recordwatchProfile", JSON.stringify(caseData.personal));
+        localStorage.setItem("recordwatchCases", JSON.stringify(cases));
+        editingCaseId = caseData.id;
+        saveMessage.classList.add("show");
+        saveMessage.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      document.getElementById("addChargeTop").addEventListener("click", function () { addCharge(); });
+      document.getElementById("addChargeBottom").addEventListener("click", function () { addCharge(); });
+      populateLatest();
+    }());
+  </script>
+</body>
+</html>
