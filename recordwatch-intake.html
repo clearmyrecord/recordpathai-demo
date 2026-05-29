@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body class="recordwatch-intake-page">
-  <header class="site-header"><div class="container"><div class="header-shell"><div class="header-inner"><a href="index.html" class="brand"><span class="brand-icon" aria-hidden="true"></span><span>RecordPathAI</span></a><nav class="nav" aria-label="Primary navigation"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="record-details.html">Record Details</a><a href="recordwatch.html">RecordWatch</a><a href="eligibility.html" class="nav-cta">Start Free Eligibility Check</a></nav></div></div></div></header>
+  <header class="site-header"><div class="container"><div class="header-shell"><div class="header-inner"><a href="index.html" class="brand"><span class="brand-icon" aria-hidden="true"></span><span>RecordPathAI</span></a><nav class="nav" aria-label="Primary navigation"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="record-details.html">Record Details</a><a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a><a href="eligibility.html" class="nav-cta">Start Free Eligibility Check</a></nav></div></div></div></header>
 
   <main>
     <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Layer 1: Record Intake Engine</span><h1>RecordWatch Intake</h1><p>Collect structured criminal case data as early as arrest, booking, filing, conviction, dismissal, discharge, sealing, or expungement.</p><div class="hero-actions"><a class="btn secondary" href="recordwatch-dashboard.html">View Dashboard</a><a class="btn secondary" href="recordwatch-relief.html">Start Relief Actions</a></div></div></section>
@@ -73,7 +73,7 @@
     </div></section>
   </main>
 
-  <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">RecordPathAI is not a law firm and does not provide legal advice.</div></div><div class="footer-links"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="recordwatch.html">RecordWatch</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
+  <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">RecordPathAI is not a law firm and does not provide legal advice.</div></div><div class="footer-links"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
 
   <script>
     (function () {
@@ -135,9 +135,10 @@
       function populateLatest() {
         var profile = readJSON("recordwatchProfile", {});
         Object.keys(profile).forEach(function (key) { setValue(key, profile[key]); });
+        var startBlankCase = new URLSearchParams(window.location.search).get("new") === "1";
         var cases = readJSON("recordwatchCases", []);
         var latest = cases[cases.length - 1];
-        if (!latest) { addCharge(); return; }
+        if (startBlankCase || !latest) { editingCaseId = null; addCharge(); return; }
         editingCaseId = latest.id;
         [latest.arrest, latest.court, latest.outcome, latest.sentencing, latest.personal].forEach(function (group) { Object.keys(group || {}).forEach(function (key) { setValue(key, group[key]); }); });
         chargesContainer.innerHTML = "";

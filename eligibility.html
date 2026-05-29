@@ -379,10 +379,25 @@
         align-items: flex-start;
       }
 
-      .nav,
-      .nav a {
+      .nav {
         width: 100%;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .nav a {
+        width: auto;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 8px;
         text-align: center;
+      }
+
+      .nav .nav-cta {
+        grid-column: 1 / -1;
       }
 
       .hero-card {
@@ -434,7 +449,7 @@
             <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
             <a href="eligibility.html" class="nav-cta" data-i18n="nav.eligibility">Eligibility</a>
             <a href="record-details.html" data-i18n="nav.recordDetails">Record Details</a>
-            <a href="recordwatch.html">RecordWatch</a>
+            <a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a>
           </nav>
 
           <div class="language-access">
@@ -588,7 +603,7 @@
         <a href="index.html" data-i18n="nav.home">Home</a>
         <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
         <a href="eligibility.html" data-i18n="nav.eligibility">Eligibility</a>
-        <a href="recordwatch.html">RecordWatch</a>
+        <a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a>
         <a href="terms.html" data-i18n="footer.terms">Terms</a>
         <a href="privacy.html" data-i18n="footer.privacy">Privacy</a>
         <a href="disclaimer.html" data-i18n="footer.disclaimer">Disclaimer</a>

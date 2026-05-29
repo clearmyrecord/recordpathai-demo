@@ -1552,3 +1552,31 @@ body.home-page .cta .btn {
     width: 100%;
   }
 }
+
+/* Keep expanded navigation usable after adding RecordWatch. */
+@media (max-width: 760px) {
+  .nav,
+  .main-nav,
+  .nav-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .nav a,
+  .main-nav a,
+  .nav-links a {
+    width: auto;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 8px;
+  }
+
+  .nav .nav-cta,
+  .main-nav .nav-btn,
+  .nav-links .nav-cta {
+    grid-column: 1 / -1;
+  }
+}
