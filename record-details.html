@@ -741,6 +741,10 @@
           <div class="case-banner" data-i18n="record.notice">
             <strong>Important:</strong> This is now the unified case intake for both court packet generation and RecordWatch tracking. Enter the case once here; RecordPathAI will carry it into <code>packet.html</code> and RecordWatch.
           </div>
+          <div class="account-cta">
+            <strong>Create account to save progress.</strong> You can continue entering record details without logging in, but saving this case to your dashboard requires a local demo account.
+            <a href="signup.html?returnUrl=record-details.html">Create account</a>
+          </div>
 
           <form id="recordDetailsForm" class="intake-form" onsubmit="return false;">
             <section class="intake-section" aria-labelledby="personalSectionTitle">
@@ -826,6 +830,7 @@
 
             <div class="actions">
               <a href="eligibility.html" class="btn btn-secondary">Back</a>
+              <button type="button" id="saveProgressBtn" class="btn btn-secondary">Save Progress</button>
               <button type="button" id="continueBtn" class="btn btn-primary">Continue to Packet</button>
             </div>
           </form>
@@ -877,6 +882,8 @@
   <script src="js/recordwatch-rules.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/translate.js"></script>
+  <script src="js/user-store.js"></script>
+  <script src="js/auth.js"></script>
   <script>
     (function () {
       "use strict";
@@ -884,6 +891,7 @@
       const offenseList = document.getElementById("offenseList");
       const addOffenseBtn = document.getElementById("addOffenseBtn");
       const continueBtn = document.getElementById("continueBtn");
+      const saveProgressBtn = document.getElementById("saveProgressBtn");
       const recordStatus = document.getElementById("recordStatus");
       let offenseCounter = 0;
 
@@ -1191,6 +1199,13 @@
             RecordWatchBridge.saveCaseFromRecordDetails({ charges: charges });
           }
         }
+        if (syncRecordWatchCase && window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
+          try {
+            RecordPathUserStore.saveCase({ packetStatus: "Draft saved" });
+          } catch (error) {
+            console.warn("Account case save skipped:", error);
+          }
+        }
         renderRecordWatchPanel();
         return { data, charges };
       }
@@ -1223,6 +1238,19 @@
           addOffense();
           saveDraft(false);
         });
+
+        if (saveProgressBtn) {
+          saveProgressBtn.addEventListener("click", function () {
+            const result = saveDraft(false);
+            if (window.RecordPathAuth && !RecordPathAuth.requireAuth("save progress", "record-details.html")) return;
+            if (!result.charges.length && !value("caseNumber")) {
+              alert("Add at least one charge or case number before saving progress.");
+              return;
+            }
+            saveDraft(true);
+            alert("Progress saved to your local demo account.");
+          });
+        }
 
         continueBtn.addEventListener("click", function () {
           const result = saveDraft(true);

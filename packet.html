@@ -1057,6 +1057,8 @@
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/translate.js"></script>
 
+  <script src="js/user-store.js"></script>
+  <script src="js/auth.js"></script>
  <script>
 document.addEventListener("DOMContentLoaded", function () {
       function renderRecordWatchPanel(eligibilityResult) {
@@ -2127,6 +2129,7 @@ document.addEventListener("DOMContentLoaded", function () {
         try {
           setStatus("Generating PDF packet...");
 
+          if (window.RecordPathAuth && !RecordPathAuth.requireAuth("generate PDF packet", "packet.html")) return;
           if (!window.PDFLib) throw new Error("pdf-lib failed to load.");
 
           const raw = readPacketData();
@@ -2287,6 +2290,10 @@ document.addEventListener("DOMContentLoaded", function () {
           link.remove();
 
           setTimeout(() => URL.revokeObjectURL(url), 5000);
+          localStorage.setItem("recordPathPacketGeneratedAt", new Date().toISOString());
+          if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
+            try { RecordPathUserStore.saveCase({ packetStatus: "Generated", paymentStatus: "Paid" }); } catch (error) { console.warn("Account packet save skipped:", error); }
+          }
           setStatus("Done. PDF packet downloaded.");
           renderEfilingChecklist({
             data,
@@ -2432,6 +2439,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
       function downloadEligibilityReminder(normalizedData, eligibilityMode = "not_eligible") {
+        if (window.RecordPathAuth && !RecordPathAuth.requireAuth("download eligibility reminder", "packet.html")) return;
         const reminder = buildReminderData(normalizedData, eligibilityMode, calculatePacketEligibility(normalizedData));
         const blob = new Blob([JSON.stringify(reminder, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
@@ -2454,6 +2462,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       async function startCheckout() {
         try {
+          if (window.RecordPathAuth && !RecordPathAuth.requireAuth("pay for and unlock your packet", "packet.html")) return;
           setStatus("Opening secure checkout...");
           const raw = readPacketData();
           const normalizedData = buildNormalizedPacketData(raw);
@@ -2523,6 +2532,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const raw = readPacketData();
       const normalizedData = buildNormalizedPacketData(raw);
+      if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
+        try { RecordPathUserStore.saveCase({ packetStatus: isPacketPaymentComplete() ? "Ready to generate" : "Packet reviewed" }); } catch (error) { console.warn("Account packet review save skipped:", error); }
+      }
       const packetEligibility = calculatePacketEligibility(normalizedData);
 
       document.getElementById("testPdfBtn").addEventListener("click", testPdfAccess);

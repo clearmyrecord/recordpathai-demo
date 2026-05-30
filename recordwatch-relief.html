@@ -27,6 +27,8 @@
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/recordwatch-monitor.js"></script>
   <script src="js/recordwatch-relief.js"></script>
+  <script src="js/user-store.js"></script>
+  <script src="js/auth.js"></script>
   <script>
     (function () {
       "use strict";
@@ -86,6 +88,11 @@
       document.getElementById("downloadPlan").addEventListener("click", function () { RecordWatchRelief.downloadActionPlanJSON(plan); });
       render();
     }());
+  </script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      if (window.RecordPathAuth) RecordPathAuth.requireProtectedPage("open RecordWatch");
+    });
   </script>
 </body>
 </html>
