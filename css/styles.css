@@ -2278,6 +2278,17 @@ body.home-page .cta .btn {
   white-space: nowrap;
 }
 
+.site-header .header-shell .nav a.active,
+.site-header .header-shell-modern .nav a.active,
+.site-header .nav a.active,
+.site-header .header-shell .nav a[aria-current="page"],
+.site-header .header-shell-modern .nav a[aria-current="page"],
+.site-header .nav a[aria-current="page"] {
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-color: #cfe0ff;
+}
+
 .site-header .header-shell .nav .nav-cta,
 .site-header .header-shell-modern .nav .nav-cta,
 .site-header .nav .nav-cta {
