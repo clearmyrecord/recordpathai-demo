@@ -12,6 +12,7 @@
       'nav.eligibility': 'Eligibility',
       'nav.recordDetails': 'Record Details',
       'nav.recordWatch': 'RecordWatch',
+      'nav.judgeAccess': 'Judge Access',
       'nav.packet': 'Packet',
       'nav.checkEligibility': 'Start Free Eligibility Check',
 
@@ -200,6 +201,7 @@
       'nav.eligibility': 'Elegibilidad',
       'nav.recordDetails': 'Detalles del registro',
       'nav.recordWatch': 'RecordWatch',
+      'nav.judgeAccess': 'Acceso judicial',
       'nav.packet': 'Paquete',
       'nav.checkEligibility': 'Comenzar revisión gratuita de elegibilidad',
 
@@ -403,17 +405,17 @@
   function applyLanguage(lang) {
     document.documentElement.lang = lang;
     document.querySelectorAll('[data-i18n]').forEach((node) => translateNode(node, lang));
-    const selector = document.querySelector('[data-language-selector]');
-    if (selector) selector.value = lang;
+    document.querySelectorAll('[data-language-selector]').forEach((selector) => {
+      selector.value = lang;
+    });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    const selector = document.querySelector('[data-language-selector]');
-    if (selector) {
+    document.querySelectorAll('[data-language-selector]').forEach((selector) => {
       selector.addEventListener('change', function (event) {
         setLanguage(event.target.value);
       });
-    }
+    });
     applyLanguage(getLanguage());
   });
 })();
