@@ -868,13 +868,15 @@
           </button>
 
           <nav class="nav" id="primary-navigation" aria-label="Primary navigation">
-            <a href="index.html" data-i18n="nav.home">Home</a>
-            <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
-            <a href="eligibility.html" data-i18n="nav.eligibility">Eligibility</a>
-            <a href="record-details.html" data-i18n="nav.recordDetails">Record Details</a>
-            <a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a>
-            <a href="court-access.html" data-i18n="nav.courtAccess">Court Access</a>
-            <a href="eligibility.html" class="nav-cta" data-i18n="nav.checkEligibility">Start Free Eligibility Check</a>
+            <div class="nav-group nav-workflow" aria-label="Consumer workflow navigation">
+              <a href="eligibility.html" data-workflow-link="eligibility" data-i18n="nav.eligibility">Check Eligibility</a>
+              <a href="record-details.html" data-workflow-link="record-details" data-i18n="nav.recordDetails">Record Details</a>
+              <a href="packet.html" data-workflow-link="packet" data-i18n="nav.packetGeneration">Packet Generation</a>
+            </div>
+            <div class="nav-group nav-partner" aria-label="Institutional partner navigation">
+              <a href="court-access.html" data-i18n="nav.courtAccess">Court Access</a>
+            </div>
+            <a href="eligibility.html" class="nav-cta" data-workflow-link="eligibility" data-i18n="nav.checkEligibility">Start Free Eligibility Check</a>
           </nav>
         </div>
       </div>
@@ -892,6 +894,10 @@
           </p>
         </div>
       </div>
+    </section>
+
+    <section class="workflow-progress-section">
+      <div class="container" data-workflow-progress></div>
     </section>
 
     <section class="page-section">
@@ -1110,8 +1116,12 @@
 
   <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/workflow.js"></script>
  <script>
 document.addEventListener("DOMContentLoaded", function () {
+      if (window.RecordPathWorkflow && !RecordPathWorkflow.guardPage("packet")) return;
+      if (window.RecordPathWorkflow) RecordPathWorkflow.renderProgress("packet");
+
       function renderRecordWatchPanel(eligibilityResult) {
         const result = eligibilityResult || calculatePacketEligibility(buildNormalizedPacketData(readPacketData()));
         const missing = result.flags && result.flags.length ? result.flags.join(", ") : "None recorded";
@@ -2196,8 +2206,18 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
 
+      function ensurePacketPrerequisites() {
+        if (!window.RecordPathWorkflow) return true;
+        const missing = RecordPathWorkflow.getMissingPacketPrerequisites();
+        if (!missing.length) return true;
+        setStatus(missing.join(" "), "error");
+        alert(missing.join("\n"));
+        return false;
+      }
+
       async function generateSealingPdf() {
         try {
+          if (!ensurePacketPrerequisites()) return;
           setStatus("Generating PDF packet...");
 
           if (window.RecordPathAuth && !RecordPathAuth.requireAuth("generate PDF packet", "packet.html")) return;
@@ -2362,6 +2382,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
           setTimeout(() => URL.revokeObjectURL(url), 5000);
           localStorage.setItem("recordPathPacketGeneratedAt", new Date().toISOString());
+          if (window.RecordPathWorkflow) {
+            RecordPathWorkflow.markPacketGenerated();
+            RecordPathWorkflow.renderProgress("packet");
+            RecordPathWorkflow.decorateNavigation();
+          }
           if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
             RecordPathUserStore.saveCase({ packetStatus: "Generated", paymentStatus: "Paid" }).catch(function (error) { console.warn("Account packet save skipped:", error); });
           }
@@ -2496,6 +2521,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       async function handlePrimaryPacketAction() {
+        if (!ensurePacketPrerequisites()) return;
         const raw = readPacketData();
         const normalizedData = buildNormalizedPacketData(raw);
         const packetEligibility = calculatePacketEligibility(normalizedData);
@@ -2576,6 +2602,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       async function startCheckout() {
         try {
+          if (!ensurePacketPrerequisites()) return;
           if (window.RecordPathAuth && !RecordPathAuth.requireAuth("pay for and unlock your packet", "packet.html")) return;
           const raw = readPacketData();
           const normalizedData = buildNormalizedPacketData(raw);
