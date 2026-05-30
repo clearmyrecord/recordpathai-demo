@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Court Access | RecordPathAI</title>
-  <meta name="description" content="Future RecordPathAI court access portal for clerks, court administrators, filing staff, partner agencies, and e-filing integration partners." />
+  <title>Court Access &amp; Filing Integration | RecordPathAI</title>
+  <meta name="description" content="Court Access and filing integration tools for courts, clerks, agencies, and justice-system partners reviewing structured record-sealing packets." />
   <link rel="canonical" href="https://recordpathai.com/court-access.html" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
@@ -41,13 +41,15 @@
           </button>
 
           <nav class="nav" id="primary-navigation" aria-label="Primary navigation">
-            <a href="index.html" data-i18n="nav.home">Home</a>
-            <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
-            <a href="eligibility.html" data-i18n="nav.eligibility">Eligibility</a>
-            <a href="record-details.html" data-i18n="nav.recordDetails">Record Details</a>
-            <a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a>
-            <a href="court-access.html" data-i18n="nav.courtAccess">Court Access</a>
-            <a href="eligibility.html" class="nav-cta" data-i18n="nav.checkEligibility">Start Free Eligibility Check</a>
+            <div class="nav-group nav-workflow" aria-label="Consumer workflow navigation">
+              <a href="eligibility.html" data-workflow-link="eligibility" data-i18n="nav.eligibility">Check Eligibility</a>
+              <a href="record-details.html" data-workflow-link="record-details" data-i18n="nav.recordDetails">Record Details</a>
+              <a href="packet.html" data-workflow-link="packet" data-i18n="nav.packetGeneration">Packet Generation</a>
+            </div>
+            <div class="nav-group nav-partner" aria-label="Institutional partner navigation">
+              <a href="court-access.html" data-i18n="nav.courtAccess">Court Access</a>
+            </div>
+            <a href="eligibility.html" class="nav-cta" data-workflow-link="eligibility" data-i18n="nav.checkEligibility">Start Free Eligibility Check</a>
           </nav>
         </div>
       </div>
@@ -57,87 +59,101 @@
   <main>
     <section class="page-hero">
       <div class="container hero-card court-hero-card">
-        <span class="eyebrow">Court partner portal roadmap</span>
-        <h1>Court Access</h1>
-        <p>A future portal for clerks, court administrators, and filing partners to review, track, and manage record-relief packets.</p>
-        <div class="hero-actions">
+        <span class="eyebrow">Institutional partner access</span>
+        <h1>Court Access &amp; Filing Integration</h1>
+        <p>RecordPathAI helps courts, clerks, agencies, and justice-system partners receive structured record-sealing packets, review user-submitted documents, manage approval workflows, and prepare for online filing integration.</p>
+        <div class="hero-actions court-cta-grid">
           <a class="btn" href="mailto:Matt@UnitedPaintersWW.com?subject=RecordPathAI%20Court%20Access%20Request">Request Court Access</a>
-          <a class="btn secondary" href="#clerk-workflow">View Clerk Workflow</a>
+          <a class="btn secondary" href="mailto:Matt@UnitedPaintersWW.com?subject=RecordPathAI%20Court%20Partnership">Partner With RecordPathAI</a>
+          <a class="btn secondary" href="#technical-integration">Review Integration Options</a>
+          <a class="btn secondary" href="mailto:Matt@UnitedPaintersWW.com?subject=RecordPathAI%20Platform%20Administrator%20Contact">Contact Platform Administrator</a>
         </div>
       </div>
     </section>
 
-    <section class="page-section" id="clerk-workflow">
+    <section class="page-section" id="court-dashboard">
       <div class="container section-card">
-        <h2>How Clerk Access Works</h2>
-        <p class="section-copy">Court Access is designed for the people and partner organizations that receive, review, and process court-ready record-relief filings.</p>
-        <div class="court-process-list">
-          <article><span>1</span><p>Applicant generates court-ready packet.</p></article>
-          <article><span>2</span><p>Packet is submitted digitally or by print/mail.</p></article>
-          <article><span>3</span><p>Clerk receives structured packet data.</p></article>
-          <article><span>4</span><p>Clerk reviews filing requirements.</p></article>
-          <article><span>5</span><p>Clerk marks status: received, incomplete, accepted, filed, hearing scheduled, granted, denied.</p></article>
-          <article><span>6</span><p>Applicant receives status updates.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section class="page-section">
-      <div class="container section-card">
-        <h2>Future Court Dashboard Features</h2>
+        <h2>Court &amp; Clerk Dashboard</h2>
+        <p class="section-copy">Court Access is a partner-facing workspace for onboarded court personnel, clerk teams, agency administrators, and authorized justice-system reviewers. The dashboard is designed to help court-side users review completed user packets, verify required fields, inspect supporting documents, flag missing information, and manage submission status using role-based access and audit trails.</p>
         <div class="court-feature-grid">
-          <div class="mini-card">Secure court/staff login</div>
-          <div class="mini-card">Assigned court/county access</div>
-          <div class="mini-card">Packet review queue</div>
-          <div class="mini-card">Applicant/case lookup</div>
-          <div class="mini-card">Filing checklist</div>
-          <div class="mini-card">Missing document flags</div>
-          <div class="mini-card">Court notes</div>
-          <div class="mini-card">Filing status tracking</div>
-          <div class="mini-card">Hearing date tracking</div>
-          <div class="mini-card">Document download</div>
-          <div class="mini-card">Audit log</div>
-          <div class="mini-card">Court-specific form templates</div>
-          <div class="mini-card">Integration-ready API structure</div>
+          <div class="mini-card">Court-side dashboard access</div>
+          <div class="mini-card">Document verification</div>
+          <div class="mini-card">Required-field review</div>
+          <div class="mini-card">Missing-information flags</div>
+          <div class="mini-card">Administrative review queues</div>
+          <div class="mini-card">Role-based access</div>
         </div>
       </div>
     </section>
 
-    <section class="page-section">
+    <section class="page-section" id="online-filing-intake">
       <div class="container section-card">
-        <h2>Court Partner Data Model</h2>
-        <p class="section-copy">The Court Access foundation is organized around future Supabase-backed entities that can support court staff permissions, packet intake, filing status history, document requests, and auditability.</p>
+        <h2>Online Filing Intake</h2>
+        <p class="section-copy">RecordPathAI is designed to route completed packets from eligible users to participating clerks or court partners for clerk review, acceptance, correction, or filing preparation. Intake workflows can support structured packet submission, secure packet transmission, jurisdiction-specific packet routing, filing status updates, and court-approved submission rules for participating jurisdictions.</p>
         <div class="court-data-grid">
-          <article class="mini-card"><h3>court_users</h3><p>Authorized clerks, administrators, filing reviewers, partner viewers, and super admins.</p></article>
-          <article class="mini-card"><h3>courts</h3><p>Court, county, jurisdiction, filing URL, and digital packet acceptance metadata.</p></article>
-          <article class="mini-card"><h3>court_staff_roles</h3><p>Role definitions and permission scopes for court-specific portal access.</p></article>
-          <article class="mini-card"><h3>packet_submissions</h3><p>Structured packet records linked to applicants, courts, case IDs, PDFs, and status.</p></article>
-          <article class="mini-card"><h3>filing_status_events</h3><p>Append-only status history for received, incomplete, filed, hearing, and outcome changes.</p></article>
-          <article class="mini-card"><h3>court_notes</h3><p>Internal and applicant-visible notes tied to each packet submission.</p></article>
-          <article class="mini-card"><h3>document_requests</h3><p>Correction and missing-document requests that can be surfaced to applicants.</p></article>
-          <article class="mini-card"><h3>audit_logs</h3><p>Security and compliance trail for every court-side action.</p></article>
+          <article class="mini-card"><h3>Structured packets</h3><p>Packet data is organized into consistent fields for review, validation, document inspection, and downstream filing preparation.</p></article>
+          <article class="mini-card"><h3>Participating courts</h3><p>Routing can be configured around participating courts, onboarded clerks, agency partners, and jurisdiction-specific submission rules.</p></article>
+          <article class="mini-card"><h3>Secure transmission</h3><p>The platform architecture supports secure packet transfer patterns, correction requests, notification workflows, and status updates.</p></article>
         </div>
       </div>
     </section>
 
-    <section class="page-section">
+    <section class="page-section" id="review-workflow">
       <div class="container section-card">
-        <h2>Access Roles</h2>
-        <div class="grid-3 court-role-grid">
-          <article class="mini-card"><h3>Clerk</h3><p>Reviews incoming packets, updates filing statuses, and requests corrections.</p></article>
-          <article class="mini-card"><h3>Court Administrator</h3><p>Manages court staff access and oversees court-specific filing operations.</p></article>
-          <article class="mini-card"><h3>Filing Reviewer</h3><p>Reviews filing requirements and prepares packets for formal processing.</p></article>
-          <article class="mini-card"><h3>Read-only Partner</h3><p>Views assigned packet and status information without changing records.</p></article>
-          <article class="mini-card"><h3>Super Admin</h3><p>Manages courts, role policies, templates, and integration readiness across jurisdictions.</p></article>
+        <h2>Review &amp; Approval Workflow</h2>
+        <p class="section-copy">Court Access separates consumer packet preparation from court-side administrative review so partner teams can manage each packet according to local filing procedures and clerk review requirements.</p>
+        <div class="court-process-list review-stage-list">
+          <article><span>1</span><p>Packet submitted</p></article>
+          <article><span>2</span><p>Clerk review</p></article>
+          <article><span>3</span><p>Missing information flagged</p></article>
+          <article><span>4</span><p>Corrections requested</p></article>
+          <article><span>5</span><p>Packet accepted</p></article>
+          <article><span>6</span><p>Filing prepared</p></article>
+          <article><span>7</span><p>Status updated</p></article>
         </div>
       </div>
     </section>
 
-    <section class="cta" id="request-access">
+    <section class="page-section" id="technical-integration">
+      <div class="container section-card">
+        <h2>Technical Integration</h2>
+        <p class="section-copy">The platform is being structured for API-ready connections, jurisdiction-specific templates, court routing rules, structured data validation, audit trails, notification workflows, and compatibility with future court case-management systems. Integration planning focuses on e-filing readiness, template configuration by jurisdiction, court-approved workflows, and future case-management system integration where participating courts or agencies choose to onboard.</p>
+        <div class="court-feature-grid">
+          <div class="mini-card">API-ready architecture</div>
+          <div class="mini-card">Jurisdiction-specific templates</div>
+          <div class="mini-card">Court routing rules</div>
+          <div class="mini-card">Structured data validation</div>
+          <div class="mini-card">Audit trails</div>
+          <div class="mini-card">Notification workflows</div>
+          <div class="mini-card">Future CMS integration</div>
+          <div class="mini-card">E-filing readiness</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page-section" id="court-onboarding">
+      <div class="container section-card">
+        <h2>Court Onboarding</h2>
+        <p class="section-copy">Courts, clerks, agencies, and justice-system partners can configure the operational rules that determine how packets are prepared for review, routed to the right administrative queue, corrected when information is missing, and tracked through status updates.</p>
+        <div class="court-data-grid">
+          <article class="mini-card"><h3>Filing requirements</h3><p>Configure local filing requirements, accepted packet formats, required documents, and submission procedures.</p></article>
+          <article class="mini-card"><h3>Review permissions</h3><p>Define review permissions, role-based access, administrative reviewer roles, and court-side dashboard visibility.</p></article>
+          <article class="mini-card"><h3>Workflow labels</h3><p>Set notification workflows, status labels, correction request stages, and jurisdiction-specific templates.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="page-section" id="integration-cta">
       <div class="container section-card court-interest-card">
-        <h2>Request Court Access</h2>
-        <p class="section-copy">Interested clerks, court administrators, filing staff, court partner agencies, and future e-filing integration partners can request early access information.</p>
-        <a class="btn" href="mailto:Matt@UnitedPaintersWW.com?subject=RecordPathAI%20Court%20Access%20Request">Request Court Access</a>
+        <h2>Build a Court-Approved Intake Path</h2>
+        <p class="section-copy">RecordPathAI works with participating courts, onboarded clerks, agencies, administrators, and integration partners to plan structured packet intake, clerk review, filing preparation, and future e-filing integrations according to local procedures.</p>
+        <div class="hero-actions court-cta-grid">
+          <a class="btn" href="mailto:Matt@UnitedPaintersWW.com?subject=RecordPathAI%20Court%20Access%20Request">Request Court Access</a>
+          <a class="btn secondary" href="mailto:Matt@UnitedPaintersWW.com?subject=Partner%20With%20RecordPathAI">Partner With RecordPathAI</a>
+          <a class="btn secondary" href="#technical-integration">Review Integration Options</a>
+          <a class="btn secondary" href="mailto:Matt@UnitedPaintersWW.com?subject=Contact%20RecordPathAI%20Platform%20Administrator">Contact Platform Administrator</a>
+        </div>
+        <p class="court-access-disclaimer">RecordPathAI is not a court, law firm, or legal representative. Filing availability, acceptance, review procedures, and online submission options depend on each participating court, agency, or jurisdiction.</p>
       </div>
     </section>
   </main>
@@ -169,6 +185,7 @@
   <script src="js/supabase-client.js"></script>
   <script src="js/user-store.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/workflow.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/court-access.js"></script>
 </body>

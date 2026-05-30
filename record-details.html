@@ -705,13 +705,15 @@
           </button>
 
           <nav class="nav" id="primary-navigation" aria-label="Primary navigation">
-            <a href="index.html" data-i18n="nav.home">Home</a>
-            <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
-            <a href="eligibility.html" data-i18n="nav.eligibility">Eligibility</a>
-            <a href="record-details.html" data-i18n="nav.recordDetails">Record Details</a>
-            <a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a>
-            <a href="court-access.html" data-i18n="nav.courtAccess">Court Access</a>
-            <a href="eligibility.html" class="nav-cta" data-i18n="nav.checkEligibility">Start Free Eligibility Check</a>
+            <div class="nav-group nav-workflow" aria-label="Consumer workflow navigation">
+              <a href="eligibility.html" data-workflow-link="eligibility" data-i18n="nav.eligibility">Check Eligibility</a>
+              <a href="record-details.html" data-workflow-link="record-details" data-i18n="nav.recordDetails">Record Details</a>
+              <a href="packet.html" data-workflow-link="packet" data-i18n="nav.packetGeneration">Packet Generation</a>
+            </div>
+            <div class="nav-group nav-partner" aria-label="Institutional partner navigation">
+              <a href="court-access.html" data-i18n="nav.courtAccess">Court Access</a>
+            </div>
+            <a href="eligibility.html" class="nav-cta" data-workflow-link="eligibility" data-i18n="nav.checkEligibility">Start Free Eligibility Check</a>
           </nav>
         </div>
       </div>
@@ -729,6 +731,10 @@
           </p>
         </div>
       </div>
+    </section>
+
+    <section class="workflow-progress-section">
+      <div class="container" data-workflow-progress></div>
     </section>
 
     <section class="page-section">
@@ -872,9 +878,13 @@
   <script src="js/translate.js"></script>
   <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/workflow.js"></script>
   <script>
     (function () {
       "use strict";
+
+      if (window.RecordPathWorkflow && !RecordPathWorkflow.guardPage("record-details")) return;
+      if (window.RecordPathWorkflow) RecordPathWorkflow.renderProgress("record-details");
 
       const offenseList = document.getElementById("offenseList");
       const addOffenseBtn = document.getElementById("addOffenseBtn");
@@ -1194,6 +1204,11 @@
             RecordWatchBridge.saveCaseFromRecordDetails({ charges: charges });
           }
         }
+        if (hasRecordDetailsCompletion(charges) && window.RecordPathWorkflow) {
+          RecordPathWorkflow.markRecordDetailsComplete({ recordDetailsCompletedAt: new Date().toISOString() });
+          RecordPathWorkflow.renderProgress("record-details");
+          RecordPathWorkflow.decorateNavigation();
+        }
         if (syncRecordWatchCase && window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
           try {
             RecordPathUserStore.saveCase({ packetStatus: "Draft saved" }).catch(function (error) { console.warn("Account draft save skipped:", error); });
@@ -1203,6 +1218,10 @@
         }
         renderRecordWatchPanel();
         return { data, charges };
+      }
+
+      function hasRecordDetailsCompletion(charges) {
+        return Boolean((charges && charges.length) || value("caseNumber"));
       }
 
       function renderRecordWatchPanel() {
@@ -1249,7 +1268,7 @@
 
         continueBtn.addEventListener("click", function () {
           const result = saveDraft(true);
-          if (!result.charges.length) {
+          if (!hasRecordDetailsCompletion(result.charges)) {
             alert("Add at least one charge or case number before continuing.");
             return;
           }

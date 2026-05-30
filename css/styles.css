@@ -2348,3 +2348,225 @@ body.home-page .cta .btn {
     justify-content: center;
   }
 }
+
+/* Workflow navigation, progress, and Court Access positioning */
+.site-header .nav {
+  align-items: center;
+}
+
+.site-header .nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.site-header .nav-workflow {
+  padding-right: 14px;
+  border-right: 1px solid var(--line);
+}
+
+.site-header .nav-partner a {
+  color: #38547f;
+}
+
+.site-header .nav a.is-locked,
+.workflow-step.is-locked a {
+  color: #7b879a;
+  background: #f1f5fb;
+  border-color: #d9e2f0;
+  cursor: not-allowed;
+}
+
+.site-header .nav a.is-locked::after {
+  content: " 🔒";
+  font-size: 0.9em;
+}
+
+.workflow-progress-section {
+  padding: 0 0 24px;
+}
+
+.workflow-progress-card {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: var(--shadow-soft);
+  padding: 18px;
+}
+
+.workflow-progress-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+  color: var(--text);
+}
+
+.workflow-progress-kicker {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.workflow-step a {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 76px;
+  padding: 14px;
+  border: 1px solid #dbe6f6;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.workflow-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-weight: 900;
+}
+
+.workflow-step-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.workflow-step-text span {
+  font-weight: 900;
+  color: var(--text);
+}
+
+.workflow-step-text small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.workflow-step.is-completed a {
+  border-color: #bee5cc;
+  background: var(--green-soft);
+}
+
+.workflow-step.is-completed .workflow-step-number {
+  background: var(--green);
+  color: #ffffff;
+}
+
+.workflow-step.is-completed .workflow-step-number::before {
+  content: "✓";
+}
+
+.workflow-step.is-completed .workflow-step-number {
+  font-size: 0;
+}
+
+.workflow-step.is-completed .workflow-step-number::before {
+  font-size: 18px;
+}
+
+.workflow-step.is-current a {
+  border-color: #9dc0f7;
+  background: #f4f8ff;
+  box-shadow: inset 0 0 0 2px rgba(23, 69, 156, 0.08);
+}
+
+.workflow-step.is-current .workflow-step-number {
+  background: var(--blue);
+  color: #ffffff;
+}
+
+.workflow-step.is-locked .workflow-step-number {
+  background: #e9eef6;
+  color: #7b879a;
+}
+
+.workflow-step.is-locked .workflow-step-number::before {
+  content: "🔒";
+  font-size: 15px;
+}
+
+.workflow-step.is-locked .workflow-step-number {
+  font-size: 0;
+}
+
+.court-cta-grid {
+  align-items: stretch;
+  gap: 12px;
+}
+
+.court-cta-grid .btn {
+  min-width: 220px;
+}
+
+.review-stage-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.court-access-disclaimer {
+  margin: 24px 0 0;
+  padding: 18px;
+  border: 1px solid #d8e3f3;
+  border-radius: 18px;
+  background: #f8fbff;
+  color: #526780;
+  line-height: 1.6;
+  font-weight: 700;
+}
+
+@media (max-width: 992px) {
+  .site-header .header-shell .nav,
+  .site-header .header-shell-modern .nav,
+  .site-header .nav {
+    gap: 10px;
+  }
+
+  .site-header .nav-group {
+    display: grid;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .site-header .nav-workflow {
+    padding: 0 0 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .site-header .nav-partner {
+    padding-bottom: 4px;
+  }
+
+  .workflow-steps,
+  .review-stage-list {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-progress-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .court-cta-grid .btn {
+    width: 100%;
+    min-width: 0;
+  }
+}
