@@ -56,6 +56,11 @@
         <article class="dashboard-card"><p class="eyebrow-mini">RecordWatch status</p><h3 id="recordWatchStatus">Ready</h3><p class="muted">Use RecordWatch to monitor next steps.</p></article>
         <article class="dashboard-card wide"><p class="eyebrow-mini">Next action</p><h3 id="nextAction">Continue eligibility intake</h3><div class="hero-actions"><a id="nextActionLink" class="btn" href="eligibility.html">Continue</a><a class="btn secondary" href="record-details.html">Edit Record Details</a><a class="btn secondary" href="recordwatch-dashboard.html">Open RecordWatch</a></div></article>
       </div>
+      <section class="page-card" id="recordWatchDashboardCard">
+        <h2>RecordWatch activity</h2>
+        <p class="muted">Monitor eligibility estimates, reminder status, notification preferences, and recent RecordWatch activity for your saved cases.</p>
+        <div id="recordWatchWidget" class="record-list"><div class="muted">Loading RecordWatch activity…</div></div>
+      </section>
       <section class="page-card" id="purchaseLedgerSection">
         <div class="section-heading-row">
           <div>
@@ -83,6 +88,7 @@
     </div></section>
   </main>
   <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Authentication and saved case records are powered by Supabase.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
+  <script src="js/recordwatch-notifications.js"></script>
   <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/i18n.js" defer></script>
   <script src="js/auth.js"></script><script>
     document.addEventListener("DOMContentLoaded", async function () {
@@ -101,9 +107,38 @@
       const nextAction = !cases.length ? ["Continue eligibility intake", "eligibility.html"] : latest.paymentStatus !== "Paid" ? ["Review packet and payment", "packet.html"] : latest.packetStatus !== "Generated" ? ["Generate or download packet", "packet.html"] : ["Open RecordWatch", "recordwatch-dashboard.html"];
       document.getElementById("nextAction").textContent = nextAction[0];
       document.getElementById("nextActionLink").href = nextAction[1];
+      await loadRecordWatchData(user && user.id);
+      renderRecordWatchWidget(latest);
       document.getElementById("caseList").innerHTML = cases.length ? cases.map((item) => `<article class="record-card"><h3>${escapeHtml(item.caseNumber || item.caseId)}</h3><p><strong>${escapeHtml(item.court || "Court not set")}</strong> ${escapeHtml([item.county,item.caseState].filter(Boolean).join(", "))}</p><p>${escapeHtml((item.charges || []).join(", ") || "Charges not stored in profile")}</p><p class="muted">Eligibility: ${escapeHtml(item.eligibilityStatus || "Not screened yet")} · Packet: ${escapeHtml(item.packetStatus || "Not generated")} · Updated: ${escapeHtml(new Date(item.updatedAt).toLocaleString())}</p></article>`).join("") : '<div class="empty-state"><h2>No saved cases yet</h2><p>Complete record details and choose Save Progress to add a case.</p><a class="btn" href="record-details.html">Add case details</a></div>';
       await loadLedger();
     });
+
+    async function loadRecordWatchData(userId){
+      if (!window.RecordWatchNotifications || !RecordWatchNotifications.fetchRemoteData) return null;
+      return RecordWatchNotifications.fetchRemoteData(userId);
+    }
+
+    function renderRecordWatchWidget(latest){
+      const widget = document.getElementById("recordWatchWidget");
+      if (!widget) return;
+      const events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
+      const notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
+      const subscriptions = window.RecordWatchNotifications ? RecordWatchNotifications.loadSubscriptions() : [];
+      const event = events.find((item) => item.case_id === latest.caseId || item.case_id === latest.id) || events[0];
+      const eligibilityDate = (event && event.eligibility_date) || latest.estimatedEligibleDate || "";
+      const confidence = (event && event.eligibility_confidence) || "medium";
+      const confidenceReason = (event && event.eligibility_confidence_reason) || "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.";
+      const days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(eligibilityDate) : null;
+      widget.innerHTML = [
+        ["Eligibility Date", eligibilityDate || "Complete screening to estimate a date."],
+        ["Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")],
+        ["Confidence", confidence.replace(/_/g, " ") + " — " + confidenceReason],
+        ["Notification Status", subscriptions.length ? "Active" : "Not activated"],
+        ["Reminder History", notifications.length ? notifications.slice(-3).map((item) => item.subject).join("; ") : "No reminders yet"],
+        ["Communication Preferences", subscriptions[0] && subscriptions[0].notify_sms ? "Premium SMS + email" : "Free email / in-app"],
+        ["Upcoming Alerts", days !== null && days > 0 ? "90, 30, 7, and day-of reminders" : "Eligibility reached alert"]
+      ].map((item) => `<article class="record-card"><strong>${escapeHtml(item[0])}</strong><p>${escapeHtml(item[1])}</p></article>`).join("");
+    }
 
     let ledgerEntries = [];
 
