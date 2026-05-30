@@ -1581,7 +1581,7 @@ body.home-page .cta .btn {
   }
 }
 
-/* Modern homepage header layout */
+/* Modern global header layout */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1611,7 +1611,9 @@ body.home-page .cta .btn {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 12px;
   min-height: 30px;
+  font-size: 13px;
 }
 
 .header-shell-modern .header-inner {
@@ -1631,7 +1633,7 @@ body.home-page .cta .btn {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 24px;
+  gap: 20px;
   flex: 1 1 auto;
   flex-wrap: nowrap;
   min-width: 0;
@@ -1690,7 +1692,51 @@ body.home-page .cta .btn {
   font-weight: 800;
 }
 
-.language-access-mobile {
+.auth-utility {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.auth-utility-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.auth-utility-link:hover {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.auth-login {
+  padding-inline: 6px;
+  color: var(--muted);
+}
+
+.auth-create-account {
+  background: var(--blue);
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(23, 69, 156, 0.14);
+}
+
+.auth-create-account:hover {
+  background: var(--blue-dark);
+  color: #ffffff;
+}
+
+.language-access-mobile,
+.auth-utility-mobile {
   display: none;
 }
 
@@ -1717,9 +1763,9 @@ body.home-page .cta .btn {
   background: currentColor;
 }
 
-@media (max-width: 1240px) and (min-width: 981px) {
+@media (max-width: 1280px) and (min-width: 981px) {
   .header-shell-modern .header-inner {
-    gap: 18px;
+    gap: 16px;
   }
 
   .header-shell-modern .brand {
@@ -1727,12 +1773,12 @@ body.home-page .cta .btn {
   }
 
   .header-shell-modern .nav {
-    gap: 14px;
-    font-size: 14px;
+    gap: 12px;
+    font-size: 13px;
   }
 
   .header-shell-modern .nav .nav-cta {
-    padding-inline: 14px;
+    padding-inline: 12px;
   }
 }
 
@@ -1809,6 +1855,21 @@ body.home-page .cta .btn {
   .language-access-mobile select {
     width: auto;
     min-width: 150px;
+  }
+
+  .auth-utility-mobile {
+    display: flex;
+    justify-content: stretch;
+    gap: 8px;
+    width: 100%;
+    padding: 4px 0 0;
+  }
+
+  .auth-utility-mobile .auth-utility-link {
+    flex: 1 1 auto;
+    min-height: 42px;
+    padding: 12px 14px;
+    text-align: center;
   }
 }
 

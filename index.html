@@ -41,7 +41,7 @@
   <header class="site-header">
     <div class="container">
       <div class="header-shell header-shell-modern">
-        <div class="header-utility" aria-label="Language options">
+        <div class="header-utility" aria-label="Utility navigation">
           <div class="language-access language-access-utility">
             <span class="language-icon" aria-hidden="true">🌐</span>
             <label for="language-selector" data-i18n="lang.label">Language Access</label>
@@ -50,11 +50,12 @@
               <option value="es" data-i18n="lang.spanish">Español</option>
             </select>
           </div>
+          <div class="auth-utility" data-auth-utility></div>
         </div>
 
         <div class="header-inner">
           <a href="index.html" class="brand">
-            <span class="brand-icon"></span>
+            <span class="brand-icon" aria-hidden="true"></span>
             <span>RecordPathAI</span>
           </a>
 
@@ -81,6 +82,7 @@
                 <option value="es" data-i18n="lang.spanish">Español</option>
               </select>
             </div>
+            <div class="auth-utility auth-utility-mobile" data-auth-utility></div>
           </nav>
         </div>
       </div>
@@ -314,18 +316,5 @@
   <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/i18n.js"></script>
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      const headerShell = document.querySelector(".header-shell-modern");
-      const menuToggle = document.querySelector(".menu-toggle");
-
-      if (!headerShell || !menuToggle) return;
-
-      menuToggle.addEventListener("click", function () {
-        const isOpen = headerShell.classList.toggle("nav-open");
-        menuToggle.setAttribute("aria-expanded", String(isOpen));
-      });
-    });
-  </script>
 </body>
 </html>

@@ -2,7 +2,56 @@
 <html lang="en">
 <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Account | RecordPathAI</title><meta name="description" content="Manage RecordPathAI account details." /><link rel="stylesheet" href="css/styles.css" /></head>
 <body>
-  <header class="site-header"><div class="container"><div class="header-shell"><div class="header-inner"><a href="index.html" class="brand"><span class="brand-icon" aria-hidden="true"></span><span>RecordPathAI</span></a><nav class="nav" aria-label="Primary navigation"><a href="index.html">Home</a><a href="dashboard.html">Dashboard</a><a href="eligibility.html">Eligibility</a><a href="recordwatch.html">RecordWatch</a></nav></div></div></div></header>
+  <header class="site-header">
+    <div class="container">
+      <div class="header-shell header-shell-modern">
+        <div class="header-utility" aria-label="Utility navigation">
+          <div class="language-access language-access-utility">
+            <span class="language-icon" aria-hidden="true">🌐</span>
+            <label for="language-selector" data-i18n="lang.label">Language Access</label>
+            <select id="language-selector" data-language-selector>
+              <option value="en" data-i18n="lang.english">English</option>
+              <option value="es" data-i18n="lang.spanish">Español</option>
+            </select>
+          </div>
+          <div class="auth-utility" data-auth-utility></div>
+        </div>
+
+        <div class="header-inner">
+          <a href="index.html" class="brand">
+            <span class="brand-icon" aria-hidden="true"></span>
+            <span>RecordPathAI</span>
+          </a>
+
+          <button class="menu-toggle" type="button" aria-controls="primary-navigation" aria-expanded="false">
+            <span class="menu-toggle-line"></span>
+            <span class="menu-toggle-line"></span>
+            <span class="menu-toggle-line"></span>
+            <span class="sr-only">Toggle navigation</span>
+          </button>
+
+          <nav class="nav" id="primary-navigation" aria-label="Primary navigation">
+            <a href="index.html" data-i18n="nav.home">Home</a>
+            <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
+            <a href="eligibility.html" data-i18n="nav.eligibility">Eligibility</a>
+            <a href="record-details.html" data-i18n="nav.recordDetails">Record Details</a>
+            <a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a>
+            <a href="record-details.html" data-i18n="nav.judgeAccess">Judge Access</a>
+            <a href="eligibility.html" class="nav-cta" data-i18n="nav.checkEligibility">Start Free Eligibility Check</a>
+            <div class="language-access language-access-mobile">
+              <span class="language-icon" aria-hidden="true">🌐</span>
+              <label for="language-selector-mobile" data-i18n="lang.label">Language Access</label>
+              <select id="language-selector-mobile" data-language-selector>
+                <option value="en" data-i18n="lang.english">English</option>
+                <option value="es" data-i18n="lang.spanish">Español</option>
+              </select>
+            </div>
+            <div class="auth-utility auth-utility-mobile" data-auth-utility></div>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </header>
   <main><section class="page-hero"><div class="container hero-card"><span class="eyebrow">Account</span><h1>Account settings</h1><p>Update your Supabase account profile.</p></div></section><section class="page-section"><div class="container"><section class="page-card auth-card"><form id="accountForm" class="form-grid" onsubmit="return false;"><div class="field field-full"><label for="fullName">Full name</label><input id="fullName" type="text" required /></div><div class="field"><label for="email">Email</label><input id="email" type="email" required /></div><div class="field"><label for="phone">Phone</label><input id="phone" type="tel" /></div><div class="summary-box field-full"><h3>Account metadata</h3><div class="summary-list"><div class="summary-row"><strong>User ID</strong><span id="userId">—</span></div><div class="summary-row"><strong>Created</strong><span id="createdAt">—</span></div><div class="summary-row"><strong>Last login</strong><span id="lastLoginAt">—</span></div></div></div><div class="button-row field-full"><button class="btn btn-primary" type="submit">Save Account</button><button class="btn btn-secondary" id="logoutBtn" type="button">Logout</button></div></form><p id="accountStatus" class="meta-note" role="status"></p></section></div></section></main>
   <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Authentication is powered by Supabase Auth.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
   <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/auth.js"></script><script>

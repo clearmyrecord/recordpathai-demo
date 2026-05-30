@@ -2,7 +2,56 @@
 <html lang="en">
 <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Dashboard | RecordPathAI</title><meta name="description" content="Track RecordPathAI eligibility, saved cases, packet status, and RecordWatch status." /><link rel="stylesheet" href="css/styles.css" /></head>
 <body>
-  <header class="site-header"><div class="container"><div class="header-shell"><div class="header-inner"><a href="index.html" class="brand"><span class="brand-icon" aria-hidden="true"></span><span>RecordPathAI</span></a><nav class="nav" aria-label="Primary navigation"><a href="index.html">Home</a><a href="eligibility.html">Eligibility</a><a href="record-details.html">Record Details</a><a href="packet.html">Packet</a><a href="recordwatch.html">RecordWatch</a></nav></div></div></div></header>
+  <header class="site-header">
+    <div class="container">
+      <div class="header-shell header-shell-modern">
+        <div class="header-utility" aria-label="Utility navigation">
+          <div class="language-access language-access-utility">
+            <span class="language-icon" aria-hidden="true">🌐</span>
+            <label for="language-selector" data-i18n="lang.label">Language Access</label>
+            <select id="language-selector" data-language-selector>
+              <option value="en" data-i18n="lang.english">English</option>
+              <option value="es" data-i18n="lang.spanish">Español</option>
+            </select>
+          </div>
+          <div class="auth-utility" data-auth-utility></div>
+        </div>
+
+        <div class="header-inner">
+          <a href="index.html" class="brand">
+            <span class="brand-icon" aria-hidden="true"></span>
+            <span>RecordPathAI</span>
+          </a>
+
+          <button class="menu-toggle" type="button" aria-controls="primary-navigation" aria-expanded="false">
+            <span class="menu-toggle-line"></span>
+            <span class="menu-toggle-line"></span>
+            <span class="menu-toggle-line"></span>
+            <span class="sr-only">Toggle navigation</span>
+          </button>
+
+          <nav class="nav" id="primary-navigation" aria-label="Primary navigation">
+            <a href="index.html" data-i18n="nav.home">Home</a>
+            <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
+            <a href="eligibility.html" data-i18n="nav.eligibility">Eligibility</a>
+            <a href="record-details.html" data-i18n="nav.recordDetails">Record Details</a>
+            <a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a>
+            <a href="record-details.html" data-i18n="nav.judgeAccess">Judge Access</a>
+            <a href="eligibility.html" class="nav-cta" data-i18n="nav.checkEligibility">Start Free Eligibility Check</a>
+            <div class="language-access language-access-mobile">
+              <span class="language-icon" aria-hidden="true">🌐</span>
+              <label for="language-selector-mobile" data-i18n="lang.label">Language Access</label>
+              <select id="language-selector-mobile" data-language-selector>
+                <option value="en" data-i18n="lang.english">English</option>
+                <option value="es" data-i18n="lang.spanish">Español</option>
+              </select>
+            </div>
+            <div class="auth-utility auth-utility-mobile" data-auth-utility></div>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </header>
   <main>
     <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Account dashboard</span><h1 id="dashboardTitle">Your RecordPathAI dashboard</h1><p>Review saved account data, live case records, packet status, RecordWatch status, and the recommended next action.</p></div></section>
     <section class="page-section"><div class="container recordwatch-stack">
