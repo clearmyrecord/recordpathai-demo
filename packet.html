@@ -1027,16 +1027,8 @@
               <div id="missingInfoFields" class="missing-info-grid"></div>
             </div>
 
-            <div class="sig-row">
-              <input id="typedSignature" class="sig-input" type="text" data-i18n-placeholder="packet.typedSignaturePlaceholder" placeholder="Typed signature name" />
-              <div class="sig-actions">
-                <button type="button" class="sig-small-btn" id="useTypedSigBtn" data-i18n="packet.useTyped">Use Typed Signature</button>
-                <button type="button" class="sig-small-btn" id="clearSigBtn" data-i18n="packet.clearSignature">Clear Signature</button>
-              </div>
-            </div>
-
             <div class="sig-pad-wrap">
-              <p class="sig-pad-label" data-i18n="packet.signatureDraw">Or draw your signature below</p>
+              <p class="sig-pad-label" data-i18n="packet.signatureDraw">Draw your signature below</p>
               <canvas id="signaturePad"></canvas>
               <div class="sig-actions" style="margin-top: 10px;">
                 <button type="button" class="sig-small-btn" id="useDrawnSigBtn" data-i18n="packet.useDrawn">Use Drawn Signature</button>
@@ -1159,8 +1151,9 @@ document.addEventListener("DOMContentLoaded", function () {
     "charges.0.disposition_date"
   ];
 
-  // ✍️ Signature storage (typed or drawn)
+  // ✍️ Signature storage (drawn only)
   let signatureImageBytes = null;
+  let signaturePadHasInk = false;
 
       function setStatus(message, mode = "normal") {
         const el = document.getElementById("statusText");
@@ -1919,25 +1912,6 @@ document.addEventListener("DOMContentLoaded", function () {
         return bytes;
       }
 
-      function buildTypedSignatureImage(name) {
-        const canvas = document.createElement("canvas");
-        canvas.width = 700;
-        canvas.height = 180;
-        const ctx = canvas.getContext("2d");
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.font = "italic 64px Georgia";
-        ctx.fillStyle = "#111";
-        ctx.fillText(name || "Signature", 18, 110);
-        return dataUrlToBytes(canvas.toDataURL("image/png"));
-      }
-
-      function setTypedSignature() {
-        const input = document.getElementById("typedSignature");
-        const name = input ? input.value.trim() : "";
-        signatureImageBytes = buildTypedSignatureImage(name);
-        setStatus("Typed signature selected.");
-      }
-
       function setupSignaturePad() {
         const canvas = document.getElementById("signaturePad");
         const ctx = canvas.getContext("2d");
@@ -1968,6 +1942,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         function start(event) {
           drawing = true;
+          signatureImageBytes = null;
           const p = pointFromEvent(event);
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
@@ -1979,6 +1954,8 @@ document.addEventListener("DOMContentLoaded", function () {
           const p = pointFromEvent(event);
           ctx.lineTo(p.x, p.y);
           ctx.stroke();
+          signaturePadHasInk = true;
+          signatureImageBytes = null;
           event.preventDefault();
         }
 
@@ -1988,6 +1965,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         function clearPad() {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
+          signaturePadHasInk = false;
         }
 
         window.clearSignaturePadCanvas = clearPad;
@@ -2003,7 +1981,17 @@ document.addEventListener("DOMContentLoaded", function () {
         window.addEventListener("touchend", end);
       }
 
+      function requireSavedDrawnSignature() {
+        if (signatureImageBytes) return true;
+        setStatus("Please draw your signature before generating your packet.", "error");
+        return false;
+      }
+
       function setDrawnSignature() {
+        if (!signaturePadHasInk) {
+          setStatus("Please draw your signature before generating your packet.", "error");
+          return;
+        }
         const dataUrl = window.getSignaturePadDataUrl();
         signatureImageBytes = dataUrlToBytes(dataUrl);
         setStatus("Drawn signature selected.");
@@ -2011,6 +1999,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       function clearSignature() {
         signatureImageBytes = null;
+        signaturePadHasInk = false;
         if (window.clearSignaturePadCanvas) window.clearSignaturePadCanvas();
         setStatus("Signature cleared.");
       }
@@ -2235,12 +2224,7 @@ document.addEventListener("DOMContentLoaded", function () {
             throw new Error("Payment is required before generating the PDF packet.");
           }
 
-          const typedSignature = document.getElementById("typedSignature");
-          if (!signatureImageBytes) {
-            signatureImageBytes = buildTypedSignatureImage(
-              typedSignature?.value || data.petitioner.full_name
-            );
-          }
+          if (!requireSavedDrawnSignature()) return;
 
           const selected = await loadActiveTemplateForPacket(data);
           if (!selected) {
@@ -2395,7 +2379,7 @@ document.addEventListener("DOMContentLoaded", function () {
             data,
             singleFileBytes,
             totalPacketBytes,
-            hasSignature: Boolean(signatureImageBytes || (typedSignature?.value || "").trim())
+            hasSignature: Boolean(signatureImageBytes)
           });
         } catch (error) {
           console.error("PDF generation failed:", error);
@@ -2528,6 +2512,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const state = getPacketGenerationState(packetEligibility);
 
         if (state === "eligibleUnpaid") {
+          if (!requireSavedDrawnSignature()) return;
           await startCheckout();
           return;
         }
@@ -2603,6 +2588,7 @@ document.addEventListener("DOMContentLoaded", function () {
       async function startCheckout() {
         try {
           if (!ensurePacketPrerequisites()) return;
+          if (!requireSavedDrawnSignature()) return;
           if (window.RecordPathAuth && !RecordPathAuth.requireAuth("pay for and unlock your packet", "packet.html")) return;
           const raw = readPacketData();
           const normalizedData = buildNormalizedPacketData(raw);
@@ -2684,9 +2670,7 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById("testPdfBtn")?.addEventListener("click", testPdfAccess);
       document.getElementById("generateSealingBtn")?.addEventListener("click", handlePrimaryPacketAction);
       document.getElementById("openSourceBtn")?.addEventListener("click", openSourcePdf);
-      document.getElementById("useTypedSigBtn")?.addEventListener("click", setTypedSignature);
       document.getElementById("useDrawnSigBtn").addEventListener("click", setDrawnSignature);
-      document.getElementById("clearSigBtn").addEventListener("click", clearSignature);
       document.getElementById("clearPadBtn").addEventListener("click", clearSignature);
 
       setupSignaturePad();
@@ -2696,8 +2680,6 @@ document.addEventListener("DOMContentLoaded", function () {
       updateTemplateCallout(normalizedData);
       renderRecordWatchPanel(packetEligibility);
 
-      const sigInput = document.getElementById("typedSignature");
-      if (sigInput) sigInput.value = normalizedData.petitioner.full_name || "";
 
       const eligibilityMode = packetEligibility.mode;
       const packetGenerationState = getPacketGenerationState(packetEligibility);
@@ -2727,8 +2709,6 @@ document.addEventListener("DOMContentLoaded", function () {
       const downloadReminderBtn = document.getElementById("downloadEligibilityReminderBtn");
       if (saveReminderBtn) saveReminderBtn.addEventListener("click", () => saveEligibilityReminder(normalizedData, eligibilityMode));
       if (downloadReminderBtn) downloadReminderBtn.addEventListener("click", () => downloadEligibilityReminder(normalizedData, eligibilityMode));
-
-      setTypedSignature();
     });
 
     if (window.RecordPathDataBridge && RecordPathDataBridge.initPage) {

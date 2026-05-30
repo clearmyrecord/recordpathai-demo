@@ -198,7 +198,7 @@
       'packet.screeningNote': 'This is a screening result, not legal advice. Final approval depends on the court.',
       'packet.offensesSubtitle': 'The packet and eligibility banner above use the current selected record. This section shows every saved offense currently in your flow.',
       'packet.missingInfoHelp': 'Please provide the required fields below so your form can be generated.',
-      'packet.signatureDraw': 'Or draw your signature below',
+      'packet.signatureDraw': 'Draw your signature below',
       'packet.loadingFiling': 'Loading filing instructions...',
       'packet.footerNote': 'RecordPathAI prepares court-ready documents. It does not file directly with the court and is not a law firm. You can use an e-filing-ready packet with your court integration partner.',
     },
@@ -398,7 +398,7 @@
       'packet.screeningNote': 'Este es un resultado de evaluación, no asesoría legal. La aprobación final depende del tribunal.',
       'packet.offensesSubtitle': 'El paquete y el aviso de elegibilidad de arriba usan el expediente seleccionado actual. Esta sección muestra todos los delitos guardados en su flujo.',
       'packet.missingInfoHelp': 'Proporcione los campos obligatorios a continuación para que se pueda generar su formulario.',
-      'packet.signatureDraw': 'O dibuje su firma abajo',
+      'packet.signatureDraw': 'Dibuje su firma abajo',
       'packet.loadingFiling': 'Cargando instrucciones de presentación...',
       'packet.footerNote': 'RecordPathAI prepara documentos listos para el tribunal. No presenta directamente ante el tribunal y no es un bufete de abogados. Puede usar un paquete listo para presentación electrónica con su socio de integración judicial.',
     }
