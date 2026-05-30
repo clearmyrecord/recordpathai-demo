@@ -95,25 +95,23 @@ header {
   letter-spacing: -0.03em;
 }
 
-.brand-icon {
-  width: 28px;
-  height: 34px;
-  border: 2px solid #22345f;
-  border-radius: 4px;
-  background: #ffffff;
-  position: relative;
-  flex: 0 0 auto;
+.site-logo {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
-.brand-icon::before {
-  content: "";
-  position: absolute;
-  left: 5px;
-  right: 5px;
-  top: 9px;
-  height: 2px;
-  background: #97a4bb;
-  box-shadow: 0 6px 0 #97a4bb, 0 12px 0 #97a4bb;
+.site-logo-img {
+  height: 44px;
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+
+@media (max-width: 768px) {
+  .site-logo-img {
+    height: 38px;
+  }
 }
 
 .nav,
@@ -1196,27 +1194,6 @@ footer {
   color: #3b6db4;
   letter-spacing: -0.02em;
   text-decoration: none;
-}
-
-.brand-icon {
-  width: 28px;
-  height: 34px;
-  border: 2px solid #22345f;
-  border-radius: 4px;
-  background: #ffffff;
-  position: relative;
-  flex: 0 0 auto;
-}
-
-.brand-icon::before {
-  content: "";
-  position: absolute;
-  left: 5px;
-  right: 5px;
-  top: 9px;
-  height: 2px;
-  background: #97a4bb;
-  box-shadow: 0 6px 0 #97a4bb, 0 12px 0 #97a4bb;
 }
 
 .language-access {
