@@ -2014,6 +2014,88 @@ body.home-page .cta .btn {
   .dashboard-grid { grid-template-columns: 1fr; }
 }
 
+/* Dashboard RecordWatch summary widget */
+.recordwatch-dashboard-card {
+  overflow: hidden;
+}
+
+.section-heading-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.section-heading-row h2 {
+  margin-bottom: 8px;
+}
+
+.section-heading-row .muted {
+  margin: 0;
+}
+
+.recordwatch-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.recordwatch-stat-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 10px;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.recordwatch-stat-label {
+  display: block;
+  color: #233d70;
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.recordwatch-stat-value {
+  display: block;
+  color: #17345f;
+  font-size: clamp(18px, 2vw, 24px);
+  line-height: 1.25;
+  font-weight: 900;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.recordwatch-stat-value.small {
+  font-size: 15px;
+  font-weight: 700;
+  color: #5f6f91;
+}
+
+@media (max-width: 900px) {
+  .recordwatch-dashboard-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .section-heading-row {
+    flex-direction: column;
+  }
+
+  .recordwatch-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .auth-reset-callout {
   display: grid;
   gap: 8px;
