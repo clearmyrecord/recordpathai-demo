@@ -1930,3 +1930,35 @@ body.home-page .cta .btn {
 @media (max-width: 640px) {
   .dashboard-grid { grid-template-columns: 1fr; }
 }
+
+.auth-reset-callout {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid #d7e3fb;
+  border-radius: 18px;
+  background: #f7faff;
+  color: #355486;
+  line-height: 1.55;
+}
+
+.auth-reset-callout strong {
+  color: #233d70;
+}
+
+.link-button.reset-link,
+.auth-reset-callout .link-button {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  text-decoration: underline;
+}
+
+.auth-reset-form[hidden] {
+  display: none;
+}

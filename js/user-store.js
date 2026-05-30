@@ -11,6 +11,42 @@
   let cachedCases = [];
   let initPromise = null;
 
+  const LOGIN_INVALID_CREDENTIALS_MESSAGE = "Email or password is incorrect. If you just confirmed your email, use Reset Password to set a new password.";
+  const SIGNUP_ACCOUNT_EXISTS_MESSAGE = "Account already exists. Please log in or reset your password.";
+  const SIGNUP_PARTIAL_SUCCESS_MESSAGE = "Your account was created, but we could not finish setting up your profile. Please confirm your email, then use Reset Password if login says your password is incorrect.";
+
+  function authError(message, code, details) {
+    const error = new Error(message);
+    error.code = code || "auth_error";
+    if (details) Object.assign(error, details);
+    return error;
+  }
+
+  function errorCode(error) { return String((error && (error.code || error.status || error.name)) || "").toLowerCase(); }
+  function errorMessage(error) { return String((error && error.message) || error || "").toLowerCase(); }
+
+  function isInvalidCredentialsError(error) {
+    const code = errorCode(error);
+    const message = errorMessage(error);
+    return code === "invalid_credentials" || message.includes("invalid login credentials");
+  }
+
+  function isAccountExistsSignupError(error) {
+    const code = errorCode(error);
+    const message = errorMessage(error);
+    return code === "user_already_exists" || code === "email_exists" || code === "email_address_exists" || message.includes("already registered") || message.includes("already exists") || message.includes("user already");
+  }
+
+  function signUpReturnedExistingUser(data) {
+    const identities = data && data.user && data.user.identities;
+    return Array.isArray(identities) && identities.length === 0;
+  }
+
+  function authRedirectUrl() {
+    const basePath = window.location.pathname.replace(/[^/]*$/, "");
+    return `${window.location.origin}${basePath}login.html?returnUrl=${encodeURIComponent(getReturnUrl("dashboard.html"))}`;
+  }
+
   function nowIso() { return new Date().toISOString(); }
 
   function readJSON(key, fallback) {
@@ -113,8 +149,21 @@
       password: String(password),
       options: { data: { full_name: String(fullName).trim(), phone: String(phone || "").trim() } }
     });
-    if (error) throw new Error(error.message);
-    if (data && data.user) await upsertProfile(data.user, { fullName, email: normalizedEmail, phone });
+    if (error) {
+      if (isAccountExistsSignupError(error)) throw authError(SIGNUP_ACCOUNT_EXISTS_MESSAGE, "account_exists");
+      throw new Error(error.message);
+    }
+    if (signUpReturnedExistingUser(data)) throw authError(SIGNUP_ACCOUNT_EXISTS_MESSAGE, "account_exists");
+    if (data && data.user) {
+      try {
+        await upsertProfile(data.user, { fullName, email: normalizedEmail, phone });
+      } catch (profileError) {
+        console.warn("Profile setup failed after signup:", profileError);
+        try { await supabase.auth.signOut(); } catch (signOutError) { console.warn("Could not clear partial signup session:", signOutError); }
+        currentUser = null;
+        throw authError(SIGNUP_PARTIAL_SUCCESS_MESSAGE, "signup_partial_success", { accountCreated: true });
+      }
+    }
     await maybeImportDraftAfterLogin();
     await refreshCases();
     return currentUser;
@@ -124,7 +173,10 @@
     const normalizedEmail = normalizeEmail(email);
     const supabase = await client();
     const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password: String(password || "") });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isInvalidCredentialsError(error)) throw authError(LOGIN_INVALID_CREDENTIALS_MESSAGE, "invalid_credentials");
+      throw new Error(error.message);
+    }
     const profile = await loadProfile(data.user);
     currentUser = publicUser(data.user, profile);
     if (!profile) await upsertProfile(data.user, { email: normalizedEmail });
@@ -145,10 +197,18 @@
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail) throw new Error("Enter your email address first.");
     const supabase = await client();
-    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-      redirectTo: `${window.location.origin}/login.html?returnUrl=${encodeURIComponent(getReturnUrl("dashboard.html"))}`
-    });
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo: authRedirectUrl() });
     if (error) throw new Error(error.message);
+  }
+
+  async function updatePasswordAfterReset(password) {
+    if (!password || String(password).length < 6) throw new Error("Password must be at least 6 characters.");
+    const supabase = await client();
+    const { error } = await supabase.auth.updateUser({ password: String(password) });
+    if (error) throw new Error(error.message);
+    await supabase.auth.signOut();
+    currentUser = null;
+    cachedCases = [];
   }
 
   async function logout() {
@@ -348,6 +408,7 @@
     login,
     loginWithGoogle,
     sendPasswordReset,
+    updatePasswordAfterReset,
     logout,
     getCurrentUser: function () { return currentUser; },
     refreshCurrentUser: init,
