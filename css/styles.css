@@ -95,22 +95,58 @@ header {
   letter-spacing: -0.03em;
 }
 
-.site-logo {
+.site-brand,
+.nav-brand,
+.nav-logo,
+.logo-wrap {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
+  min-width: 240px;
   flex-shrink: 0;
 }
 
-.site-logo-img {
-  height: 44px;
-  width: auto;
+.site-logo {
   display: block;
+  width: 210px;
+  height: auto;
+  max-height: 90px;
   object-fit: contain;
 }
 
-@media (max-width: 768px) {
-  .site-logo-img {
-    height: 38px;
+.navbar,
+.site-header,
+.header-inner {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+}
+
+.nav-wrap {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.nav-links,
+.nav-right,
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 992px) {
+  .site-brand,
+  .nav-brand,
+  .nav-logo,
+  .logo-wrap {
+    min-width: 170px;
+  }
+
+  .site-logo {
+    width: 150px;
   }
 }
 
@@ -1601,7 +1637,7 @@ body.home-page .cta .btn {
   width: 100%;
 }
 
-.header-shell-modern .brand {
+.header-shell-modern .site-brand {
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -1745,10 +1781,6 @@ body.home-page .cta .btn {
     gap: 16px;
   }
 
-  .header-shell-modern .brand {
-    font-size: 20px;
-  }
-
   .header-shell-modern .nav {
     gap: 12px;
     font-size: 13px;
@@ -1855,9 +1887,6 @@ body.home-page .cta .btn {
     width: min(100% - 20px, 1320px);
   }
 
-  .header-shell-modern .brand {
-    font-size: 19px;
-  }
 }
 
 /* Progressive demo account flow */

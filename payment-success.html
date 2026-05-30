@@ -32,9 +32,9 @@
       text-align: center;
     }
 
-    .site-logo { display: flex; align-items: center; flex-shrink: 0; justify-content: center; margin-bottom: 18px; }
-    .site-logo-img { height: 44px; width: auto; display: block; object-fit: contain; }
-    @media (max-width: 768px) { .site-logo-img { height: 38px; } }
+    .site-brand { display: flex; align-items: center; justify-content: center; min-width: 0; margin-bottom: 18px; }
+    .site-logo { display: block; width: 210px; height: auto; max-height: 90px; object-fit: contain; }
+    @media (max-width: 992px) { .site-logo { width: 150px; } }
 
     h1 {
       margin: 10px 0 12px;
@@ -67,11 +67,11 @@
 </head>
 <body>
   <div class="wrap">
-    <a href="index.html" class="site-logo">
+    <a href="index.html" class="site-brand">
       <img
         src="/assets/images/logo/RecordPathAI_Logo_Transparent.png"
         alt="RecordPathAI"
-        class="site-logo-img"
+        class="site-logo"
       >
     </a>
     <h1>Payment received. Your packet is unlocked.</h1>
