@@ -1,9 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Login | RecordPathAI</title><meta name="description" content="Sign in to a local demo RecordPathAI account." /><link rel="stylesheet" href="css/styles.css" /></head>
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Login | RecordPathAI</title><meta name="description" content="Sign in to your RecordPathAI account." /><link rel="stylesheet" href="css/styles.css" /></head>
 <body>
   <header class="site-header"><div class="container"><div class="header-shell"><div class="header-inner"><a href="index.html" class="brand"><span class="brand-icon" aria-hidden="true"></span><span>RecordPathAI</span></a><nav class="nav" aria-label="Primary navigation"><a href="index.html">Home</a><a href="eligibility.html">Eligibility</a><a href="record-details.html">Record Details</a><a href="recordwatch.html">RecordWatch</a></nav></div></div></div></header>
-  <main><section class="page-hero"><div class="container hero-card"><span class="eyebrow">Demo sign in</span><h1>Welcome back</h1><p>Sign in to your local demo account. This is demo/local auth only and should be replaced with backend authentication before production use.</p></div></section><section class="page-section"><div class="container"><section class="page-card auth-card"><form id="loginForm" class="form-grid" onsubmit="return false;"><div class="field field-full"><label for="email">Email</label><input id="email" type="email" autocomplete="email" required /></div><div class="field field-full"><label for="password">Demo password</label><input id="password" type="password" autocomplete="current-password" /><div class="field-helper">For older demo accounts without a password, leave this blank.</div></div><div class="button-row field-full"><button class="btn btn-primary" type="submit">Login</button><a class="btn btn-secondary" id="signupLink" href="signup.html">Create account</a></div></form><p id="authStatus" class="meta-note" role="status"></p></section></div></section></main>
-  <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Demo account data is stored locally in this browser.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
-  <script src="js/user-store.js"></script><script src="js/auth.js"></script><script>document.addEventListener("DOMContentLoaded",function(){const returnUrl=RecordPathUserStore.getReturnUrl("dashboard.html");document.getElementById("signupLink").href=RecordPathAuth.signupUrl(returnUrl);const localEmail=localStorage.getItem("email")||"";if(localEmail)document.getElementById("email").value=localEmail;document.getElementById("loginForm").addEventListener("submit",function(){try{RecordPathUserStore.login({email:email.value,password:password.value});RecordPathUserStore.clearReturnUrl();window.location.href=returnUrl;}catch(error){document.getElementById("authStatus").textContent=error.message;}});});</script>
+  <main><section class="page-hero"><div class="container hero-card"><span class="eyebrow">Secure sign in</span><h1>Welcome back</h1><p>Sign in with your RecordPathAI account to access saved cases, packets, and RecordWatch.</p></div></section><section class="page-section"><div class="container"><section class="page-card auth-card"><form id="loginForm" class="form-grid" onsubmit="return false;"><div class="field field-full"><label for="email">Email</label><input id="email" type="email" autocomplete="email" required /></div><div class="field field-full"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required /></div><div class="button-row field-full"><button class="btn btn-primary" type="submit">Login</button><button class="btn btn-secondary" id="googleLogin" type="button">Continue with Google</button><a class="btn btn-secondary" id="signupLink" href="signup.html">Create account</a></div><div class="field field-full"><button class="link-button" id="resetPassword" type="button">Forgot your password?</button></div></form><p id="authStatus" class="meta-note" role="status"></p></section></div></section></main>
+  <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Authentication is powered by Supabase Auth.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
+  <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/auth.js"></script><script>
+    document.addEventListener("DOMContentLoaded", async function () {
+      const returnUrl = RecordPathUserStore.getReturnUrl("dashboard.html");
+      document.getElementById("signupLink").href = RecordPathAuth.signupUrl(returnUrl);
+      const localEmail = localStorage.getItem("email") || "";
+      if (localEmail) document.getElementById("email").value = localEmail;
+      await RecordPathUserStore.ready;
+      if (RecordPathUserStore.isLoggedIn()) { RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; return; }
+      document.getElementById("loginForm").addEventListener("submit", async function () {
+        authStatus.textContent = "Signing in…";
+        try { await RecordPathUserStore.login({ email: email.value, password: password.value }); RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; }
+        catch (error) { authStatus.textContent = error.message; }
+      });
+      document.getElementById("googleLogin").addEventListener("click", async function () {
+        authStatus.textContent = "Redirecting to Google…";
+        try { await RecordPathUserStore.loginWithGoogle(returnUrl); } catch (error) { authStatus.textContent = error.message; }
+      });
+      document.getElementById("resetPassword").addEventListener("click", async function () {
+        authStatus.textContent = "Sending reset email…";
+        try { await RecordPathUserStore.sendPasswordReset(email.value); authStatus.textContent = "If that email exists, a reset link has been sent."; }
+        catch (error) { authStatus.textContent = error.message; }
+      });
+    });
+  </script>
 </body></html>

@@ -20,6 +20,14 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+app.get("/api/config/supabase", (req, res) => {
+  res.json({
+    url: process.env.SUPABASE_URL || process.env.PUBLIC_SUPABASE_URL || "",
+    anonKey: process.env.SUPABASE_ANON_KEY || process.env.PUBLIC_SUPABASE_ANON_KEY || ""
+  });
+});
+
 app.use(express.static(process.cwd()));
 
 const OFFICIAL_PACKET_HINTS = [
