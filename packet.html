@@ -351,10 +351,12 @@
     .efiling-checklist ul { margin: 0; padding-left: 18px; }
     .efiling-checklist li { margin: 6px 0; color: #1f2937; }
 
-    .summary-grid {
+    .intake-summary-card .summary-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 18px;
+      grid-template-columns: minmax(280px, 1fr) minmax(420px, 2fr);
+      gap: 24px;
+      align-items: start;
+      width: 100%;
     }
 
     .summary-box {
@@ -362,6 +364,12 @@
       border: 1px solid var(--line);
       border-radius: 20px;
       padding: 20px;
+    }
+
+    .intake-summary-card .summary-box {
+      min-width: 0;
+      width: 100%;
+      max-width: none;
     }
 
     .summary-box h3 {
@@ -378,14 +386,34 @@
 
     .summary-row {
       display: grid;
-      grid-template-columns: 160px 1fr;
+      grid-template-columns: 160px minmax(0, 1fr);
       gap: 10px;
       align-items: start;
       font-size: 15px;
       line-height: 1.5;
     }
 
+    .intake-summary-card .summary-row {
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 16px;
+    }
+
     .summary-row strong { color: #3d5682; }
+
+    .intake-summary-card .summary-row strong,
+    .intake-summary-card .summary-row span,
+    .intake-summary-card .summary-value {
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: break-word;
+      word-break: normal;
+      line-height: 1.35;
+    }
+
+    .intake-summary-card #summaryEmail,
+    .intake-summary-card #summaryCaseNumber {
+      overflow-wrap: anywhere;
+    }
 
     .callout {
       background: #eef4ff;
@@ -715,6 +743,10 @@
         grid-template-columns: 1fr;
       }
 
+      .intake-summary-card .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
       .sig-row {
         grid-template-columns: 1fr;
       }
@@ -770,6 +802,15 @@
       }
 
       .summary-row {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+
+      .intake-summary-card .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .intake-summary-card .summary-row {
         grid-template-columns: 1fr;
         gap: 4px;
       }
@@ -905,7 +946,7 @@
             </aside>
           </section>
 
-          <section class="packet-card">
+          <section class="packet-card intake-summary-card">
             <h2 class="section-title" data-i18n="packet.intakeSummary">Intake Summary</h2>
 
             <div class="summary-grid">
