@@ -22,18 +22,6 @@ const CREDIT_LEDGER_TYPES = new Set(["credit", "refund", "promo_credit", "charge
 const PACKET_UNLOCK_AMOUNT_CENTS = Number(process.env.PACKET_UNLOCK_AMOUNT_CENTS || 5000);
 const RECORDWATCH_PREMIUM_AMOUNT_CENTS = Number(process.env.RECORDWATCH_PREMIUM_AMOUNT_CENTS || 0);
 
-const recordwatchMemory = {
-  subscriptions: [],
-  events: [],
-  notifications: [],
-  preferences: [],
-  courtStatuses: new Map(),
-  jobRuns: []
-};
-const RECORDWATCH_FROM_EMAIL = "matt@recordpathai.com";
-const RECORDWATCH_PROVIDER_MISSING = "skipped_provider_missing";
-const COURT_STATUS_VALUES = ["RECEIVED", "UNDER_REVIEW", "CORRECTION_REQUESTED", "ACCEPTED", "FILED", "HEARING_SCHEDULED", "GRANTED", "DENIED", "CLOSED"];
-
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -363,86 +351,6 @@ async function getAdminLedgerSummary() {
 }
 
 
-function recordwatchId(prefix) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-function recordwatchDateOnly(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
-}
-
-function normalizeRecordwatchStatus(status) {
-  return String(status || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
-}
-
-function normalizeRecordwatchPreferences(payload = {}) {
-  return {
-    eligibility_email: payload.eligibility_email !== false && payload.eligibilityEmail !== false,
-    eligibility_sms: Boolean(payload.eligibility_sms || payload.eligibilitySms),
-    court_status_updates: payload.court_status_updates !== false && payload.courtStatusUpdates !== false,
-    packet_reminders: payload.packet_reminders !== false && payload.packetReminders !== false,
-    marketing_emails: Boolean(payload.marketing_emails || payload.marketingEmails)
-  };
-}
-
-function getMemoryPreferences(userId) {
-  return recordwatchMemory.preferences.find((item) => item.user_id === userId) || {
-    id: recordwatchId("rwp"),
-    user_id: userId,
-    eligibility_email: true,
-    eligibility_sms: false,
-    court_status_updates: true,
-    packet_reminders: true,
-    marketing_emails: false,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
-}
-
-function upsertMemoryPreferences(payload = {}) {
-  const userId = safe(payload.user_id || payload.userId, "demo-user");
-  const existing = recordwatchMemory.preferences.find((item) => item.user_id === userId);
-  const row = Object.assign(existing || { id: recordwatchId("rwp"), user_id: userId, created_at: new Date().toISOString() }, normalizeRecordwatchPreferences(payload), { updated_at: new Date().toISOString() });
-  if (!existing) recordwatchMemory.preferences.push(row);
-  return row;
-}
-
-async function recordwatchTableSelect(table, userId) {
-  if (!isSupabaseServerConfigured() || !userId) return null;
-  try {
-    const query = new URLSearchParams({ user_id: `eq.${userId}`, order: "created_at.desc" });
-    return await supabaseRest(`/rest/v1/${table}?${query.toString()}`, { headers: { Accept: "application/json" } });
-  } catch (error) {
-    console.warn(`RecordWatch ${table} lookup using memory fallback:`, error.message);
-    return null;
-  }
-}
-
-async function recordwatchTableUpsert(table, payload, conflict = "id") {
-  if (!isSupabaseServerConfigured()) return null;
-  try {
-    const rows = await supabaseRest(`/rest/v1/${table}?on_conflict=${encodeURIComponent(conflict)}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Prefer: "resolution=merge-duplicates,return=representation"
-      },
-      body: JSON.stringify(payload)
-    });
-    return Array.isArray(rows) ? rows[0] : rows;
-  } catch (error) {
-    console.warn(`RecordWatch ${table} upsert using memory fallback:`, error.message);
-    return null;
-  }
-}
-
-function memoryRows(name, userId) {
-  return recordwatchMemory[name].filter((item) => !userId || item.user_id === userId);
-}
-
 function getBaseUrl(req) {
   const envUrl = safe(process.env.PUBLIC_APP_URL);
 
@@ -684,94 +592,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
 });
 
-
-app.get("/api/recordwatch/subscriptions", async (req, res) => {
-  const userId = safe(req.query.user_id || req.query.userId, "demo-user");
-  const remote = await recordwatchTableSelect("recordwatch_subscriptions", userId);
-  return res.json({ source: remote ? "supabase" : "local_fallback", subscriptions: remote || memoryRows("subscriptions", userId) });
-});
-
-app.get("/api/recordwatch/events", async (req, res) => {
-  const userId = safe(req.query.user_id || req.query.userId, "demo-user");
-  const remote = await recordwatchTableSelect("recordwatch_eligibility_events", userId);
-  return res.json({ source: remote ? "supabase" : "local_fallback", events: remote || memoryRows("events", userId) });
-});
-
-app.get("/api/recordwatch/notifications", async (req, res) => {
-  const userId = safe(req.query.user_id || req.query.userId, "demo-user");
-  const remote = await recordwatchTableSelect("recordwatch_notifications", userId);
-  return res.json({ source: remote ? "supabase" : "local_fallback", notifications: remote || memoryRows("notifications", userId) });
-});
-
-app.get("/api/recordwatch/preferences", async (req, res) => {
-  const userId = safe(req.query.user_id || req.query.userId, "demo-user");
-  const remote = await recordwatchTableSelect("recordwatch_notification_preferences", userId);
-  return res.json({ source: remote ? "supabase" : "local_fallback", preferences: remote && remote[0] ? remote[0] : getMemoryPreferences(userId) });
-});
-
-app.post("/api/recordwatch/preferences", async (req, res) => {
-  const payload = Object.assign({}, req.body || {}, { user_id: safe(req.body?.user_id || req.body?.userId, "demo-user") });
-  const row = Object.assign(upsertMemoryPreferences(payload), normalizeRecordwatchPreferences(payload));
-  const remote = await recordwatchTableUpsert("recordwatch_notification_preferences", row, "user_id");
-  return res.json({ source: remote ? "supabase" : "local_fallback", preferences: remote || row });
-});
-
-app.post("/api/recordwatch/subscribe", async (req, res) => {
-  const payload = req.body || {};
-  const userId = safe(payload.user_id || payload.userId, "demo-user");
-  const caseId = safe(payload.case_id || payload.caseId, "demo-case");
-  const planType = safe(payload.plan_type || payload.planType, "free").toLowerCase() === "premium" ? "premium" : "free";
-  const premiumActive = Boolean(payload.premium_active || payload.premiumActive || planType === "premium");
-  const existing = recordwatchMemory.subscriptions.find((item) => item.user_id === userId && item.case_id === caseId);
-  const row = Object.assign(existing || { id: recordwatchId("rws"), user_id: userId, case_id: caseId, created_at: new Date().toISOString() }, payload, {
-    user_id: userId,
-    case_id: caseId,
-    plan_type: premiumActive ? "premium" : planType,
-    premium_active: premiumActive,
-    notify_sms: premiumActive && Boolean(payload.notify_sms || payload.notifySms),
-    sms_requires_premium: !premiumActive && Boolean(payload.notify_sms || payload.notifySms),
-    status: safe(payload.status, "active"),
-    updated_at: new Date().toISOString()
-  });
-  if (!existing) recordwatchMemory.subscriptions.push(row);
-  const remote = await recordwatchTableUpsert("recordwatch_subscriptions", row);
-  return res.json({ source: remote ? "supabase" : "local_fallback", subscription: remote || row });
-});
-
-app.post("/api/recordwatch/eligibility-event", async (req, res) => {
-  const payload = req.body || {};
-  const userId = safe(payload.user_id || payload.userId, "demo-user");
-  const caseId = safe(payload.case_id || payload.caseId, "demo-case");
-  const existing = recordwatchMemory.events.find((item) => item.user_id === userId && item.case_id === caseId);
-  const row = Object.assign(existing || { id: recordwatchId("rwe"), user_id: userId, case_id: caseId, created_at: new Date().toISOString() }, payload, {
-    user_id: userId,
-    case_id: caseId,
-    eligibility_date: recordwatchDateOnly(payload.eligibility_date || payload.eligibilityDate),
-    eligibility_confidence: safe(payload.eligibility_confidence || payload.eligibilityConfidence, "medium"),
-    updated_at: new Date().toISOString()
-  });
-  if (!existing) recordwatchMemory.events.push(row);
-  const remote = await recordwatchTableUpsert("recordwatch_eligibility_events", row);
-  return res.json({ source: remote ? "supabase" : "local_fallback", event: remote || row });
-});
-
-app.post("/api/recordwatch/court-status", async (req, res) => {
-  const payload = req.body || {};
-  const userId = safe(payload.user_id || payload.userId, "demo-user");
-  const caseId = safe(payload.case_id || payload.caseId, "demo-case");
-  const status = normalizeRecordwatchStatus(payload.status);
-  if (!COURT_STATUS_VALUES.includes(status)) return res.status(400).json({ error: "Invalid court status" });
-  const key = `${userId}:${caseId}`;
-  const previous = recordwatchMemory.courtStatuses.get(key);
-  recordwatchMemory.courtStatuses.set(key, status);
-  return res.json({ source: "local_fallback", user_id: userId, case_id: caseId, status, previous_status: previous || null });
-});
-
-app.post("/api/recordwatch/run-daily", (req, res) => {
-  const job = { id: recordwatchId("rwj"), source: safe(req.body?.source, "server-preview"), status: "completed", created_at: new Date().toISOString() };
-  recordwatchMemory.jobRuns.unshift(job);
-  return res.json({ source: "local_fallback", job, from_email: RECORDWATCH_FROM_EMAIL, provider_missing_status: RECORDWATCH_PROVIDER_MISSING });
-});
 
 app.get("/api/ledger", async (req, res) => {
   try {
