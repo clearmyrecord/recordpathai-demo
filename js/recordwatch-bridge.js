@@ -199,6 +199,21 @@
     });
   }
 
+
+  function registerRecordWatchEligibility(caseData) {
+    if (!caseData || !window.RecordWatchRules || !window.RecordWatchNotifications) return;
+    var eligibilityDate = window.RecordWatchRules.calculateEligibilityDate(caseData);
+    if (!eligibilityDate) return;
+    var status = window.RecordWatchRules.calculateCaseStatus(caseData);
+    window.RecordWatchNotifications.registerEligibilityEvent({
+      userId: (caseData.personal && (caseData.personal.email || caseData.personal.fullName)) || "demo-user",
+      caseId: caseData.id,
+      eligibilityDate: eligibilityDate,
+      eligibilityReason: status,
+      waitingPeriod: window.RecordWatchRules.getRecommendedStatus(caseData)
+    });
+  }
+
   function saveCaseFromRecordDetails(formData) {
     var shape = ensureRecordWatchDataShape();
     var mapped = mapCaseFromRecordDetails(formData);
@@ -210,11 +225,13 @@
       shape.cases[index].updatedAt = nowIso();
       localStorage.setItem(ACTIVE_CASE_KEY, shape.cases[index].id);
       writeJSON(CASES_KEY, shape.cases);
+      registerRecordWatchEligibility(shape.cases[index]);
       return shape.cases[index];
     }
     shape.cases.push(mapped);
     localStorage.setItem(ACTIVE_CASE_KEY, mapped.id);
     writeJSON(CASES_KEY, shape.cases);
+    registerRecordWatchEligibility(mapped);
     return mapped;
   }
 
@@ -239,6 +256,7 @@
     var index = shape.cases.findIndex(function (item) { return item.id === active.id; });
     shape.cases[index] = normalizeCase(mergeDefined(active, partialData || {}));
     writeJSON(CASES_KEY, shape.cases);
+    registerRecordWatchEligibility(shape.cases[index]);
     return shape.cases[index];
   }
 
