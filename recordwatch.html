@@ -57,9 +57,9 @@
     <section class="hero">
       <div class="container hero-grid">
         <div class="hero-copy">
-          <span class="eyebrow">RecordWatch MVP</span>
-          <h1>Background tracking for your RecordPathAI flow.</h1>
-          <p>RecordWatch runs in the background as you complete your RecordPathAI eligibility check and court packet. It uses the information you already enter on eligibility, record details, and packet pages to estimate status, track missing requirements, and monitor next steps.</p>
+          <span class="eyebrow">RecordWatch</span>
+          <h1>Never Miss Your Eligibility Date</h1>
+          <p>RecordWatch tracks your eligibility timeline and reminds you when it may be time to take action.</p>
           <div class="hero-actions">
             <a class="btn" href="eligibility.html">Start Eligibility Check</a>
             <a class="btn secondary" href="recordwatch-dashboard.html">View Dashboard</a>
@@ -69,7 +69,7 @@
         </div>
         <div class="dashboard-card" aria-label="RecordWatch workflow preview">
           <div class="window-bar"><span></span><span></span><span></span></div>
-          <div class="visual-header"><div><p class="eyebrow-mini">Four-layer workflow</p><h3>Case tracking through correction</h3></div><div class="status-chip">MVP</div></div>
+          <div class="visual-header"><div><p class="eyebrow-mini">Reminder workflow</p><h3>Eligibility tracking through filing</h3></div><div class="status-chip">Active</div></div>
           <div class="progress-row">
             <div class="progress-step active"><span>1</span><p>Intake</p></div><div class="progress-line"></div>
             <div class="progress-step active"><span>2</span><p>Rules</p></div><div class="progress-line"></div>
@@ -78,7 +78,7 @@
           </div>
           <div class="data-grid">
             <div class="data-panel"><label>Eligibility</label><strong>Estimated status</strong></div>
-            <div class="data-panel"><label>Monitoring</label><strong>Checklist saved locally</strong></div>
+            <div class="data-panel"><label>Monitoring</label><strong>Supabase first with local fallback</strong></div>
             <div class="data-panel wide"><label>Next action</label><strong>Generate packet, dispute request, or follow-up plan</strong></div>
           </div>
         </div>
@@ -91,7 +91,11 @@
         <div>
           <span class="eyebrow-mini">RecordWatch reminders</span>
           <h2>Never Miss Your Eligibility Date</h2>
-          <p>RecordWatch monitors your eligibility timeline and automatically alerts you when action is required.</p>
+          <p>RecordWatch tracks your eligibility timeline and reminds you when it may be time to take action.</p>
+          <div class="recordwatch-plan-grid">
+            <article class="recordwatch-plan-card"><h3>Free Eligibility Reminders</h3><ul><li>Email reminders</li><li>Countdown dashboard</li><li>Saved eligibility date</li></ul></article>
+            <article class="recordwatch-plan-card premium"><h3>Premium RecordWatch</h3><ul><li>SMS alerts</li><li>Filing reminders</li><li>Court status updates when available</li></ul></article>
+          </div>
           <div class="recordwatch-countdown-panel">
             <div><strong id="recordwatchEstimatedDate">Not available yet</strong><span>Estimated eligibility date</span></div>
             <div><strong id="recordwatchCountdown">—</strong><span>Days Until Eligibility</span></div>
@@ -102,6 +106,7 @@
           <label>Mobile Phone<input id="recordwatchPhone" type="tel" placeholder="(555) 555-5555" /></label>
           <label class="toggle-row"><input id="recordwatchNotifyEmail" type="checkbox" checked /> <span>Email Notifications</span></label>
           <label class="toggle-row"><input id="recordwatchNotifySms" type="checkbox" /> <span>SMS Notifications</span></label>
+          <p id="recordwatchSmsNotice" class="meta-note" hidden>SMS alerts are part of Premium RecordWatch.</p>
           <button class="btn" type="submit">Activate RecordWatch</button>
           <p id="recordwatchEnrollmentStatus" class="muted"></p>
         </form>
@@ -114,7 +119,7 @@
         <p>RecordWatch helps users reuse RecordPathAI intake data, organize charges and outcomes, estimate sealing or expungement eligibility, track missing requirements, prepare next-step action plans, and monitor whether records have been corrected after relief. Advanced Case Intake is optional for arrest, booking, prosecutor, judge, defense attorney, jail, and detailed monitoring information.</p>
         <div class="recordwatch-grid-3">
           <article class="mini-card"><h3>Collect early</h3><p>Capture arrest, booking, court, charge, and completion details in one local workflow.</p></article>
-          <article class="mini-card"><h3>Estimate next steps</h3><p>Use placeholder MVP rules to identify possible eligibility dates, missing requirements, and risk flags.</p></article>
+          <article class="mini-card"><h3>Estimate next steps</h3><p>Use rules-based estimates to identify possible eligibility dates, missing requirements, and review flags.</p></article>
           <article class="mini-card"><h3>Monitor corrections</h3><p>Track court dockets, repositories, background-check companies, data brokers, and verified updates.</p></article>
         </div>
       </div>
@@ -141,7 +146,7 @@
 
     <section class="recordwatch-section">
       <div class="container disclaimer-box">
-        <strong>Disclaimer:</strong> RecordWatch provides organization, document preparation, estimated eligibility calculations, and tracking tools. It is not legal advice and does not guarantee eligibility, filing acceptance, record sealing, expungement, deletion, correction, or removal from any court, government repository, background-check company, employer, housing screener, or data broker.
+        <strong>Disclaimer:</strong> RecordWatch reminders are based on the information you provide. RecordPathAI is not a law firm and does not guarantee eligibility or court approval.
       </div>
     </section>
   </main>
@@ -167,19 +172,26 @@
       document.getElementById("recordwatchPhone").value = profile.phone || localStorage.getItem("phone") || "";
       document.getElementById("recordwatchEstimatedDate").textContent = window.RecordWatchRules ? RecordWatchRules.formatDate(date) : "Not available yet";
       document.getElementById("recordwatchCountdown").textContent = days === null ? "—" : (days <= 0 ? "Eligible now" : String(days));
+      var smsToggle = document.getElementById("recordwatchNotifySms");
+      var smsNotice = document.getElementById("recordwatchSmsNotice");
+      smsToggle.addEventListener("change", function () { smsNotice.hidden = !smsToggle.checked; });
       document.getElementById("recordwatchEnrollmentForm").addEventListener("submit", function (event) {
         event.preventDefault();
+        var wantsSms = document.getElementById("recordwatchNotifySms").checked;
         var subscription = RecordWatchNotifications.registerSubscription({
-          userId: (profile.email || profile.fullName || "demo-user"),
+          userId: (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id) || (profile.email || profile.fullName || "demo-user"),
           caseId: active && active.id || "demo-case",
           email: document.getElementById("recordwatchEmail").value,
           phone: document.getElementById("recordwatchPhone").value,
           notify_email: document.getElementById("recordwatchNotifyEmail").checked,
-          notify_sms: document.getElementById("recordwatchNotifySms").checked,
+          notify_sms: wantsSms,
+          plan_type: "free",
+          premium_active: false,
           eligibilityDate: date
         });
-        if (date) RecordWatchNotifications.registerEligibilityEvent({ userId: subscription.user_id, caseId: subscription.case_id, eligibilityDate: date, eligibilityReason: active && RecordWatchRules.calculateCaseStatus(active), waitingPeriod: active && RecordWatchRules.getRecommendedStatus(active) });
-        document.getElementById("recordwatchEnrollmentStatus").textContent = "RecordWatch is active. Reminder checks run daily and alerts will be logged in your dashboard.";
+        var confidence = active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active) : { level: "medium", reason: "Estimate based on information entered." };
+        if (date) RecordWatchNotifications.registerEligibilityEvent({ userId: subscription.user_id, caseId: subscription.case_id, eligibilityDate: date, eligibilityReason: active && RecordWatchRules.calculateCaseStatus(active), waitingPeriod: active && RecordWatchRules.getRecommendedStatus(active), eligibilityConfidence: confidence.level, eligibilityConfidenceReason: confidence.reason });
+        document.getElementById("recordwatchEnrollmentStatus").textContent = wantsSms ? "Free RecordWatch is active with email reminders. SMS alerts require Premium RecordWatch." : "Free RecordWatch is active with email reminders and dashboard countdown.";
       });
     });
   </script>

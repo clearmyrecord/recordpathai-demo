@@ -79,22 +79,31 @@
       const nextAction = !cases.length ? ["Continue eligibility intake", "eligibility.html"] : latest.paymentStatus !== "Paid" ? ["Review packet and payment", "packet.html"] : latest.packetStatus !== "Generated" ? ["Generate or download packet", "packet.html"] : ["Open RecordWatch", "recordwatch-dashboard.html"];
       document.getElementById("nextAction").textContent = nextAction[0];
       document.getElementById("nextActionLink").href = nextAction[1];
+      await loadRecordWatchData();
       renderRecordWatchWidget(latest);
       document.getElementById("caseList").innerHTML = cases.length ? cases.map((item) => `<article class="record-card"><h3>${escapeHtml(item.caseNumber || item.caseId)}</h3><p><strong>${escapeHtml(item.court || "Court not set")}</strong> ${escapeHtml([item.county,item.caseState].filter(Boolean).join(", "))}</p><p>${escapeHtml((item.charges || []).join(", ") || "Charges not stored in profile")}</p><p class="muted">Eligibility: ${escapeHtml(item.eligibilityStatus || "Not screened yet")} · Packet: ${escapeHtml(item.packetStatus || "Not generated")} · Updated: ${escapeHtml(new Date(item.updatedAt).toLocaleString())}</p></article>`).join("") : '<div class="empty-state"><h2>No saved cases yet</h2><p>Complete record details and choose Save Progress to add a case.</p><a class="btn" href="record-details.html">Add case details</a></div>';
     });
+    async function loadRecordWatchData(){
+      if (!window.RecordWatchNotifications || !RecordWatchNotifications.fetchRemoteData) return null;
+      const user = RecordPathUserStore.getCurrentUser();
+      return RecordWatchNotifications.fetchRemoteData(user && user.id);
+    }
     function renderRecordWatchWidget(latest){
       const events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
       const notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
       const event = events.find((item) => item.case_id === latest.caseId || item.case_id === latest.id) || events[0];
       const eligibilityDate = (event && event.eligibility_date) || latest.estimatedEligibleDate || "";
+      const confidence = (event && event.eligibility_confidence) || "medium";
+      const confidenceReason = (event && event.eligibility_confidence_reason) || "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.";
       const days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(eligibilityDate) : null;
       const subscriptions = window.RecordWatchNotifications ? RecordWatchNotifications.loadSubscriptions() : [];
       document.getElementById("recordWatchWidget").innerHTML = [
         ["Eligibility Date", eligibilityDate || "Complete screening to estimate a date."],
         ["Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")],
+        ["Confidence", confidence.replace(/_/g, " ") + " — " + confidenceReason],
         ["Notification Status", subscriptions.length ? "Active" : "Not activated"],
         ["Reminder History", notifications.length ? notifications.slice(-3).map((item) => item.subject).join("; ") : "No reminders yet"],
-        ["Communication Preferences", subscriptions[0] && subscriptions[0].notify_sms ? "Email + SMS" : "Email / in-app"],
+        ["Communication Preferences", subscriptions[0] && subscriptions[0].notify_sms ? "Premium SMS + email" : "Free email / in-app"],
         ["Upcoming Alerts", days !== null && days > 0 ? "90, 30, 7, and day-of reminders" : "Eligibility reached alert"]
       ].map((item) => `<div class="detail-row"><strong>${escapeHtml(item[0])}</strong><span>${escapeHtml(item[1])}</span></div>`).join("");
     }

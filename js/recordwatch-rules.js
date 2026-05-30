@@ -155,6 +155,24 @@
     return STATUS.ELIGIBLE_FUTURE;
   }
 
+
+  function calculateEligibilityConfidence(caseData) {
+    var missing = getMissingRequirements(caseData);
+    var risks = getRiskFlags(caseData);
+    var outcome = getOutcome(caseData);
+    var hasDate = Boolean(calculateEligibilityDate(caseData));
+    var charges = getCharges(caseData);
+    var hasState = Boolean(getState(caseData));
+    var hasChargeLevel = charges.some(function (charge) { return charge.chargeLevel || charge.degree; });
+    if (!hasDate || outcome === "pending" || !outcome || risks.length || missing.some(function (item) { return /date|outcome|disposition|paid/i.test(item); })) {
+      return { level: "needs_review", reason: "Missing key dates, unclear disposition, pending status, completion details, or disqualifying flags require review before relying on this estimate." };
+    }
+    if (hasState && hasChargeLevel && !missing.length && !risks.length) {
+      return { level: "high", reason: "Required dates, case state, charge level, outcome, and completion fields are present with no disqualifying flags detected." };
+    }
+    return { level: "medium", reason: "There is enough information to estimate a date, but optional court, payment, or case details should still be verified." };
+  }
+
   function getRecommendedStatus(caseData) {
     var status = calculateCaseStatus(caseData);
     var missing = getMissingRequirements(caseData);
@@ -192,6 +210,7 @@
     getMissingRequirements: getMissingRequirements,
     getRiskFlags: getRiskFlags,
     getRecommendedStatus: getRecommendedStatus,
+    calculateEligibilityConfidence: calculateEligibilityConfidence,
     daysUntil: daysUntil,
     formatDate: formatDate
   };

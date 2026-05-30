@@ -205,12 +205,21 @@
     var eligibilityDate = window.RecordWatchRules.calculateEligibilityDate(caseData);
     if (!eligibilityDate) return;
     var status = window.RecordWatchRules.calculateCaseStatus(caseData);
+    var confidence = window.RecordWatchRules.calculateEligibilityConfidence ? window.RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available RecordWatch data." };
+    var workflow = {};
+    try { workflow = JSON.parse(localStorage.getItem("recordPathWorkflowState")) || {}; } catch (error) { workflow = {}; }
     window.RecordWatchNotifications.registerEligibilityEvent({
-      userId: (caseData.personal && (caseData.personal.email || caseData.personal.fullName)) || "demo-user",
+      userId: (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id) || (caseData.personal && (caseData.personal.email || caseData.personal.fullName)) || "demo-user",
       caseId: caseData.id,
       eligibilityDate: eligibilityDate,
       eligibilityReason: status,
-      waitingPeriod: window.RecordWatchRules.getRecommendedStatus(caseData)
+      waitingPeriod: window.RecordWatchRules.getRecommendedStatus(caseData),
+      eligibilityConfidence: confidence.level,
+      eligibilityConfidenceReason: confidence.reason,
+      eligibilityCompletedAt: workflow.eligibilityCompletedAt || workflow.updatedAt || null,
+      recordDetailsCompletedAt: workflow.recordDetailsCompletedAt || null,
+      paidAt: localStorage.getItem("recordPathPacketPaymentComplete") === "true" ? new Date().toISOString() : null,
+      packetGeneratedAt: localStorage.getItem("recordPathPacketGeneratedAt") || null
     });
   }
 
