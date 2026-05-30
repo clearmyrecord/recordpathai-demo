@@ -115,7 +115,7 @@
       'packet.screeningNote': 'This is a screening result, not legal advice. Final approval depends on the court.',
       'packet.offensesSubtitle': 'The packet and eligibility banner above use the current selected record. This section shows every saved offense currently in your flow.',
       'packet.missingInfoHelp': 'Please provide the required fields below so your form can be generated.',
-      'packet.signatureDraw': 'Or draw your signature below',
+      'packet.signatureDraw': 'Draw your signature below',
       'packet.loadingFiling': 'Loading filing instructions...',
       'packet.footerNote': 'RecordPathAI prepares court-ready documents. It does not file directly with the court and is not a law firm. You can use an e-filing-ready packet with your court integration partner.',
 
@@ -147,7 +147,6 @@
       'packet.allSavedOffenses': 'All Saved Offenses',
       'packet.currentRecord': 'Current packet record',
       'packet.generate': 'Generate Packet',
-      'packet.useTyped': 'Use Typed Signature',
       'packet.clearSignature': 'Clear Signature',
       'packet.useDrawn': 'Use Drawn Signature',
       'packet.clearPad': 'Clear Pad',
@@ -225,7 +224,6 @@
       ,'packet.reviewingCaseStateData': 'We are reviewing the case-state data you entered.'
       ,'packet.reviewingTemplate': 'Reviewing which packet template should be used for this case.'
       ,'packet.lockedWarning': 'Packet is locked until payment is complete. Your eligibility summary and filing checklist remain visible.'
-      ,'packet.typedSignaturePlaceholder': 'Typed signature name'
       ,'packet.efilingChecklistTitle': 'E-Filing Readiness Checklist (Franklin County)'
       ,'packet.noSavedOffensesFound': 'No saved offenses found.'
       ,'packet.addAtLeastOneOffense': 'Go back to Record Details and add at least one offense.'
@@ -396,7 +394,7 @@
       'packet.screeningNote': 'Este es un resultado de evaluación, no asesoría legal. La aprobación final depende del tribunal.',
       'packet.offensesSubtitle': 'El paquete y el aviso de elegibilidad de arriba usan el expediente seleccionado actual. Esta sección muestra todos los delitos guardados en su flujo.',
       'packet.missingInfoHelp': 'Proporcione los campos obligatorios a continuación para que se pueda generar su formulario.',
-      'packet.signatureDraw': 'O dibuje su firma abajo',
+      'packet.signatureDraw': 'Dibuje su firma abajo',
       'packet.loadingFiling': 'Cargando instrucciones de presentación...',
       'packet.footerNote': 'RecordPathAI prepara documentos listos para el tribunal. No presenta directamente ante el tribunal y no es un bufete de abogados. Puede usar un paquete listo para presentación electrónica con su socio de integración judicial.',
 
@@ -428,7 +426,6 @@
       'packet.allSavedOffenses': 'Todos los delitos guardados',
       'packet.currentRecord': 'Registro actual del paquete',
       'packet.generate': 'Generar paquete',
-      'packet.useTyped': 'Usar firma escrita',
       'packet.clearSignature': 'Borrar firma',
       'packet.useDrawn': 'Usar firma dibujada',
       'packet.clearPad': 'Borrar panel',
@@ -506,7 +503,6 @@
       ,'packet.reviewingCaseStateData': 'Estamos revisando los datos del estado del caso que ingresó.'
       ,'packet.reviewingTemplate': 'Revisando qué plantilla de paquete debe usarse para este caso.'
       ,'packet.lockedWarning': 'El paquete está bloqueado hasta que se complete el pago. Su resumen de elegibilidad y la lista de verificación siguen visibles.'
-      ,'packet.typedSignaturePlaceholder': 'Nombre de firma escrita'
       ,'packet.efilingChecklistTitle': 'Lista de preparación para presentación electrónica (Condado de Franklin)'
       ,'packet.noSavedOffensesFound': 'No se encontraron delitos guardados.'
       ,'packet.addAtLeastOneOffense': 'Regrese a Detalles del registro y agregue al menos un delito.'
