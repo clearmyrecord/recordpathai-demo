@@ -2585,6 +2585,18 @@ document.addEventListener("DOMContentLoaded", function () {
         return "/api/create-checkout-session";
       }
 
+      async function getSupabaseAccessToken() {
+        if (!window.RecordPathSupabase) return "";
+        try {
+          const client = await RecordPathSupabase.getClient();
+          const result = await client.auth.getSession();
+          return result?.data?.session?.access_token || "";
+        } catch (error) {
+          console.warn("Payment auth token unavailable:", error);
+          return "";
+        }
+      }
+
       async function startCheckout() {
         try {
           if (!ensurePacketPrerequisites()) return;
@@ -2614,6 +2626,7 @@ document.addEventListener("DOMContentLoaded", function () {
             },
             caseInfo: {
               caseState: safe(normalizedData?.court?.state),
+              caseId: safe(normalizedData?.court?.case_number),
               caseNumber: safe(normalizedData?.court?.case_number),
               chargeName: safe(normalizedData?.charges?.[0]?.offense_name),
               offenseCode: safe(normalizedData?.charges?.[0]?.statute_citation),
@@ -2631,13 +2644,18 @@ document.addEventListener("DOMContentLoaded", function () {
               manualReview: packetEligibility.needsReview || Boolean(normalizedData?.eligibility?.manualReview)
             },
             amount: 5000,
-            currency: "usd"
+            currency: "usd",
+            successUrl: `${window.location.origin}${window.location.pathname.replace(/packet\.html$/, "payment-success.html")}?payment=success`
           };
 
           const checkoutEndpoint = getCheckoutEndpoint();
+          const accessToken = await getSupabaseAccessToken();
           const response = await fetch(checkoutEndpoint, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+            },
             body: JSON.stringify(payload)
           });
 

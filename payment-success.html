@@ -130,9 +130,58 @@
   <script src="js/auth.js"></script>
   <script>
     localStorage.setItem("recordPathPaymentComplete", "true");
-    if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
-      RecordPathUserStore.saveCase({ paymentStatus: "Paid", packetStatus: "Ready to generate" }).catch(function (error) { console.warn("Account payment save skipped:", error); });
+
+    function apiEndpoint(path) {
+      const host = window.location.hostname || "";
+      if (host.includes("github.io")) return `https://recordpathai-790902013328.us-west1.run.app${path}`;
+      return path;
     }
+
+    async function getAccessToken() {
+      if (!window.RecordPathSupabase) return "";
+      try {
+        const client = await RecordPathSupabase.getClient();
+        const result = await client.auth.getSession();
+        return result?.data?.session?.access_token || "";
+      } catch (error) {
+        console.warn("Ledger auth token unavailable:", error);
+        return "";
+      }
+    }
+
+    async function createPacketLedgerEntry() {
+      if (!window.RecordPathUserStore || !RecordPathUserStore.isLoggedIn()) return;
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get("session_id") || params.get("checkout_session_id") || "";
+      const caseData = RecordPathUserStore.collectCurrentCaseFromStorage ? RecordPathUserStore.collectCurrentCaseFromStorage() : {};
+      const token = await getAccessToken();
+      if (!token) return;
+      const response = await fetch(apiEndpoint("/api/ledger/packet-purchase"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          sessionId,
+          caseId: caseData.caseNumber || caseData.caseId || "",
+          amountCents: 5000,
+          currency: "usd",
+          idempotencyKey: sessionId || `packet_purchase:${caseData.caseNumber || caseData.caseId || "current"}`
+        })
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(function () { return {}; });
+        throw new Error(data.error || "Ledger entry was not created.");
+      }
+    }
+
+    async function finishAccountPaymentSave() {
+      if (!window.RecordPathUserStore) return;
+      if (RecordPathUserStore.ready) await RecordPathUserStore.ready;
+      if (!RecordPathUserStore.isLoggedIn()) return;
+      RecordPathUserStore.saveCase({ paymentStatus: "Paid", packetStatus: "Ready to generate" }).catch(function (error) { console.warn("Account payment save skipped:", error); });
+      createPacketLedgerEntry().catch(function (error) { console.warn("Packet ledger save skipped:", error); });
+    }
+
+    finishAccountPaymentSave();
   </script>
 </body>
 </html>

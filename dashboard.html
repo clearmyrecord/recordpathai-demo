@@ -56,6 +56,29 @@
         <article class="dashboard-card"><p class="eyebrow-mini">RecordWatch status</p><h3 id="recordWatchStatus">Ready</h3><p class="muted">Use RecordWatch to monitor next steps.</p></article>
         <article class="dashboard-card wide"><p class="eyebrow-mini">Next action</p><h3 id="nextAction">Continue eligibility intake</h3><div class="hero-actions"><a id="nextActionLink" class="btn" href="eligibility.html">Continue</a><a class="btn secondary" href="record-details.html">Edit Record Details</a><a class="btn secondary" href="recordwatch-dashboard.html">Open RecordWatch</a></div></article>
       </div>
+      <section class="page-card" id="purchaseLedgerSection">
+        <div class="section-heading-row">
+          <div>
+            <h2>Purchase Ledger</h2>
+            <p class="muted">Track your RecordPathAI purchases, credits, refunds, and RecordWatch activity.</p>
+            <p class="muted">Your ledger shows purchases, credits, and refunds connected to your RecordPathAI account.</p>
+          </div>
+          <button class="btn secondary" type="button" id="downloadLedgerCsv">Download Ledger CSV</button>
+        </div>
+        <div class="dashboard-grid ledger-summary-grid" aria-label="Purchase ledger summary">
+          <article class="dashboard-card"><p class="eyebrow-mini">Total Purchases</p><h3 id="ledgerTotalPurchases">$0.00</h3></article>
+          <article class="dashboard-card"><p class="eyebrow-mini">Credits / Refunds</p><h3 id="ledgerTotalCredits">$0.00</h3></article>
+          <article class="dashboard-card"><p class="eyebrow-mini">Current Balance</p><h3 id="ledgerCurrentBalance">$0.00</h3></article>
+          <article class="dashboard-card"><p class="eyebrow-mini">Last Transaction</p><h3 id="ledgerLastTransaction">—</h3></article>
+        </div>
+        <div class="table-wrap ledger-table-wrap">
+          <table class="ledger-table">
+            <thead><tr><th>Date</th><th>Description</th><th>Case</th><th>Type</th><th>Debit</th><th>Credit</th><th>Status</th></tr></thead>
+            <tbody id="ledgerTableBody"><tr><td colspan="7" class="muted">Loading your ledger…</td></tr></tbody>
+          </table>
+        </div>
+        <p class="muted">This ledger is for your RecordPathAI account activity. Court filing fees, attorney fees, or third-party fees may not appear unless paid through RecordPathAI.</p>
+      </section>
       <section class="page-card"><h2>Saved cases</h2><div id="caseList" class="record-list"></div></section>
     </div></section>
   </main>
@@ -79,7 +102,73 @@
       document.getElementById("nextAction").textContent = nextAction[0];
       document.getElementById("nextActionLink").href = nextAction[1];
       document.getElementById("caseList").innerHTML = cases.length ? cases.map((item) => `<article class="record-card"><h3>${escapeHtml(item.caseNumber || item.caseId)}</h3><p><strong>${escapeHtml(item.court || "Court not set")}</strong> ${escapeHtml([item.county,item.caseState].filter(Boolean).join(", "))}</p><p>${escapeHtml((item.charges || []).join(", ") || "Charges not stored in profile")}</p><p class="muted">Eligibility: ${escapeHtml(item.eligibilityStatus || "Not screened yet")} · Packet: ${escapeHtml(item.packetStatus || "Not generated")} · Updated: ${escapeHtml(new Date(item.updatedAt).toLocaleString())}</p></article>`).join("") : '<div class="empty-state"><h2>No saved cases yet</h2><p>Complete record details and choose Save Progress to add a case.</p><a class="btn" href="record-details.html">Add case details</a></div>';
+      await loadLedger();
     });
+
+    let ledgerEntries = [];
+
+    function apiEndpoint(path){
+      const host = window.location.hostname || "";
+      if (host.includes("github.io")) return `https://recordpathai-790902013328.us-west1.run.app${path}`;
+      return path;
+    }
+
+    async function getAccessToken(){
+      if (!window.RecordPathSupabase) return "";
+      const client = await RecordPathSupabase.getClient();
+      const result = await client.auth.getSession();
+      return result?.data?.session?.access_token || "";
+    }
+
+    async function loadLedger(){
+      const body = document.getElementById("ledgerTableBody");
+      try {
+        const token = await getAccessToken();
+        const response = await fetch(apiEndpoint("/api/ledger"), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        if (!response.ok) throw new Error("Ledger unavailable");
+        const data = await response.json();
+        ledgerEntries = Array.isArray(data.entries) ? data.entries : [];
+        renderLedger(ledgerEntries, data.balance || {});
+      } catch (error) {
+        console.warn("Ledger load skipped:", error);
+        ledgerEntries = [];
+        renderLedger([], { total_debits_cents: 0, total_credits_cents: 0, current_balance_cents: 0 });
+      }
+    }
+
+    function renderLedger(entries, balance){
+      document.getElementById("ledgerTotalPurchases").textContent = formatMoney(balance.total_debits_cents || 0);
+      document.getElementById("ledgerTotalCredits").textContent = formatMoney(balance.total_credits_cents || 0);
+      document.getElementById("ledgerCurrentBalance").textContent = formatMoney(balance.current_balance_cents || 0);
+      document.getElementById("ledgerLastTransaction").textContent = entries[0]?.created_at ? new Date(entries[0].created_at).toLocaleDateString() : "—";
+      const body = document.getElementById("ledgerTableBody");
+      if (!entries.length) {
+        body.innerHTML = '<tr><td colspan="7" class="empty-state">Your purchases and credits will appear here after you unlock a packet or activate premium RecordWatch.</td></tr>';
+        return;
+      }
+      body.innerHTML = entries.map((entry) => `<tr><td>${escapeHtml(formatDate(entry.created_at))}</td><td>${escapeHtml(entry.description)}</td><td>${escapeHtml(entry.case_id || "—")}</td><td>${escapeHtml(formatType(entry.entry_type))}</td><td>${escapeHtml(formatMoney(entry.debit_cents || 0))}</td><td>${escapeHtml(formatMoney(entry.credit_cents || 0))}</td><td><span class="status-badge ${escapeHtml(entry.status || "posted")}">${escapeHtml(formatStatus(entry.status))}</span></td></tr>`).join("");
+    }
+
+    function formatMoney(cents){return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format((Number(cents)||0)/100);}
+    function formatDate(value){return value ? new Date(value).toLocaleString() : "—";}
+    function formatType(value){return String(value||"").replace(/_/g," ").replace(/\b\w/g,(c)=>c.toUpperCase());}
+    function formatStatus(value){return formatType(value || "posted");}
+    function csvCell(value){return `"${String(value ?? "").replace(/"/g,'""')}"`;}
+    function downloadLedgerCsv(){
+      const header = ["date","description","case_id","entry_type","debit","credit","status","stripe_session_id"];
+      const rows = ledgerEntries.map((entry) => [entry.created_at || "", entry.description || "", entry.case_id || "", entry.entry_type || "", ((Number(entry.debit_cents)||0)/100).toFixed(2), ((Number(entry.credit_cents)||0)/100).toFixed(2), entry.status || "", entry.stripe_session_id || ""]);
+      const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "recordpathai-ledger.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    document.getElementById("downloadLedgerCsv")?.addEventListener("click", downloadLedgerCsv);
     function escapeHtml(value){return String(value||"").replace(/[&<>'"]/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));}
   </script>
 </body></html>

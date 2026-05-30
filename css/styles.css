@@ -2570,3 +2570,70 @@ body.home-page .cta .btn {
     min-width: 0;
   }
 }
+
+.section-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.ledger-summary-grid {
+  margin: 18px 0;
+}
+
+.ledger-summary-grid .dashboard-card {
+  min-height: 120px;
+}
+
+.ledger-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #ffffff;
+  margin: 18px 0;
+}
+
+.ledger-table {
+  width: 100%;
+  min-width: 840px;
+  border-collapse: collapse;
+}
+
+.ledger-table th,
+.ledger-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ledger-table th {
+  background: #f6f9ff;
+  color: #32415f;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ledger-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.status-badge.posted { background: var(--green-soft); color: var(--green); }
+.status-badge.pending { background: var(--amber-soft); color: var(--amber); }
+.status-badge.refunded,
+.status-badge.reversed { background: var(--purple-soft); color: var(--purple); }
+.status-badge.failed { background: var(--red-soft); color: var(--red); }
+
+@media (max-width: 720px) {
+  .section-heading-row {
+    display: block;
+  }
+
+  .section-heading-row .btn {
+    margin-top: 12px;
+  }
+}

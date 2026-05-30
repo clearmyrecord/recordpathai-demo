@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RecordPathAI Ledger Admin</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="./css/admin.css">
+  <style>
+    .metric-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1rem}.metric{background:#fff;border:1px solid #dbe3f0;border-radius:14px;padding:1rem}.metric strong{display:block;font-size:1.6rem;color:#233d70}.admin-table-wrap{overflow:auto}.admin-ledger-table{width:100%;min-width:980px;border-collapse:collapse}.admin-ledger-table th,.admin-ledger-table td{border-bottom:1px solid #dbe3f0;padding:.75rem;text-align:left}.admin-ledger-table th{background:#f6f9ff;text-transform:uppercase;font-size:.75rem;letter-spacing:.04em}@media(max-width:900px){.metric-grid{grid-template-columns:1fr 1fr}}@media(max-width:560px){.metric-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="admin-wrap">
+    <section class="card">
+      <p class="eyebrow-mini">Admin</p>
+      <h1>Purchase Ledger</h1>
+      <p class="muted">Revenue, refunds, failed payments, and recent user ledger activity.</p>
+      <p id="adminLedgerStatus" class="muted" role="status">Checking admin access…</p>
+    </section>
+
+    <section class="card">
+      <div class="metric-grid" aria-label="Ledger revenue summary">
+        <article class="metric"><span>Total revenue</span><strong id="totalRevenue">$0.00</strong></article>
+        <article class="metric"><span>Packet purchase revenue</span><strong id="packetRevenue">$0.00</strong></article>
+        <article class="metric"><span>RecordWatch premium revenue</span><strong id="recordwatchRevenue">$0.00</strong></article>
+        <article class="metric"><span>Refunds / credits</span><strong id="refundCredits">$0.00</strong></article>
+        <article class="metric"><span>Failed payments</span><strong id="failedPayments">0</strong></article>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Recent ledger entries</h2>
+      <div class="admin-table-wrap">
+        <table class="admin-ledger-table">
+          <thead><tr><th>Date</th><th>User</th><th>Description</th><th>Case</th><th>Type</th><th>Debit</th><th>Credit</th><th>Status</th></tr></thead>
+          <tbody id="recentLedgerEntries"><tr><td colspan="8">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="../js/supabase-client.js"></script>
+  <script src="../js/user-store.js"></script>
+  <script>
+    function money(cents){return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format((Number(cents)||0)/100);}
+    function esc(value){return String(value||"").replace(/[&<>'"]/g,function(char){return {"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char];});}
+    function title(value){return String(value||"").replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();});}
+    function apiEndpoint(path){const host=window.location.hostname||"";if(host.includes("github.io"))return `https://recordpathai-790902013328.us-west1.run.app${path}`;return path;}
+    async function token(){const client=await RecordPathSupabase.getClient();const result=await client.auth.getSession();return result?.data?.session?.access_token||"";}
+    async function loadAdminLedger(){
+      const status=document.getElementById("adminLedgerStatus");
+      try{
+        if (window.RecordPathUserStore?.ready) await RecordPathUserStore.ready;
+        const accessToken=await token();
+        if(!accessToken) throw new Error("Sign in with an admin account to view this page.");
+        const response=await fetch(apiEndpoint("/api/admin/ledger-summary"),{headers:{Authorization:`Bearer ${accessToken}`}});
+        const data=await response.json();
+        if(!response.ok) throw new Error(data.error||"Admin ledger unavailable.");
+        document.getElementById("totalRevenue").textContent=money(data.total_revenue_cents);
+        document.getElementById("packetRevenue").textContent=money(data.packet_purchase_revenue_cents);
+        document.getElementById("recordwatchRevenue").textContent=money(data.recordwatch_premium_revenue_cents);
+        document.getElementById("refundCredits").textContent=money(data.refunds_credits_cents);
+        document.getElementById("failedPayments").textContent=String(data.failed_payments_count||0);
+        const entries=Array.isArray(data.recent_entries)?data.recent_entries:[];
+        document.getElementById("recentLedgerEntries").innerHTML=entries.length?entries.map(function(entry){return `<tr><td>${esc(entry.created_at?new Date(entry.created_at).toLocaleString():"—")}</td><td>${esc(entry.user_id)}</td><td>${esc(entry.description)}</td><td>${esc(entry.case_id||"—")}</td><td>${esc(title(entry.entry_type))}</td><td>${esc(money(entry.debit_cents))}</td><td>${esc(money(entry.credit_cents))}</td><td>${esc(title(entry.status))}</td></tr>`;}).join(""):'<tr><td colspan="8">No ledger entries yet.</td></tr>';
+        status.textContent="Admin ledger loaded.";
+      }catch(error){status.textContent=error.message;document.getElementById("recentLedgerEntries").innerHTML='<tr><td colspan="8">Admin access required.</td></tr>';}
+    }
+    loadAdminLedger();
+  </script>
+</body>
+</html>
