@@ -2075,3 +2075,10 @@ body.home-page .cta .btn {
     grid-template-columns: 1fr;
   }
 }
+
+.brand-logo {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
