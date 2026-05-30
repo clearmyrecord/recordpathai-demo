@@ -1213,7 +1213,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const record = getSelectedPacketRecord(data);
         const eligibility = data?.eligibility || {};
         const state = normalizeState(record.case_state || data?.court?.state || eligibility.state_ruleset || "");
-        const dischargeSource = record.probation_end_date || record.probationEndDate || record.discharge_date || record.dischargeDate || record.final_discharge_date || record.finalDischargeDate || record.case_closed_date || record.caseClosedDate || "";
+        const dischargeSource = record.discharge_date || record.dischargeDate || record.final_discharge_date || record.finalDischargeDate || record.probation_end_date || record.probationEndDate || record.case_closed_date || record.caseClosedDate || "";
         const parsedDischargeDate = parsePacketDate(dischargeSource);
         const parsedDischargeIso = toIsoDate(parsedDischargeDate);
         const levelRaw = safe(record.level || record.degree || record.charge_level || record.offense_classification || "").toUpperCase();
