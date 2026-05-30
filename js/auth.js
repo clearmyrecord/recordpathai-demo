@@ -44,34 +44,49 @@
   function requireProtectedPage(action) { return requireAuth(action || "open this page", currentPageUrl()); }
   async function requireProtectedPageAsync(action) { return requireAuthAsync(action || "open this page", currentPageUrl()); }
 
-  function addLink(nav, href, text, className) {
+  function addLink(container, href, text, className) {
     const a = document.createElement("a");
     a.href = href;
     a.textContent = text;
-    if (className) a.className = className;
+    a.className = ["auth-utility-link", className].filter(Boolean).join(" ");
     a.setAttribute("data-auth-link", text.toLowerCase().replace(/\s+/g, "-"));
-    nav.appendChild(a);
+    container.appendChild(a);
     return a;
   }
 
   function renderHeaderLinks() {
     if (!window.RecordPathUserStore) return;
-    document.querySelectorAll("nav.nav, nav.main-nav, nav.nav-links").forEach(function (nav) {
-      nav.querySelectorAll("[data-auth-link]").forEach(function (node) { node.remove(); });
-      const user = RecordPathUserStore.getCurrentUser();
+    const utilities = document.querySelectorAll("[data-auth-utility]");
+    if (!utilities.length) return;
+
+    const user = RecordPathUserStore.getCurrentUser();
+    utilities.forEach(function (utility) {
+      utility.querySelectorAll("[data-auth-link]").forEach(function (node) { node.remove(); });
       if (user) {
-        addLink(nav, "dashboard.html", "Dashboard");
-        addLink(nav, "account.html", "Account");
-        const logout = addLink(nav, "#logout", "Logout");
+        addLink(utility, "dashboard.html", "Dashboard");
+        addLink(utility, "account.html", "Account");
+        const logout = addLink(utility, "#logout", "Logout");
         logout.addEventListener("click", async function (event) {
           event.preventDefault();
           await RecordPathUserStore.logout();
           window.location.href = "index.html";
         });
       } else {
-        addLink(nav, loginUrl(currentPageUrl()), "Login");
-        addLink(nav, signupUrl(currentPageUrl()), "Create Account", "nav-cta");
+        addLink(utility, loginUrl(currentPageUrl()), "Login", "auth-login");
+        addLink(utility, signupUrl(currentPageUrl()), "Create Account", "auth-create-account");
       }
+    });
+  }
+
+  function wireHeaderMenus() {
+    document.querySelectorAll(".header-shell-modern").forEach(function (headerShell) {
+      const toggle = headerShell.querySelector(".menu-toggle");
+      if (!toggle || toggle.dataset.menuAttached === "true") return;
+      toggle.dataset.menuAttached = "true";
+      toggle.addEventListener("click", function () {
+        const isOpen = headerShell.classList.toggle("nav-open");
+        toggle.setAttribute("aria-expanded", String(isOpen));
+      });
     });
   }
 
@@ -128,6 +143,7 @@
   };
 
   document.addEventListener("DOMContentLoaded", function () {
+    wireHeaderMenus();
     renderHeaderLinks();
     wireAuthActionGuards(document);
     ensureReady().then(function () {
