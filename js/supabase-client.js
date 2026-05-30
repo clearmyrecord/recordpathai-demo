@@ -12,17 +12,8 @@
 
   function fromWindowConfig() {
     return {
-      url: window.RECORDPATH_SUPABASE_URL || window.SUPABASE_URL || "",
-      anonKey: window.RECORDPATH_SUPABASE_ANON_KEY || window.SUPABASE_ANON_KEY || ""
-    };
-  }
-
-  function fromMetaConfig() {
-    const url = document.querySelector('meta[name="supabase-url"]');
-    const anonKey = document.querySelector('meta[name="supabase-anon-key"]');
-    return {
-      url: url ? url.getAttribute("content") : "",
-      anonKey: anonKey ? anonKey.getAttribute("content") : ""
+      url: window.RECORDPATH_SUPABASE_URL || "",
+      anonKey: window.RECORDPATH_SUPABASE_ANON_KEY || ""
     };
   }
 
@@ -41,11 +32,15 @@
     if (!configPromise) {
       configPromise = (async function () {
         const windowConfig = fromWindowConfig();
-        const metaConfig = fromMetaConfig();
+        if (windowConfig.url && windowConfig.anonKey) {
+          cachedConfig = windowConfig;
+          return cachedConfig;
+        }
+
         const serverConfig = await fetchServerConfig();
         cachedConfig = {
-          url: windowConfig.url || metaConfig.url || serverConfig.url || "",
-          anonKey: windowConfig.anonKey || metaConfig.anonKey || serverConfig.anonKey || ""
+          url: windowConfig.url || serverConfig.url || "",
+          anonKey: windowConfig.anonKey || serverConfig.anonKey || ""
         };
         return cachedConfig;
       }());
