@@ -114,9 +114,8 @@
       options: { data: { full_name: String(fullName).trim(), phone: String(phone || "").trim() } }
     });
     if (error) throw new Error(error.message);
-    if (data && data.user) await upsertProfile(data.user, { fullName, email: normalizedEmail, phone });
-    await maybeImportDraftAfterLogin();
-    await refreshCases();
+    currentUser = data && data.user ? publicUser(data.user, null) : null;
+    cachedCases = [];
     return currentUser;
   }
 

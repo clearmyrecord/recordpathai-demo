@@ -75,4 +75,4 @@ RecordPathAI uses Supabase Auth and Postgres for production accounts. Configure 
 - `SUPABASE_URL` (or `PUBLIC_SUPABASE_URL`)
 - `SUPABASE_ANON_KEY` (or `PUBLIC_SUPABASE_ANON_KEY`)
 
-Run `supabase/migrations/20260530000000_create_profiles_and_cases.sql` in your Supabase project to create `profiles` and `cases` with row-level security policies.
+Run the SQL files in `supabase/migrations/` in filename order in your Supabase project to create `profiles`, `cases`, row-level security policies, and the auth signup trigger that automatically creates profile rows.
