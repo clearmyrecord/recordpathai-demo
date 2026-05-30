@@ -882,7 +882,7 @@
   <script src="js/recordwatch-rules.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/translate.js"></script>
-  <script src="js/user-store.js"></script>
+  <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script>
   <script src="js/auth.js"></script>
   <script>
     (function () {
@@ -1201,7 +1201,7 @@
         }
         if (syncRecordWatchCase && window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
           try {
-            RecordPathUserStore.saveCase({ packetStatus: "Draft saved" });
+            RecordPathUserStore.saveCase({ packetStatus: "Draft saved" }).catch(function (error) { console.warn("Account draft save skipped:", error); });
           } catch (error) {
             console.warn("Account case save skipped:", error);
           }

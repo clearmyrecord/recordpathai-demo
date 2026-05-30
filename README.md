@@ -67,3 +67,12 @@ Built by an entrepreneur focused on legal-tech, workflow automation, and scalabl
 ## Contact
 
 For partnership, pilot, or investor interest, reach out through LinkedIn or direct contact channels associated with RecordPathAI.
+
+## Supabase configuration
+
+RecordPathAI uses Supabase Auth and Postgres for production accounts. Configure these deployment environment variables:
+
+- `SUPABASE_URL` (or `PUBLIC_SUPABASE_URL`)
+- `SUPABASE_ANON_KEY` (or `PUBLIC_SUPABASE_ANON_KEY`)
+
+Run `supabase/migrations/20260530000000_create_profiles_and_cases.sql` in your Supabase project to create `profiles` and `cases` with row-level security policies.

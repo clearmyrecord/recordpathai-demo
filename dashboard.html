@@ -4,11 +4,11 @@
 <body>
   <header class="site-header"><div class="container"><div class="header-shell"><div class="header-inner"><a href="index.html" class="brand"><span class="brand-icon" aria-hidden="true"></span><span>RecordPathAI</span></a><nav class="nav" aria-label="Primary navigation"><a href="index.html">Home</a><a href="eligibility.html">Eligibility</a><a href="record-details.html">Record Details</a><a href="packet.html">Packet</a><a href="recordwatch.html">RecordWatch</a></nav></div></div></div></header>
   <main>
-    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Account dashboard</span><h1 id="dashboardTitle">Your RecordPathAI dashboard</h1><p>Review locally saved demo account data, cases, packet status, RecordWatch status, and the recommended next action.</p></div></section>
+    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Account dashboard</span><h1 id="dashboardTitle">Your RecordPathAI dashboard</h1><p>Review saved account data, live case records, packet status, RecordWatch status, and the recommended next action.</p></div></section>
     <section class="page-section"><div class="container recordwatch-stack">
       <div class="dashboard-grid">
         <article class="dashboard-card"><p class="eyebrow-mini">Eligibility status</p><h3 id="eligibilityStatus">Not screened yet</h3><p id="eligibleDate" class="muted"></p></article>
-        <article class="dashboard-card"><p class="eyebrow-mini">Saved cases</p><h3 id="savedCaseCount">0</h3><p class="muted">Cases saved to your local demo account.</p></article>
+        <article class="dashboard-card"><p class="eyebrow-mini">Saved cases</p><h3 id="savedCaseCount">0</h3><p class="muted">Cases saved to your account.</p></article>
         <article class="dashboard-card"><p class="eyebrow-mini">Packet status</p><h3 id="packetStatus">Not generated</h3><p id="paymentStatus" class="muted">Payment not recorded.</p></article>
         <article class="dashboard-card"><p class="eyebrow-mini">RecordWatch status</p><h3 id="recordWatchStatus">Ready</h3><p class="muted">Use RecordWatch to monitor next steps.</p></article>
         <article class="dashboard-card wide"><p class="eyebrow-mini">Next action</p><h3 id="nextAction">Continue eligibility intake</h3><div class="hero-actions"><a id="nextActionLink" class="btn" href="eligibility.html">Continue</a><a class="btn secondary" href="record-details.html">Edit Record Details</a><a class="btn secondary" href="recordwatch-dashboard.html">Open RecordWatch</a></div></article>
@@ -16,13 +16,13 @@
       <section class="page-card"><h2>Saved cases</h2><div id="caseList" class="record-list"></div></section>
     </div></section>
   </main>
-  <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Demo/local account data is browser-local and not production secure authentication.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
-  <script src="js/user-store.js"></script><script src="js/auth.js"></script><script>
-    document.addEventListener("DOMContentLoaded", function () {
-      if (!RecordPathAuth.requireProtectedPage("view your dashboard")) return;
+  <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Authentication and saved case records are powered by Supabase.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
+  <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/auth.js"></script><script>
+    document.addEventListener("DOMContentLoaded", async function () {
+      if (!await RecordPathAuth.requireProtectedPageAsync("view your dashboard")) return;
       const user = RecordPathUserStore.getCurrentUser();
-      try { RecordPathUserStore.saveCase(); } catch (error) {}
-      const cases = RecordPathUserStore.getCases();
+      try { await RecordPathUserStore.saveCase(); } catch (error) {}
+      const cases = await RecordPathUserStore.getCasesAsync();
       const latest = cases[cases.length - 1] || RecordPathUserStore.collectCurrentCaseFromStorage();
       document.getElementById("dashboardTitle").textContent = `Welcome, ${user.fullName || user.email}`;
       document.getElementById("eligibilityStatus").textContent = latest.eligibilityStatus || "Not screened yet";
@@ -34,7 +34,7 @@
       const nextAction = !cases.length ? ["Continue eligibility intake", "eligibility.html"] : latest.paymentStatus !== "Paid" ? ["Review packet and payment", "packet.html"] : latest.packetStatus !== "Generated" ? ["Generate or download packet", "packet.html"] : ["Open RecordWatch", "recordwatch-dashboard.html"];
       document.getElementById("nextAction").textContent = nextAction[0];
       document.getElementById("nextActionLink").href = nextAction[1];
-      document.getElementById("caseList").innerHTML = cases.length ? cases.map((item) => `<article class="record-card"><h3>${escapeHtml(item.caseNumber || item.caseId)}</h3><p><strong>${escapeHtml(item.court || "Court not set")}</strong> ${escapeHtml([item.county,item.caseState].filter(Boolean).join(", "))}</p><p>${escapeHtml((item.charges || []).join(", ") || "Charges not entered")}</p><p class="muted">Eligibility: ${escapeHtml(item.eligibilityStatus || "Not screened yet")} · Packet: ${escapeHtml(item.packetStatus || "Not generated")} · Updated: ${escapeHtml(new Date(item.updatedAt).toLocaleString())}</p></article>`).join("") : '<div class="empty-state"><h2>No saved cases yet</h2><p>Complete record details and choose Save Progress to add a case.</p><a class="btn" href="record-details.html">Add case details</a></div>';
+      document.getElementById("caseList").innerHTML = cases.length ? cases.map((item) => `<article class="record-card"><h3>${escapeHtml(item.caseNumber || item.caseId)}</h3><p><strong>${escapeHtml(item.court || "Court not set")}</strong> ${escapeHtml([item.county,item.caseState].filter(Boolean).join(", "))}</p><p>${escapeHtml((item.charges || []).join(", ") || "Charges not stored in profile")}</p><p class="muted">Eligibility: ${escapeHtml(item.eligibilityStatus || "Not screened yet")} · Packet: ${escapeHtml(item.packetStatus || "Not generated")} · Updated: ${escapeHtml(new Date(item.updatedAt).toLocaleString())}</p></article>`).join("") : '<div class="empty-state"><h2>No saved cases yet</h2><p>Complete record details and choose Save Progress to add a case.</p><a class="btn" href="record-details.html">Add case details</a></div>';
     });
     function escapeHtml(value){return String(value||"").replace(/[&<>'"]/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));}
   </script>
