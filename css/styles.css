@@ -1994,3 +1994,84 @@ body.home-page .cta .btn {
   flex: 0 0 18px;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath fill='%234285F4' d='M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.12-.84 2.07-1.79 2.71v2.25h2.9c1.7-1.56 2.69-3.87 2.69-6.6z'/%3E%3Cpath fill='%2334A853' d='M9 18c2.43 0 4.47-.81 5.96-2.19l-2.9-2.25c-.81.54-1.84.86-3.06.86-2.35 0-4.33-1.58-5.04-3.71H.96v2.32C2.44 15.96 5.48 18 9 18z'/%3E%3Cpath fill='%23FBBC05' d='M3.96 10.71c-.18-.54-.28-1.12-.28-1.71s.1-1.17.28-1.71V4.97H.96C.35 6.18 0 7.55 0 9s.35 2.82.96 4.03l3-2.32z'/%3E%3Cpath fill='%23EA4335' d='M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.04.96 4.97l3 2.32C4.67 5.16 6.65 3.58 9 3.58z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
+
+/* Court Access roadmap page */
+.court-access-page .court-hero-card {
+  max-width: 980px;
+}
+
+.court-process-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.court-process-list article {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--soft);
+}
+
+.court-process-list span {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--blue);
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.court-process-list p,
+.court-feature-grid .mini-card {
+  margin: 0;
+  font-weight: 800;
+}
+
+.court-feature-grid,
+.court-data-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.court-feature-grid .mini-card {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+}
+
+.court-role-grid {
+  margin-top: 24px;
+}
+
+.court-interest-card .section-copy {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 980px) {
+  .court-process-list,
+  .court-feature-grid,
+  .court-data-grid,
+  .court-role-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .court-process-list,
+  .court-feature-grid,
+  .court-data-grid,
+  .court-role-grid {
+    grid-template-columns: 1fr;
+  }
+}
