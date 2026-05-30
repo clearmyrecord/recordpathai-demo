@@ -1433,7 +1433,21 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       const pathAliases = {
         "petitioner.ssn": "petitioner.ssn_full",
-        "petitioner.date_of_birth": "petitioner.dob"
+        "petitioner.date_of_birth": "petitioner.dob",
+        "signature.petitioner_signature_name": "signatures.petitioner_signature_name",
+        "signature.attorney_signature_name": "signatures.attorney_signature_name",
+        "signature.district_attorney_delegate_signature": "signatures.district_attorney_delegate_signature",
+        "signature.district_attorney_delegate_bar_number": "signatures.district_attorney_delegate_bar_number",
+        "signature.petition_signed_day": "signatures.petition_signed_day",
+        "signature.petition_signed_month": "signatures.petition_signed_month",
+        "signature.petition_signed_year": "signatures.petition_signed_year",
+        "signature.affidavit_signed_day": "signatures.affidavit_signed_day",
+        "signature.affidavit_signed_month": "signatures.affidavit_signed_month",
+        "signature.affidavit_signed_year": "signatures.affidavit_signed_year",
+        "dates.current_date": "generated.current_date",
+        "dates.current_day": "generated.current_day",
+        "dates.current_month": "generated.current_month",
+        "dates.current_year": "generated.current_year"
       };
       function persistPacketData(raw) {
         const bridge = window.RecordPathDataBridge;

@@ -751,9 +751,7 @@
                 </div>
               </div>
               <div class="record-grid">
-                <div class="field"><label for="firstName">First Name</label><input id="firstName" data-path="petitioner.first_name" type="text" placeholder="First name" /></div>
-                <div class="field"><label for="lastName">Last Name</label><input id="lastName" data-path="petitioner.last_name" type="text" placeholder="Last name" /></div>
-                <div class="field"><label for="fullName">Full Legal Name</label><input id="fullName" data-path="petitioner.full_name" type="text" placeholder="Full legal name" /></div>
+                <div class="field"><label for="fullName">Full Legal Name</label><input id="fullName" data-path="petitioner.full_name" type="text" placeholder="Full legal name" /><div class="helper">Canonical name field. First and last name aliases are derived automatically for packet data.</div></div>
                 <div class="field"><label for="dateOfBirth">Date of Birth</label><input id="dateOfBirth" data-path="petitioner.dob" type="date" /></div>
                 <div class="field"><label for="email">Email</label><input id="email" data-path="petitioner.email" type="email" placeholder="Email address" /></div>
                 <div class="field"><label for="phone">Phone</label><input id="phone" data-path="petitioner.phone" type="text" placeholder="Phone number" /></div>
@@ -815,7 +813,6 @@
               <div class="record-grid">
                 <div class="field"><label for="releaseDate">Jail / Prison Release Date</label><input id="releaseDate" type="date" /></div>
                 <div class="field"><label for="probationStartDate">Probation Start Date</label><input id="probationStartDate" type="date" /></div>
-                <div class="field"><label for="probationEndDate">Probation End Date</label><input id="probationEndDate" type="date" /></div>
                 <div class="field"><label for="communityControlEndDate">Community Control End Date</label><input id="communityControlEndDate" type="date" /></div>
                 <div class="field"><label for="finePaidDate">Fine Paid Date</label><input id="finePaidDate" type="date" /></div>
                 <div class="field"><label for="restitutionPaidDate">Restitution Paid Date</label><input id="restitutionPaidDate" type="date" /></div>
@@ -907,6 +904,14 @@
         return v === "true" || v === "1" || v === "yes";
       }
 
+      function firstNonEmpty() {
+        for (let i = 0; i < arguments.length; i += 1) {
+          const next = arguments[i];
+          if (next !== undefined && next !== null && String(next).trim() !== "") return next;
+        }
+        return "";
+      }
+
       function setInputValue(input, nextValue) {
         if (input.type === "checkbox") {
           input.checked = normalizeBooleanValue(nextValue);
@@ -959,7 +964,7 @@
           discharge_date: value("dischargeDate"),
           release_date: value("releaseDate"),
           probation_start_date: value("probationStartDate"),
-          probation_end_date: value("probationEndDate"),
+          probation_end_date: value("dischargeDate"),
           community_control_end_date: value("communityControlEndDate"),
           fine_paid_date: value("finePaidDate"),
           restitution_paid_date: value("restitutionPaidDate"),
@@ -982,11 +987,11 @@
           <div class="record-grid">
             <div class="field"><label data-i18n="packet.charge">Charge Name</label><input data-field="charge_name" list="chargeNameSuggestions" placeholder="Charge name" /></div>
             <div class="field"><label data-i18n="packet.offenseCode">Statute / Offense Code</label><input data-field="charge_code" list="offenseCodeSuggestions" placeholder="Statute code" /></div>
-            <div class="field"><label data-i18n="packet.level">Charge Level</label><select data-field="level"><option value="">Select</option><option value="MM">Minor Misdemeanor</option><option value="M">Misdemeanor</option><option value="F5">Felony 5</option><option value="F4">Felony 4</option><option value="F3">Felony 3</option><option value="F2">Felony 2</option><option value="F1">Felony 1</option></select></div>
-            <div class="field"><label>Degree</label><select data-field="degree"><option value="">Select</option><option value="MM">MM</option><option value="M1">M1</option><option value="M2">M2</option><option value="M3">M3</option><option value="M4">M4</option><option value="F1">F1</option><option value="F2">F2</option><option value="F3">F3</option><option value="F4">F4</option><option value="F5">F5</option></select></div>
+            <div class="field"><label data-i18n="packet.level">Degree / Level</label><select data-field="degree"><option value="">Select</option><option value="MM">Minor Misdemeanor / MM</option><option value="M1">Misdemeanor 1 / M1</option><option value="M2">Misdemeanor 2 / M2</option><option value="M3">Misdemeanor 3 / M3</option><option value="M4">Misdemeanor 4 / M4</option><option value="F1">Felony 1 / F1</option><option value="F2">Felony 2 / F2</option><option value="F3">Felony 3 / F3</option><option value="F4">Felony 4 / F4</option><option value="F5">Felony 5 / F5</option></select><div class="helper">Saved as both degree and level aliases for packet compatibility.</div></div>
             <div class="field"><label>Offense Date</label><input type="date" data-field="offense_date" /></div>
             <div class="field field-full"><label>Charge Notes</label><textarea data-field="notes" placeholder="Optional notes about this charge"></textarea></div>
             <div class="flag-box"><h3 class="flag-title">Charge Flags</h3><div class="check-grid">
+              <label class="check"><input type="checkbox" data-field="pending_charges" /> Pending charges / open case</label>
               <label class="check"><input type="checkbox" data-field="isTraffic" /> Traffic offense</label>
               <label class="check"><input type="checkbox" data-field="isSexOffense" /> Sex offense</label>
               <label class="check"><input type="checkbox" data-field="isDomesticViolenceConviction" /> Domestic violence related</label>
@@ -1016,7 +1021,10 @@
         if (data) {
           card.querySelectorAll("[data-field]").forEach((input) => {
             const key = input.dataset.field;
-            if (Object.prototype.hasOwnProperty.call(data, key)) setInputValue(input, data[key]);
+            const aliasValue = key === "degree"
+              ? firstNonEmpty(data.degree, data.level, data.chargeLevel, data.charge_level)
+              : firstNonEmpty(data[key], key === "pending_charges" ? data.pendingCharges : "");
+            if (aliasValue !== "") setInputValue(input, aliasValue);
           });
         }
         updateStatus();
@@ -1047,8 +1055,11 @@
           if (!charge.charge_name && !charge.case_number && !charge.charge_code) return;
           const outcome = String(charge.final_disposition || "").toLowerCase();
           charge.is_dismissed = outcome === "dismissed" || outcome === "not guilty" || outcome === "acquitted" || outcome === "no bill";
+          charge.level = firstNonEmpty(charge.level, charge.degree, charge.chargeLevel);
+          charge.degree = firstNonEmpty(charge.degree, charge.level, charge.chargeLevel);
+          charge.charge_level = charge.level;
           charge.is_convicted = outcome === "convicted";
-          charge.pendingCharges = outcome === "pending" || charge.pendingCharges === true;
+          charge.pendingCharges = outcome === "pending" || charge.pending_charges === true || charge.pendingCharges === true;
           charge.pending_charges = charge.pendingCharges;
           charge.sex_offense_registry = charge.isSexOffense || charge.sex_offense_registry;
           charge.felony_violence_offense = charge.isViolentOffense || charge.felony_violence_offense;
@@ -1066,7 +1077,7 @@
 
         setValue("firstName", petitioner.first_name || localStorage.getItem("firstName"));
         setValue("lastName", petitioner.last_name || localStorage.getItem("lastName"));
-        setValue("fullName", petitioner.full_name || localStorage.getItem("fullName"));
+        setValue("fullName", petitioner.full_name || [petitioner.first_name, petitioner.last_name].filter(Boolean).join(" ") || localStorage.getItem("fullName") || [localStorage.getItem("firstName"), localStorage.getItem("lastName")].filter(Boolean).join(" "));
         setValue("dateOfBirth", petitioner.dob || localStorage.getItem("dateOfBirth"));
         setValue("email", petitioner.email || localStorage.getItem("email"));
         setValue("phone", petitioner.phone || localStorage.getItem("phone"));
@@ -1093,7 +1104,7 @@
         setValue("dischargeDate", first.discharge_date || localStorage.getItem("dischargeDate"));
         setValue("releaseDate", first.release_date);
         setValue("probationStartDate", first.probation_start_date);
-        setValue("probationEndDate", first.probation_end_date);
+        // probation_end_date is an older packet alias for the canonical Final Discharge Date field.
         setValue("communityControlEndDate", first.community_control_end_date);
         setValue("finePaidDate", first.fine_paid_date);
         setValue("restitutionPaidDate", first.restitution_paid_date);
