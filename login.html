@@ -52,17 +52,28 @@
       </div>
     </div>
   </header>
-  <main><section class="page-hero"><div class="container hero-card"><span class="eyebrow">Secure sign in</span><h1>Welcome back</h1><p>Sign in with your RecordPathAI account to access saved cases, packets, and RecordWatch.</p></div></section><section class="page-section"><div class="container"><section class="page-card auth-card"><form id="loginForm" class="form-grid" onsubmit="return false;"><div class="field field-full"><label for="email">Email</label><input id="email" type="email" autocomplete="email" required /></div><div class="field field-full"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required /></div><div class="button-row field-full"><button class="btn btn-primary" type="submit">Login</button><button class="btn btn-secondary" id="googleLogin" type="button">Continue with Google</button><a class="btn btn-secondary" id="signupLink" href="signup.html">Create account</a></div><div class="field field-full"><button class="link-button" id="resetPassword" type="button">Forgot your password?</button></div></form><p id="authStatus" class="meta-note" role="status"></p></section></div></section></main>
+  <main><section class="page-hero"><div class="container hero-card"><span class="eyebrow">Secure sign in</span><h1>Welcome back</h1><p>Sign in with your RecordPathAI account to access saved cases, packets, and RecordWatch.</p></div></section><section class="page-section"><div class="container"><section class="page-card auth-card"><form id="loginForm" class="form-grid" onsubmit="return false;"><div class="field field-full"><label for="email">Email</label><input id="email" type="email" autocomplete="email" required /></div><div class="field field-full"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required /></div><div class="button-row field-full"><button class="btn btn-primary" type="submit">Login</button><button class="btn google-signin-button" id="googleLogin" type="button"><span class="google-signin-icon" aria-hidden="true"></span>Sign in with Google</button><a class="btn btn-secondary" id="signupLink" href="signup.html">Create account</a></div><div class="auth-reset-callout field-full"><strong>Need to set a new password?</strong><span>If you just confirmed your email or forgot your password, send a reset link and return here to log in.</span><button class="link-button reset-link" id="resetPassword" type="button">Reset Password</button></div></form><form id="newPasswordForm" class="form-grid auth-reset-form" onsubmit="return false;" hidden><div class="field field-full"><label for="newPassword">Create a new password</label><input id="newPassword" type="password" autocomplete="new-password" minlength="6" required /><div class="field-helper">Use at least 6 characters. After saving, you will return to login.</div></div><div class="button-row field-full"><button class="btn btn-primary" type="submit">Save new password</button><a class="btn btn-secondary" id="backToLogin" href="login.html">Back to login</a></div></form><p id="authStatus" class="meta-note" role="status"></p></section></div></section></main>
   <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Authentication is powered by Supabase Auth.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
   <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/auth.js"></script><script>
     document.addEventListener("DOMContentLoaded", async function () {
       const returnUrl = RecordPathUserStore.getReturnUrl("dashboard.html");
+      const queryParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
+      const isPasswordRecovery = queryParams.get("type") === "recovery" || hashParams.get("type") === "recovery";
+      const loginForm = document.getElementById("loginForm");
+      const newPasswordForm = document.getElementById("newPasswordForm");
       document.getElementById("signupLink").href = RecordPathAuth.signupUrl(returnUrl);
+      document.getElementById("backToLogin").href = RecordPathAuth.loginUrl(returnUrl);
       const localEmail = localStorage.getItem("email") || "";
       if (localEmail) document.getElementById("email").value = localEmail;
+      if (isPasswordRecovery) {
+        loginForm.hidden = true;
+        newPasswordForm.hidden = false;
+        authStatus.textContent = "Create a new password, then log in with it.";
+      }
       await RecordPathUserStore.ready;
-      if (RecordPathUserStore.isLoggedIn()) { RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; return; }
-      document.getElementById("loginForm").addEventListener("submit", async function () {
+      if (!isPasswordRecovery && RecordPathUserStore.isLoggedIn()) { RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; return; }
+      loginForm.addEventListener("submit", async function () {
         authStatus.textContent = "Signing in…";
         try { await RecordPathUserStore.login({ email: email.value, password: password.value }); RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; }
         catch (error) { authStatus.textContent = error.message; }
@@ -73,8 +84,16 @@
       });
       document.getElementById("resetPassword").addEventListener("click", async function () {
         authStatus.textContent = "Sending reset email…";
-        try { await RecordPathUserStore.sendPasswordReset(email.value); authStatus.textContent = "If that email exists, a reset link has been sent."; }
+        try { await RecordPathUserStore.sendPasswordReset(email.value); authStatus.textContent = "If that email exists, a reset link has been sent. Open it to set a new password, then return here to log in."; }
         catch (error) { authStatus.textContent = error.message; }
+      });
+      newPasswordForm.addEventListener("submit", async function () {
+        authStatus.textContent = "Saving your new password…";
+        try {
+          await RecordPathUserStore.updatePasswordAfterReset(newPassword.value);
+          RecordPathUserStore.clearReturnUrl();
+          window.location.href = RecordPathAuth.loginUrl(returnUrl);
+        } catch (error) { authStatus.textContent = error.message; }
       });
     });
   </script>
