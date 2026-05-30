@@ -346,6 +346,82 @@
     }
 
 
+    .field-key-panel {
+      border-top: 1px solid var(--line);
+      margin-top: 4px;
+      padding-top: 14px;
+    }
+
+    .field-key-search {
+      margin-bottom: 10px;
+    }
+
+    .field-key-list {
+      display: grid;
+      gap: 12px;
+      max-height: 360px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .field-key-group {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .field-key-group-title {
+      background: #f8fafc;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .field-key-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 10px;
+      border-bottom: 1px solid #eef2f7;
+    }
+
+    .field-key-row:last-child {
+      border-bottom: 0;
+    }
+
+    .field-key-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    .field-key-name {
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12px;
+      color: #0f172a;
+      word-break: break-all;
+    }
+
+    .copy-field-name-btn {
+      padding: 7px 9px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .field-key-empty {
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+
     .grid-overlay {
       position: absolute;
       inset: 0;
@@ -564,6 +640,15 @@
         <p class="muted">
           Drag and resize fields directly on the PDF, or edit their values here.
         </p>
+
+        <div class="field-key-panel" aria-labelledby="fieldNameKeyTitle">
+          <div class="section-title" id="fieldNameKeyTitle">Field Name Key</div>
+          <p class="muted">Supported packet paths from normalized <code>packet.html</code> data. Use the exact field name in mappings.</p>
+          <label class="label" for="fieldKeySearch">Search field names</label>
+          <input class="field-key-search" type="text" id="fieldKeySearch" placeholder="Search label or JSON path" />
+          <div id="fieldNameKeyList" class="field-key-list"></div>
+        </div>
+
       </div>
     </aside>
   </div>
@@ -620,6 +705,8 @@
     const nudgeFiveBtn = document.getElementById("nudgeFiveBtn");
     const copyFieldJsonBtn = document.getElementById("copyFieldJsonBtn");
     const applyJudgeFixBtn = document.getElementById("applyJudgeFixBtn");
+    const fieldKeySearch = document.getElementById("fieldKeySearch");
+    const fieldNameKeyList = document.getElementById("fieldNameKeyList");
 
     let pdfDoc = null;
     let currentPage = 1;
@@ -628,6 +715,145 @@
     let selectedFieldId = null;
     let nextFieldId = 1;
     let showGrid = false;
+
+
+
+    const FIELD_NAME_KEY_GROUPS = [
+      {
+        title: "petitioner.*",
+        fields: [
+          ["Full legal name", "petitioner.full_name"],
+          ["First name (derived alias)", "petitioner.first_name"],
+          ["Middle name", "petitioner.middle_name"],
+          ["Last name (derived alias)", "petitioner.last_name"],
+          ["Date of birth", "petitioner.dob"],
+          ["Full SSN", "petitioner.ssn_full"],
+          ["Last 4 SSN", "petitioner.ssn_last4"],
+          ["Phone", "petitioner.phone"],
+          ["Email", "petitioner.email"],
+          ["Address line 1", "petitioner.address.line1"],
+          ["Address line 2", "petitioner.address.line2"],
+          ["City", "petitioner.address.city"],
+          ["Residence state", "petitioner.address.state"],
+          ["ZIP", "petitioner.address.zip"],
+          ["Residence county", "petitioner.address.county"]
+        ]
+      },
+      {
+        title: "court.*",
+        fields: [
+          ["Case state", "court.state"],
+          ["County", "court.county"],
+          ["Court name", "court.name"],
+          ["Department", "court.department"],
+          ["Docket number", "court.docket_number"],
+          ["Case number", "court.case_number"],
+          ["Judge name", "court.judge_name"],
+          ["Case type", "court.case_type"],
+          ["Court address line 1", "court.address.line1"],
+          ["Court address city", "court.address.city"],
+          ["Court address state", "court.address.state"],
+          ["Court address ZIP", "court.address.zip"]
+        ]
+      },
+      {
+        title: "case.*",
+        fields: [
+          ["Filing date", "case.filing_date"],
+          ["Hearing date", "case.hearing_date"],
+          ["Incident count", "case.incident_count"],
+          ["Conviction count", "case.conviction_count"],
+          ["Dismissal count", "case.dismissal_count"],
+          ["Overall disposition summary", "case.overall_disposition_summary"],
+          ["Petition reason", "case.petition_reason"],
+          ["Rehabilitation statement", "case.rehabilitation_statement"],
+          ["Supporting statement", "case.supporting_statement"]
+        ]
+      },
+      {
+        title: "charges[0].* (mapper path uses charges.0.*)",
+        fields: [
+          ["Charge / offense name", "charges.0.charge_name"],
+          ["Statute / code", "charges.0.charge_code"],
+          ["Degree / level", "charges.0.level"],
+          ["Offense classification", "charges.0.offense_classification"],
+          ["Arrest date", "charges.0.arrest_date"],
+          ["Citation date", "charges.0.citation_date"],
+          ["Offense date", "charges.0.offense_date"],
+          ["Outcome / disposition", "charges.0.disposition"],
+          ["Final disposition", "charges.0.final_disposition"],
+          ["Disposition date", "charges.0.disposition_date"],
+          ["Sentencing date", "charges.0.sentencing_date"],
+          ["Release date", "charges.0.release_date"],
+          ["Probation / discharge date", "charges.0.probation_end_date"],
+          ["Final discharge date", "charges.0.discharge_date"],
+          ["Waiting period end date", "charges.0.waiting_period_end_date"],
+          ["Case number", "charges.0.case_number"],
+          ["Court name", "charges.0.court_name"],
+          ["Court county", "charges.0.court_county"],
+          ["Judge name", "charges.0.judge_name"],
+          ["Case state", "charges.0.case_state"],
+          ["Arresting agency", "charges.0.arresting_agency"],
+          ["Prosecutor agency", "charges.0.prosecutor_agency"],
+          ["Dismissed checkbox", "charges.0.is_dismissed"],
+          ["Convicted checkbox", "charges.0.is_convicted"],
+          ["Sealable checkbox", "charges.0.is_sealable"],
+          ["Pending charges flag", "charges.0.pending_charges"],
+          ["Sex offense registry flag", "charges.0.sex_offense_registry"],
+          ["Victim under 13 flag", "charges.0.victim_under_13"],
+          ["Felony violence flag", "charges.0.felony_violence_offense"],
+          ["F3 felony count", "charges.0.f3_felony_count"],
+          ["Ineligible reason", "charges.0.ineligible_reason"],
+          ["Fine amount due", "charges.0.fine_amount_due"],
+          ["Restitution due", "charges.0.restitution_due"],
+          ["Charge notes", "charges.0.notes"]
+        ]
+      },
+      {
+        title: "eligibility.*",
+        fields: [
+          ["State ruleset", "eligibility.state_ruleset"],
+          ["Filing type", "eligibility.filing_type"],
+          ["Is eligible", "eligibility.is_eligible"],
+          ["Eligibility status", "eligibility.eligibility_status"],
+          ["Eligibility reason", "eligibility.eligibility_reason"],
+          ["Estimated eligible on", "eligibility.estimated_eligible_on"],
+          ["Waiting period complete", "eligibility.waiting_period_complete"],
+          ["Pending cases flag", "eligibility.has_pending_cases"],
+          ["Outstanding fines flag", "eligibility.has_outstanding_fines"],
+          ["Open warrants flag", "eligibility.has_open_warrants"],
+          ["Requires prosecutor notice", "eligibility.requires_prosecutor_notice"],
+          ["Requires hearing", "eligibility.requires_hearing"],
+          ["Requires fingerprints", "eligibility.requires_fingerprints"],
+          ["Requires certified disposition", "eligibility.requires_certified_disposition"],
+          ["Eligibility notes", "eligibility.notes"]
+        ]
+      },
+      {
+        title: "signature.*",
+        fields: [
+          ["Petitioner signature name", "signature.petitioner_signature_name"],
+          ["Attorney signature name", "signature.attorney_signature_name"],
+          ["DA delegate signature", "signature.district_attorney_delegate_signature"],
+          ["DA delegate bar number", "signature.district_attorney_delegate_bar_number"],
+          ["Petition signed day", "signature.petition_signed_day"],
+          ["Petition signed month", "signature.petition_signed_month"],
+          ["Petition signed year", "signature.petition_signed_year"],
+          ["Affidavit signed day", "signature.affidavit_signed_day"],
+          ["Affidavit signed month", "signature.affidavit_signed_month"],
+          ["Affidavit signed year", "signature.affidavit_signed_year"]
+        ]
+      },
+      {
+        title: "dates.*",
+        fields: [
+          ["Current date", "dates.current_date"],
+          ["Current day", "dates.current_day"],
+          ["Current month", "dates.current_month"],
+          ["Current year", "dates.current_year"]
+        ]
+      }
+    ];
 
     let interaction = {
       mode: null,
@@ -639,6 +865,60 @@
       startWidth: 0,
       startHeight: 0
     };
+
+
+
+    function renderFieldNameKey() {
+      if (!fieldNameKeyList) return;
+      const query = (fieldKeySearch?.value || "").trim().toLowerCase();
+      const groups = FIELD_NAME_KEY_GROUPS.map((group) => ({
+        title: group.title,
+        fields: group.fields.filter(([label, name]) => {
+          if (!query) return true;
+          return label.toLowerCase().includes(query) || name.toLowerCase().includes(query) || group.title.toLowerCase().includes(query);
+        })
+      })).filter((group) => group.fields.length);
+
+      if (!groups.length) {
+        fieldNameKeyList.innerHTML = '<div class="field-key-empty">No field names match your search.</div>';
+        return;
+      }
+
+      fieldNameKeyList.innerHTML = groups.map((group) => `
+        <div class="field-key-group">
+          <div class="field-key-group-title">${escapeHtml(group.title)}</div>
+          ${group.fields.map(([label, name]) => `
+            <div class="field-key-row">
+              <div>
+                <div class="field-key-label">${escapeHtml(label)}</div>
+                <div class="field-key-name">${escapeHtml(name)}</div>
+              </div>
+              <button type="button" class="btn btn-secondary copy-field-name-btn" data-field-name="${escapeHtml(name)}">Copy</button>
+            </div>
+          `).join("")}
+        </div>
+      `).join("");
+    }
+
+    async function copyFieldName(name, button) {
+      try {
+        await navigator.clipboard.writeText(name);
+      } catch (err) {
+        const scratch = document.createElement("textarea");
+        scratch.value = name;
+        document.body.appendChild(scratch);
+        scratch.select();
+        document.execCommand("copy");
+        scratch.remove();
+      }
+
+      if (fieldNameInput) fieldNameInput.value = name;
+      if (button) {
+        const original = button.textContent;
+        button.textContent = "Copied";
+        setTimeout(() => { button.textContent = original; }, 900);
+      }
+    }
 
     function clamp(value, min, max) {
       return Math.max(min, Math.min(max, value));
@@ -1033,6 +1313,16 @@
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
     }
+
+    if (fieldKeySearch) fieldKeySearch.addEventListener("input", renderFieldNameKey);
+    if (fieldNameKeyList) {
+      fieldNameKeyList.addEventListener("click", (event) => {
+        const button = event.target.closest(".copy-field-name-btn");
+        if (!button) return;
+        copyFieldName(button.dataset.fieldName || "", button);
+      });
+    }
+    renderFieldNameKey();
 
     overlay.addEventListener("mousedown", (e) => {
       if (e.target === overlay) {
