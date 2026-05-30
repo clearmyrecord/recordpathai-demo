@@ -56,6 +56,16 @@
         <article class="dashboard-card"><p class="eyebrow-mini">RecordWatch status</p><h3 id="recordWatchStatus">Ready</h3><p class="muted">Use RecordWatch to monitor next steps.</p></article>
         <article class="dashboard-card wide"><p class="eyebrow-mini">Next action</p><h3 id="nextAction">Continue eligibility intake</h3><div class="hero-actions"><a id="nextActionLink" class="btn" href="eligibility.html">Continue</a><a class="btn secondary" href="record-details.html">Edit Record Details</a><a class="btn secondary" href="recordwatch-dashboard.html">Open RecordWatch</a></div></article>
       </div>
+      <section class="page-card recordwatch-dashboard-card">
+        <div class="section-heading-row">
+          <div>
+            <h2>RecordWatch</h2>
+            <p class="muted">Track your eligibility date, reminders, notification status, and upcoming alerts.</p>
+          </div>
+          <a class="btn secondary" href="recordwatch-dashboard.html">Open RecordWatch</a>
+        </div>
+        <div id="recordWatchWidget" class="recordwatch-dashboard-grid"></div>
+      </section>
       <section class="page-card" id="purchaseLedgerSection">
         <div class="section-heading-row">
           <div>
@@ -101,11 +111,34 @@
       const nextAction = !cases.length ? ["Continue eligibility intake", "eligibility.html"] : latest.paymentStatus !== "Paid" ? ["Review packet and payment", "packet.html"] : latest.packetStatus !== "Generated" ? ["Generate or download packet", "packet.html"] : ["Open RecordWatch", "recordwatch-dashboard.html"];
       document.getElementById("nextAction").textContent = nextAction[0];
       document.getElementById("nextActionLink").href = nextAction[1];
-      document.getElementById("caseList").innerHTML = cases.length ? cases.map((item) => `<article class="record-card"><h3>${escapeHtml(item.caseNumber || item.caseId)}</h3><p><strong>${escapeHtml(item.court || "Court not set")}</strong> ${escapeHtml([item.county,item.caseState].filter(Boolean).join(", "))}</p><p>${escapeHtml((item.charges || []).join(", ") || "Charges not stored in profile")}</p><p class="muted">Eligibility: ${escapeHtml(item.eligibilityStatus || "Not screened yet")} · Packet: ${escapeHtml(item.packetStatus || "Not generated")} · Updated: ${escapeHtml(new Date(item.updatedAt).toLocaleString())}</p></article>`).join("") : '<div class="empty-state"><h2>No saved cases yet</h2><p>Complete record details and choose Save Progress to add a case.</p><a class="btn" href="record-details.html">Add case details</a></div>';
+      renderRecordWatchWidget(latest, cases);
+      renderSavedCases(cases);
       await loadLedger();
     });
 
     let ledgerEntries = [];
+
+    function renderSavedCases(cases){
+      document.getElementById("caseList").innerHTML = cases.length ? cases.map((item) => `<article class="record-card"><h3>${escapeHtml(item.caseNumber || item.caseId)}</h3><p><strong>${escapeHtml(item.court || "Court not set")}</strong> ${escapeHtml([item.county,item.caseState].filter(Boolean).join(", "))}</p><p>${escapeHtml((item.charges || []).join(", ") || "Charges not stored in profile")}</p><p class="muted">Eligibility: ${escapeHtml(item.eligibilityStatus || "Not screened yet")} · Packet: ${escapeHtml(item.packetStatus || "Not generated")} · Updated: ${escapeHtml(new Date(item.updatedAt).toLocaleString())}</p></article>`).join("") : '<div class="empty-state"><h2>No saved cases yet</h2><p>Complete record details and choose Save Progress to add a case.</p><a class="btn" href="record-details.html">Add case details</a></div>';
+    }
+
+    function renderRecordWatchWidget(latest, cases){
+      const widget = document.getElementById("recordWatchWidget");
+      if (!widget) return;
+      const estimatedDate = latest && latest.estimatedEligibleDate ? latest.estimatedEligibleDate : "Not estimated yet";
+      const paymentState = latest && latest.paymentStatus === "Paid" ? "Packet unlocked" : "Packet not unlocked";
+      const caseCount = Array.isArray(cases) ? cases.length : 0;
+      const alerts = caseCount ? "90, 30, 7, and day-of reminders when available" : "Add a case to start reminders";
+      const stats = [
+        ["Eligibility date", estimatedDate],
+        ["Reminder status", caseCount ? "Tracking saved cases" : "Ready to start"],
+        ["Notifications", "Email and dashboard alerts"],
+        ["Upcoming alerts", alerts],
+        ["Saved cases", String(caseCount)],
+        ["Packet status", paymentState]
+      ];
+      widget.innerHTML = stats.map((item) => `<article class="recordwatch-stat-card"><p class="recordwatch-stat-label">${escapeHtml(item[0])}</p><p class="recordwatch-stat-value">${escapeHtml(item[1])}</p></article>`).join("");
+    }
 
     function apiEndpoint(path){
       const host = window.location.hostname || "";

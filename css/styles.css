@@ -2571,6 +2571,63 @@ body.home-page .cta .btn {
   }
 }
 
+.recordwatch-dashboard-card {
+  overflow: hidden;
+}
+
+.recordwatch-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.recordwatch-stat-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #f8fbff;
+  padding: 18px;
+  box-shadow: 0 10px 24px rgba(17, 56, 130, 0.06);
+}
+
+.recordwatch-stat-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.recordwatch-stat-value {
+  margin: 0;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+@media (max-width: 900px) {
+  .recordwatch-dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .recordwatch-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .recordwatch-stat-card {
+    padding: 16px;
+  }
+
+  .recordwatch-stat-value {
+    font-size: 18px;
+  }
+}
+
 .section-heading-row {
   display: flex;
   align-items: flex-start;
