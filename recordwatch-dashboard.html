@@ -56,7 +56,9 @@
   <main>
     <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Layer 3: Monitoring Engine</span><h1>RecordWatch Dashboard</h1><p>Track eligibility estimates, requirements, risk flags, and correction tasks across every saved case.</p><div class="hero-actions"><a class="btn" href="recordwatch-intake.html?new=1">Add New Case</a><a class="btn secondary" href="recordwatch-relief.html">Relief Actions</a></div></div></section>
     <section class="recordwatch-section"><div class="container recordwatch-stack">
+      <div id="recordwatchDataNotice" class="meta-note"></div>
       <div class="summary-grid" id="summaryGrid"></div>
+      <section class="recordwatch-widget" id="recordwatchWidget"></section>
       <div class="recordwatch-actions"><button class="btn secondary" id="exportJson" type="button">Export RecordWatch Data JSON</button><button class="btn danger" id="clearData" type="button">Clear Demo Data</button></div>
       <div id="casesContainer" class="recordwatch-stack"></div>
       <div class="disclaimer-box"><strong>Disclaimer:</strong> RecordWatch provides organization, estimated eligibility calculations, document preparation, and tracking tools. It is not legal advice. Eligibility rules vary by state, county, court, charge type, disposition, and personal history. Calculations must be verified before filing. RecordWatch does not guarantee record sealing, expungement, correction, deletion, removal, employment, housing approval, or background-check results.</div>
@@ -67,6 +69,7 @@
 
   <script src="js/packet-data-bridge.js"></script>
   <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-notifications.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/recordwatch-monitor.js"></script>
   <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script>
@@ -78,6 +81,8 @@
       var taskLabels = { courtDocketChecked: "Court docket checked", stateRepositoryChecked: "State repository checked", certifiedDispositionRequested: "Certified disposition requested", backgroundCheckChecked: "Background check company checked", dataBrokerChecked: "Data broker checked", disputePacketGenerated: "Dispute packet generated", followUpNeeded: "Follow-up needed", correctedVerified: "Corrected / verified" };
       var summaryGrid = document.getElementById("summaryGrid");
       var casesContainer = document.getElementById("casesContainer");
+      var recordwatchWidget = document.getElementById("recordwatchWidget");
+      var recordwatchDataNotice = document.getElementById("recordwatchDataNotice");
 
       function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
       function list(items) { return items && items.length ? "<ul>" + items.map(function (item) { return "<li>" + esc(item) + "</li>"; }).join("") + "</ul>" : "<span class='muted'>None recorded</span>"; }
@@ -99,6 +104,8 @@
           ["User name", profile.fullName || "Not entered"], ["Total cases", cases.length], ["Eligible now", counts.eligible], ["Future eligible", counts.future], ["More info needed", counts.more], ["Risk flag cases", counts.risks]
         ].map(function (item) { return '<article class="summary-card"><p class="eyebrow-mini">' + esc(item[0]) + '</p><h3>' + esc(item[1]) + '</h3></article>'; }).join("");
 
+        renderRecordWatchWidget(cases);
+
         if (!cases.length) {
           casesContainer.innerHTML = '<div class="empty-state"><h2>No RecordWatch cases yet</h2><p>Start at eligibility, continue through record details, or use optional Advanced Case Intake for extra fields.</p><a class="btn" href="recordwatch-intake.html">Advanced Case Intake</a></div>';
           return;
@@ -115,11 +122,36 @@
           }).join("");
           return '<article class="case-card"><div class="case-header"><div><p class="eyebrow-mini">Case</p><h3>' + esc(caseData.court && caseData.court.caseNumber || "No case number") + '</h3></div><span class="status-badge ' + statusClass(monitoringStatus) + '">' + esc(monitoringStatus) + '</span></div>' +
             '<div class="detail-list">' +
-            row("Court", caseData.court && caseData.court.courtName) + row("County / State", [caseData.court && caseData.court.county, caseData.court && caseData.court.caseState].filter(Boolean).join(", ")) + row("Outcome", caseData.outcome && caseData.outcome.outcome) + row("Charge summary", chargeSummary(caseData)) + row("Eligibility status", status) + row("Estimated eligibility date", RecordWatchRules.formatDate(date)) + row("Days until eligibility", days === null ? "Not available" : (days <= 0 ? "Eligible date reached" : days + " day(s)")) + row("Missing requirements", list(RecordWatchRules.getMissingRequirements(caseData))) + row("Risk flags", list(RecordWatchRules.getRiskFlags(caseData))) + row("Recommended next action", RecordWatchRules.getRecommendedStatus(caseData)) +
+            row("Court", caseData.court && caseData.court.courtName) + row("County / State", [caseData.court && caseData.court.county, caseData.court && caseData.court.caseState].filter(Boolean).join(", ")) + row("Outcome", caseData.outcome && caseData.outcome.outcome) + row("Charge summary", chargeSummary(caseData)) + row("Eligibility status", status) + row("Estimated eligibility date", RecordWatchRules.formatDate(date)) + row("Confidence", confidenceLabel(caseData)) + row("Days until eligibility", days === null ? "Not available" : (days <= 0 ? "Eligible date reached" : days + " day(s)")) + row("Missing requirements", list(RecordWatchRules.getMissingRequirements(caseData))) + row("Risk flags", list(RecordWatchRules.getRiskFlags(caseData))) + row("Recommended next action", RecordWatchRules.getRecommendedStatus(caseData)) +
             '</div><h4>Monitoring checklist</h4><div class="checklist">' + checklist + '</div></article>';
         }).join("");
       }
 
+
+      function renderRecordWatchWidget(cases) {
+        var events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
+        var notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
+        var active = cases[0] || null;
+        var event = active ? events.find(function (item) { return item.case_id === active.id; }) : events[0];
+        var eligibilityDate = event && event.eligibility_date || (active && RecordWatchRules.calculateEligibilityDate(active));
+        var confidence = event && event.eligibility_confidence || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).level : "medium");
+        var confidenceReason = event && event.eligibility_confidence_reason || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).reason : "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.");
+        var days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(eligibilityDate) : RecordWatchRules.daysUntil(eligibilityDate);
+        var upcoming = [90, 30, 7, 0].filter(function (n) { return days !== null && days >= n; }).map(function (n) { return n === 0 ? "Eligibility day alert" : n + "-day reminder"; });
+        recordwatchWidget.innerHTML = '<div class="case-header"><div><p class="eyebrow-mini">RecordWatch widget</p><h2>Reminder & eligibility monitor</h2><p class="muted">RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.</p></div><a class="btn secondary" href="recordwatch.html#recordwatch-enrollment">Edit preferences</a></div>' +
+          '<div class="recordwatch-widget-grid">' +
+          row("Eligibility Date", RecordWatchRules.formatDate(eligibilityDate)) +
+          row("Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")) +
+          row("Confidence", confidenceText(confidence) + " — " + confidenceReason) +
+          row("Notification Status", event ? "Registered" : "Not registered yet") +
+          row("Communication Preferences", (RecordWatchNotifications.loadSubscriptions()[0] || {}).notify_sms ? "Premium SMS + email" : "Free email / in-app") +
+          row("Upcoming Alerts", upcoming.length ? upcoming.join(", ") : "No scheduled alerts") +
+          row("Reminder History", notifications.length ? notifications.slice(-4).map(function (item) { return item.subject + " (" + item.channel + ")"; }).join("; ") : "No reminders sent yet") +
+          '</div>';
+      }
+
+      function confidenceText(value) { return String(value || "medium").replace(/_/g, " ").replace(/\b\w/g, function (letter) { return letter.toUpperCase(); }); }
+      function confidenceLabel(caseData) { var result = RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available details." }; return confidenceText(result.level) + " — " + result.reason; }
       function row(label, value) { return '<div class="detail-row"><strong>' + esc(label) + '</strong><span>' + (String(value || "").charAt(0) === "<" ? value : esc(value || "Not entered")) + '</span></div>'; }
 
       casesContainer.addEventListener("change", function (event) {
@@ -143,6 +175,13 @@
         RecordWatchBridge.syncExistingRecordPathData();
       }
       render();
+      if (window.RecordWatchNotifications && RecordWatchNotifications.fetchRemoteData) {
+        var userId = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id;
+        RecordWatchNotifications.fetchRemoteData(userId).then(function (data) {
+          recordwatchDataNotice.textContent = data.source === "local_fallback" ? data.fallbackNote : "Showing Supabase-saved RecordWatch data.";
+          render();
+        });
+      }
     }());
   </script>
   <script>

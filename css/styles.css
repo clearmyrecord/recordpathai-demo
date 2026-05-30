@@ -2570,3 +2570,140 @@ body.home-page .cta .btn {
     min-width: 0;
   }
 }
+
+/* RecordWatch reminders and notification system */
+.recordwatch-enrollment-card,
+.recordwatch-widget {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 28px;
+  align-items: stretch;
+  background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(238,244,255,0.92));
+  border: 1px solid #dbe7fb;
+  border-radius: 30px;
+  box-shadow: 0 18px 48px rgba(23, 52, 95, 0.12);
+  padding: 30px;
+}
+
+.recordwatch-enrollment-card h2,
+.recordwatch-widget h2 {
+  margin: 8px 0 10px;
+  color: #17345f;
+}
+
+.recordwatch-countdown-panel,
+.recordwatch-widget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.recordwatch-countdown-panel > div,
+.recordwatch-widget-grid .detail-row {
+  background: #ffffff;
+  border: 1px solid #dce8fb;
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.recordwatch-countdown-panel strong {
+  display: block;
+  color: #143d8f;
+  font-size: clamp(24px, 4vw, 38px);
+  line-height: 1.05;
+}
+
+.recordwatch-countdown-panel span {
+  display: block;
+  color: #667796;
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.recordwatch-enrollment-form {
+  display: grid;
+  gap: 14px;
+  background: #ffffff;
+  border: 1px solid #dce8fb;
+  border-radius: 24px;
+  padding: 22px;
+}
+
+.recordwatch-enrollment-form label:not(.toggle-row) {
+  display: grid;
+  gap: 8px;
+  color: #233d70;
+  font-weight: 800;
+}
+
+.recordwatch-enrollment-form input[type="email"],
+.recordwatch-enrollment-form input[type="tel"] {
+  width: 100%;
+  border: 1px solid #d7e3fb;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font: inherit;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #233d70;
+  font-weight: 800;
+}
+
+@media (max-width: 760px) {
+  .recordwatch-enrollment-card,
+  .recordwatch-widget {
+    grid-template-columns: 1fr;
+    padding: 22px;
+  }
+}
+
+.recordwatch-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 20px 0;
+}
+
+.recordwatch-plan-card {
+  background: #fff;
+  border: 1px solid #dce8fb;
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.recordwatch-plan-card.premium {
+  border-color: #8eb8ff;
+  box-shadow: inset 0 0 0 1px rgba(20, 61, 143, 0.08);
+}
+
+.recordwatch-plan-card h3 {
+  margin: 0 0 10px;
+  color: #143d8f;
+}
+
+.recordwatch-plan-card ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #667796;
+  line-height: 1.7;
+}
+
+.notification-preferences-card {
+  margin-top: 20px;
+}
+
+.notification-preferences-card .toggle-row {
+  justify-content: flex-start;
+  background: #fff;
+  border: 1px solid #dce8fb;
+  border-radius: 14px;
+  padding: 12px 14px;
+}

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RecordWatch Admin | RecordPathAI</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body class="recordwatch-dashboard-page">
+  <header class="site-header"><div class="container"><div class="header-shell header-shell-modern"><div class="header-inner"><a href="../index.html" class="site-brand"><img src="/assets/images/logo/RecordPathAI_Logo_Transparent.png" alt="RecordPathAI" class="site-logo"></a><nav class="nav"><a href="../dashboard.html">Dashboard</a><a href="../recordwatch-dashboard.html">RecordWatch</a><a href="../recordwatch.html">Enrollment</a></nav></div></div></div></header>
+  <main>
+    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Admin</span><h1>RecordWatch Admin Dashboard</h1><p>Monitor subscribers, upcoming eligibility events, delivery outcomes, provider warnings, and job runs.</p><div class="hero-actions"><button class="btn" id="runDaily" type="button">Run Daily Job Preview</button></div></div></section>
+    <section class="recordwatch-section"><div class="container recordwatch-stack"><div id="adminPermission" class="disclaimer-box" hidden>You do not have permission to view this page.</div><div class="summary-grid" id="adminSummary"></div><section class="page-card"><h2>Latest Job Runs & Delivery Log</h2><div id="adminLog" class="record-list"></div></section></div></section>
+  </main>
+  <script src="../js/recordwatch-notifications.js"></script>
+  <script src="../js/supabase-client.js"></script><script src="../js/user-store.js"></script><script src="../js/auth.js"></script>
+  <script>
+    (function () {
+      function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
+      function isDemoAdmin(user) { return Boolean(user && (user.email === "matt@recordpathai.com" || localStorage.getItem("recordPathAdminMode") === "true")); }
+      async function fetchAdminSummary() {
+        var headers = {};
+        if (localStorage.getItem("recordPathAdminKey")) headers["x-recordpath-admin-key"] = localStorage.getItem("recordPathAdminKey");
+        if (localStorage.getItem("recordPathAdminMode") === "true") headers["x-recordpath-demo-admin"] = "true";
+        var response = await fetch("/api/recordwatch/admin-summary", { headers: headers });
+        if (!response.ok) throw new Error("Admin summary unavailable");
+        var json = await response.json();
+        return json.summary || json;
+      }
+      function render(summary) {
+        summary = summary || RecordWatchNotifications.getAdminSummary();
+        var labels = [
+          ["Total subscribers", summary.total_subscribers],
+          ["Free subscribers", summary.free_subscribers],
+          ["Premium subscribers", summary.premium_subscribers],
+          ["Upcoming eligibility events", summary.upcoming_eligibility_events],
+          ["Notifications sent", summary.notifications_sent],
+          ["Failed/skipped notifications", summary.failed_or_skipped_notifications],
+          ["Provider missing warnings", summary.provider_missing_warnings],
+          ["SMS usage", summary.sms_usage],
+          ["Email usage", summary.email_usage]
+        ];
+        document.getElementById("adminSummary").innerHTML = labels.map(function (item) { return '<article class="summary-card"><p class="eyebrow-mini">' + esc(item[0]) + '</p><h3>' + esc(item[1]) + '</h3></article>'; }).join("");
+        var notifications = RecordWatchNotifications.loadNotifications().slice().reverse();
+        var jobs = (summary.latest_job_runs || []).map(function (job) { return '<article class="record-card"><h3>' + esc(job.job_type) + '</h3><p>' + esc(job.status) + ' · processed ' + esc(job.processed_count) + ' · sent ' + esc(job.sent_count) + ' · failed ' + esc(job.failed_count) + '</p><p class="muted">' + esc(job.started_at) + '</p></article>'; }).join("");
+        var log = notifications.length ? notifications.map(function (item) { return '<article class="record-card"><h3>' + esc(item.subject) + '</h3><p>' + esc(item.type) + ' · ' + esc(item.channel) + ' · ' + esc(item.status) + '</p><p class="muted">' + esc(item.sent_at) + '</p></article>'; }).join("") : '<div class="empty-state"><h2>No local notifications logged yet</h2><p>Activate RecordWatch or run the daily job preview to create reminder history.</p></div>';
+        document.getElementById("adminLog").innerHTML = jobs + log;
+      }
+      document.addEventListener("DOMContentLoaded", async function () {
+        if (!await RecordPathAuth.requireProtectedPageAsync("view RecordWatch admin")) return;
+        var user = RecordPathUserStore.getCurrentUser();
+        if (!isDemoAdmin(user)) {
+          document.getElementById("adminPermission").hidden = false;
+          document.getElementById("adminSummary").hidden = true;
+          document.getElementById("adminLog").closest("section").hidden = true;
+          return;
+        }
+        document.getElementById("runDaily").addEventListener("click", function () { RecordWatchNotifications.runDailyCheck(); render(); });
+        try { render(await fetchAdminSummary()); } catch (error) { render(); }
+      });
+    }());
+  </script>
+</body>
+</html>
