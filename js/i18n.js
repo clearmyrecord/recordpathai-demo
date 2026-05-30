@@ -12,7 +12,7 @@
       'nav.eligibility': 'Eligibility',
       'nav.recordDetails': 'Record Details',
       'nav.recordWatch': 'RecordWatch',
-      'nav.judgeAccess': 'Judge Access',
+      'nav.courtAccess': 'Court Access',
       'nav.packet': 'Packet',
       'nav.checkEligibility': 'Start Free Eligibility Check',
 
@@ -211,7 +211,7 @@
       'nav.eligibility': 'Elegibilidad',
       'nav.recordDetails': 'Detalles del registro',
       'nav.recordWatch': 'RecordWatch',
-      'nav.judgeAccess': 'Acceso judicial',
+      'nav.courtAccess': 'Acceso al tribunal',
       'nav.packet': 'Paquete',
       'nav.checkEligibility': 'Comenzar revisión gratuita de elegibilidad',
 
