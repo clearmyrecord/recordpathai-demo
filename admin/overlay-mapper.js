@@ -75,7 +75,7 @@ function getDemoCase() {
       firstName: "Matt",
       lastName: "Tunstall",
       fullName: "Matt Tunstall",
-      email: "unitedpaintersww@gmail.com",
+      email: "matt@recordpathai.com",
       phone: "8668219810",
       address1: "231 W Horizon Ridge Parkway",
       address2: "",
