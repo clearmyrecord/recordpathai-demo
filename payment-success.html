@@ -32,7 +32,9 @@
       text-align: center;
     }
 
-    .brand { font-size: 15px; font-weight: 800; letter-spacing: .04em; color:#4f88e8; text-transform: uppercase; }
+    .site-logo { display: flex; align-items: center; flex-shrink: 0; justify-content: center; margin-bottom: 18px; }
+    .site-logo-img { height: 44px; width: auto; display: block; object-fit: contain; }
+    @media (max-width: 768px) { .site-logo-img { height: 38px; } }
 
     h1 {
       margin: 10px 0 12px;
@@ -65,7 +67,13 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="brand">RecordPathAI</div>
+    <a href="index.html" class="site-logo">
+      <img
+        src="/assets/images/logo/RecordPathAI_Logo_Transparent.png"
+        alt="RecordPathAI"
+        class="site-logo-img"
+      >
+    </a>
     <h1>Payment received. Your packet is unlocked.</h1>
     <p>Your court-ready packet and e-filing-ready packet tools are now available.</p>
     <a href="packet.html?payment=success">Return to Packet</a>

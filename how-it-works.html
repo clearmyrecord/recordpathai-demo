@@ -97,27 +97,6 @@
       letter-spacing: -0.02em;
     }
 
-    .brand-icon {
-      width: 28px;
-      height: 34px;
-      border: 2px solid #22345f;
-      border-radius: 4px;
-      background: #ffffff;
-      position: relative;
-      flex: 0 0 auto;
-    }
-
-    .brand-icon::before {
-      content: "";
-      position: absolute;
-      left: 5px;
-      right: 5px;
-      top: 9px;
-      height: 2px;
-      background: #97a4bb;
-      box-shadow: 0 6px 0 #97a4bb, 0 12px 0 #97a4bb;
-    }
-
     .nav {
       display: flex;
       align-items: center;
@@ -567,9 +546,12 @@
         </div>
 
         <div class="header-inner">
-          <a href="index.html" class="brand">
-            <span class="brand-icon" aria-hidden="true"></span>
-            <span>RecordPathAI</span>
+          <a href="index.html" class="site-logo">
+            <img
+              src="/assets/images/logo/RecordPathAI_Logo_Transparent.png"
+              alt="RecordPathAI"
+              class="site-logo-img"
+            >
           </a>
 
           <button class="menu-toggle" type="button" aria-controls="primary-navigation" aria-expanded="false">
