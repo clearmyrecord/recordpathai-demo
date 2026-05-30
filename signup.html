@@ -86,7 +86,7 @@
       if (RecordPathUserStore.isLoggedIn()) { RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; return; }
       signupForm.addEventListener("submit", async function () {
         authStatus.textContent = "Creating your account…";
-        try { await RecordPathUserStore.signup({ fullName: fullName.value, email: email.value, phone: phone.value, password: password.value }); RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; }
+        try { await RecordPathUserStore.signup({ fullName: fullName.value, email: email.value, phone: phone.value, password: password.value }); RecordPathUserStore.clearReturnUrl(); window.location.href = "dashboard.html"; }
         catch (error) { authStatus.textContent = error.message; }
       });
       googleLogin.addEventListener("click", async function () {
