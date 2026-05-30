@@ -632,6 +632,29 @@
       color: #7f8ba0;
     }
 
+    .debug-pdf-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: -4px;
+    }
+
+    .debug-pdf-tools[hidden] {
+      display: none;
+    }
+
+    .debug-pdf-link {
+      background: transparent;
+      border: 0;
+      color: #48638f;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 6px;
+      text-decoration: underline;
+    }
+
     .bottom-actions {
       display: flex;
       gap: 14px;
@@ -1055,18 +1078,11 @@
             </div>
 
             <div class="button-stack">
-              <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>
-                <span data-i18n="packet.generatePdf">Generate PDF Packet</span>
-              </button>
-              <button type="button" class="packet-btn packet-btn-secondary" id="testPdfBtn">
-                <span data-i18n="packet.testPdf">Test PDF Access</span>
-              </button>
-              <button type="button" class="packet-btn packet-btn-secondary" id="openSourceBtn">
-                <span data-i18n="packet.openPdf">Open Source PDF</span>
-              </button>
-              <button type="button" class="packet-btn packet-btn-muted" id="payAndSubmitBtn">
-                <span data-i18n="packet.unlock">Unlock Packet — $50</span>
-              </button>
+              <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
+              <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
+                <button type="button" class="debug-pdf-link" id="testPdfBtn">Test PDF Access</button>
+                <button type="button" class="debug-pdf-link" id="openSourceBtn">Open Source PDF</button>
+              </div>
             </div>
 
             <div class="status-text" id="statusText" data-i18n="packet.ready">Ready.</div>
@@ -1205,9 +1221,29 @@ document.addEventListener("DOMContentLoaded", function () {
         );
       }
 
+      function syncPaymentCompletionFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("payment") === "success") {
+          localStorage.setItem(PAYMENT_STORAGE_KEY, "true");
+        }
+      }
+
       function isPacketPaymentComplete() {
         return localStorage.getItem(PAYMENT_STORAGE_KEY) === "true" ||
           isPacketPaymentBypassEnabled();
+      }
+
+      function isPacketDebugMode() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get("debug") === "true" ||
+          localStorage.getItem("recordPathDebug") === "true";
+      }
+
+      function getPacketGenerationState(packetEligibility) {
+        if (!packetEligibility?.isEligibleNow) return "notEligible";
+        if (isPacketPaymentBypassEnabled()) return "devBypass";
+        if (isPacketPaymentComplete()) return "eligiblePaid";
+        return "eligibleUnpaid";
       }
 
       function parsePacketDate(value) {
@@ -2441,21 +2477,64 @@ document.addEventListener("DOMContentLoaded", function () {
         window.open(`./${selected.pdfPath}`, "_blank");
       }
 
-      function setPacketLockState(isUnlocked, message) {
+      function renderDebugPdfTools() {
+        const debugTools = document.getElementById("debugPdfTools");
+        if (debugTools) debugTools.hidden = !isPacketDebugMode();
+      }
+
+      function renderPacketGenerationState(state, packetEligibility) {
         const paymentCallout = document.getElementById("paymentCallout");
         const generateBtn = document.getElementById("generateSealingBtn");
-        const unlockBtn = document.getElementById("payAndSubmitBtn");
 
-        if (generateBtn) generateBtn.disabled = !isUnlocked;
+        if (generateBtn) {
+          generateBtn.disabled = state === "notEligible";
+          generateBtn.classList.toggle("packet-btn-muted", state === "notEligible");
+          generateBtn.classList.toggle("packet-btn-primary", state !== "notEligible");
 
-        if (unlockBtn) {
-          unlockBtn.disabled = isUnlocked;
-          unlockBtn.textContent = isUnlocked ? (window.RecordPathI18n?.t?.("packet.unlocked") || "Packet unlocked") : (window.RecordPathI18n?.t?.("packet.unlock") || "Unlock Packet — $50");
+          if (state === "eligibleUnpaid") {
+            generateBtn.textContent = "Pay $50 & Generate Packet";
+          } else if (state === "eligiblePaid") {
+            generateBtn.textContent = "Generate PDF Packet";
+          } else if (state === "devBypass") {
+            generateBtn.textContent = "Generate PDF Packet (Dev Mode)";
+          } else {
+            generateBtn.textContent = "Not Eligible Yet";
+          }
         }
 
-        if (paymentCallout) {
-          paymentCallout.className = isUnlocked ? "callout success" : "callout warning";
-          paymentCallout.innerHTML = message;
+        if (!paymentCallout) return;
+
+        if (state === "eligiblePaid") {
+          paymentCallout.className = "callout success";
+          paymentCallout.textContent = "Payment complete. Your packet is unlocked and ready to generate.";
+        } else if (state === "devBypass") {
+          paymentCallout.className = "callout success";
+          paymentCallout.textContent = "Dev payment bypass active. Your packet is unlocked and ready to generate.";
+        } else if (state === "eligibleUnpaid") {
+          paymentCallout.className = "callout warning";
+          paymentCallout.textContent = "Eligible now — continue to secure checkout to unlock PDF packet generation.";
+        } else if (packetEligibility?.isNotYetEligible) {
+          paymentCallout.className = "callout danger";
+          paymentCallout.innerHTML = `You are not yet eligible based on this screening. Estimated eligible date: <strong>${escapeHtml(formatDateForDisplay(packetEligibility.estimatedEligibleDate))}</strong>.`;
+        } else {
+          paymentCallout.className = "callout warning";
+          paymentCallout.textContent = t("packet.eligibilityUnclearWarning") === "packet.eligibilityUnclearWarning" ? "Eligibility needs review before payment or packet generation." : t("packet.eligibilityUnclearWarning");
+        }
+      }
+
+      async function handlePrimaryPacketAction() {
+        const raw = readPacketData();
+        const normalizedData = buildNormalizedPacketData(raw);
+        const packetEligibility = calculatePacketEligibility(normalizedData);
+        const state = getPacketGenerationState(packetEligibility);
+
+        if (state === "eligibleUnpaid") {
+          await startCheckout();
+          return;
+        }
+
+        if (state === "eligiblePaid" || state === "devBypass") {
+          await generateSealingPdf();
         }
       }
       function buildReminderData(normalizedData, eligibilityMode = "not_eligible", eligibilityResult = calculatePacketEligibility(normalizedData)) {
@@ -2525,7 +2604,6 @@ document.addEventListener("DOMContentLoaded", function () {
       async function startCheckout() {
         try {
           if (window.RecordPathAuth && !RecordPathAuth.requireAuth("pay for and unlock your packet", "packet.html")) return;
-          setStatus("Opening secure checkout...");
           const raw = readPacketData();
           const normalizedData = buildNormalizedPacketData(raw);
           const packetEligibility = calculatePacketEligibility(normalizedData);
@@ -2534,6 +2612,8 @@ document.addEventListener("DOMContentLoaded", function () {
               ? "You are not yet eligible based on this screening."
               : "Eligibility needs review before payment.");
           }
+
+          setStatus("Opening secure checkout...");
 
           const payload = {
             applicant: {
@@ -2592,6 +2672,8 @@ document.addEventListener("DOMContentLoaded", function () {
         RecordWatchBridge.syncExistingRecordPathData();
       }
 
+      syncPaymentCompletionFromUrl();
+
       const raw = readPacketData();
       const normalizedData = buildNormalizedPacketData(raw);
       if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
@@ -2599,11 +2681,10 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       const packetEligibility = calculatePacketEligibility(normalizedData);
 
-      document.getElementById("testPdfBtn").addEventListener("click", testPdfAccess);
-      document.getElementById("generateSealingBtn").addEventListener("click", generateSealingPdf);
-      document.getElementById("openSourceBtn").addEventListener("click", openSourcePdf);
-      document.getElementById("payAndSubmitBtn").addEventListener("click", startCheckout);
-      document.getElementById("useTypedSigBtn").addEventListener("click", setTypedSignature);
+      document.getElementById("testPdfBtn")?.addEventListener("click", testPdfAccess);
+      document.getElementById("generateSealingBtn")?.addEventListener("click", handlePrimaryPacketAction);
+      document.getElementById("openSourceBtn")?.addEventListener("click", openSourcePdf);
+      document.getElementById("useTypedSigBtn")?.addEventListener("click", setTypedSignature);
       document.getElementById("useDrawnSigBtn").addEventListener("click", setDrawnSignature);
       document.getElementById("clearSigBtn").addEventListener("click", clearSignature);
       document.getElementById("clearPadBtn").addEventListener("click", clearSignature);
@@ -2619,55 +2700,26 @@ document.addEventListener("DOMContentLoaded", function () {
       if (sigInput) sigInput.value = normalizedData.petitioner.full_name || "";
 
       const eligibilityMode = packetEligibility.mode;
-      const paymentBtn = document.getElementById("payAndSubmitBtn");
-      const paymentCallout = document.getElementById("paymentCallout");
-      const generateBtn = document.getElementById("generateSealingBtn");
-      const paymentUnlocked = isPacketPaymentComplete();
-      const paymentBypassEnabled = isPacketPaymentBypassEnabled();
+      const packetGenerationState = getPacketGenerationState(packetEligibility);
+      const packetUnlocked = packetGenerationState === "eligiblePaid" || packetGenerationState === "devBypass";
       const reminderCardShouldShow = packetEligibility.isNotYetEligible;
       renderReminderCard(normalizedData, reminderCardShouldShow, packetEligibility);
+      renderPacketGenerationState(packetGenerationState, packetEligibility);
+      renderDebugPdfTools();
+
+      if (packetGenerationState === "eligiblePaid") {
+        localStorage.setItem(PAYMENT_STORAGE_KEY, "true");
+      }
 
       if (packetEligibility.isEligibleNow) {
-        if (paymentBtn) {
-          paymentBtn.style.display = paymentUnlocked ? "none" : "";
-          paymentBtn.disabled = paymentUnlocked;
-          paymentBtn.textContent = paymentUnlocked ? "Packet unlocked" : "Unlock Packet — $50";
-        }
-        if (generateBtn) generateBtn.disabled = !paymentUnlocked;
-
-        if (paymentCallout) {
-          if (paymentUnlocked) {
-            paymentCallout.className = "callout success";
-            paymentCallout.innerHTML = paymentBypassEnabled
-              ? "Eligible now — dev payment bypass active; packet ready to generate."
-              : "Eligible now — payment complete; packet ready to generate.";
-          } else {
-            paymentCallout.className = "callout warning";
-            paymentCallout.innerHTML = "Eligible now — continue to payment to unlock PDF packet generation.";
-          }
-        }
-
-        setStatus(paymentUnlocked
+        setStatus(packetUnlocked
           ? "Eligible now — packet ready to generate."
           : "Eligible now — payment required to generate the PDF packet.");
-        if (paymentUnlocked && !paymentBypassEnabled) localStorage.setItem(PAYMENT_STORAGE_KEY, "true");
-        loadAndRenderCourtInstructions(normalizedData, paymentUnlocked);
+        loadAndRenderCourtInstructions(normalizedData, packetUnlocked);
       } else if (packetEligibility.isNotYetEligible) {
-        if (paymentBtn) paymentBtn.style.display = "none";
-        if (generateBtn) generateBtn.disabled = true;
-        if (paymentCallout) {
-          paymentCallout.className = "callout danger";
-          paymentCallout.innerHTML = `You are not yet eligible based on this screening. Estimated eligible date: <strong>${escapeHtml(formatDateForDisplay(packetEligibility.estimatedEligibleDate))}</strong>.`;
-        }
         setStatus("You are not yet eligible based on this screening.", "error");
         loadAndRenderCourtInstructions(normalizedData, false);
       } else {
-        if (paymentBtn) paymentBtn.style.display = "none";
-        if (generateBtn) generateBtn.disabled = true;
-        if (paymentCallout) {
-          paymentCallout.className = "callout warning";
-          paymentCallout.innerHTML = t("packet.eligibilityUnclearWarning") === "packet.eligibilityUnclearWarning" ? "Eligibility needs review before payment or packet generation." : t("packet.eligibilityUnclearWarning");
-        }
         setStatus("Eligibility needs review before payment or packet generation.", "error");
         loadAndRenderCourtInstructions(normalizedData, false);
       }
