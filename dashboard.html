@@ -137,7 +137,7 @@
         ["Saved cases", String(caseCount)],
         ["Packet status", paymentState]
       ];
-      widget.innerHTML = stats.map((item) => `<article class="recordwatch-stat-card"><p class="recordwatch-stat-label">${escapeHtml(item[0])}</p><p class="recordwatch-stat-value">${escapeHtml(item[1])}</p></article>`).join("");
+      widget.innerHTML = stats.map((item) => `<article class="recordwatch-stat-card"><span class="recordwatch-stat-label">${escapeHtml(item[0])}</span><strong class="recordwatch-stat-value">${escapeHtml(item[1])}</strong></article>`).join("");
     }
 
     function apiEndpoint(path){
@@ -170,19 +170,19 @@
     }
 
     function renderLedger(entries, balance){
-      document.getElementById("ledgerTotalPurchases").textContent = formatMoney(balance.total_debits_cents || 0);
-      document.getElementById("ledgerTotalCredits").textContent = formatMoney(balance.total_credits_cents || 0);
-      document.getElementById("ledgerCurrentBalance").textContent = formatMoney(balance.current_balance_cents || 0);
+      document.getElementById("ledgerTotalPurchases").textContent = money(balance.total_debits_cents || 0);
+      document.getElementById("ledgerTotalCredits").textContent = money(balance.total_credits_cents || 0);
+      document.getElementById("ledgerCurrentBalance").textContent = money(balance.current_balance_cents || 0);
       document.getElementById("ledgerLastTransaction").textContent = entries[0]?.created_at ? new Date(entries[0].created_at).toLocaleDateString() : "—";
       const body = document.getElementById("ledgerTableBody");
       if (!entries.length) {
         body.innerHTML = '<tr><td colspan="7" class="empty-state">Your purchases and credits will appear here after you unlock a packet or activate premium RecordWatch.</td></tr>';
         return;
       }
-      body.innerHTML = entries.map((entry) => `<tr><td>${escapeHtml(formatDate(entry.created_at))}</td><td>${escapeHtml(entry.description)}</td><td>${escapeHtml(entry.case_id || "—")}</td><td>${escapeHtml(formatType(entry.entry_type))}</td><td>${escapeHtml(formatMoney(entry.debit_cents || 0))}</td><td>${escapeHtml(formatMoney(entry.credit_cents || 0))}</td><td><span class="status-badge ${escapeHtml(entry.status || "posted")}">${escapeHtml(formatStatus(entry.status))}</span></td></tr>`).join("");
+      body.innerHTML = entries.map((entry) => `<tr><td>${escapeHtml(formatDate(entry.created_at))}</td><td>${escapeHtml(entry.description)}</td><td>${escapeHtml(entry.case_id || "—")}</td><td>${escapeHtml(formatType(entry.entry_type))}</td><td>${escapeHtml(money(entry.debit_cents || 0))}</td><td>${escapeHtml(money(entry.credit_cents || 0))}</td><td><span class="status-badge ${escapeHtml(entry.status || "posted")}">${escapeHtml(formatStatus(entry.status))}</span></td></tr>`).join("");
     }
 
-    function formatMoney(cents){return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format((Number(cents)||0)/100);}
+    function money(cents){return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format((Number(cents)||0)/100);}
     function formatDate(value){return value ? new Date(value).toLocaleString() : "—";}
     function formatType(value){return String(value||"").replace(/_/g," ").replace(/\b\w/g,(c)=>c.toUpperCase());}
     function formatStatus(value){return formatType(value || "posted");}
