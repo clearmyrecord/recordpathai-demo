@@ -71,7 +71,7 @@
     </div></section>
   </main>
   <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Authentication and saved case records are powered by Supabase.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
-  <script src="js/recordwatch-notifications.js"></script><script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/i18n.js" defer></script>
+  <script src="js/packet-data-bridge.js"></script><script src="js/recordwatch-rules.js"></script><script src="js/recordwatch-notifications.js"></script><script src="js/recordwatch-bridge.js"></script><script src="js/recordwatch-monitor.js"></script><script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/i18n.js" defer></script>
   <script src="js/auth.js"></script><script>
     document.addEventListener("DOMContentLoaded", async function () {
       if (!await RecordPathAuth.requireProtectedPageAsync("view your dashboard")) return;
@@ -89,7 +89,9 @@
       const nextAction = !cases.length ? ["Continue eligibility intake", "eligibility.html"] : latest.paymentStatus !== "Paid" ? ["Review packet and payment", "packet.html"] : latest.packetStatus !== "Generated" ? ["Generate or download packet", "packet.html"] : ["Open RecordWatch", "recordwatch-dashboard.html"];
       document.getElementById("nextAction").textContent = nextAction[0];
       document.getElementById("nextActionLink").href = nextAction[1];
+      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();
       await loadRecordWatchData();
+      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();
       renderRecordWatchWidget(latest);
       document.getElementById("caseList").innerHTML = cases.length ? cases.map((item) => `<article class="record-card"><h3>${escapeHtml(item.caseNumber || item.caseId)}</h3><p><strong>${escapeHtml(item.court || "Court not set")}</strong> ${escapeHtml([item.county,item.caseState].filter(Boolean).join(", "))}</p><p>${escapeHtml((item.charges || []).join(", ") || "Charges not stored in profile")}</p><p class="muted">Eligibility: ${escapeHtml(item.eligibilityStatus || "Not screened yet")} · Packet: ${escapeHtml(item.packetStatus || "Not generated")} · Updated: ${escapeHtml(new Date(item.updatedAt).toLocaleString())}</p></article>`).join("") : '<div class="empty-state"><h2>No saved cases yet</h2><p>Complete record details and choose Save Progress to add a case.</p><a class="btn" href="record-details.html">Add case details</a></div>';
     });
@@ -101,14 +103,19 @@
     function renderRecordWatchWidget(latest){
       const events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
       const notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
-      const event = events.find((item) => item.case_id === latest.caseId || item.case_id === latest.id) || events[0];
-      const eligibilityDate = (event && event.eligibility_date) || latest.estimatedEligibleDate || "";
-      const confidence = (event && event.eligibility_confidence) || "";
-      const confidenceReason = (event && event.eligibility_confidence_reason) || "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.";
+      const localCases = window.RecordWatchMonitor ? RecordWatchMonitor.loadCases() : [];
+      const active = localCases.find((item) => item.court && (item.court.caseNumber === latest.caseNumber || item.id === latest.caseId || item.id === latest.id)) || localCases[0] || null;
+      const currentResult = active && window.RecordWatchBridge ? RecordWatchBridge.getCurrentEligibilityResult(active) : null;
+      if (active && window.RecordWatchBridge && typeof RecordWatchBridge.registerRecordWatchEligibility === "function") RecordWatchBridge.registerRecordWatchEligibility(active);
+      const currentEligibilityDate = (currentResult && currentResult.estimatedEligibleDate) || latest.estimatedEligibleDate || "";
+      const event = events.find((item) => active && item.case_id === active.id && item.eligibility_date === currentEligibilityDate) || events.find((item) => (item.case_id === latest.caseId || item.case_id === latest.id) && item.eligibility_date === currentEligibilityDate) || null;
+      const eligibilityDate = currentEligibilityDate || (event && event.eligibility_date) || "";
+      const confidence = (event && event.eligibility_confidence) || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).level : "");
+      const confidenceReason = (event && event.eligibility_confidence_reason) || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).reason : "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.");
       const days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(eligibilityDate) : null;
       const subscriptions = window.RecordWatchNotifications ? RecordWatchNotifications.loadSubscriptions() : [];
       const items = [
-        ["Eligibility Date", eligibilityDate || "Complete screening to estimate a date."],
+        ["Eligibility Date", eligibilityDate ? formatRecordWatchDate(eligibilityDate) : "Complete screening to estimate a date."],
         ["Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")],
         ["Confidence", confidence ? confidence.replace(/_/g, " ") + " — " + confidenceReason : "Needs review"],
         ["Notification Status", subscriptions.length ? "Active" : "Not activated"],
@@ -128,6 +135,7 @@
         `;
       }).join("");
     }
+    function formatRecordWatchDate(value){ return window.RecordWatchRules ? RecordWatchRules.formatDate(value) : value; }
     function escapeHtml(value){return String(value||"").replace(/[&<>'"]/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));}
   </script>
 </body></html>

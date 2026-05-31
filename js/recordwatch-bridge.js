@@ -139,9 +139,9 @@
   function mapChargeFromRecordPath(charge) {
     charge = charge || {};
     return {
-      chargeName: firstValue(charge, ["charge_name", "chargeName", "offense", "charge"]),
-      statuteCode: firstValue(charge, ["charge_code", "statuteCode", "offenseCode"]),
-      chargeLevel: firstValue(charge, ["chargeLevel"]) || normalizeLevel(firstValue(charge, ["level", "degree"])),
+      chargeName: firstValue(charge, ["charge_name", "chargeName", "offense_name", "offense", "charge"]),
+      statuteCode: firstValue(charge, ["charge_code", "statuteCode", "offenseCode", "statute_citation"]),
+      chargeLevel: firstValue(charge, ["chargeLevel", "charge_level"]) || normalizeLevel(firstValue(charge, ["level", "degree"])),
       degree: firstValue(charge, ["degree", "level"]),
       violentOffense: firstValue(charge, ["violentOffense", "isViolentOffense"]),
       sexOffense: firstValue(charge, ["sexOffense", "isSexOffense", "isSexOffenseRegistry"]),
@@ -181,11 +181,20 @@
       outcome: {
         outcome: firstValue(first, ["final_disposition", "outcome", "disposition"]),
         dispositionDate: firstValue(first, ["disposition_date", "dispositionDate"]),
-        finalDischargeDate: firstValue(first, ["discharge_date", "finalDischargeDate", "dischargeDate"]),
-        caseClosedDate: firstValue(first, ["caseClosedDate", "case_closed_date", "discharge_date"])
+        sentenceCompletionDate: firstValue(first, ["sentence_completion_date", "sentenceCompletionDate"]),
+        probationCompletedDate: firstValue(first, ["probation_completed_date", "probationCompletedDate", "probation_end_date", "probationEndDate"]),
+        dischargeDate: firstValue(first, ["discharge_date", "dischargeDate"]),
+        completionDate: firstValue(first, ["completion_date", "completionDate"]),
+        finalDischargeDate: firstValue(first, ["final_discharge_date", "finalDischargeDate", "discharge_date", "dischargeDate"]),
+        caseClosedDate: firstValue(first, ["caseClosedDate", "case_closed_date"])
       },
       sentencing: {
         releaseDate: firstValue(first, ["release_date", "releaseDate"]),
+        sentenceCompletionDate: firstValue(first, ["sentence_completion_date", "sentenceCompletionDate"]),
+        probationCompletedDate: firstValue(first, ["probation_completed_date", "probationCompletedDate", "probation_end_date", "probationEndDate"]),
+        dischargeDate: firstValue(first, ["discharge_date", "dischargeDate"]),
+        completionDate: firstValue(first, ["completion_date", "completionDate"]),
+        finalDischargeDate: firstValue(first, ["final_discharge_date", "finalDischargeDate"]),
         probationStartDate: firstValue(first, ["probation_start_date", "probationStartDate"]),
         probationEndDate: firstValue(first, ["probation_end_date", "probationEndDate"]),
         communityControlEndDate: firstValue(first, ["community_control_end_date", "communityControlEndDate"]),
@@ -199,21 +208,43 @@
     });
   }
 
+  function getCurrentEligibilityResult(caseData) {
+    if (!caseData || !window.RecordWatchRules) return null;
+    var result = window.RecordWatchRules.calculateEligibilityResult ? window.RecordWatchRules.calculateEligibilityResult(caseData) : { estimatedEligibleDate: window.RecordWatchRules.calculateEligibilityDate(caseData) };
+    if (result && result.estimatedEligibleDate) {
+      caseData.eligibility = Object.assign(caseData.eligibility || {}, {
+        estimatedEligibleDate: result.estimatedEligibleDate,
+        estimated_eligible_on: result.estimatedEligibleDate,
+        completionDate: result.completionDate || "",
+        completionDateField: result.completionDateField || "",
+        waitingPeriodText: result.waitingPeriodText || "",
+        waitingPeriodMonths: result.waitingPeriodMonths
+      });
+    }
+    return result;
+  }
+
+  function getCurrentUserId(caseData) {
+    return (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id) || (caseData && caseData.personal && (caseData.personal.email || caseData.personal.fullName)) || localStorage.getItem("email") || "demo-user";
+  }
 
   function registerRecordWatchEligibility(caseData) {
     if (!caseData || !window.RecordWatchRules || !window.RecordWatchNotifications) return;
-    var eligibilityDate = window.RecordWatchRules.calculateEligibilityDate(caseData);
+    var result = getCurrentEligibilityResult(caseData);
+    var eligibilityDate = result && result.estimatedEligibleDate;
     if (!eligibilityDate) return;
     var status = window.RecordWatchRules.calculateCaseStatus(caseData);
     var confidence = window.RecordWatchRules.calculateEligibilityConfidence ? window.RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available RecordWatch data." };
     var workflow = {};
     try { workflow = JSON.parse(localStorage.getItem("recordPathWorkflowState")) || {}; } catch (error) { workflow = {}; }
     window.RecordWatchNotifications.registerEligibilityEvent({
-      userId: (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id) || (caseData.personal && (caseData.personal.email || caseData.personal.fullName)) || "demo-user",
+      userId: getCurrentUserId(caseData),
       caseId: caseData.id,
       eligibilityDate: eligibilityDate,
       eligibilityReason: status,
-      waitingPeriod: window.RecordWatchRules.getRecommendedStatus(caseData),
+      waitingPeriod: result.waitingPeriodText || window.RecordWatchRules.getRecommendedStatus(caseData),
+      completionDateUsed: result.completionDate || "",
+      completionDateField: result.completionDateField || "",
       eligibilityConfidence: confidence.level,
       eligibilityConfidenceReason: confidence.reason,
       eligibilityCompletedAt: workflow.eligibilityCompletedAt || workflow.updatedAt || null,
@@ -292,6 +323,7 @@
     var shape = ensureRecordWatchDataShape();
     var cases = shape.cases;
     var active = cases.find(function (item) { return item.id === localStorage.getItem(ACTIVE_CASE_KEY); }) || cases[cases.length - 1] || null;
+    var eligibilityResult = active ? getCurrentEligibilityResult(active) : null;
     var status = active && window.RecordWatchRules ? window.RecordWatchRules.calculateCaseStatus(active) : (active ? "More information needed" : "More information needed");
     var missing = active && window.RecordWatchRules ? window.RecordWatchRules.getMissingRequirements(active) : ["Case details"];
     var nextAction = active && window.RecordWatchRules ? window.RecordWatchRules.getRecommendedStatus(active) : "Start with eligibility, then add record details.";
@@ -301,6 +333,8 @@
       activeCase: active,
       totalCases: cases.length,
       estimatedEligibilityStatus: status,
+      eligibilityResult: eligibilityResult,
+      estimatedEligibleDate: eligibilityResult && eligibilityResult.estimatedEligibleDate || "",
       missingRequirements: missing,
       nextRecommendedAction: nextAction,
       dashboardUrl: "recordwatch-dashboard.html"
@@ -314,6 +348,8 @@
     getOrCreateActiveCase: getOrCreateActiveCase,
     updateActiveCase: updateActiveCase,
     getRecordWatchSummary: getRecordWatchSummary,
+    getCurrentEligibilityResult: getCurrentEligibilityResult,
+    registerRecordWatchEligibility: registerRecordWatchEligibility,
     ensureRecordWatchDataShape: ensureRecordWatchDataShape
   };
 }());

@@ -66,9 +66,43 @@
     });
   }
 
-  function getAnchorDate(caseData) {
+  function firstValue(source, keys) {
+    source = source || {};
+    for (var i = 0; i < keys.length; i += 1) {
+      var value = source[keys[i]];
+      if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+    }
+    return "";
+  }
+
+  function getCompletionDateResult(caseData) {
     var outcome = (caseData && caseData.outcome) || {};
-    return outcome.finalDischargeDate || outcome.caseClosedDate || outcome.dispositionDate || "";
+    var sentencing = (caseData && caseData.sentencing) || {};
+    var charges = getCharges(caseData);
+    var charge = charges[0] || {};
+    var scopes = [caseData || {}, outcome, sentencing, charge];
+    var priority = [
+      { key: "sentence_completion_date", label: "sentence_completion_date", aliases: ["sentence_completion_date", "sentenceCompletionDate"] },
+      { key: "probation_completed_date", label: "probation_completed_date", aliases: ["probation_completed_date", "probationCompletedDate", "probation_end_date", "probationEndDate"] },
+      { key: "discharge_date", label: "discharge_date", aliases: ["discharge_date", "dischargeDate"] },
+      { key: "completion_date", label: "completion_date", aliases: ["completion_date", "completionDate"] },
+      { key: "final_discharge_date", label: "final_discharge_date", aliases: ["final_discharge_date", "finalDischargeDate"] }
+    ];
+
+    for (var i = 0; i < priority.length; i += 1) {
+      for (var j = 0; j < scopes.length; j += 1) {
+        var value = firstValue(scopes[j], priority[i].aliases);
+        if (value) return { date: value, field: priority[i].label };
+      }
+    }
+
+    var fallback = firstValue(outcome, ["dispositionDate", "disposition_date"]);
+    if (fallback) return { date: fallback, field: "disposition_date_fallback" };
+    return { date: "", field: "" };
+  }
+
+  function getAnchorDate(caseData) {
+    return getCompletionDateResult(caseData).date;
   }
 
   function addMonths(dateString, months) {
@@ -79,25 +113,61 @@
     return date.toISOString().slice(0, 10);
   }
 
-  function calculateEligibilityDate(caseData) {
+  function getPacketCompatibleWaitingMonths(caseData) {
     var outcome = getOutcome(caseData);
-    if (outcome === "pending" || outcome === "sealed" || outcome === "expunged") return "";
+    var charges = getCharges(caseData);
+    var charge = charges[0] || {};
+    var state = normalize(getState(caseData));
+    var levelRaw = normalize(charge.chargeLevel || charge.degree || charge.level || charge.offense_classification).toUpperCase();
+    var chargeText = normalize((charge.chargeName || charge.offense_name || charge.offense || "") + " " + (charge.statuteCode || charge.charge_code || charge.offenseCode || ""));
 
-    var anchor = getAnchorDate(caseData);
-    if (!anchor) return "";
+    if (["dismissed", "not guilty", "acquitted", "no bill", "pardon", "set aside"].indexOf(outcome) !== -1) return 0;
+    if (outcome === "diversion / intervention") return 12;
+    if (state === "ohio" || state === "oh") {
+      if (/2921\.43/.test(chargeText) || /soliciting improper compensation/.test(chargeText)) return 84;
+      if (/\bF3\b/.test(levelRaw)) return 36;
+      return 12;
+    }
 
     var rules = getRules(caseData);
-    var months = rules.misdemeanorMonths;
-    if (["dismissed", "not guilty", "acquitted", "no bill", "pardon", "set aside"].indexOf(outcome) !== -1) {
-      months = rules.dismissedMonths;
-    } else if (outcome === "diversion / intervention") {
-      months = rules.diversionMonths;
-    } else if (hasFelony(caseData)) {
-      months = rules.felonyMonths;
-    } else if (hasMisdemeanor(caseData)) {
-      months = rules.misdemeanorMonths;
+    if (hasFelony(caseData)) return rules.felonyMonths;
+    if (hasMisdemeanor(caseData)) return rules.misdemeanorMonths;
+    return rules.misdemeanorMonths;
+  }
+
+  function formatWaitingPeriod(months) {
+    if (months === 0) return "No waiting period";
+    if (months % 12 === 0) return (months / 12) + " " + (months === 12 ? "year" : "years");
+    return months + " months";
+  }
+
+  function calculateEligibilityResult(caseData) {
+    var outcome = getOutcome(caseData);
+    if (outcome === "pending" || outcome === "sealed" || outcome === "expunged") {
+      return { estimatedEligibleDate: "", eligibilityDate: "", completionDate: "", completionDateField: "", waitingPeriodMonths: 0, waitingPeriodText: "Not applicable", source: "RecordWatchRules" };
     }
-    return addMonths(anchor, months);
+
+    var completion = getCompletionDateResult(caseData);
+    if (!completion.date) {
+      return { estimatedEligibleDate: "", eligibilityDate: "", completionDate: "", completionDateField: "", waitingPeriodMonths: null, waitingPeriodText: "Not available", source: "RecordWatchRules" };
+    }
+
+    var months = getPacketCompatibleWaitingMonths(caseData);
+    var date = addMonths(completion.date, months);
+    return {
+      estimatedEligibleDate: date,
+      eligibilityDate: date,
+      completionDate: completion.date,
+      completionDateField: completion.field,
+      waitingPeriodMonths: months,
+      waitingPeriodYears: months % 12 === 0 ? months / 12 : null,
+      waitingPeriodText: formatWaitingPeriod(months),
+      source: "RecordWatchRules packet-compatible"
+    };
+  }
+
+  function calculateEligibilityDate(caseData) {
+    return calculateEligibilityResult(caseData).estimatedEligibleDate;
   }
 
   function getMissingRequirements(caseData) {
@@ -107,7 +177,7 @@
 
     if (!outcome.outcome) missing.push("Case outcome/disposition");
     if (!["pending", "sealed", "expunged"].includes(getOutcome(caseData)) && !getAnchorDate(caseData)) {
-      missing.push("Disposition, case closed, or final discharge date");
+      missing.push("Sentence completion, probation completion, discharge, or final completion date");
     }
     if (!caseData || !caseData.court || !caseData.court.caseNumber) missing.push("Case number");
     if (!caseData || !caseData.court || !caseData.court.courtName) missing.push("Court name");
@@ -207,6 +277,8 @@
     stateRules: stateRules,
     calculateCaseStatus: calculateCaseStatus,
     calculateEligibilityDate: calculateEligibilityDate,
+    calculateEligibilityResult: calculateEligibilityResult,
+    getCompletionDateResult: getCompletionDateResult,
     getMissingRequirements: getMissingRequirements,
     getRiskFlags: getRiskFlags,
     getRecommendedStatus: getRecommendedStatus,
