@@ -156,8 +156,8 @@
       sentenceCompletionDate: firstValue(charge, ["sentence_completion_date", "sentenceCompletionDate"]),
       probationCompletedDate: firstValue(charge, ["probation_completed_date", "probationCompletedDate", "probation_end_date", "probationEndDate"]),
       dischargeDate: firstValue(charge, ["discharge_date", "dischargeDate"]),
-      finalDischargeDate: firstValue(charge, ["final_discharge_date", "finalDischargeDate"]),
       completionDate: firstValue(charge, ["completion_date", "completionDate"]),
+      finalDischargeDate: firstValue(charge, ["final_discharge_date", "finalDischargeDate"]),
       pendingCharges: firstValue(charge, ["pendingCharges", "pending_charges"]),
       f3FelonyCount: firstValue(charge, ["f3_felony_count", "f3FelonyCount"])
     };
@@ -196,8 +196,8 @@
         sentenceCompletionDate: firstValue(first, ["sentence_completion_date", "sentenceCompletionDate"]),
         probationCompletedDate: firstValue(first, ["probation_completed_date", "probationCompletedDate", "probation_end_date", "probationEndDate"]),
         dischargeDate: firstValue(first, ["discharge_date", "dischargeDate"]),
-        finalDischargeDate: firstValue(first, ["final_discharge_date", "finalDischargeDate", "discharge_date", "dischargeDate"]),
         completionDate: firstValue(first, ["completion_date", "completionDate"]),
+        finalDischargeDate: firstValue(first, ["final_discharge_date", "finalDischargeDate", "discharge_date", "dischargeDate"]),
         caseClosedDate: firstValue(first, ["caseClosedDate", "case_closed_date", "discharge_date"])
       },
       sentencing: {
@@ -268,7 +268,7 @@
       courtProfile: null,
       ruleSet: null,
       packetTemplate: null,
-      dateUsedForCalculation: clean(stored.date_used_for_calculation || stored.completion_date)
+      dateUsedForCalculation: clean(stored.date_used_for_calculation || stored.completion_date_used || stored.completion_date)
     };
   }
 
@@ -296,7 +296,7 @@
       completion_date_used: result.completionDateUsed || result.completionDate || result.dateUsedForCalculation || "",
       completion_date: result.completionDate || result.completionDateUsed || result.dateUsedForCalculation || "",
       completion_date_field: result.completionDateField || "",
-      date_used_for_calculation: result.dateUsedForCalculation || result.completionDate || "",
+      date_used_for_calculation: result.dateUsedForCalculation || result.completionDateUsed || result.completionDate || "",
       packet_template_id: packetTemplate.packet_template_id || "",
       updated_at: nowIso()
     };
@@ -331,7 +331,7 @@
       ruleSetId: result.ruleSet && result.ruleSet.rule_set_id,
       localProfileId: result.courtProfile && result.courtProfile.local_profile_id,
       packetTemplateId: result.packetTemplate && result.packetTemplate.packet_template_id,
-      dateUsedForCalculation: result.dateUsedForCalculation || result.completionDate,
+      dateUsedForCalculation: result.dateUsedForCalculation || result.completionDateUsed || result.completionDate,
       eligibilityCompletedAt: workflow.eligibilityCompletedAt || workflow.updatedAt || null,
       recordDetailsCompletedAt: workflow.recordDetailsCompletedAt || null,
       paidAt: localStorage.getItem("recordPathPacketPaymentComplete") === "true" ? new Date().toISOString() : null,

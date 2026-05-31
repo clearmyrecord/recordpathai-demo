@@ -60,9 +60,9 @@
   function getCompletionDateResult(caseData) {
     for (var i = 0; i < DATE_FIELDS.length; i += 1) {
       var iso = readDateCandidate(caseData, DATE_FIELDS[i][1]);
-      if (iso) return { completionDate: iso, completionDateField: DATE_FIELDS[i][0] };
+      if (iso) return { completionDate: iso, completionDateUsed: iso, completionDateField: DATE_FIELDS[i][0] };
     }
-    return { completionDate: "", completionDateField: "" };
+    return { completionDate: "", completionDateUsed: "", completionDateField: "" };
   }
 
   function normalizeLevel(value) {
