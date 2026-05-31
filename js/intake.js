@@ -1,6 +1,6 @@
-// ==========================
+// --------------------------
 // LOAD USER DATA
-// ==========================
+// --------------------------
 function loadUserData() {
   const raw = localStorage.getItem("cmr_user");
   if (!raw) return;
@@ -13,9 +13,9 @@ function loadUserData() {
   });
 }
 
-// ==========================
+// --------------------------
 // COLLECT USER DATA
-// ==========================
+// --------------------------
 function collectUserData() {
   return {
     firstName: document.getElementById("firstName")?.value || "",
@@ -31,17 +31,17 @@ function collectUserData() {
   };
 }
 
-// ==========================
+// --------------------------
 // SAVE USER DATA
-// ==========================
+// --------------------------
 function saveUserData() {
   const data = collectUserData();
   localStorage.setItem("cmr_user", JSON.stringify(data));
 }
 
-// ==========================
+// --------------------------
 // POPULATE CHARGES DROPDOWN
-// ==========================
+// --------------------------
 function populateCharges() {
   const select = document.getElementById("charge");
   if (!select || !window.charges) return;
@@ -56,9 +56,9 @@ function populateCharges() {
   });
 }
 
-// ==========================
+// --------------------------
 // NEXT BUTTON
-// ==========================
+// --------------------------
 function setupNextButton() {
   const btn = document.getElementById("nextBtn");
   if (!btn) return;
@@ -69,9 +69,9 @@ function setupNextButton() {
   });
 }
 
-// ==========================
+// --------------------------
 // INIT
-// ==========================
+// --------------------------
 document.addEventListener("DOMContentLoaded", () => {
   loadUserData();
   populateCharges();

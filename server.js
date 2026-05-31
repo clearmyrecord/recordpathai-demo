@@ -39,6 +39,10 @@ const recordwatchMemory = {
   jobRuns: []
 };
 
+const ledgerMemory = {
+  entries: []
+};
+
 const RECORDWATCH_FROM_EMAIL = "matt@recordpathai.com";
 const RECORDWATCH_PLANS = ["free", "premium"];
 const RECORDWATCH_PROVIDER_MISSING = "skipped_provider_missing";
@@ -479,6 +483,183 @@ async function recordwatchAdminSummary() {
   };
 }
 
+
+function ledgerId() {
+  return `led_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeLedgerStatus(status) {
+  const value = String(status || "posted").trim().toLowerCase();
+  return ["posted", "pending", "refunded", "reversed", "failed"].includes(value) ? value : "posted";
+}
+
+function normalizeLedgerEntryType(type) {
+  const value = String(type || "adjustment").trim().toLowerCase();
+  return ["packet_purchase", "recordwatch_subscription", "credit", "refund", "adjustment", "recordwatch_activity"].includes(value) ? value : "adjustment";
+}
+
+function getBearerToken(req) {
+  const header = req.get("authorization") || "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : "";
+}
+
+async function getAuthenticatedUser(req) {
+  const token = getBearerToken(req);
+  if (!token) return null;
+  const config = supabaseRestConfig();
+  if (!config) return null;
+  const response = await fetch(`${config.url}/auth/v1/user`, {
+    headers: {
+      apikey: config.key,
+      Authorization: `Bearer ${token}`
+    }
+  });
+  if (!response.ok) return null;
+  const user = await response.json();
+  return user && user.id ? user : null;
+}
+
+async function requireApiUser(req, res) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
+    res.status(401).json({ ok: false, error: "Authentication required" });
+    return null;
+  }
+  return user;
+}
+
+function ledgerMetadataIdempotency(metadata = {}) {
+  return String((metadata && metadata.idempotency_key) || "").trim();
+}
+
+function normalizeLedgerPayload(payload = {}, userId) {
+  const debit = Math.max(0, Number.parseInt(payload.debit_cents ?? payload.debitCents ?? 0, 10) || 0);
+  const credit = Math.max(0, Number.parseInt(payload.credit_cents ?? payload.creditCents ?? 0, 10) || 0);
+  const amount = Math.max(0, Number.parseInt(payload.amount_cents ?? payload.amountCents ?? Math.max(debit, credit), 10) || 0);
+  const metadata = Object.assign({}, payload.metadata || {});
+  return {
+    id: isUuid(payload.id) ? payload.id : ledgerId(),
+    user_id: userId || safe(payload.user_id || payload.userId),
+    case_id: safe(payload.case_id || payload.caseId) || null,
+    entry_type: normalizeLedgerEntryType(payload.entry_type || payload.entryType),
+    description: safe(payload.description, "RecordPathAI ledger entry"),
+    amount_cents: amount,
+    currency: safe(payload.currency, "usd").toLowerCase(),
+    debit_cents: debit,
+    credit_cents: credit,
+    balance_after_cents: payload.balance_after_cents ?? payload.balanceAfterCents ?? null,
+    stripe_session_id: safe(payload.stripe_session_id || payload.stripeSessionId) || null,
+    stripe_payment_intent_id: safe(payload.stripe_payment_intent_id || payload.stripePaymentIntentId) || null,
+    stripe_customer_id: safe(payload.stripe_customer_id || payload.stripeCustomerId) || null,
+    related_recordwatch_subscription_id: isUuid(payload.related_recordwatch_subscription_id || payload.relatedRecordwatchSubscriptionId) ? (payload.related_recordwatch_subscription_id || payload.relatedRecordwatchSubscriptionId) : null,
+    related_packet_id: safe(payload.related_packet_id || payload.relatedPacketId) || null,
+    status: normalizeLedgerStatus(payload.status),
+    metadata,
+    created_at: payload.created_at || payload.createdAt || new Date().toISOString()
+  };
+}
+
+async function findExistingLedgerEntry(userId, { stripeSessionId, idempotencyKey } = {}) {
+  const stripeValue = safe(stripeSessionId);
+  const idemValue = safe(idempotencyKey);
+  const memoryMatch = ledgerMemory.entries.find((entry) => entry.user_id === userId && ((stripeValue && entry.stripe_session_id === stripeValue) || (idemValue && ledgerMetadataIdempotency(entry.metadata) === idemValue)));
+  if (memoryMatch) return memoryMatch;
+  try {
+    if (stripeValue) {
+      const rows = await supabaseRest("user_ledger_entries", { query: `?user_id=eq.${encodeURIComponent(userId)}&stripe_session_id=eq.${encodeURIComponent(stripeValue)}&limit=1` });
+      if (Array.isArray(rows) && rows[0]) return rows[0];
+    }
+    if (idemValue) {
+      const rows = await supabaseRest("user_ledger_entries", { query: `?user_id=eq.${encodeURIComponent(userId)}&metadata->>idempotency_key=eq.${encodeURIComponent(idemValue)}&limit=1` });
+      if (Array.isArray(rows) && rows[0]) return rows[0];
+    }
+  } catch (error) {
+    console.warn("Ledger duplicate lookup fallback:", error.message);
+  }
+  return null;
+}
+
+async function calculateUserLedgerBalance(userId) {
+  const entries = await getUserLedger(userId, { ascending: true });
+  return entries.reduce((balance, entry) => balance + (Number(entry.debit_cents) || 0) - (Number(entry.credit_cents) || 0), 0);
+}
+
+async function createLedgerEntry(payload = {}, options = {}) {
+  const entry = normalizeLedgerPayload(payload, options.userId || payload.user_id || payload.userId);
+  if (!entry.user_id) throw new Error("user_id is required for ledger entries");
+  const idempotencyKey = ledgerMetadataIdempotency(entry.metadata);
+  const existing = await findExistingLedgerEntry(entry.user_id, { stripeSessionId: entry.stripe_session_id, idempotencyKey });
+  if (existing) return Object.assign({ duplicate: true }, existing);
+  if (entry.balance_after_cents === null || entry.balance_after_cents === undefined) {
+    entry.balance_after_cents = await calculateUserLedgerBalance(entry.user_id) + entry.debit_cents - entry.credit_cents;
+  }
+  try {
+    const persisted = await supabaseRest("user_ledger_entries", { method: "POST", body: entry, prefer: "return=representation" });
+    const row = Array.isArray(persisted) && persisted[0] ? persisted[0] : entry;
+    ledgerMemory.entries.push(row);
+    return row;
+  } catch (error) {
+    console.warn("Ledger Supabase persistence fallback:", error.message);
+    ledgerMemory.entries.push(entry);
+    return entry;
+  }
+}
+
+async function getUserLedger(userId, { limit = 100, ascending = false } = {}) {
+  try {
+    const order = ascending ? "created_at.asc" : "created_at.desc";
+    const rows = await supabaseRest("user_ledger_entries", { query: `?user_id=eq.${encodeURIComponent(userId)}&order=${order}&limit=${encodeURIComponent(limit)}` });
+    if (Array.isArray(rows)) return rows;
+  } catch (error) {
+    console.warn("Ledger Supabase fetch fallback:", error.message);
+  }
+  return ledgerMemory.entries.filter((entry) => entry.user_id === userId).sort((a, b) => ascending ? new Date(a.created_at) - new Date(b.created_at) : new Date(b.created_at) - new Date(a.created_at)).slice(0, limit);
+}
+
+async function getAllLedgerEntries({ limit = 100 } = {}) {
+  try {
+    const rows = await supabaseRest("user_ledger_entries", { query: `?order=created_at.desc&limit=${encodeURIComponent(limit)}` });
+    if (Array.isArray(rows)) return rows;
+  } catch (error) {
+    console.warn("Admin ledger Supabase fetch fallback:", error.message);
+  }
+  return ledgerMemory.entries.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, limit);
+}
+
+async function getLedgerSummary(userId) {
+  const entries = await getUserLedger(userId, { limit: 1000, ascending: false });
+  return summarizeLedgerEntries(entries);
+}
+
+function summarizeLedgerEntries(entries = []) {
+  const posted = entries.filter((entry) => entry.status === "posted" || entry.status === "refunded" || entry.status === "reversed");
+  const totalDebits = posted.reduce((sum, entry) => sum + (Number(entry.debit_cents) || 0), 0);
+  const totalCredits = posted.reduce((sum, entry) => sum + (Number(entry.credit_cents) || 0), 0);
+  return {
+    total_purchases_cents: totalDebits,
+    total_credits_cents: totalCredits,
+    current_balance_cents: totalDebits - totalCredits,
+    last_transaction_at: entries[0] ? entries[0].created_at : null,
+    entry_count: entries.length
+  };
+}
+
+async function getAdminLedgerSummary() {
+  const entries = await getAllLedgerEntries({ limit: 1000 });
+  const posted = entries.filter((entry) => entry.status === "posted");
+  const sumDebit = (items) => items.reduce((sum, entry) => sum + (Number(entry.debit_cents) || 0), 0);
+  const sumCredit = (items) => items.reduce((sum, entry) => sum + (Number(entry.credit_cents) || 0), 0);
+  return {
+    total_revenue_cents: sumDebit(posted) - sumCredit(posted),
+    packet_purchase_revenue_cents: sumDebit(posted.filter((entry) => entry.entry_type === "packet_purchase")),
+    recordwatch_premium_revenue_cents: sumDebit(posted.filter((entry) => entry.entry_type === "recordwatch_subscription")),
+    refunds_credits_cents: sumCredit(entries.filter((entry) => ["posted", "refunded", "reversed"].includes(entry.status))),
+    failed_payments_cents: sumDebit(entries.filter((entry) => entry.status === "failed")),
+    recent_entries: entries.slice(0, 25)
+  };
+}
+
 function isAdminRequest(req) {
   const configuredKey = process.env.RECORDWATCH_ADMIN_KEY || "";
   if (configuredKey && req.get("x-recordpath-admin-key") === configuredKey) return true;
@@ -664,6 +845,123 @@ app.get("/health", (req, res) => {
 });
 
 
+
+app.get("/api/ledger", async (req, res) => {
+  try {
+    const user = await requireApiUser(req, res);
+    if (!user) return;
+    const entries = await getUserLedger(user.id);
+    res.json({ ok: true, entries });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/ledger/summary", async (req, res) => {
+  try {
+    const user = await requireApiUser(req, res);
+    if (!user) return;
+    const summary = await getLedgerSummary(user.id);
+    res.json({ ok: true, summary });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/ledger/packet-purchase", async (req, res) => {
+  try {
+    const user = await requireApiUser(req, res);
+    if (!user) return;
+    const payload = req.body || {};
+    let session = null;
+    if (payload.stripe_session_id || payload.stripeSessionId) {
+      if (!stripe) return res.status(503).json({ ok: false, error: "Stripe verification is not configured" });
+      session = await stripe.checkout.sessions.retrieve(safe(payload.stripe_session_id || payload.stripeSessionId));
+      if (session.payment_status !== "paid") return res.status(402).json({ ok: false, error: "Payment is not confirmed" });
+    } else if (payload.payment_confirmed !== true && payload.paymentConfirmed !== true) {
+      return res.status(402).json({ ok: false, error: "Payment is not confirmed" });
+    }
+    const metadata = Object.assign({}, payload.metadata || {}, session && session.metadata ? session.metadata : {}, {
+      product: "packet_generation",
+      idempotency_key: safe(payload.idempotency_key || payload.idempotencyKey || (session && session.id) || `packet:${user.id}:${payload.case_id || payload.caseId || "unknown"}`)
+    });
+    const entry = await createLedgerEntry({
+      user_id: user.id,
+      case_id: payload.case_id || payload.caseId || (session && session.metadata && (session.metadata.caseId || session.metadata.caseNumber)),
+      entry_type: "packet_purchase",
+      description: "RecordPathAI packet unlock",
+      amount_cents: 5000,
+      debit_cents: 5000,
+      credit_cents: 0,
+      status: "posted",
+      stripe_session_id: (session && session.id) || payload.stripe_session_id || payload.stripeSessionId || null,
+      stripe_payment_intent_id: (session && session.payment_intent) || payload.stripe_payment_intent_id || payload.stripePaymentIntentId || null,
+      stripe_customer_id: (session && session.customer) || payload.stripe_customer_id || payload.stripeCustomerId || null,
+      related_packet_id: payload.related_packet_id || payload.relatedPacketId || (session && session.client_reference_id) || null,
+      metadata
+    }, { userId: user.id });
+    res.json({ ok: true, entry, duplicate: entry.duplicate === true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/ledger/recordwatch-subscription", async (req, res) => {
+  try {
+    const user = await requireApiUser(req, res);
+    if (!user) return;
+    const payload = req.body || {};
+    let session = null;
+    if (payload.stripe_session_id || payload.stripeSessionId) {
+      if (!stripe) return res.status(503).json({ ok: false, error: "Stripe verification is not configured" });
+      session = await stripe.checkout.sessions.retrieve(safe(payload.stripe_session_id || payload.stripeSessionId));
+      if (session.payment_status !== "paid") return res.status(202).json({ ok: true, posted: false, reason: "Payment is not confirmed" });
+    } else if (payload.payment_confirmed !== true && payload.paymentConfirmed !== true) {
+      return res.status(202).json({ ok: true, posted: false, reason: "Payment is not confirmed" });
+    }
+    const amount = Math.max(0, Number.parseInt(payload.amount_cents ?? payload.amountCents ?? 0, 10) || 0);
+    if (!amount) return res.status(400).json({ ok: false, error: "amount_cents is required for confirmed RecordWatch billing" });
+    const entry = await createLedgerEntry({
+      user_id: user.id,
+      case_id: payload.case_id || payload.caseId,
+      entry_type: "recordwatch_subscription",
+      description: safe(payload.description, "RecordWatch Premium subscription"),
+      amount_cents: amount,
+      debit_cents: amount,
+      credit_cents: 0,
+      status: "posted",
+      stripe_session_id: (session && session.id) || payload.stripe_session_id || payload.stripeSessionId || null,
+      stripe_payment_intent_id: (session && session.payment_intent) || payload.stripe_payment_intent_id || payload.stripePaymentIntentId || null,
+      stripe_customer_id: (session && session.customer) || payload.stripe_customer_id || payload.stripeCustomerId || null,
+      related_recordwatch_subscription_id: payload.related_recordwatch_subscription_id || payload.relatedRecordwatchSubscriptionId || null,
+      metadata: Object.assign({}, payload.metadata || {}, { product: "recordwatch_premium", idempotency_key: safe(payload.idempotency_key || payload.idempotencyKey || (session && session.id)) })
+    }, { userId: user.id });
+    res.json({ ok: true, posted: true, entry, duplicate: entry.duplicate === true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/admin/ledger-entry", async (req, res) => {
+  try {
+    if (!isAdminRequest(req)) return res.status(403).json({ ok: false, error: "Admin access required" });
+    const entry = await createLedgerEntry(req.body || {});
+    res.json({ ok: true, entry, duplicate: entry.duplicate === true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/admin/ledger-summary", async (req, res) => {
+  try {
+    if (!isAdminRequest(req)) return res.status(403).json({ ok: false, error: "Admin access required" });
+    const summary = await getAdminLedgerSummary();
+    res.json({ ok: true, summary });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.post("/api/recordwatch/subscribe", async (req, res) => {
   try {
     const subscription = upsertRecordwatchSubscription(req.body || {});
@@ -804,7 +1102,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
     const baseUrl = getBaseUrl(req);
 
-    const finalSuccessUrl = safe(successUrl) || `${baseUrl}/payment-success.html`;
+    const rawSuccessUrl = safe(successUrl) || `${baseUrl}/payment-success.html`;
+    const finalSuccessUrl = rawSuccessUrl.includes("session_id=") ? rawSuccessUrl : `${rawSuccessUrl}${rawSuccessUrl.includes("?") ? "&" : "?"}session_id={CHECKOUT_SESSION_ID}`;
     const finalCancelUrl = safe(cancelUrl) || `${baseUrl}/packet.html?payment=cancelled`;
     const internalOrderId = `packet_${Date.now()}`;
 
@@ -832,6 +1131,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
       metadata: {
         productType: safe(productType),
         orderId: internalOrderId,
+        userId: safe((req.body || {}).user_id || (req.body || {}).userId),
+        caseId: safe(caseInfo.caseId || caseInfo.case_id || caseInfo.caseNumber),
 
         fullName: safe(applicant.fullName),
         email: safe(applicant.email),
