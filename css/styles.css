@@ -2035,15 +2035,17 @@ body.home-page .cta .btn {
   margin: 0;
 }
 
+.recordwatch-monitor-grid,
 .recordwatch-dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 18px;
   align-items: stretch;
+  width: 100%;
 }
 
 .recordwatch-stat-card {
-  background: #fff;
+  background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 18px;
@@ -2052,14 +2054,17 @@ body.home-page .cta .btn {
   flex-direction: column;
   justify-content: flex-start;
   gap: 10px;
-  overflow-wrap: anywhere;
-  word-break: normal;
+  overflow: hidden;
+}
+
+.recordwatch-stat-card.wide {
+  grid-column: span 2;
 }
 
 .recordwatch-stat-label {
   display: block;
   color: #233d70;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 15px;
   line-height: 1.25;
 }
@@ -2067,30 +2072,59 @@ body.home-page .cta .btn {
 .recordwatch-stat-value {
   display: block;
   color: #17345f;
-  font-size: clamp(18px, 2vw, 24px);
+  font-size: clamp(19px, 2vw, 25px);
   line-height: 1.25;
   font-weight: 900;
   white-space: normal;
+  word-break: normal;
   overflow-wrap: break-word;
 }
 
 .recordwatch-stat-value.small {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
   color: #5f6f91;
+  line-height: 1.35;
 }
 
-@media (max-width: 900px) {
-  .recordwatch-dashboard-grid {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+.recordwatch-stat-note {
+  margin: 0;
+  color: #667796;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.recordwatch-monitor-card {
+  overflow: hidden;
+}
+
+.recordwatch-widget.recordwatch-monitor-card {
+  display: block;
+}
+
+.recordwatch-monitor-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  gap: 28px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .recordwatch-monitor-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .recordwatch-stat-card.wide {
+    grid-column: span 1;
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 620px) {
   .section-heading-row {
     flex-direction: column;
   }
 
+  .recordwatch-monitor-grid,
   .recordwatch-dashboard-grid {
     grid-template-columns: 1fr;
   }
@@ -2766,16 +2800,14 @@ body.home-page .cta .btn {
   color: #17345f;
 }
 
-.recordwatch-countdown-panel,
-.recordwatch-widget-grid {
+.recordwatch-countdown-panel {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 14px;
   margin-top: 22px;
 }
 
-.recordwatch-countdown-panel > div,
-.recordwatch-widget-grid .detail-row {
+.recordwatch-countdown-panel > div {
   background: #ffffff;
   border: 1px solid #dce8fb;
   border-radius: 18px;

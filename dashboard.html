@@ -112,16 +112,17 @@
         ["Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")],
         ["Confidence", confidence ? confidence.replace(/_/g, " ") + " — " + confidenceReason : "Needs review"],
         ["Notification Status", subscriptions.length ? "Active" : "Not activated"],
-        ["Reminder History", notifications.length ? notifications.slice(-3).map((item) => item.subject).filter(Boolean).join("; ") || "No reminders yet" : "No reminders yet"],
         ["Communication Preferences", subscriptions[0] && subscriptions[0].notify_sms ? "Premium SMS + email" : "Email reminders"],
-        ["Upcoming Alerts", days !== null && days > 0 ? "90, 30, 7, and day-of reminders" : "No alerts scheduled"]
+        ["Upcoming Alerts", days !== null && days > 0 ? "90, 30, 7, and day-of reminders" : "No alerts scheduled"],
+        ["Reminder History", notifications.length ? notifications.slice(-3).map((item) => item.subject).filter(Boolean).join("; ") || "No reminders yet" : "No reminders yet"]
       ];
       document.getElementById("recordWatchWidget").innerHTML = items.map((item) => {
         const isLong = String(item[1] || "").length > 40;
+        const valueClass = isLong ? "recordwatch-stat-value small" : "recordwatch-stat-value";
         return `
           <article class="recordwatch-stat-card">
             <span class="recordwatch-stat-label">${escapeHtml(item[0])}</span>
-            <strong class="recordwatch-stat-value ${isLong ? "small" : ""}">
+            <strong class="${valueClass}">
               ${escapeHtml(item[1])}
             </strong>
           </article>
