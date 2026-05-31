@@ -81,7 +81,10 @@
   <script src="js/rules/rule-resolver.js"></script>
   <script src="js/rules/rule-engine.js"></script>
   <script src="js/recordwatch-rules.js"></script>
-  <script src="js/recordwatch-notifications.js"></script><script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/i18n.js" defer></script>
+  <script src="js/recordwatch-notifications.js"></script>
+  <script src="js/recordwatch-bridge.js"></script>
+  <script src="js/recordwatch-monitor.js"></script>
+  <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/i18n.js" defer></script>
   <script src="js/auth.js"></script><script>
     document.addEventListener("DOMContentLoaded", async function () {
       if (!await RecordPathAuth.requireProtectedPageAsync("view your dashboard")) return;
@@ -90,8 +93,9 @@
       const cases = await RecordPathUserStore.getCasesAsync();
       const latest = cases[cases.length - 1] || RecordPathUserStore.collectCurrentCaseFromStorage();
       document.getElementById("dashboardTitle").textContent = `Welcome, ${user.fullName || user.email}`;
-      document.getElementById("eligibilityStatus").textContent = latest.eligibilityStatus || "Not screened yet";
-      document.getElementById("eligibleDate").textContent = latest.estimatedEligibleDate ? `Estimated eligible date: ${window.RecordWatchRules ? RecordWatchRules.formatDate(latest.estimatedEligibleDate) : latest.estimatedEligibleDate}` : "Complete screening to estimate a date.";
+      const dashboardEligibility = getDashboardEligibilityResult(latest);
+      document.getElementById("eligibilityStatus").textContent = latest.eligibilityStatus || dashboardEligibility.eligibilityStatus || "Not screened yet";
+      document.getElementById("eligibleDate").textContent = dashboardEligibility.estimatedEligibleDate ? `Estimated eligible date: ${window.RecordWatchRules ? RecordWatchRules.formatDate(dashboardEligibility.estimatedEligibleDate) : dashboardEligibility.estimatedEligibleDate}` : "Complete screening to estimate a date.";
       document.getElementById("savedCaseCount").textContent = String(cases.length);
       document.getElementById("packetStatus").textContent = latest.packetStatus || "Not generated";
       document.getElementById("paymentStatus").textContent = latest.paymentStatus || "Unpaid";
@@ -108,13 +112,35 @@
       const user = RecordPathUserStore.getCurrentUser();
       return RecordWatchNotifications.fetchRemoteData(user && user.id);
     }
+    function getDashboardEligibilityResult(latest){
+      if (latest && window.RecordPathEligibilityEngine && typeof RecordPathEligibilityEngine.resolveEligibilityForCase === "function") {
+        const resolved = RecordPathEligibilityEngine.resolveEligibilityForCase(latest);
+        return {
+          estimatedEligibleDate: resolved.estimatedEligibleDate || "",
+          confidence: resolved.confidence || "needs_review",
+          confidenceReason: resolved.confidenceReason || "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.",
+          eligibilityStatus: resolved.eligibilityStatus || "needs_review"
+        };
+      }
+      if (latest && window.RecordWatchBridge && typeof RecordWatchBridge.getCurrentEligibilityResult === "function") {
+        const bridgeResult = RecordWatchBridge.getCurrentEligibilityResult(latest);
+        return {
+          estimatedEligibleDate: bridgeResult.estimatedEligibleDate || "",
+          confidence: bridgeResult.confidence || "needs_review",
+          confidenceReason: bridgeResult.confidenceReason || "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.",
+          eligibilityStatus: bridgeResult.eligibilityStatus || "needs_review"
+        };
+      }
+      return { estimatedEligibleDate: latest && latest.estimatedEligibleDate || "", confidence: "", confidenceReason: "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.", eligibilityStatus: latest && latest.eligibilityStatus || "" };
+    }
     function renderRecordWatchWidget(latest){
       const events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
       const notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
       const event = events.find((item) => item.case_id === latest.caseId || item.case_id === latest.id) || events[0];
-      const eligibilityDate = (event && event.eligibility_date) || latest.estimatedEligibleDate || "";
-      const confidence = (event && event.eligibility_confidence) || "";
-      const confidenceReason = (event && event.eligibility_confidence_reason) || "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.";
+      const resolvedEligibility = getDashboardEligibilityResult(latest);
+      const eligibilityDate = resolvedEligibility.estimatedEligibleDate || (event && event.eligibility_date) || latest.estimatedEligibleDate || "";
+      const confidence = resolvedEligibility.confidence || (event && event.eligibility_confidence) || "";
+      const confidenceReason = resolvedEligibility.confidenceReason || (event && event.eligibility_confidence_reason) || "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.";
       const days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(eligibilityDate) : null;
       const subscriptions = window.RecordWatchNotifications ? RecordWatchNotifications.loadSubscriptions() : [];
       const items = [

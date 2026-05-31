@@ -29,6 +29,11 @@
     return stateMap[normalized] || normalized;
   }
 
+  function currentUserId(caseData) {
+    if (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser()) return RecordPathUserStore.getCurrentUser().id;
+    return (caseData && caseData.personal && (caseData.personal.email || caseData.personal.fullName)) || localStorage.getItem("email") || "demo-user";
+  }
+
   function firstValue(source, keys) {
     source = source || {};
     for (var i = 0; i < keys.length; i += 1) {
@@ -211,19 +216,97 @@
   }
 
 
-  function registerRecordWatchEligibility(caseData) {
-    if (!caseData || !window.RecordWatchRules || !window.RecordWatchNotifications) return;
-    var resolved = window.RecordWatchRules.resolveEligibilityForCase ? window.RecordWatchRules.resolveEligibilityForCase(caseData) : null;
-    var eligibilityDate = resolved && resolved.estimatedEligibleDate || window.RecordWatchRules.calculateEligibilityDate(caseData);
-    var status = resolved && resolved.eligibilityStatus || window.RecordWatchRules.calculateCaseStatus(caseData);
-    var confidence = window.RecordWatchRules.calculateEligibilityConfidence ? window.RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available RecordWatch data." };
-    var userId = (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id) || (caseData.personal && (caseData.personal.email || caseData.personal.fullName)) || "demo-user";
-    if (resolved && window.RecordPathEligibilityEngine && typeof window.RecordPathEligibilityEngine.toStorageRecord === "function") {
-      caseData.eligibility = window.RecordPathEligibilityEngine.toStorageRecord(resolved, userId, caseData.id);
-      caseData.eligibilityResult = resolved;
-      localStorage.setItem("recordPathResolvedEligibility", JSON.stringify(caseData.eligibility));
-      if (eligibilityDate) localStorage.setItem("estimatedEligibleDate", eligibilityDate);
+  function getCurrentEligibilityResult(caseData) {
+    var active = caseData || null;
+    if (!active) {
+      var shape = ensureRecordWatchDataShape();
+      active = shape.cases.find(function (item) { return item.id === localStorage.getItem(ACTIVE_CASE_KEY); }) || shape.cases[shape.cases.length - 1] || null;
     }
+
+    if (active && window.RecordPathEligibilityEngine && typeof window.RecordPathEligibilityEngine.resolveEligibilityForCase === "function") {
+      var resolved = window.RecordPathEligibilityEngine.resolveEligibilityForCase(active);
+      return {
+        estimatedEligibleDate: resolved.estimatedEligibleDate || "",
+        completionDate: resolved.dateUsedForCalculation || "",
+        completionDateField: resolved.dateUsedForCalculationField || "",
+        waitingPeriodText: resolved.requiredWaitingPeriodLabel || "",
+        waitingPeriodMonths: resolved.requiredWaitingPeriod ? Number(resolved.requiredWaitingPeriod.years || 0) * 12 + Number(resolved.requiredWaitingPeriod.months || 0) : 0,
+        eligibilityStatus: resolved.eligibilityStatus || "needs_review",
+        likelyEligible: Boolean(resolved.likelyEligible),
+        reasons: resolved.reasons || [],
+        confidence: resolved.confidence || "needs_review",
+        confidenceReason: resolved.confidenceReason || "RecordPathAI provides an estimate based on the information entered and available rules.",
+        courtProfile: resolved.courtProfile || null,
+        ruleSet: resolved.ruleSet || null,
+        packetTemplate: resolved.packetTemplate || null,
+        dateUsedForCalculation: resolved.dateUsedForCalculation || "",
+        rawResult: resolved
+      };
+    }
+
+    if (active && window.RecordWatchRules && typeof window.RecordWatchRules.calculateEligibilityResult === "function") {
+      return window.RecordWatchRules.calculateEligibilityResult(active);
+    }
+
+    var stored = readJSON("recordPathResolvedEligibility", {});
+    var storedDate = clean(stored.eligibility_date || stored.estimatedEligibleDate || localStorage.getItem("estimatedEligibleDate"));
+    return {
+      estimatedEligibleDate: storedDate,
+      completionDate: clean(stored.date_used_for_calculation || stored.completion_date),
+      completionDateField: clean(stored.completion_date_field),
+      waitingPeriodText: clean(stored.required_waiting_period || stored.waiting_period),
+      waitingPeriodMonths: 0,
+      eligibilityStatus: clean(stored.eligibility_status) || (storedDate ? "needs_review" : ""),
+      likelyEligible: false,
+      reasons: stored.eligibility_reasons || [],
+      confidence: clean(stored.eligibility_confidence) || "needs_review",
+      confidenceReason: clean(stored.eligibility_confidence_reason),
+      courtProfile: null,
+      ruleSet: null,
+      packetTemplate: null,
+      dateUsedForCalculation: clean(stored.date_used_for_calculation || stored.completion_date)
+    };
+  }
+
+  function persistResolvedEligibility(caseData, result, userId) {
+    if (!caseData || !result) return;
+    var raw = result.rawResult || result;
+    var profile = result.courtProfile || raw.courtProfile || {};
+    var ruleSet = result.ruleSet || raw.ruleSet || {};
+    var packetTemplate = result.packetTemplate || raw.packetTemplate || {};
+    var storage = {
+      case_id: caseData.id || caseData.caseId || "",
+      user_id: userId || currentUserId(caseData),
+      court_id: profile.court_id || "",
+      rule_set_id: ruleSet.rule_set_id || "",
+      local_profile_id: profile.local_profile_id || "",
+      relief_type: raw.reliefType || result.reliefType || "",
+      eligibility_status: result.eligibilityStatus || "needs_review",
+      eligibility_date: result.estimatedEligibleDate || "",
+      estimatedEligibleDate: result.estimatedEligibleDate || "",
+      eligibility_confidence: result.confidence || "needs_review",
+      eligibility_confidence_reason: result.confidenceReason || "",
+      eligibility_reasons: result.reasons || [],
+      required_waiting_period: result.waitingPeriodText || raw.requiredWaitingPeriodLabel || "",
+      waiting_period: result.waitingPeriodText || raw.requiredWaitingPeriodLabel || "",
+      completion_date: result.completionDate || result.dateUsedForCalculation || "",
+      completion_date_field: result.completionDateField || "",
+      date_used_for_calculation: result.dateUsedForCalculation || result.completionDate || "",
+      packet_template_id: packetTemplate.packet_template_id || "",
+      updated_at: nowIso()
+    };
+    caseData.eligibility = storage;
+    caseData.eligibilityResult = raw;
+    localStorage.setItem("recordPathResolvedEligibility", JSON.stringify(storage));
+    if (storage.eligibility_date) localStorage.setItem("estimatedEligibleDate", storage.eligibility_date);
+  }
+
+  function registerRecordWatchEligibility(caseData) {
+    if (!caseData || !window.RecordWatchNotifications) return;
+    var result = getCurrentEligibilityResult(caseData);
+    var eligibilityDate = result && result.estimatedEligibleDate || "";
+    var userId = currentUserId(caseData);
+    persistResolvedEligibility(caseData, result, userId);
     if (!eligibilityDate) return;
     var workflow = {};
     try { workflow = JSON.parse(localStorage.getItem("recordPathWorkflowState")) || {}; } catch (error) { workflow = {}; }
@@ -231,15 +314,17 @@
       userId: userId,
       caseId: caseData.id,
       eligibilityDate: eligibilityDate,
-      eligibilityReason: status,
-      waitingPeriod: resolved && resolved.requiredWaitingPeriodLabel || window.RecordWatchRules.getRecommendedStatus(caseData),
-      eligibilityConfidence: confidence.level,
-      eligibilityConfidenceReason: confidence.reason,
-      courtId: resolved && resolved.courtProfile && resolved.courtProfile.court_id,
-      ruleSetId: resolved && resolved.ruleSet && resolved.ruleSet.rule_set_id,
-      localProfileId: resolved && resolved.courtProfile && resolved.courtProfile.local_profile_id,
-      packetTemplateId: resolved && resolved.packetTemplate && resolved.packetTemplate.packet_template_id,
-      dateUsedForCalculation: resolved && resolved.dateUsedForCalculation,
+      eligibilityReason: result.eligibilityStatus || "needs_review",
+      waitingPeriod: result.waitingPeriodText || "",
+      completionDate: result.completionDate || result.dateUsedForCalculation,
+      completionDateField: result.completionDateField,
+      eligibilityConfidence: result.confidence,
+      eligibilityConfidenceReason: result.confidenceReason,
+      courtId: result.courtProfile && result.courtProfile.court_id,
+      ruleSetId: result.ruleSet && result.ruleSet.rule_set_id,
+      localProfileId: result.courtProfile && result.courtProfile.local_profile_id,
+      packetTemplateId: result.packetTemplate && result.packetTemplate.packet_template_id,
+      dateUsedForCalculation: result.dateUsedForCalculation || result.completionDate,
       eligibilityCompletedAt: workflow.eligibilityCompletedAt || workflow.updatedAt || null,
       recordDetailsCompletedAt: workflow.recordDetailsCompletedAt || null,
       paidAt: localStorage.getItem("recordPathPacketPaymentComplete") === "true" ? new Date().toISOString() : null,
@@ -344,6 +429,7 @@
     saveCaseFromRecordDetails: saveCaseFromRecordDetails,
     syncExistingRecordPathData: syncExistingRecordPathData,
     getOrCreateActiveCase: getOrCreateActiveCase,
+    getCurrentEligibilityResult: getCurrentEligibilityResult,
     updateActiveCase: updateActiveCase,
     getRecordWatchSummary: getRecordWatchSummary,
     ensureRecordWatchDataShape: ensureRecordWatchDataShape
