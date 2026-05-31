@@ -1,12 +1,22 @@
 (function () {
   "use strict";
 
-  function currentPageUrl() {
-    return `${window.location.pathname.split("/").pop() || "index.html"}${window.location.search || ""}${window.location.hash || ""}`;
+  function relativeRoot() {
+    const script = document.querySelector('script[src$="js/auth.js"]');
+    const src = script ? script.getAttribute("src") || "" : "";
+    const match = src.match(/^((?:\.\.\/)*)js\/auth\.js(?:[?#].*)?$/);
+    return match ? match[1] : "";
   }
 
-  function signupUrl(returnUrl) { return `signup.html?returnUrl=${encodeURIComponent(returnUrl || currentPageUrl())}`; }
-  function loginUrl(returnUrl) { return `login.html?returnUrl=${encodeURIComponent(returnUrl || currentPageUrl())}`; }
+  function currentPageUrl() {
+    const fileName = window.location.pathname.split("/").pop() || "index.html";
+    const parentDir = window.location.pathname.split("/").filter(Boolean).slice(-2, -1)[0] || "";
+    const path = relativeRoot() && parentDir ? `${parentDir}/${fileName}` : fileName;
+    return `${path}${window.location.search || ""}${window.location.hash || ""}`;
+  }
+
+  function signupUrl(returnUrl) { return `${relativeRoot()}signup.html?returnUrl=${encodeURIComponent(returnUrl || currentPageUrl())}`; }
+  function loginUrl(returnUrl) { return `${relativeRoot()}login.html?returnUrl=${encodeURIComponent(returnUrl || currentPageUrl())}`; }
 
   function preserveIntake(returnUrl) {
     if (window.RecordPathUserStore && typeof RecordPathUserStore.saveDraftSnapshot === "function") RecordPathUserStore.saveDraftSnapshot(returnUrl || currentPageUrl());
@@ -63,13 +73,13 @@
     utilities.forEach(function (utility) {
       utility.querySelectorAll("[data-auth-link]").forEach(function (node) { node.remove(); });
       if (user) {
-        addLink(utility, "dashboard.html", "Dashboard");
-        addLink(utility, "account.html", "Account");
+        addLink(utility, `${relativeRoot()}dashboard.html`, "Dashboard");
+        addLink(utility, `${relativeRoot()}account.html`, "Account");
         const logout = addLink(utility, "#logout", "Logout");
         logout.addEventListener("click", async function (event) {
           event.preventDefault();
           await RecordPathUserStore.logout();
-          window.location.href = "index.html";
+          window.location.href = `${relativeRoot()}index.html`;
         });
       } else {
         addLink(utility, loginUrl(currentPageUrl()), "Login", "auth-login");
@@ -115,6 +125,28 @@
     });
   }
 
+
+  async function authDiagnostics() {
+    const supabaseDiagnostics = window.RecordPathSupabase && typeof RecordPathSupabase.getDiagnostics === "function" ? await RecordPathSupabase.getDiagnostics() : {};
+    const storeReady = Boolean(window.RecordPathUserStore && RecordPathUserStore.ready);
+    const user = window.RecordPathUserStore && typeof RecordPathUserStore.getCurrentUser === "function" ? RecordPathUserStore.getCurrentUser() : null;
+    const state = {
+      supabaseConfigLoaded: Boolean(supabaseDiagnostics.configLoaded),
+      supabaseClientLoaded: Boolean(supabaseDiagnostics.clientLoaded),
+      userStoreInitialized: storeReady,
+      currentAuthState: user ? "signed_in" : "signed_out",
+      configEndpoint: supabaseDiagnostics.configEndpoint || "/api/config/supabase"
+    };
+    if (supabaseDiagnostics.configError) state.configError = supabaseDiagnostics.configError;
+    if (supabaseDiagnostics.clientError) state.clientError = supabaseDiagnostics.clientError;
+    console.info("RecordPathAI auth diagnostics", state);
+    return state;
+  }
+
+  async function logAuthDiagnostics() {
+    try { await authDiagnostics(); } catch (error) { console.warn("RecordPathAI auth diagnostics failed:", error); }
+  }
+
   function wireAuthActionGuards(root) {
     (root || document).querySelectorAll("[data-requires-auth]").forEach(function (node) {
       if (node.dataset.authGuardAttached === "true") return;
@@ -132,6 +164,7 @@
     currentPageUrl,
     signupUrl,
     loginUrl,
+    relativeRoot,
     preserveIntake,
     requireAuth,
     requireAuthAsync,
@@ -139,7 +172,9 @@
     requireProtectedPageAsync,
     renderHeaderLinks,
     wireAuthActionGuards,
-    showLegacyImportPrompt
+    showLegacyImportPrompt,
+    diagnostics: authDiagnostics,
+    logDiagnostics: logAuthDiagnostics
   };
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -149,6 +184,7 @@
     ensureReady().then(function () {
       renderHeaderLinks();
       showLegacyImportPrompt();
+      logAuthDiagnostics();
     });
   });
 }());

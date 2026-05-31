@@ -87,11 +87,20 @@
     return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   }
 
+  function supabaseUnavailableError(message) {
+    return authError(message || (window.RecordPathSupabase && RecordPathSupabase.missingConfigMessage) || "Supabase is not configured. Ask an administrator to set the public Supabase URL and anon key.", "supabase_unavailable");
+  }
+
   async function client() {
-    if (!window.RecordPathSupabase) throw new Error("Supabase client was not loaded.");
-    const supabase = await window.RecordPathSupabase.getClient();
-    if (!supabase) throw new Error("Supabase is not configured.");
-    return supabase;
+    if (!window.RecordPathSupabase) throw supabaseUnavailableError("Supabase client was not loaded. Ask an administrator to confirm js/supabase-client.js is included before js/user-store.js.");
+    try {
+      const supabase = await window.RecordPathSupabase.getClient();
+      if (!supabase) throw supabaseUnavailableError();
+      return supabase;
+    } catch (error) {
+      if (error && (error.code === "supabase_config_missing" || String(error.message || "").toLowerCase().includes("supabase is not configured"))) throw supabaseUnavailableError(error.message);
+      throw error;
+    }
   }
 
   async function loadProfile(authUser) {
