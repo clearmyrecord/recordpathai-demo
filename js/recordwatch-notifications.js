@@ -9,6 +9,7 @@
   var FALLBACK_NOTE = "Showing locally saved RecordWatch data.";
 
   var reminderDefinitions = [
+    { days: 180, flag: "reminder_180_sent", type: "eligibility_180_day" },
     { days: 90, flag: "reminder_90_sent", type: "eligibility_90_day" },
     { days: 30, flag: "reminder_30_sent", type: "eligibility_30_day" },
     { days: 7, flag: "reminder_7_sent", type: "eligibility_7_day" },
@@ -134,7 +135,7 @@
     var existing = events.find(function (item) { return item.user_id === userId && item.case_id === caseId; });
     var dateChanged = Boolean(existing && nextEligibilityDate && dateOnly(existing.eligibility_date) !== nextEligibilityDate);
     var row = Object.assign(existing || {
-      id: id("rwe"), user_id: userId, case_id: caseId, reminder_90_sent: false, reminder_30_sent: false,
+      id: id("rwe"), user_id: userId, case_id: caseId, reminder_180_sent: false, reminder_90_sent: false, reminder_30_sent: false,
       reminder_7_sent: false, reminder_day_sent: false, eligibility_notification_sent: false, created_at: new Date().toISOString()
     }, {
       eligibility_date: nextEligibilityDate,
@@ -151,6 +152,7 @@
       updated_at: new Date().toISOString()
     });
     if (dateChanged) {
+      row.reminder_180_sent = false;
       row.reminder_90_sent = false;
       row.reminder_30_sent = false;
       row.reminder_7_sent = false;
@@ -184,6 +186,7 @@
     if (type === "eligibility_reached") return "Based on the information provided, your waiting period appears complete. Log in to RecordPathAI to verify eligibility and generate your packet.";
     if (type.indexOf("packet_incomplete") === 0) return "Your eligibility review is complete. Finish your record details to generate your court packet.";
     if (type.indexOf("court_status_") === 0) return "Your court filing status changed to " + (context.status || "updated") + ". This is a RecordWatch manual or system-test update unless marked as verified.";
+    if (type === "eligibility_180_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 180 days.";
     if (type === "eligibility_90_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 90 days.";
     if (type === "eligibility_30_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 30 days.";
     if (type === "eligibility_7_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 7 days.";
@@ -278,6 +281,41 @@
     };
   }
 
+
+  async function premiumApiGet(path) {
+    if (!window.RecordWatchMessageProvider) throw new Error("RecordWatch premium client unavailable");
+    return RecordWatchMessageProvider.apiFetch(path);
+  }
+
+  async function premiumApiPost(path, payload) {
+    if (!window.RecordWatchMessageProvider) throw new Error("RecordWatch premium client unavailable");
+    return RecordWatchMessageProvider.apiFetch(path, { method: "POST", body: payload || {} });
+  }
+
+  function checkoutPremium(plan, context) {
+    return premiumApiPost("/api/recordwatch/checkout", Object.assign({ plan: plan }, context || {}));
+  }
+
+  function verifyPremiumCheckout(sessionId) {
+    return premiumApiPost("/api/recordwatch/verify-checkout", { session_id: sessionId });
+  }
+
+  function fetchPremiumSubscription() {
+    return premiumApiGet("/api/recordwatch/subscription");
+  }
+
+  function cancelPremiumSubscription() {
+    return premiumApiPost("/api/recordwatch/cancel", {});
+  }
+
+  function fetchPremiumPreferences() {
+    return premiumApiGet("/api/recordwatch/premium-preferences");
+  }
+
+  function savePremiumPreferences(payload) {
+    return premiumApiPost("/api/recordwatch/premium-preferences", payload);
+  }
+
   window.RecordWatchNotifications = {
     courtStatuses: courtStatuses,
     fallbackNote: FALLBACK_NOTE,
@@ -288,6 +326,12 @@
     loadNotifications: loadNotifications,
     loadPreferences: loadPreferences,
     savePreferences: savePreferences,
+    checkoutPremium: checkoutPremium,
+    verifyPremiumCheckout: verifyPremiumCheckout,
+    fetchPremiumSubscription: fetchPremiumSubscription,
+    cancelPremiumSubscription: cancelPremiumSubscription,
+    fetchPremiumPreferences: fetchPremiumPreferences,
+    savePremiumPreferences: savePremiumPreferences,
     registerSubscription: registerSubscription,
     registerEligibilityEvent: registerEligibilityEvent,
     createNotification: createNotification,

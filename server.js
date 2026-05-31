@@ -56,6 +56,7 @@ const RECORDWATCH_FROM_EMAIL = "matt@recordpathai.com";
 const RECORDWATCH_PLANS = ["free", "premium"];
 const RECORDWATCH_PROVIDER_MISSING = "skipped_provider_missing";
 const RECORDWATCH_REMINDERS = [
+  { days: 180, flag: "reminder_180_sent", type: "eligibility_180_day" },
   { days: 90, flag: "reminder_90_sent", type: "eligibility_90_day" },
   { days: 30, flag: "reminder_30_sent", type: "eligibility_30_day" },
   { days: 7, flag: "reminder_7_sent", type: "eligibility_7_day" },
@@ -89,6 +90,7 @@ const COURT_STATUS_NOTIFICATION_TYPES = {
   CLOSED: "court_status_closed"
 };
 const RECORDWATCH_NOTIFICATION_TYPES = [
+  "eligibility_180_day",
   "eligibility_90_day",
   "eligibility_30_day",
   "eligibility_7_day",
@@ -193,6 +195,7 @@ function recordwatchMessage(type, context = {}) {
     const hearing = context.hearing_date ? ` Hearing date: ${context.hearing_date}.` : "";
     return `Your court filing status changed to ${context.status || "updated"}.${hearing} Log in to RecordPathAI to view details.${source}`;
   }
+  if (type === "eligibility_180_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 180 days.";
   if (type === "eligibility_90_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 90 days.";
   if (type === "eligibility_30_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 30 days.";
   if (type === "eligibility_7_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 7 days.";
@@ -360,6 +363,7 @@ function upsertRecordwatchEvent(payload) {
     id: recordwatchId("rwe"),
     user_id: userId,
     case_id: caseId,
+    reminder_180_sent: false,
     reminder_90_sent: false,
     reminder_30_sent: false,
     reminder_7_sent: false,
@@ -504,7 +508,7 @@ function normalizeLedgerStatus(status) {
 
 function normalizeLedgerEntryType(type) {
   const value = String(type || "adjustment").trim().toLowerCase();
-  return ["packet_purchase", "recordwatch_subscription", "credit", "refund", "adjustment", "recordwatch_activity"].includes(value) ? value : "adjustment";
+  return ["packet_purchase", "recordwatch_subscription", "recordwatch_addon", "recordwatch_refund", "recordwatch_credit", "credit", "refund", "adjustment", "recordwatch_activity"].includes(value) ? value : "adjustment";
 }
 
 function getBearerToken(req) {
@@ -971,6 +975,305 @@ app.get("/api/admin/ledger-summary", async (req, res) => {
   }
 });
 
+
+const RECORDWATCH_PRICE_ENV = {
+  monthly: "STRIPE_RECORDWATCH_MONTHLY_PRICE_ID",
+  annual: "STRIPE_RECORDWATCH_ANNUAL_PRICE_ID",
+  addon_12_month: "STRIPE_RECORDWATCH_ADDON_PRICE_ID"
+};
+const RECORDWATCH_PLAN_AMOUNTS = { monthly: 499, annual: 3900, addon_12_month: 1900 };
+
+function normalizePremiumRecordwatchPlan(plan) {
+  const value = safe(plan).toLowerCase();
+  return ["monthly", "annual", "addon_12_month"].includes(value) ? value : "";
+}
+
+function recordwatchPlanPeriod(plan) {
+  const start = new Date();
+  const end = new Date(start);
+  if (plan === "monthly") end.setUTCMonth(end.getUTCMonth() + 1);
+  else end.setUTCFullYear(end.getUTCFullYear() + 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function isActiveRecordwatchSubscription(row) {
+  if (!row) return false;
+  const status = String(row.status || "").toLowerCase();
+  if (!["active", "trialing", "paid"].includes(status)) return false;
+  if (!row.current_period_end) return true;
+  return new Date(row.current_period_end).getTime() > Date.now();
+}
+
+async function getActiveRecordwatchSubscription(userId) {
+  const memoryMatch = recordwatchMemory.subscriptions.find((item) => item.user_id === userId && isActiveRecordwatchSubscription(item));
+  try {
+    const rows = await supabaseRest("recordwatch_subscriptions", { query: `?user_id=eq.${encodeURIComponent(userId)}&status=in.(active,trialing,paid)&order=current_period_end.desc.nullslast&limit=1` });
+    if (Array.isArray(rows) && rows[0]) return rows[0];
+  } catch (error) {
+    console.warn("RecordWatch subscription lookup fallback:", error.message);
+  }
+  return memoryMatch || null;
+}
+
+async function upsertPremiumRecordwatchSubscription(payload = {}) {
+  const period = recordwatchPlanPeriod(payload.plan);
+  const row = {
+    id: isUuid(payload.id) ? payload.id : undefined,
+    user_id: payload.user_id,
+    plan: normalizePremiumRecordwatchPlan(payload.plan) || "monthly",
+    status: payload.status || "active",
+    stripe_subscription_id: payload.stripe_subscription_id || null,
+    stripe_customer_id: payload.stripe_customer_id || null,
+    stripe_session_id: payload.stripe_session_id || null,
+    current_period_start: payload.current_period_start || period.start,
+    current_period_end: payload.current_period_end || period.end,
+    cancel_at_period_end: Boolean(payload.cancel_at_period_end),
+    updated_at: new Date().toISOString()
+  };
+  const existing = recordwatchMemory.subscriptions.find((item) => item.user_id === row.user_id && ((row.stripe_session_id && item.stripe_session_id === row.stripe_session_id) || (row.stripe_subscription_id && item.stripe_subscription_id === row.stripe_subscription_id)));
+  const memoryRow = Object.assign(existing || { id: recordwatchId("rws"), created_at: new Date().toISOString() }, row, { premium_active: isActiveRecordwatchSubscription(row), plan_type: "premium" });
+  if (!existing) recordwatchMemory.subscriptions.push(memoryRow);
+  try {
+    const conflict = row.stripe_session_id ? "user_id,stripe_session_id" : (row.stripe_subscription_id ? "user_id,stripe_subscription_id" : "id");
+    const persisted = await supabaseRest("recordwatch_subscriptions", { method: "POST", query: `?on_conflict=${encodeURIComponent(conflict)}`, body: row, prefer: "resolution=merge-duplicates,return=representation" });
+    return Array.isArray(persisted) && persisted[0] ? persisted[0] : memoryRow;
+  } catch (error) {
+    console.warn("RecordWatch premium subscription persistence fallback:", error.message);
+    return memoryRow;
+  }
+}
+
+async function createRecordwatchLedgerEntryFromSession(userId, session, plan) {
+  const amount = RECORDWATCH_PLAN_AMOUNTS[plan] || 0;
+  if (!amount) return null;
+  const entryType = plan === "addon_12_month" ? "recordwatch_addon" : "recordwatch_subscription";
+  return createLedgerEntry({
+    user_id: userId,
+    case_id: session.metadata && (session.metadata.saved_case_id || session.metadata.case_id),
+    entry_type: entryType,
+    description: plan === "addon_12_month" ? "Premium RecordWatch 12-month packet add-on" : "Premium RecordWatch subscription",
+    amount_cents: amount,
+    debit_cents: amount,
+    credit_cents: 0,
+    status: "posted",
+    stripe_session_id: session.id,
+    stripe_payment_intent_id: session.payment_intent || null,
+    stripe_customer_id: session.customer || null,
+    metadata: Object.assign({}, session.metadata || {}, { product: "premium_recordwatch", idempotency_key: `recordwatch:${session.id}` })
+  }, { userId });
+}
+
+async function getRecordwatchPreferences(userId) {
+  try {
+    const rows = await supabaseRest("recordwatch_notification_preferences", { query: `?user_id=eq.${encodeURIComponent(userId)}&order=updated_at.desc&limit=1` });
+    if (Array.isArray(rows) && rows[0]) return rows[0];
+  } catch (error) {
+    console.warn("RecordWatch premium preference lookup fallback:", error.message);
+  }
+  return recordwatchMemory.preferences.find((item) => item.user_id === userId) || null;
+}
+
+async function saveRecordwatchPreferences(userId, payload = {}) {
+  const activeSubscription = await getActiveRecordwatchSubscription(userId);
+  const phone = safe(payload.phone_number || payload.phoneNumber);
+  const consentAt = payload.sms_consent_at || payload.smsConsentAt || (payload.sms_consent || payload.smsConsent ? new Date().toISOString() : null);
+  const optedOutAt = payload.sms_opted_out_at || payload.smsOptedOutAt || null;
+  const wantsSms = payload.sms_enabled === true || payload.smsEnabled === true;
+  const smsAllowed = Boolean(activeSubscription && phone && consentAt && !optedOutAt);
+  const row = {
+    user_id: userId,
+    saved_case_id: isUuid(payload.saved_case_id || payload.savedCaseId) ? (payload.saved_case_id || payload.savedCaseId) : null,
+    case_id: safe(payload.case_id || payload.caseId) || null,
+    email_enabled: payload.email_enabled !== false && payload.emailEnabled !== false,
+    sms_enabled: wantsSms && smsAllowed,
+    phone_number: phone || null,
+    sms_consent_at: consentAt,
+    sms_opted_out_at: optedOutAt,
+    reminder_180_enabled: payload.reminder_180_enabled !== false && payload.reminder180Enabled !== false,
+    reminder_90_enabled: payload.reminder_90_enabled !== false && payload.reminder90Enabled !== false,
+    reminder_30_enabled: payload.reminder_30_enabled !== false && payload.reminder30Enabled !== false,
+    reminder_7_enabled: payload.reminder_7_enabled !== false && payload.reminder7Enabled !== false,
+    reminder_day_enabled: payload.reminder_day_enabled !== false && payload.reminderDayEnabled !== false,
+    court_status_enabled: payload.court_status_enabled !== false && payload.courtStatusEnabled !== false,
+    updated_at: new Date().toISOString()
+  };
+  const existing = recordwatchMemory.preferences.find((item) => item.user_id === userId && (item.saved_case_id || null) === row.saved_case_id && (item.case_id || null) === row.case_id);
+  const memoryRow = Object.assign(existing || { id: recordwatchId("rwp"), created_at: new Date().toISOString() }, row);
+  if (!existing) recordwatchMemory.preferences.push(memoryRow);
+  try {
+    const savedFilter = row.saved_case_id ? `&saved_case_id=eq.${encodeURIComponent(row.saved_case_id)}` : "&saved_case_id=is.null&case_id=is.null";
+    const existingRows = await supabaseRest("recordwatch_notification_preferences", { query: `?user_id=eq.${encodeURIComponent(userId)}${savedFilter}&limit=1` });
+    if (Array.isArray(existingRows) && existingRows[0]) {
+      const persisted = await supabaseRest("recordwatch_notification_preferences", { method: "PATCH", query: `?id=eq.${encodeURIComponent(existingRows[0].id)}`, body: row, prefer: "return=representation" });
+      return Array.isArray(persisted) && persisted[0] ? persisted[0] : memoryRow;
+    }
+    const persisted = await supabaseRest("recordwatch_notification_preferences", { method: "POST", body: row, prefer: "return=representation" });
+    return Array.isArray(persisted) && persisted[0] ? persisted[0] : memoryRow;
+  } catch (error) {
+    console.warn("RecordWatch premium preference persistence fallback:", error.message);
+    return memoryRow;
+  }
+}
+
+async function recordwatchAuthToken(req, res) {
+  return requireApiUser(req, res);
+}
+
+
+app.post("/api/recordwatch/checkout", async (req, res) => {
+  try {
+    const user = await recordwatchAuthToken(req, res);
+    if (!user) return;
+    if (!stripe) return res.status(503).json({ ok: false, error: "Stripe checkout is not configured" });
+    const payload = req.body || {};
+    const plan = normalizePremiumRecordwatchPlan(payload.plan);
+    if (!plan) return res.status(400).json({ ok: false, error: "plan must be monthly, annual, or addon_12_month" });
+    const priceId = process.env[RECORDWATCH_PRICE_ENV[plan]];
+    if (!priceId) return res.status(503).json({ ok: false, error: `${RECORDWATCH_PRICE_ENV[plan]} is not configured` });
+    const baseUrl = getBaseUrl(req);
+    const session = await stripe.checkout.sessions.create({
+      mode: plan === "monthly" || plan === "annual" ? "subscription" : "payment",
+      payment_method_types: ["card"],
+      ui_mode: "hosted",
+      success_url: `${baseUrl}/recordwatch-dashboard.html?recordwatch=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/recordwatch-dashboard.html?recordwatch=cancelled`,
+      customer_email: user.email || undefined,
+      line_items: [{ price: priceId, quantity: 1 }],
+      metadata: {
+        product: "premium_recordwatch",
+        user_id: user.id,
+        saved_case_id: safe(payload.saved_case_id || payload.savedCaseId),
+        case_id: safe(payload.case_id || payload.caseId),
+        plan
+      },
+      subscription_data: plan === "monthly" || plan === "annual" ? {
+        metadata: {
+          product: "premium_recordwatch",
+          user_id: user.id,
+          saved_case_id: safe(payload.saved_case_id || payload.savedCaseId),
+          case_id: safe(payload.case_id || payload.caseId),
+          plan
+        }
+      } : undefined
+    });
+    res.json({ ok: true, url: session.url, sessionId: session.id });
+  } catch (error) {
+    console.error("RecordWatch checkout error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/recordwatch/verify-checkout", async (req, res) => {
+  try {
+    const user = await recordwatchAuthToken(req, res);
+    if (!user) return;
+    if (!stripe) return res.status(503).json({ ok: false, error: "Stripe verification is not configured" });
+    const sessionId = safe((req.body || {}).session_id || (req.body || {}).sessionId);
+    if (!sessionId) return res.status(400).json({ ok: false, error: "session_id is required" });
+    const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["subscription"] });
+    if (!session || (session.metadata && session.metadata.user_id && session.metadata.user_id !== user.id)) return res.status(403).json({ ok: false, error: "Checkout session does not belong to this user" });
+    if (session.payment_status !== "paid" && session.status !== "complete") return res.status(402).json({ ok: false, error: "Payment is not confirmed" });
+    const plan = normalizePremiumRecordwatchPlan((session.metadata && session.metadata.plan) || (req.body || {}).plan) || "monthly";
+    const subscriptionObject = typeof session.subscription === "object" ? session.subscription : null;
+    const period = recordwatchPlanPeriod(plan);
+    const subscription = await upsertPremiumRecordwatchSubscription({
+      user_id: user.id,
+      plan,
+      status: subscriptionObject ? subscriptionObject.status : "active",
+      stripe_subscription_id: subscriptionObject ? subscriptionObject.id : (typeof session.subscription === "string" ? session.subscription : null),
+      stripe_customer_id: typeof session.customer === "string" ? session.customer : null,
+      stripe_session_id: session.id,
+      current_period_start: subscriptionObject && subscriptionObject.current_period_start ? new Date(subscriptionObject.current_period_start * 1000).toISOString() : period.start,
+      current_period_end: subscriptionObject && subscriptionObject.current_period_end ? new Date(subscriptionObject.current_period_end * 1000).toISOString() : period.end,
+      cancel_at_period_end: Boolean(subscriptionObject && subscriptionObject.cancel_at_period_end)
+    });
+    const ledgerEntry = await createRecordwatchLedgerEntryFromSession(user.id, session, plan).catch((error) => ({ error: error.message }));
+    res.json({ ok: true, subscription, ledgerEntry, duplicate: ledgerEntry && ledgerEntry.duplicate === true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/recordwatch/subscription", async (req, res) => {
+  try {
+    const user = await recordwatchAuthToken(req, res);
+    if (!user) return;
+    const subscription = await getActiveRecordwatchSubscription(user.id);
+    res.json({ ok: true, premium: isActiveRecordwatchSubscription(subscription), subscription: subscription || null, plan: subscription && subscription.plan || "free", status: subscription && subscription.status || "free", current_period_end: subscription && subscription.current_period_end || null });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/recordwatch/cancel", async (req, res) => {
+  try {
+    const user = await recordwatchAuthToken(req, res);
+    if (!user) return;
+    const active = await getActiveRecordwatchSubscription(user.id);
+    if (!active) return res.status(404).json({ ok: false, error: "No active Premium RecordWatch subscription found" });
+    let stripeSubscription = null;
+    if (stripe && active.stripe_subscription_id) {
+      stripeSubscription = await stripe.subscriptions.update(active.stripe_subscription_id, { cancel_at_period_end: true });
+    }
+    const updated = await upsertPremiumRecordwatchSubscription(Object.assign({}, active, {
+      user_id: user.id,
+      cancel_at_period_end: true,
+      status: stripeSubscription ? stripeSubscription.status : active.status,
+      current_period_end: stripeSubscription && stripeSubscription.current_period_end ? new Date(stripeSubscription.current_period_end * 1000).toISOString() : active.current_period_end
+    }));
+    res.json({ ok: true, subscription: updated });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/recordwatch/premium-preferences", async (req, res) => {
+  try {
+    const user = await recordwatchAuthToken(req, res);
+    if (!user) return;
+    const preferences = await getRecordwatchPreferences(user.id);
+    res.json({ ok: true, preferences });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/recordwatch/premium-preferences", async (req, res) => {
+  try {
+    const user = await recordwatchAuthToken(req, res);
+    if (!user) return;
+    const preferences = await saveRecordwatchPreferences(user.id, req.body || {});
+    res.json({ ok: true, preferences });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/recordwatch/inbound-sms", async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const body = safe(payload.Body || payload.body).toUpperCase();
+    const from = safe(payload.From || payload.from || payload.phone_number || payload.phoneNumber);
+    if (!from || body !== "STOP") return res.json({ ok: true, ignored: true });
+    recordwatchMemory.preferences.forEach((pref) => {
+      if (safe(pref.phone_number || pref.notification_phone) === from) {
+        pref.sms_enabled = false;
+        pref.eligibility_sms = false;
+        pref.sms_opted_out_at = new Date().toISOString();
+        pref.updated_at = new Date().toISOString();
+      }
+    });
+    try {
+      await supabaseRest("recordwatch_notification_preferences", { method: "PATCH", query: `?phone_number=eq.${encodeURIComponent(from)}`, body: { sms_enabled: false, sms_opted_out_at: new Date().toISOString(), updated_at: new Date().toISOString() }, prefer: "return=representation" });
+    } catch (error) {
+      console.warn("RecordWatch SMS opt-out Supabase fallback:", error.message);
+    }
+    res.json({ ok: true, optedOut: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.post("/api/recordwatch/subscribe", async (req, res) => {
   try {
     const subscription = upsertRecordwatchSubscription(req.body || {});
@@ -1097,6 +1400,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
       applicant = {},
       caseInfo = {},
       eligibility = {},
+      recordwatchAddon = false,
       successUrl,
       cancelUrl
     } = req.body || {};
@@ -1115,6 +1419,23 @@ app.post("/api/create-checkout-session", async (req, res) => {
     const finalSuccessUrl = rawSuccessUrl.includes("session_id=") ? rawSuccessUrl : `${rawSuccessUrl}${rawSuccessUrl.includes("?") ? "&" : "?"}session_id={CHECKOUT_SESSION_ID}`;
     const finalCancelUrl = safe(cancelUrl) || `${baseUrl}/packet.html?payment=cancelled`;
     const internalOrderId = `packet_${Date.now()}`;
+    const wantsRecordwatchAddon = recordwatchAddon === true || recordwatchAddon === "true" || (req.body || {}).recordwatch_addon === true || (req.body || {}).recordwatchAddon === true;
+    const recordwatchAddonPriceId = process.env.STRIPE_RECORDWATCH_ADDON_PRICE_ID;
+    const lineItems = [
+      {
+        quantity: 1,
+        price_data: {
+          currency: safe(currency, "usd").toLowerCase(),
+          unit_amount: numericAmount,
+          product_data: {
+            name: "RecordPathAI Packet Preparation",
+            description: "Court-ready sealing / expungement packet preparation"
+          }
+        }
+      }
+    ];
+    if (wantsRecordwatchAddon && recordwatchAddonPriceId) lineItems.push({ price: recordwatchAddonPriceId, quantity: 1 });
+    else if (wantsRecordwatchAddon) lineItems.push({ quantity: 1, price_data: { currency: safe(currency, "usd").toLowerCase(), unit_amount: RECORDWATCH_PLAN_AMOUNTS.addon_12_month, product_data: { name: "Premium RecordWatch 12-month add-on", description: "SMS reminders and premium monitoring for 12 months" } } });
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -1124,22 +1445,12 @@ app.post("/api/create-checkout-session", async (req, res) => {
       cancel_url: finalCancelUrl,
       client_reference_id: internalOrderId,
       customer_email: safe(applicant.email) || undefined,
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: safe(currency, "usd").toLowerCase(),
-            unit_amount: numericAmount,
-            product_data: {
-              name: "RecordPathAI Packet Preparation",
-              description: "Court-ready sealing / expungement packet preparation"
-            }
-          }
-        }
-      ],
+      line_items: lineItems,
       metadata: {
         productType: safe(productType),
         orderId: internalOrderId,
+        recordwatchAddon: String(Boolean(wantsRecordwatchAddon)),
+        recordwatchPlan: wantsRecordwatchAddon ? "addon_12_month" : "",
         userId: safe((req.body || {}).user_id || (req.body || {}).userId),
         caseId: safe(caseInfo.caseId || caseInfo.case_id || caseInfo.caseNumber),
 
