@@ -59,6 +59,10 @@
       <div id="recordwatchDataNotice" class="meta-note"></div>
       <div class="summary-grid" id="summaryGrid"></div>
       <section class="recordwatch-widget" id="recordwatchWidget"></section>
+      <section class="recordwatch-widget recordwatch-premium-panel" id="recordwatchPremiumPanel"></section>
+      <section class="recordwatch-widget recordwatch-preferences-panel" id="recordwatchPreferencesPanel"></section>
+      <section class="recordwatch-widget recordwatch-reminder-schedule" id="recordwatchReminderSchedule"></section>
+      <section class="recordwatch-widget recordwatch-history-panel" id="recordwatchHistoryPanel"></section>
       <div class="recordwatch-actions"><button class="btn secondary" id="exportJson" type="button">Export RecordWatch Data JSON</button><button class="btn danger" id="clearData" type="button">Clear Demo Data</button></div>
       <div id="casesContainer" class="recordwatch-stack"></div>
       <div class="disclaimer-box"><strong>Disclaimer:</strong> RecordWatch provides organization, estimated eligibility calculations, document preparation, and tracking tools. It is not legal advice. Eligibility rules vary by state, county, court, charge type, disposition, and personal history. Calculations must be verified before filing. RecordWatch does not guarantee record sealing, expungement, correction, deletion, removal, employment, housing approval, or background-check results.</div>
@@ -78,6 +82,7 @@
   <script src="js/rules/rule-resolver.js"></script>
   <script src="js/rules/rule-engine.js"></script>
   <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-message-provider.js"></script>
   <script src="js/recordwatch-notifications.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/recordwatch-monitor.js"></script>
@@ -93,6 +98,11 @@
       var casesContainer = document.getElementById("casesContainer");
       var recordwatchWidget = document.getElementById("recordwatchWidget");
       var recordwatchDataNotice = document.getElementById("recordwatchDataNotice");
+      var recordwatchPremiumPanel = document.getElementById("recordwatchPremiumPanel");
+      var recordwatchPreferencesPanel = document.getElementById("recordwatchPreferencesPanel");
+      var recordwatchReminderSchedule = document.getElementById("recordwatchReminderSchedule");
+      var recordwatchHistoryPanel = document.getElementById("recordwatchHistoryPanel");
+      var premiumState = { subscription: null, preferences: null };
 
       function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
       function list(items) { return items && items.length ? "<ul>" + items.map(function (item) { return "<li>" + esc(item) + "</li>"; }).join("") + "</ul>" : "<span class='muted'>None recorded</span>"; }
@@ -122,6 +132,7 @@
         ].map(function (item) { return '<article class="summary-card"><p class="eyebrow-mini">' + esc(item[0]) + '</p><h3>' + esc(item[1]) + '</h3></article>'; }).join("");
 
         renderRecordWatchWidget(cases);
+        renderPremiumPanels(cases);
 
         if (!cases.length) {
           casesContainer.innerHTML = '<div class="empty-state"><h2>No RecordWatch cases yet</h2><p>Start at eligibility, continue through record details, or use optional Advanced Case Intake for extra fields.</p><a class="btn" href="recordwatch-intake.html">Advanced Case Intake</a></div>';
@@ -179,6 +190,61 @@
           '</div></div>';
       }
 
+
+      function activeUser() { return window.RecordPathUserStore && RecordPathUserStore.getCurrentUser ? RecordPathUserStore.getCurrentUser() : null; }
+      function activeSubscription() { return premiumState.subscription || (RecordWatchNotifications.loadSubscriptions && RecordWatchNotifications.loadSubscriptions()[0]) || null; }
+      function renderPremiumPanels(cases) {
+        var user = activeUser();
+        var subscription = activeSubscription();
+        var preferences = Object.assign({ email_enabled: true, sms_enabled: false }, premiumState.preferences || {});
+        var premium = window.RecordWatchMessageProvider && RecordWatchMessageProvider.isPremium(subscription);
+        var renewal = subscription && (subscription.current_period_end || subscription.premium_expires_at);
+        recordwatchPremiumPanel.innerHTML = '<div class="case-header"><div><p class="eyebrow-mini">Premium RecordWatch</p><h2>' + (premium ? 'Premium active <span class="status-badge eligible-now">Premium</span>' : 'Free monitoring') + '</h2><p class="muted">Paid monitoring adds SMS reminders, court-status updates when available, missing-info reminders, and multi-case monitoring.</p></div></div>' +
+          '<div class="recordwatch-monitor-grid">' + statCard('Current status', premium ? 'Premium' : 'Free') + statCard('Plan', subscription && subscription.plan || 'Free') + statCard('Renewal date', renewal ? RecordWatchRules.formatDate(renewal) : 'Not scheduled') + statCard('Notification status', preferences.sms_enabled ? 'Email + SMS' : 'Email / dashboard') + '</div>' +
+          '<div class="recordwatch-actions"><button class="btn" type="button" data-premium-action="monthly">Monthly checkout — $4.99/month</button><button class="btn secondary" type="button" data-premium-action="annual">Annual checkout — $39/year</button><button class="btn danger" type="button" data-premium-action="cancel">Cancel subscription</button></div><p id="premiumActionStatus" class="muted"></p>';
+        var consentText = window.RecordWatchMessageProvider ? RecordWatchMessageProvider.SMS_CONSENT_TEXT : 'By enabling SMS notifications, you agree to receive RecordWatch reminders from RecordPathAI. Message and data rates may apply. Reply STOP to opt out.';
+        var phone = preferences.phone_number || (user && user.phone) || '';
+        var consentChecked = Boolean(preferences.sms_consent_at || preferences.sms_consent);
+        var smsReason = window.RecordWatchMessageProvider ? RecordWatchMessageProvider.smsDisabledReason(user, subscription, Object.assign({}, preferences, { phone_number: phone, sms_consent: consentChecked })) : '';
+        recordwatchPreferencesPanel.innerHTML = '<form id="premiumPreferencesForm" class="recordwatch-enrollment-form"><p class="eyebrow-mini">Notification preferences / SMS consent</p><h2>Email + SMS preferences</h2><label>Phone number<input id="premiumPhone" type="tel" value="' + esc(phone) + '" placeholder="(555) 555-5555" /></label><label class="toggle-row"><input id="premiumEmailEnabled" type="checkbox" ' + (preferences.email_enabled !== false ? 'checked' : '') + ' /> <span>Email enabled</span></label><label class="toggle-row"><input id="premiumSmsConsent" type="checkbox" ' + (consentChecked ? 'checked' : '') + ' /> <span>' + esc(consentText) + '</span></label><label class="toggle-row"><input id="premiumSmsEnabled" type="checkbox" ' + (preferences.sms_enabled ? 'checked' : '') + ' /> <span>SMS enabled</span></label><p id="premiumSmsReason" class="meta-note">' + esc(smsReason || 'SMS is ready for Premium reminders.') + '</p><button class="btn" type="submit">Save preferences</button><p id="premiumPreferencesStatus" class="muted"></p></form>';
+        var events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
+        var schedule = [180, 90, 30, 7, 0].map(function (days) { return days === 0 ? 'Eligibility-day reminder' : days + '-day eligibility reminder'; });
+        recordwatchReminderSchedule.innerHTML = '<p class="eyebrow-mini">Reminder schedule</p><h2>Upcoming Premium reminders</h2>' + list(schedule.concat(['Packet-not-generated reminders', 'Missing-info reminders', 'Court-status updates when supported courts come online.']));
+        var notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
+        recordwatchHistoryPanel.innerHTML = '<p class="eyebrow-mini">Reminder history / upcoming alerts</p><h2>Recent RecordWatch reminders</h2>' + (notifications.length ? list(notifications.slice(-6).reverse().map(function (item) { return (item.subject || item.type) + ' — ' + item.channel + ' — ' + (item.status || 'logged'); })) : '<p class="muted">No reminder history yet.</p>');
+        bindPremiumPanelEvents();
+      }
+      function bindPremiumPanelEvents() {
+        document.querySelectorAll('[data-premium-action]').forEach(function (button) {
+          if (button.dataset.bound === 'true') return;
+          button.dataset.bound = 'true';
+          button.addEventListener('click', function () {
+            var action = button.getAttribute('data-premium-action');
+            var status = document.getElementById('premiumActionStatus');
+            button.disabled = true;
+            var request = action === 'cancel' ? RecordWatchNotifications.cancelPremiumSubscription() : RecordWatchNotifications.checkoutPremium(action);
+            request.then(function (result) { if (result.url) window.location.href = result.url; else { if (status) status.textContent = 'Premium RecordWatch updated.'; loadPremiumState(); } }).catch(function (error) { if (status) status.textContent = error.message; }).finally(function () { button.disabled = false; });
+          });
+        });
+        var form = document.getElementById('premiumPreferencesForm');
+        if (form && form.dataset.bound !== 'true') {
+          form.dataset.bound = 'true';
+          form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var payload = RecordWatchMessageProvider.buildPreferencePayload(activeUser(), { phone_number: document.getElementById('premiumPhone').value, email_enabled: document.getElementById('premiumEmailEnabled').checked, sms_consent: document.getElementById('premiumSmsConsent').checked, sms_enabled: document.getElementById('premiumSmsEnabled').checked }, activeSubscription());
+            RecordWatchNotifications.savePremiumPreferences(payload).then(function (result) { premiumState.preferences = result.preferences; document.getElementById('premiumPreferencesStatus').textContent = payload.sms_enabled ? 'Preferences saved with SMS enabled.' : 'Preferences saved. SMS remains disabled until all Premium requirements are met.'; renderPremiumPanels([]); }).catch(function (error) { document.getElementById('premiumPreferencesStatus').textContent = error.message; });
+          });
+        }
+      }
+      function loadPremiumState() {
+        if (!window.RecordWatchNotifications || !RecordWatchNotifications.fetchPremiumSubscription) return Promise.resolve();
+        return Promise.all([RecordWatchNotifications.fetchPremiumSubscription().catch(function () { return {}; }), RecordWatchNotifications.fetchPremiumPreferences().catch(function () { return {}; })]).then(function (results) {
+          premiumState.subscription = results[0].subscription || results[0];
+          premiumState.preferences = results[1].preferences || null;
+          renderPremiumPanels([]);
+        });
+      }
+
       function statCard(label, value, small, note, wide) { return '<article class="recordwatch-stat-card' + (wide ? ' wide' : '') + '"><span class="recordwatch-stat-label">' + esc(label) + '</span><strong class="recordwatch-stat-value' + (small ? ' small' : '') + '">' + esc(value || "Not entered") + '</strong>' + (note ? '<p class="recordwatch-stat-note">' + esc(note) + '</p>' : '') + '</article>'; }
       function confidenceText(value) { return String(value || "medium").replace(/_/g, " ").replace(/\b\w/g, function (letter) { return letter.toUpperCase(); }); }
       function confidenceLabel(caseData) { var result = RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available details." }; return confidenceText(result.level) + " — " + result.reason; }
@@ -213,6 +279,9 @@
         RecordWatchBridge.syncExistingRecordPathData();
       }
       render();
+      loadPremiumState();
+      var successSessionId = new URLSearchParams(window.location.search).get("session_id");
+      if (new URLSearchParams(window.location.search).get("recordwatch") === "success" && successSessionId && RecordWatchNotifications.verifyPremiumCheckout) { RecordWatchNotifications.verifyPremiumCheckout(successSessionId).then(loadPremiumState).catch(function (error) { recordwatchDataNotice.textContent = error.message; }); }
       if (window.RecordWatchNotifications && RecordWatchNotifications.fetchRemoteData) {
         var userId = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id;
         RecordWatchNotifications.fetchRemoteData(userId).then(function (data) {
