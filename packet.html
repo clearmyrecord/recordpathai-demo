@@ -996,6 +996,13 @@
             <div id="paymentCallout" class="callout warning" data-i18n="packet.lockedWarning">
               Packet is locked until payment is complete. Your eligibility summary and filing checklist remain visible.
             </div>
+            <div class="recordwatch-panel" id="recordwatchCheckoutUpsell">
+              <h3>Add Premium RecordWatch for 12 months — $19</h3>
+              <p>Premium RecordWatch helps you stay on top of your eligibility date, packet progress, and next steps with automated email and SMS reminders.</p>
+              <label><input type="checkbox" id="recordwatchAddonCheckbox"> Add 12 months of Premium RecordWatch for $19</label>
+              <p class="meta-note">Do not need Premium RecordWatch to generate a packet. Court status updates when available. Automated court integrations will be added as supported courts come online.</p>
+            </div>
+
             <div id="eligibilityReminderCard" class="callout warning" style="display:none;">
               <h3 style="margin:0 0 8px;" data-i18n="packet.reminder.title">Not Yet Eligible</h3>
               <p style="margin:0 0 14px;" data-i18n="packet.reminder.message">You may not be eligible yet based on the information provided. Save a reminder so you know when to come back.</p>
@@ -1101,6 +1108,7 @@
   <script src="js/packet-data-bridge.js"></script>
   <script src="js/rules.js"></script>
   <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-message-provider.js"></script>
   <script src="js/recordwatch-notifications.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/translate.js"></script>
@@ -2633,7 +2641,8 @@ document.addEventListener("DOMContentLoaded", function () {
               manualReview: packetEligibility.needsReview || Boolean(normalizedData?.eligibility?.manualReview)
             },
             amount: 5000,
-            currency: "usd"
+            currency: "usd",
+            recordwatchAddon: Boolean(document.getElementById("recordwatchAddonCheckbox") && document.getElementById("recordwatchAddonCheckbox").checked)
           };
 
           const checkoutEndpoint = getCheckoutEndpoint();

@@ -9,10 +9,11 @@
   var FALLBACK_NOTE = "Showing locally saved RecordWatch data.";
 
   var reminderDefinitions = [
-    { days: 90, flag: "reminder_90_sent", type: "eligibility_90_day" },
-    { days: 30, flag: "reminder_30_sent", type: "eligibility_30_day" },
-    { days: 7, flag: "reminder_7_sent", type: "eligibility_7_day" },
-    { days: 0, flag: "reminder_day_sent", type: "eligibility_reached" }
+    { days: 180, flag: "reminder_180_sent", type: "eligibility_180" },
+    { days: 90, flag: "reminder_90_sent", type: "eligibility_90" },
+    { days: 30, flag: "reminder_30_sent", type: "eligibility_30" },
+    { days: 7, flag: "reminder_7_sent", type: "eligibility_7" },
+    { days: 0, flag: "reminder_day_sent", type: "eligibility_today" }
   ];
 
   var courtStatuses = ["RECEIVED", "UNDER_REVIEW", "CORRECTION_REQUESTED", "ACCEPTED", "FILED", "HEARING_SCHEDULED", "GRANTED", "DENIED", "CLOSED"];
@@ -51,7 +52,7 @@
     return localStorage.getItem("email") || "demo-user";
   }
   function defaultPreferences(userId) {
-    return { user_id: userId || currentUserId(), eligibility_email: true, eligibility_sms: false, court_status_updates: true, packet_reminders: true, marketing_emails: false };
+    return { user_id: userId || currentUserId(), email_enabled: true, sms_enabled: false, phone_number: "", sms_consent_at: null, sms_opted_out_at: null, reminder_180_enabled: true, reminder_90_enabled: true, reminder_30_enabled: true, reminder_7_enabled: true, reminder_day_enabled: true, court_status_enabled: true, eligibility_email: true, eligibility_sms: false, court_status_updates: true, packet_reminders: true, marketing_emails: false };
   }
 
   function loadSubscriptions() { return readJSON(SUBSCRIPTIONS_KEY, []); }
@@ -59,15 +60,29 @@
   function loadNotifications() { return readJSON(NOTIFICATIONS_KEY, []); }
   function loadPreferences(userId) { return Object.assign(defaultPreferences(userId), readJSON(PREFERENCES_KEY, {})); }
 
+  async function authHeaders(extra) {
+    var headers = Object.assign({}, extra || {});
+    try {
+      if (window.RecordPathSupabase) {
+        var client = await RecordPathSupabase.getClient();
+        var sessionResult = await client.auth.getSession();
+        var token = sessionResult && sessionResult.data && sessionResult.data.session && sessionResult.data.session.access_token;
+        if (token) headers.Authorization = "Bearer " + token;
+      }
+    } catch (error) {}
+    return headers;
+  }
+
   async function apiGet(path, userId) {
-    var response = await fetch(path + "?user_id=" + encodeURIComponent(userId || currentUserId()));
+    var headers = await authHeaders();
+    var response = await fetch(path + (path.indexOf("?") === -1 ? "?" : "&") + "user_id=" + encodeURIComponent(userId || currentUserId()), { headers: headers });
     if (!response.ok) throw new Error("RecordWatch API fetch failed");
     return response.json();
   }
 
   async function post(url, payload) {
     if (!window.fetch || location.protocol === "file:") throw new Error("RecordWatch API unavailable");
-    var response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    var response = await fetch(url, { method: "POST", headers: await authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(payload) });
     if (!response.ok) throw new Error("RecordWatch API save failed");
     return response.json();
   }
@@ -134,7 +149,7 @@
     var existing = events.find(function (item) { return item.user_id === userId && item.case_id === caseId; });
     var dateChanged = Boolean(existing && nextEligibilityDate && dateOnly(existing.eligibility_date) !== nextEligibilityDate);
     var row = Object.assign(existing || {
-      id: id("rwe"), user_id: userId, case_id: caseId, reminder_90_sent: false, reminder_30_sent: false,
+      id: id("rwe"), user_id: userId, case_id: caseId, reminder_180_sent: false, reminder_90_sent: false, reminder_30_sent: false,
       reminder_7_sent: false, reminder_day_sent: false, eligibility_notification_sent: false, created_at: new Date().toISOString()
     }, {
       eligibility_date: nextEligibilityDate,
@@ -151,6 +166,7 @@
       updated_at: new Date().toISOString()
     });
     if (dateChanged) {
+      row.reminder_180_sent = false;
       row.reminder_90_sent = false;
       row.reminder_30_sent = false;
       row.reminder_7_sent = false;
@@ -167,13 +183,17 @@
   function savePreferences(payload) {
     var row = Object.assign(defaultPreferences(payload && (payload.user_id || payload.userId)), loadPreferences(payload && (payload.user_id || payload.userId)), payload || {});
     row.user_id = row.user_id || row.userId || currentUserId();
+    row.phone_number = clean(row.phone_number || row.phoneNumber || row.notification_phone || row.notificationPhone);
+    if (row.sms_enabled && !row.sms_consent_at && (row.sms_consent === true || row.smsConsent === true)) row.sms_consent_at = new Date().toISOString();
+    if (row.sms_enabled && (!row.phone_number || !row.sms_consent_at || row.sms_opted_out_at)) row.sms_enabled = false;
+    row.eligibility_sms = row.sms_enabled === true;
     row.updated_at = new Date().toISOString();
     writeJSON(PREFERENCES_KEY, row);
     return post("/api/recordwatch/preferences", row).then(function (result) { return result.preferences || row; }).catch(function () { return row; });
   }
 
   function subject(type) {
-    if (type === "eligibility_reached") return "You May Now Be Eligible";
+    if (type === "eligibility_reached" || type === "eligibility_today") return "You May Now Be Eligible";
     if (type.indexOf("packet_incomplete") === 0) return "Finish Your RecordPathAI Packet";
     if (type.indexOf("court_status_") === 0) return "RecordPathAI Court Status Update";
     return "RecordPathAI Eligibility Reminder";
@@ -181,12 +201,13 @@
 
   function message(type, context) {
     context = context || {};
-    if (type === "eligibility_reached") return "Based on the information provided, your waiting period appears complete. Log in to RecordPathAI to verify eligibility and generate your packet.";
+    if (type === "eligibility_reached" || type === "eligibility_today") return "Based on the information provided, your waiting period appears complete. Log in to RecordPathAI to verify eligibility and generate your packet.";
     if (type.indexOf("packet_incomplete") === 0) return "Your eligibility review is complete. Finish your record details to generate your court packet.";
     if (type.indexOf("court_status_") === 0) return "Your court filing status changed to " + (context.status || "updated") + ". This is a RecordWatch manual or system-test update unless marked as verified.";
-    if (type === "eligibility_90_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 90 days.";
-    if (type === "eligibility_30_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 30 days.";
-    if (type === "eligibility_7_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 7 days.";
+    if (type === "eligibility_180") return "Good news. Based on current information, your record may become eligible for sealing in approximately 180 days.";
+    if (type === "eligibility_90" || type === "eligibility_90_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 90 days.";
+    if (type === "eligibility_30" || type === "eligibility_30_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 30 days.";
+    if (type === "eligibility_7" || type === "eligibility_7_day") return "Good news. Based on current information, your record may become eligible for sealing in approximately 7 days.";
     return "RecordWatch has an update about your eligibility timeline.";
   }
 
@@ -195,7 +216,7 @@
     var preferences = loadPreferences(subscription.user_id);
     var channels = [];
     if (subscription.notify_email !== false && subscription.notification_email) channels.push("email");
-    if (subscription.notify_sms && subscription.notification_phone && subscription.premium_active && preferences.eligibility_sms) channels.push("sms");
+    if (window.RecordWatchMessageProvider ? RecordWatchMessageProvider.canSendSms(subscription, preferences) : (subscription.notify_sms && subscription.notification_phone && subscription.premium_active && preferences.eligibility_sms)) channels.push("sms");
     if (!channels.length) channels.push("in_app");
     if (type.indexOf("court_status_") === 0 && !subscription.premium_active && !(context && context.admin_override)) channels = ["in_app"];
     var made = channels.map(function (channel) {
@@ -278,6 +299,36 @@
     };
   }
 
+
+
+  async function startPremiumCheckout(plan, caseId) {
+    var result = await post("/api/recordwatch/checkout", { plan: plan, case_id: caseId || "" });
+    if (result && result.url) window.location.href = result.url;
+    return result;
+  }
+
+  async function verifyPremiumCheckout(sessionId) {
+    if (!sessionId) return null;
+    var result = await post("/api/recordwatch/verify-checkout", { session_id: sessionId });
+    if (result && result.subscription) {
+      var subscriptions = loadSubscriptions().filter(function (item) { return item.id !== result.subscription.id; });
+      subscriptions.unshift(result.subscription);
+      writeJSON(SUBSCRIPTIONS_KEY, subscriptions);
+    }
+    return result;
+  }
+
+  async function fetchPremiumSubscription() {
+    var headers = await authHeaders();
+    var response = await fetch("/api/recordwatch/subscription", { headers: headers });
+    if (!response.ok) throw new Error("Could not load RecordWatch subscription.");
+    return response.json();
+  }
+
+  async function cancelPremiumSubscription() {
+    return post("/api/recordwatch/cancel", {});
+  }
+
   window.RecordWatchNotifications = {
     courtStatuses: courtStatuses,
     fallbackNote: FALLBACK_NOTE,
@@ -293,7 +344,12 @@
     createNotification: createNotification,
     runDailyCheck: runDailyCheck,
     runPacketAbandonmentCheck: runPacketAbandonmentCheck,
+    authHeaders: authHeaders,
     recordCourtStatus: recordCourtStatus,
-    getAdminSummary: getAdminSummary
+    getAdminSummary: getAdminSummary,
+    startPremiumCheckout: startPremiumCheckout,
+    verifyPremiumCheckout: verifyPremiumCheckout,
+    fetchPremiumSubscription: fetchPremiumSubscription,
+    cancelPremiumSubscription: cancelPremiumSubscription
   };
 }());

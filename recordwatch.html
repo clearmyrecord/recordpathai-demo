@@ -59,7 +59,7 @@
         <div class="hero-copy">
           <span class="eyebrow">RecordWatch</span>
           <h1>Never Miss Your Eligibility Date</h1>
-          <p>RecordWatch tracks your eligibility timeline and reminds you when it may be time to take action.</p>
+          <p>RecordWatch tracks your eligibility timeline and reminds you when it may be time to take action.</p><p>RecordPathAI does not guarantee court approval or filing acceptance. Court status updates depend on available court access, user-provided updates, or supported court integrations.</p><p class="meta-note">RecordPathAI is not a law firm and does not provide legal advice.</p>
           <div class="hero-actions">
             <a class="btn" href="eligibility.html">Start Eligibility Check</a>
             <a class="btn secondary" href="recordwatch-dashboard.html">View Dashboard</a>
@@ -94,7 +94,7 @@
           <p>RecordWatch tracks your eligibility timeline and reminds you when it may be time to take action.</p>
           <div class="recordwatch-plan-grid">
             <article class="recordwatch-plan-card"><h3>Free Eligibility Reminders</h3><ul><li>Email reminders</li><li>Countdown dashboard</li><li>Saved eligibility date</li></ul></article>
-            <article class="recordwatch-plan-card premium"><h3>Premium RecordWatch</h3><ul><li>SMS alerts</li><li>Filing reminders</li><li>Court status updates when available</li></ul></article>
+            <article class="recordwatch-plan-card premium"><h3>Premium RecordWatch</h3><p class="price-line"><strong>$4.99/month</strong> or <strong>$39/year</strong></p><p>Premium RecordWatch helps you stay on top of your eligibility date, packet progress, and next steps with automated email and SMS reminders.</p><ul><li>SMS alerts</li><li>Filing reminders</li><li>Court status updates when available</li><li>Eligibility countdown</li><li>Missing-info reminders</li><li>Multi-case monitoring</li></ul><div class="hero-actions"><button type="button" class="btn" data-recordwatch-plan="monthly">Start Premium Monthly</button><button type="button" class="btn secondary" data-recordwatch-plan="annual">Save with Annual</button><button type="button" class="btn secondary" data-recordwatch-plan="addon_12_month">Add 12 Months for $19</button></div><p class="meta-note">Automated court integrations will be added as supported courts come online.</p></article>
           </div>
           <div class="recordwatch-countdown-panel">
             <div><strong id="recordwatchEstimatedDate">Not available yet</strong><span>Estimated eligibility date</span></div>
@@ -106,7 +106,7 @@
           <label>Mobile Phone<input id="recordwatchPhone" type="tel" placeholder="(555) 555-5555" /></label>
           <label class="toggle-row"><input id="recordwatchNotifyEmail" type="checkbox" checked /> <span>Email Notifications</span></label>
           <label class="toggle-row"><input id="recordwatchNotifySms" type="checkbox" /> <span>SMS Notifications</span></label>
-          <p id="recordwatchSmsNotice" class="meta-note" hidden>SMS alerts are part of Premium RecordWatch.</p>
+          <p id="recordwatchSmsNotice" class="meta-note" hidden>By enabling SMS notifications, you agree to receive RecordWatch reminders from RecordPathAI. Message and data rates may apply. Reply STOP to opt out. SMS alerts are part of Premium RecordWatch.</p>
           <button class="btn" type="submit">Activate RecordWatch</button>
           <p id="recordwatchEnrollmentStatus" class="muted"></p>
         </form>
@@ -154,6 +154,7 @@
   <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">RecordPathAI is not a law firm and does not provide legal advice. Documents are generated based on user input and publicly available forms.</div></div><div class="footer-links"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="eligibility.html">Eligibility</a><a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
   <script src="js/packet-data-bridge.js"></script>
   <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-message-provider.js"></script>
   <script src="js/recordwatch-notifications.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/recordwatch-monitor.js"></script>
@@ -199,6 +200,18 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if (window.RecordPathAuth) RecordPathAuth.requireProtectedPageAsync("open RecordWatch");
+    });
+  </script>
+  <script>
+    document.addEventListener("click", function (event) {
+      var button = event.target.closest("[data-recordwatch-plan]");
+      if (!button || !window.RecordWatchNotifications) return;
+      if (window.RecordPathAuth && !RecordPathAuth.requireAuth("start Premium RecordWatch", "recordwatch.html")) return;
+      button.disabled = true;
+      RecordWatchNotifications.startPremiumCheckout(button.dataset.recordwatchPlan).catch(function (error) {
+        button.disabled = false;
+        alert(error.message || "Could not start Premium RecordWatch checkout.");
+      });
     });
   </script>
 </body>
