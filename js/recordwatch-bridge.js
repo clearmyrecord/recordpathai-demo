@@ -208,9 +208,18 @@
     });
   }
 
+  function resolveCentralizedEligibility(caseData) {
+    if (window.RecordPathEligibilityEngine && typeof RecordPathEligibilityEngine.resolveEligibilityForCase === "function") {
+      return RecordPathEligibilityEngine.resolveEligibilityForCase(caseData);
+    }
+    if (window.RecordWatchRules && RecordWatchRules.calculateEligibilityResult) return RecordWatchRules.calculateEligibilityResult(caseData);
+    if (window.RecordWatchRules && RecordWatchRules.calculateEligibilityDate) return { estimatedEligibleDate: RecordWatchRules.calculateEligibilityDate(caseData) };
+    return null;
+  }
+
   function getCurrentEligibilityResult(caseData) {
-    if (!caseData || !window.RecordWatchRules) return null;
-    var result = window.RecordWatchRules.calculateEligibilityResult ? window.RecordWatchRules.calculateEligibilityResult(caseData) : { estimatedEligibleDate: window.RecordWatchRules.calculateEligibilityDate(caseData) };
+    if (!caseData) return null;
+    var result = resolveCentralizedEligibility(caseData);
     if (result && result.estimatedEligibleDate) {
       caseData.eligibility = Object.assign(caseData.eligibility || {}, {
         estimatedEligibleDate: result.estimatedEligibleDate,
@@ -233,8 +242,8 @@
     var result = getCurrentEligibilityResult(caseData);
     var eligibilityDate = result && result.estimatedEligibleDate;
     if (!eligibilityDate) return;
-    var status = window.RecordWatchRules.calculateCaseStatus(caseData);
-    var confidence = window.RecordWatchRules.calculateEligibilityConfidence ? window.RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available RecordWatch data." };
+    var status = result.status || (window.RecordWatchRules ? window.RecordWatchRules.calculateCaseStatus(caseData) : "More information needed");
+    var confidence = result.confidence ? { level: result.confidence, reason: result.confidenceReason } : (window.RecordWatchRules && window.RecordWatchRules.calculateEligibilityConfidence ? window.RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available RecordWatch data." });
     var workflow = {};
     try { workflow = JSON.parse(localStorage.getItem("recordPathWorkflowState")) || {}; } catch (error) { workflow = {}; }
     window.RecordWatchNotifications.registerEligibilityEvent({
@@ -349,6 +358,7 @@
     updateActiveCase: updateActiveCase,
     getRecordWatchSummary: getRecordWatchSummary,
     getCurrentEligibilityResult: getCurrentEligibilityResult,
+    resolveCentralizedEligibility: resolveCentralizedEligibility,
     registerRecordWatchEligibility: registerRecordWatchEligibility,
     ensureRecordWatchDataShape: ensureRecordWatchDataShape
   };
