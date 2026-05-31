@@ -147,7 +147,7 @@
       local_profile_id: clean(payload.local_profile_id || payload.localProfileId),
       packet_template_id: clean(payload.packet_template_id || payload.packetTemplateId),
       date_used_for_calculation: clean(payload.date_used_for_calculation || payload.dateUsedForCalculation),
-      completion_date: clean(payload.completion_date || payload.completionDate),
+      completion_date_used: clean(payload.completion_date_used || payload.completionDateUsed || payload.completion_date || payload.completionDate),
       completion_date_field: clean(payload.completion_date_field || payload.completionDateField),
       eligibility_completed_at: payload.eligibility_completed_at || payload.eligibilityCompletedAt || null,
       record_details_completed_at: payload.record_details_completed_at || payload.recordDetailsCompletedAt || null,
@@ -161,6 +161,7 @@
       row.reminder_7_sent = false;
       row.reminder_day_sent = false;
       row.eligibility_notification_sent = false;
+      row.stale_eligibility_date_replaced_at = new Date().toISOString();
     }
     if (!existing) events.push(row);
     writeJSON(EVENTS_KEY, events);

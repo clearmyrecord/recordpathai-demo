@@ -80,12 +80,16 @@
   <script src="js/rules/court-registry.js"></script>
   <script src="js/rules/rule-resolver.js"></script>
   <script src="js/rules/rule-engine.js"></script>
+  <script src="js/packet-data-bridge.js"></script>
   <script src="js/recordwatch-rules.js"></script>
   <script src="js/recordwatch-notifications.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/recordwatch-monitor.js"></script>
-  <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/i18n.js" defer></script>
-  <script src="js/auth.js"></script><script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/user-store.js"></script>
+  <script src="js/i18n.js" defer></script>
+  <script src="js/auth.js"></script>
+  <script>
     document.addEventListener("DOMContentLoaded", async function () {
       if (!await RecordPathAuth.requireProtectedPageAsync("view your dashboard")) return;
       const user = RecordPathUserStore.getCurrentUser();

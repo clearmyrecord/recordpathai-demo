@@ -93,8 +93,10 @@
     return {
       estimatedEligibleDate: result.estimatedEligibleDate || "",
       completionDate: completionDate,
+      completionDateUsed: completionDate,
       completionDateField: result.dateUsedForCalculationField || "",
       waitingPeriodText: result.requiredWaitingPeriodLabel || "",
+      requiredWaitingPeriodLabel: result.requiredWaitingPeriodLabel || "",
       waitingPeriodMonths: Number(period.years || 0) * 12 + Number(period.months || 0),
       eligibilityStatus: result.eligibilityStatus || "needs_review",
       likelyEligible: Boolean(result.likelyEligible),
@@ -142,8 +144,10 @@
     return {
       estimatedEligibleDate: estimated,
       completionDate: completion.completionDate,
+      completionDateUsed: completion.completionDate,
       completionDateField: completion.completionDateField,
       waitingPeriodText: waitingPeriodText,
+      requiredWaitingPeriodLabel: waitingPeriodText,
       waitingPeriodMonths: months,
       eligibilityStatus: eligibilityStatus,
       likelyEligible: likelyEligible,
