@@ -171,7 +171,12 @@
   <script src="js/auth.js"></script>
 
   <script>
-    document.addEventListener("DOMContentLoaded", function () {
+    document.addEventListener("DOMContentLoaded", async function () {
+      var urlCaseId = new URLSearchParams(window.location.search).get("caseId");
+      if (urlCaseId && window.RecordPathUserStore) {
+        var found = await RecordPathUserStore.setActiveCase(urlCaseId);
+        if (!found) document.querySelector("main")?.insertAdjacentHTML("afterbegin", '<section class="page-section"><div class="container"><div class="empty-state case-page-error"><h2>We could not find that saved case.</h2><p>Please choose another case from your dashboard.</p><a class="btn" href="dashboard.html">Back to dashboard</a></div></div></section>');
+      }
       if (window.RecordWatchBridge) RecordWatchBridge.syncExistingRecordPathData();
       var active = window.RecordWatchBridge && RecordWatchBridge.getOrCreateActiveCase();
       var date = active && window.RecordWatchRules ? RecordWatchRules.calculateEligibilityDate(active) : "";
@@ -200,6 +205,9 @@
         });
         var confidence = active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active) : { level: "medium", reason: "Estimate based on information entered." };
         if (date) RecordWatchNotifications.registerEligibilityEvent({ userId: subscription.user_id, caseId: subscription.case_id, eligibilityDate: date, eligibilityReason: active && RecordWatchRules.calculateCaseStatus(active), waitingPeriod: active && RecordWatchRules.getRecommendedStatus(active), eligibilityConfidence: confidence.level, eligibilityConfidenceReason: confidence.reason });
+        if (window.RecordPathUserStore && active && active.id) {
+          RecordPathUserStore.updateCase(active.id, { recordWatchStatus: "active", eligibilityDate: date, estimatedEligibleDate: date }).catch(function (error) { console.warn("RecordWatch status sync skipped:", error); });
+        }
         document.getElementById("recordwatchEnrollmentStatus").textContent = wantsSms ? "Free RecordWatch is active with email reminders. SMS alerts require Premium RecordWatch." : "Free RecordWatch is active with email reminders and dashboard countdown.";
       });
     });

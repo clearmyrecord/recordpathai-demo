@@ -134,7 +134,7 @@
           var days = RecordWatchRules.daysUntil(date);
           var sourceCase = savedCases.find(function (item) { return item.case_id === caseData.id || item.caseId === caseData.id || item.id === caseData.id; }) || caseData;
           var reminderStatus = RecordWatchMonitor.getReminderStatus(caseData.id);
-          if (sourceCase.recordWatchStatus === "Paused") reminderStatus = "paused";
+          if (String(sourceCase.recordWatchStatus || "").toLowerCase().includes("paused")) reminderStatus = "paused";
           var tasks = RecordWatchMonitor.getCaseTasks(caseData.id);
           var monitoringStatus = reminderStatus === "paused" ? "Paused" : RecordWatchMonitor.calculateMonitoringStatus(caseData, tasks);
           var checklist = RecordWatchMonitor.taskKeys.map(function (key) {
