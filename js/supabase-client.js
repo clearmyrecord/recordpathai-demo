@@ -3,12 +3,16 @@
 
   const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
   const CONFIG_ENDPOINT = "/api/config/supabase";
+  const MISSING_CONFIG_MESSAGE = "Supabase is not configured. Ask an administrator to set RECORDPATH_SUPABASE_URL and RECORDPATH_SUPABASE_ANON_KEY (or SUPABASE_URL and SUPABASE_ANON_KEY) in the deployment environment.";
 
   let configPromise;
   let libraryPromise;
   let clientPromise;
   let cachedClient = null;
   let cachedConfig = null;
+  let lastConfigError = null;
+  let lastClientError = null;
+  let libraryLoaded = Boolean(window.supabase && window.supabase.createClient);
 
   function fromWindowConfig() {
     return {
@@ -32,6 +36,7 @@
       if (!response.ok) return {};
       return await response.json();
     } catch (error) {
+      lastConfigError = error;
       console.warn("Supabase config endpoint unavailable:", error);
       return {};
     }
@@ -44,8 +49,8 @@
         const metaConfig = fromMetaConfig();
         const serverConfig = await fetchServerConfig();
         cachedConfig = {
-          url: windowConfig.url || metaConfig.url || serverConfig.url || "",
-          anonKey: windowConfig.anonKey || metaConfig.anonKey || serverConfig.anonKey || ""
+          url: windowConfig.url || metaConfig.url || serverConfig.url || serverConfig.supabaseUrl || "",
+          anonKey: windowConfig.anonKey || metaConfig.anonKey || serverConfig.anonKey || serverConfig.supabaseAnonKey || ""
         };
         return cachedConfig;
       }());
@@ -54,12 +59,15 @@
   }
 
   function loadLibrary() {
-    if (window.supabase && window.supabase.createClient) return Promise.resolve(window.supabase);
+    if (window.supabase && window.supabase.createClient) {
+      libraryLoaded = true;
+      return Promise.resolve(window.supabase);
+    }
     if (!libraryPromise) {
       libraryPromise = new Promise(function (resolve, reject) {
         const existing = document.querySelector('script[data-recordpath-supabase-js="true"]');
         if (existing) {
-          existing.addEventListener("load", function () { resolve(window.supabase); });
+          existing.addEventListener("load", function () { libraryLoaded = Boolean(window.supabase && window.supabase.createClient); resolve(window.supabase); });
           existing.addEventListener("error", reject);
           return;
         }
@@ -68,9 +76,12 @@
         script.async = true;
         script.defer = true;
         script.dataset.recordpathSupabaseJs = "true";
-        script.onload = function () { resolve(window.supabase); };
+        script.onload = function () { libraryLoaded = Boolean(window.supabase && window.supabase.createClient); resolve(window.supabase); };
         script.onerror = function () { reject(new Error("Could not load Supabase client library.")); };
         document.head.appendChild(script);
+      }).catch(function (error) {
+        lastClientError = error;
+        throw error;
       });
     }
     return libraryPromise;
@@ -82,9 +93,12 @@
       clientPromise = (async function () {
         const config = await getConfig();
         if (!config.url || !config.anonKey) {
-          throw new Error("Supabase is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY in the deployment environment.");
+          lastClientError = new Error(MISSING_CONFIG_MESSAGE);
+          lastClientError.code = "supabase_config_missing";
+          throw lastClientError;
         }
         const supabaseLibrary = await loadLibrary();
+        if (!supabaseLibrary || !supabaseLibrary.createClient) throw new Error("Supabase client library did not initialize.");
         cachedClient = supabaseLibrary.createClient(config.url, config.anonKey, {
           auth: {
             persistSession: true,
@@ -93,14 +107,32 @@
           }
         });
         return cachedClient;
-      }());
+      }()).catch(function (error) {
+        lastClientError = error;
+        clientPromise = null;
+        throw error;
+      });
     }
     return clientPromise;
+  }
+
+  async function getDiagnostics() {
+    const config = await getConfig();
+    return {
+      configLoaded: Boolean(config.url && config.anonKey),
+      clientLoaded: Boolean(cachedClient || (window.supabase && window.supabase.createClient)),
+      libraryLoaded: Boolean(libraryLoaded || (window.supabase && window.supabase.createClient)),
+      configEndpoint: CONFIG_ENDPOINT,
+      configError: lastConfigError ? lastConfigError.message : "",
+      clientError: lastClientError ? lastClientError.message : ""
+    };
   }
 
   window.RecordPathSupabase = {
     getConfig,
     getClient,
+    getDiagnostics,
+    missingConfigMessage: MISSING_CONFIG_MESSAGE,
     isConfigured: async function () {
       const config = await getConfig();
       return Boolean(config.url && config.anonKey);

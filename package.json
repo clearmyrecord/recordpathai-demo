@@ -8,7 +8,8 @@
     "start": "node server.js",
     "crawl:forms": "node tools/form-crawler.js",
     "crawl:forms:ohio:tier1": "node tools/form-crawler.js --state=OH --tier=tier1",
-    "crawl:forms:ohio:tier1:apply": "node tools/form-crawler.js --state=OH --tier=tier1 --apply"
+    "crawl:forms:ohio:tier1:apply": "node tools/form-crawler.js --state=OH --tier=tier1 --apply",
+    "validate:auth": "node tools/validate-auth-flow.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

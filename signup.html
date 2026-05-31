@@ -74,24 +74,34 @@
     document.addEventListener("DOMContentLoaded", async function () {
       const returnUrl = RecordPathUserStore.getReturnUrl("dashboard.html");
       const prompt = sessionStorage.getItem("recordPathAuthPrompt");
-      if (prompt) { authPrompt.textContent = prompt; authPrompt.style.display = "block"; sessionStorage.removeItem("recordPathAuthPrompt"); }
-      loginLink.href = RecordPathAuth.loginUrl(returnUrl);
+      const promptBanner = document.getElementById("authPrompt");
+      const status = document.getElementById("authStatus");
+      const form = document.getElementById("signupForm");
+      const fullNameInput = document.getElementById("fullName");
+      const emailInput = document.getElementById("email");
+      const phoneInput = document.getElementById("phone");
+      const passwordInput = document.getElementById("password");
+      if (prompt) { promptBanner.textContent = prompt; promptBanner.style.display = "block"; sessionStorage.removeItem("recordPathAuthPrompt"); }
+      document.getElementById("loginLink").href = RecordPathAuth.loginUrl(returnUrl);
       ["fullName", "email", "phone"].forEach(function (id) { const value = localStorage.getItem(id); if (value && document.getElementById(id)) document.getElementById(id).value = value; });
       await RecordPathUserStore.ready;
-      if (RecordPathUserStore.isLoggedIn()) { RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; return; }
-      signupForm.addEventListener("submit", async function () {
-        authStatus.textContent = "Creating your account…";
-        try { await RecordPathUserStore.signup({ fullName: fullName.value, email: email.value, phone: phone.value, password: password.value }); RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; }
-        catch (error) { authStatus.textContent = error.message; }
+      const supabaseConfigured = !window.RecordPathSupabase || await RecordPathSupabase.isConfigured();
+      if (!supabaseConfigured) status.textContent = RecordPathSupabase.missingConfigMessage;
+      if (supabaseConfigured && RecordPathUserStore.isLoggedIn()) { RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; return; }
+      form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        status.textContent = "Creating your account…";
+        try { await RecordPathUserStore.signup({ fullName: fullNameInput.value, email: emailInput.value, phone: phoneInput.value, password: passwordInput.value }); RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; }
+        catch (error) { status.textContent = error.message; }
       });
-      googleLogin.addEventListener("click", async function () {
-        authStatus.textContent = "Redirecting to Google…";
-        try { await RecordPathUserStore.loginWithGoogle(returnUrl); } catch (error) { authStatus.textContent = error.message; }
+      document.getElementById("googleLogin").addEventListener("click", async function () {
+        status.textContent = "Redirecting to Google…";
+        try { await RecordPathUserStore.loginWithGoogle(returnUrl); } catch (error) { status.textContent = error.message; }
       });
-      resetPassword.addEventListener("click", async function () {
-        authStatus.textContent = "Sending reset email…";
-        try { await RecordPathUserStore.sendPasswordReset(email.value); authStatus.textContent = "If that email exists, a reset link has been sent. Open it to set a new password, then log in."; }
-        catch (error) { authStatus.textContent = error.message; }
+      document.getElementById("resetPassword").addEventListener("click", async function () {
+        status.textContent = "Sending reset email…";
+        try { await RecordPathUserStore.sendPasswordReset(emailInput.value); status.textContent = "If that email exists, a reset link has been sent. Open it to set a new password, then log in."; }
+        catch (error) { status.textContent = error.message; }
       });
     });
   </script>

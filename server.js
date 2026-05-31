@@ -21,10 +21,19 @@ app.use(cors({
 
 app.use(express.json());
 
+function publicSupabaseConfig() {
+  return {
+    url: process.env.RECORDPATH_SUPABASE_URL || process.env.SUPABASE_URL || "",
+    anonKey: process.env.RECORDPATH_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
+  };
+}
+
 app.get("/api/config/supabase", (req, res) => {
+  const config = publicSupabaseConfig();
   res.json({
-    url: process.env.SUPABASE_URL || process.env.PUBLIC_SUPABASE_URL || "",
-    anonKey: process.env.SUPABASE_ANON_KEY || process.env.PUBLIC_SUPABASE_ANON_KEY || ""
+    url: config.url,
+    anonKey: config.anonKey,
+    configured: Boolean(config.url && config.anonKey)
   });
 });
 
