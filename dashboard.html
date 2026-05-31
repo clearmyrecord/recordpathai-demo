@@ -102,7 +102,7 @@
           </table>
         </div>
       </section>
-      <section class="page-card"><div class="section-heading-row"><div><h2>Saved cases</h2><p class="muted">Resume, edit, monitor, or safely remove saved case records.</p></div><a class="btn secondary" href="record-details.html">Enter Record Details</a></div><div id="caseList" class="saved-case-grid"></div></section>
+      <section class="page-card"><div class="section-heading-row"><div><h2>Saved cases</h2><p class="muted">Resume, edit, monitor, or safely remove saved case records.</p></div><a class="btn secondary" href="record-details.html">Enter Record Details</a></div><p id="savedCaseStatus" class="muted" role="status" aria-live="polite"></p><div id="caseList" class="saved-case-grid"></div></section>
     </div></section>
   </main>
   <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Authentication and saved case records are powered by Supabase.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
@@ -131,7 +131,6 @@
     document.addEventListener("DOMContentLoaded", async function () {
       if (!await RecordPathAuth.requireProtectedPageAsync("view your dashboard")) return;
       const user = RecordPathUserStore.getCurrentUser();
-      try { await RecordPathUserStore.saveCase(); } catch (error) {}
       const cases = await RecordPathUserStore.getCasesAsync();
       const latest = cases[cases.length - 1] || RecordPathUserStore.collectCurrentCaseFromStorage();
       document.getElementById("dashboardTitle").textContent = `Welcome, ${user.fullName || user.email}`;
@@ -153,9 +152,11 @@
       renderRecordWatchWidget(latest);
       const caseList = document.getElementById("caseList");
       RecordPathSavedCaseCards.render(caseList, cases);
-      RecordPathSavedCaseCards.bind(caseList, async function () {
+      RecordPathSavedCaseCards.bind(caseList, async function (message) {
         const refreshed = await RecordPathUserStore.getCasesAsync();
         document.getElementById("savedCaseCount").textContent = String(refreshed.length);
+        const status = document.getElementById("savedCaseStatus");
+        if (status) status.textContent = message || "";
         RecordPathSavedCaseCards.render(caseList, refreshed);
       });
     });
