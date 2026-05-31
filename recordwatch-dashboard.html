@@ -132,8 +132,10 @@
         var events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
         var notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
         var active = cases[0] || null;
-        var event = active ? events.find(function (item) { return item.case_id === active.id; }) : events[0];
-        var eligibilityDate = event && event.eligibility_date || (active && RecordWatchRules.calculateEligibilityDate(active));
+        var currentResult = active && window.RecordWatchBridge ? RecordWatchBridge.getCurrentEligibilityResult(active) : null;
+        if (active && window.RecordWatchBridge && typeof RecordWatchBridge.registerRecordWatchEligibility === "function") RecordWatchBridge.registerRecordWatchEligibility(active);
+        var eligibilityDate = currentResult && currentResult.estimatedEligibleDate || (active && RecordWatchRules.calculateEligibilityDate(active));
+        var event = active ? events.find(function (item) { return item.case_id === active.id && item.eligibility_date === eligibilityDate; }) : null;
         var confidence = event && event.eligibility_confidence || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).level : "medium");
         var confidenceReason = event && event.eligibility_confidence_reason || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).reason : "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.");
         var days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(eligibilityDate) : RecordWatchRules.daysUntil(eligibilityDate);
@@ -180,7 +182,8 @@
       if (window.RecordWatchNotifications && RecordWatchNotifications.fetchRemoteData) {
         var userId = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id;
         RecordWatchNotifications.fetchRemoteData(userId).then(function (data) {
-          recordwatchDataNotice.textContent = data.source === "local_fallback" ? data.fallbackNote : "Showing Supabase-saved RecordWatch data.";
+          recordwatchDataNotice.textContent = data.source === "local_fallback" ? data.fallbackNote : "Showing Supabase-saved RecordWatch data synced to the latest case calculation.";
+          if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();
           render();
         });
       }

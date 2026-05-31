@@ -21,7 +21,14 @@
   }
 
   function loadProfile() { return parseJSON("recordwatchProfile", {}); }
-  function loadCases() { return parseJSON("recordwatchCases", []); }
+  function loadCases() {
+    var cases = parseJSON("recordwatchCases", []);
+    if (window.RecordWatchBridge && typeof RecordWatchBridge.registerRecordWatchEligibility === "function") {
+      cases.forEach(function (caseData) { RecordWatchBridge.registerRecordWatchEligibility(caseData); });
+      localStorage.setItem("recordwatchCases", JSON.stringify(cases));
+    }
+    return cases;
+  }
   function loadTasks() { return parseJSON("recordwatchTasks", {}); }
   function saveTasks(tasks) { localStorage.setItem("recordwatchTasks", JSON.stringify(tasks || {})); }
 

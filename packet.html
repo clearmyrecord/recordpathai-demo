@@ -1101,6 +1101,7 @@
   <script src="js/packet-data-bridge.js"></script>
   <script src="js/rules.js"></script>
   <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-notifications.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/translate.js"></script>
 
@@ -1264,7 +1265,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const record = getSelectedPacketRecord(data);
         const eligibility = data?.eligibility || {};
         const state = normalizeState(record.case_state || data?.court?.state || eligibility.state_ruleset || "");
-        const dischargeSource = record.discharge_date || record.dischargeDate || record.final_discharge_date || record.finalDischargeDate || record.probation_end_date || record.probationEndDate || record.case_closed_date || record.caseClosedDate || "";
+        const dischargeSource = record.sentence_completion_date || record.sentenceCompletionDate || record.probation_completed_date || record.probationCompletedDate || record.probation_end_date || record.probationEndDate || record.discharge_date || record.dischargeDate || record.completion_date || record.completionDate || record.final_discharge_date || record.finalDischargeDate || record.case_closed_date || record.caseClosedDate || "";
         const parsedDischargeDate = parsePacketDate(dischargeSource);
         const parsedDischargeIso = toIsoDate(parsedDischargeDate);
         const levelRaw = safe(record.level || record.degree || record.charge_level || record.offense_classification || "").toUpperCase();
@@ -2664,6 +2665,9 @@ document.addEventListener("DOMContentLoaded", function () {
         RecordPathUserStore.saveCase({ packetStatus: isPacketPaymentComplete() ? "Ready to generate" : "Packet reviewed" }).catch(function (error) { console.warn("Account packet review save skipped:", error); });
       }
       const packetEligibility = calculatePacketEligibility(normalizedData);
+      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
+        RecordWatchBridge.syncExistingRecordPathData();
+      }
 
       document.getElementById("testPdfBtn")?.addEventListener("click", testPdfAccess);
       document.getElementById("generateSealingBtn")?.addEventListener("click", handlePrimaryPacketAction);
