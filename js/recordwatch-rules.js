@@ -147,6 +147,11 @@
       return { estimatedEligibleDate: "", eligibilityDate: "", completionDate: "", completionDateField: "", waitingPeriodMonths: 0, waitingPeriodText: "Not applicable", source: "RecordWatchRules" };
     }
 
+    if (window.RecordPathEligibilityEngine && typeof RecordPathEligibilityEngine.resolveEligibilityForCase === "function") {
+      var centralized = RecordPathEligibilityEngine.resolveEligibilityForCase(caseData);
+      if (centralized && (centralized.estimatedEligibleDate || centralized.waitingPeriodMonths !== null)) return centralized;
+    }
+
     var completion = getCompletionDateResult(caseData);
     if (!completion.date) {
       return { estimatedEligibleDate: "", eligibilityDate: "", completionDate: "", completionDateField: "", waitingPeriodMonths: null, waitingPeriodText: "Not available", source: "RecordWatchRules" };
