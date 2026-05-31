@@ -1129,7 +1129,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
         return true;
       }
-      await loadCaseFromUrl();
+      if (!await loadCaseFromUrl()) return;
       if (window.RecordPathWorkflow && !RecordPathWorkflow.guardPage("packet")) return;
       if (window.RecordPathWorkflow) RecordPathWorkflow.renderProgress("packet");
 

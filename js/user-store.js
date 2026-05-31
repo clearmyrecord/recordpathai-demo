@@ -7,7 +7,11 @@
   const RETURN_KEY = "recordPathAuthReturnUrl";
   const LEGACY_IMPORT_DISMISSED_KEY = "recordPathLegacyImportDismissed";
   const LOCAL_CASES_KEY = "recordPathSavedCases";
+  const FALLBACK_CASES_KEY = "recordPathCachedCases";
+  const TEMP_DRAFT_CASE_KEY = "temporaryDraftCase";
   const ACTIVE_CASE_KEY = "recordPathActiveCaseId";
+  const OLD_CASE_KEYS = ["recordPathSavedCases", "recordPathCachedCases", "savedCases", "recordPathCases", "recordpathai_cases", "recordwatchCases", "currentCase", "activeCase"];
+  const SENSITIVE_CASE_KEYS = ["caseNumber", "caseState", "state", "county", "court", "offense", "offenseCode", "outcome", "eligibilityStatus", "estimatedEligibleDate", "dispositionDate", "dischargeDate", "recordPathPacketData", "recordPathEligibilityIntake"];
 
   let currentUser = null;
   let cachedCases = [];
@@ -124,6 +128,8 @@
           }
           const profile = await loadProfile(data.user);
           currentUser = publicUser(data.user, profile);
+          await maybeImportDraftAfterLogin();
+          await migrateLocalCasesToSupabase();
           await refreshCases();
           return currentUser;
         } catch (error) {
@@ -167,6 +173,7 @@
       }
     }
     await maybeImportDraftAfterLogin();
+    await migrateLocalCasesToSupabase();
     await refreshCases();
     return currentUser;
   }
@@ -183,6 +190,7 @@
     currentUser = publicUser(data.user, profile);
     if (!profile) await upsertProfile(data.user, { email: normalizedEmail });
     await maybeImportDraftAfterLogin();
+    await migrateLocalCasesToSupabase();
     await refreshCases();
     return currentUser;
   }
@@ -248,7 +256,35 @@
 
   function flattenCharge(charge) {
     if (!charge) return "";
-    return firstNonEmpty(charge.charge_name, charge.offense_name, charge.offense, charge.name, charge.chargeName);
+    return firstNonEmpty(charge.charge_name, charge.offense_name, charge.offense, charge.name, charge.chargeName, charge.charge_name_text);
+  }
+
+  function normalizeDate(value) {
+    if (!value) return "";
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+    const text = String(value).trim();
+    if (!text) return "";
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+    const parsed = Date.parse(text);
+    return Number.isNaN(parsed) ? text : new Date(parsed).toISOString().slice(0, 10);
+  }
+
+  function normalizeStatus(value, fallback) {
+    return firstNonEmpty(value, fallback || "");
+  }
+
+  function statusForDb(value, fallback) {
+    const text = String(firstNonEmpty(value, fallback || "")).trim().toLowerCase();
+    if (!text) return fallback || null;
+    if (text.includes("paid")) return "paid";
+    if (text.includes("generated")) return "generated";
+    if (text.includes("ready")) return "ready";
+    if (text.includes("review")) return "reviewed";
+    if (text.includes("pause")) return "paused";
+    if (text.includes("active")) return "active";
+    if (text.includes("not") && text.includes("activate")) return "not_activated";
+    if (text.includes("not") && text.includes("generate")) return "not_generated";
+    return text.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || (fallback || null);
   }
 
   function collectCurrentCaseFromStorage(overrides) {
@@ -259,8 +295,8 @@
     const court = packet.court || {};
     const timestamp = nowIso();
     const chargeNames = charges.map(flattenCharge).filter(Boolean);
-    const caseNumber = firstNonEmpty(court.case_number, first.case_number, localStorage.getItem("caseNumber"));
-    const generatedCaseId = firstNonEmpty(caseNumber && `case_${String(caseNumber).replace(/[^a-z0-9]+/gi, "_")}`, createId("case"));
+    const caseNumber = firstNonEmpty(court.case_number, court.caseNumber, first.case_number, localStorage.getItem("caseNumber"));
+    const generatedCaseId = firstNonEmpty(localStorage.getItem(ACTIVE_CASE_KEY), caseNumber && `case_${String(caseNumber).replace(/[^a-z0-9]+/gi, "_")}`, createId("case"));
     const courtName = firstNonEmpty(first.court_name, court.name, court.courtName, localStorage.getItem("court"));
     const primaryCharge = firstNonEmpty(flattenCharge(first), localStorage.getItem("offense"));
     return normalizeCase(Object.assign({
@@ -271,58 +307,108 @@
       courtName,
       court: courtName,
       courtType: firstNonEmpty(court.type, court.courtType),
+      courtId: firstNonEmpty(court.id, court.court_id),
+      ruleSetId: firstNonEmpty(eligibility.rule_set_id, eligibility.ruleSetId),
+      reliefType: firstNonEmpty(eligibility.relief_type, eligibility.reliefType),
       caseNumber,
-      charges: chargeNames.length ? chargeNames : [primaryCharge].filter(Boolean),
+      charges: chargeNames.length ? charges : [primaryCharge].filter(Boolean),
       primaryCharge,
       offenseCode: firstNonEmpty(first.statute_citation, first.offense_code, localStorage.getItem("offenseCode")),
       level: firstNonEmpty(first.level, first.charge_level),
       outcome: firstNonEmpty(first.disposition, first.final_disposition, localStorage.getItem("outcome")),
+      dispositionDate: firstNonEmpty(first.disposition_date, localStorage.getItem("dispositionDate")),
+      dischargeDate: firstNonEmpty(first.discharge_date, localStorage.getItem("dischargeDate")),
       eligibilityStatus: firstNonEmpty(eligibility.statusLabel, eligibility.status, localStorage.getItem("eligibilityStatus"), "Not screened yet"),
-      estimatedEligibleDate: firstNonEmpty(eligibility.estimatedEligibleDate, eligibility.estimated_eligible_on, localStorage.getItem("estimatedEligibleDate")),
-      packetStatus: localStorage.getItem("recordPathPacketGeneratedAt") ? "Generated" : "Not generated",
-      recordWatchStatus: localStorage.getItem("recordwatchActiveCaseId") ? "Active" : "Not Activated",
-      paymentStatus: (localStorage.getItem("recordPathPacketPaymentComplete") === "true" || localStorage.getItem("recordPathPaymentComplete") === "true") ? "Paid" : "Unpaid",
+      eligibilityDate: firstNonEmpty(eligibility.estimatedEligibleDate, eligibility.estimated_eligible_on, eligibility.eligibility_date, localStorage.getItem("estimatedEligibleDate")),
+      estimatedEligibleDate: firstNonEmpty(eligibility.estimatedEligibleDate, eligibility.estimated_eligible_on, eligibility.eligibility_date, localStorage.getItem("estimatedEligibleDate")),
+      eligibilityConfidence: firstNonEmpty(eligibility.confidence, eligibility.eligibility_confidence),
+      eligibilityReasons: Array.isArray(eligibility.reasons) ? eligibility.reasons : [],
+      requiredWaitingPeriod: firstNonEmpty(eligibility.requiredWaitingPeriod, eligibility.required_waiting_period),
+      dateUsedForCalculation: firstNonEmpty(eligibility.dateUsedForCalculation, eligibility.date_used_for_calculation),
+      packetStatus: localStorage.getItem("recordPathPacketGeneratedAt") ? "generated" : "not_generated",
+      recordWatchStatus: localStorage.getItem("recordwatchActiveCaseId") ? "active" : "not_activated",
+      paymentStatus: (localStorage.getItem("recordPathPacketPaymentComplete") === "true" || localStorage.getItem("recordPathPaymentComplete") === "true") ? "paid" : "unpaid",
       createdAt: timestamp,
       updatedAt: timestamp,
       lastUpdated: timestamp
     }, overrides || {}));
   }
 
+  function normalizeCharges(source) {
+    const charges = Array.isArray(source && source.charges) ? source.charges : [];
+    if (!charges.length && (source.primaryCharge || source.charge)) return [{ charge_name: source.primaryCharge || source.charge, offense_code: source.offenseCode || source.offense_code, offense_level: source.level || source.offenseLevel || source.offense_level, offense_date: source.offenseDate || source.offense_date }];
+    return charges.map(function (charge) {
+      if (typeof charge === "string") return { charge_name: charge };
+      return {
+        id: charge.id,
+        charge_name: flattenCharge(charge),
+        offense_code: firstNonEmpty(charge.offense_code, charge.offenseCode, charge.statute_citation),
+        offense_level: firstNonEmpty(charge.offense_level, charge.offenseLevel, charge.level, charge.chargeLevel, charge.degree),
+        offense_date: normalizeDate(firstNonEmpty(charge.offense_date, charge.offenseDate)),
+        charge_notes: firstNonEmpty(charge.charge_notes, charge.notes),
+        flags: charge.flags && typeof charge.flags === "object" ? charge.flags : {}
+      };
+    }).filter(function (charge) { return firstNonEmpty(charge.charge_name, charge.offense_code, charge.offense_level); });
+  }
 
   function normalizeCase(input) {
     const source = input || {};
     const nestedCourt = source.court && typeof source.court === "object" ? source.court : {};
-    const charges = Array.isArray(source.charges) ? source.charges : (source.primaryCharge || source.charge ? [source.primaryCharge || source.charge] : []);
-    const firstCharge = charges[0];
-    const primaryCharge = firstNonEmpty(source.primaryCharge, flattenCharge(firstCharge), typeof firstCharge === "string" ? firstCharge : "", source.offense);
-    const id = firstNonEmpty(source.case_id, source.caseId, source.id, nestedCourt.caseNumber, source.caseNumber && `case_${String(source.caseNumber).replace(/[^a-z0-9]+/gi, "_")}`);
-    const updated = firstNonEmpty(source.lastUpdated, source.updatedAt, source.updated_at, source.createdAt, source.created_at, nowIso());
+    const chargeRows = normalizeCharges(source);
+    const firstCharge = chargeRows[0] || {};
+    const updated = firstNonEmpty(source.updatedAt, source.updated_at, source.lastUpdated, source.createdAt, source.created_at, nowIso());
+    const id = firstNonEmpty(source.case_id, source.caseId, source.id, source.caseNumber, source.case_number);
+    const eligibilityDate = normalizeDate(firstNonEmpty(source.eligibilityDate, source.eligibility_date, source.estimatedEligibleDate, source.estimated_eligible_date, source.estimated_eligible_on));
+    const packetStatus = normalizeStatus(source.packetStatus || source.packet_status, "not_generated");
+    const recordWatchStatus = normalizeStatus(source.recordWatchStatus || source.recordwatch_status || (source.recordWatchPaused ? "paused" : ""), "not_activated");
     return {
       id,
       case_id: id,
       caseId: id,
-      caseNumber: firstNonEmpty(source.caseNumber, source.case_number, nestedCourt.caseNumber, id),
+      caseNumber: firstNonEmpty(source.caseNumber, source.case_number, nestedCourt.caseNumber),
       caseState: firstNonEmpty(source.caseState, source.case_state, nestedCourt.caseState, nestedCourt.state),
       county: firstNonEmpty(source.county, nestedCourt.county),
       courtName: firstNonEmpty(source.courtName, source.court_name, typeof source.court === "string" ? source.court : "", nestedCourt.courtName, nestedCourt.name),
       court: firstNonEmpty(source.courtName, source.court_name, typeof source.court === "string" ? source.court : "", nestedCourt.courtName, nestedCourt.name),
       courtType: firstNonEmpty(source.courtType, source.court_type, nestedCourt.courtType, nestedCourt.type),
-      charges: charges.map(function (charge) { return typeof charge === "string" ? charge : flattenCharge(charge); }).filter(Boolean),
-      primaryCharge,
-      offenseCode: firstNonEmpty(source.offenseCode, source.offense_code),
-      level: firstNonEmpty(source.level, source.chargeLevel),
+      courtId: firstNonEmpty(source.courtId, source.court_id, nestedCourt.courtId, nestedCourt.id),
+      ruleSetId: firstNonEmpty(source.ruleSetId, source.rule_set_id),
+      localProfileId: firstNonEmpty(source.localProfileId, source.local_profile_id),
+      reliefType: firstNonEmpty(source.reliefType, source.relief_type),
+      charges: chargeRows.map(function (charge) { return charge.charge_name; }).filter(Boolean),
+      chargeDetails: chargeRows,
+      primaryCharge: firstNonEmpty(source.primaryCharge, source.primary_charge, source.charge, firstCharge.charge_name),
+      offenseCode: firstNonEmpty(source.offenseCode, source.offense_code, firstCharge.offense_code),
+      offenseLevel: firstNonEmpty(source.offenseLevel, source.offense_level, source.level, source.chargeLevel, firstCharge.offense_level),
+      level: firstNonEmpty(source.level, source.chargeLevel, source.offenseLevel, source.offense_level, firstCharge.offense_level),
       outcome: firstNonEmpty(source.outcome, source.disposition),
+      arrestDate: normalizeDate(firstNonEmpty(source.arrestDate, source.arrest_date)),
+      offenseDate: normalizeDate(firstNonEmpty(source.offenseDate, source.offense_date, firstCharge.offense_date)),
+      dispositionDate: normalizeDate(firstNonEmpty(source.dispositionDate, source.disposition_date)),
+      sentenceCompletionDate: normalizeDate(firstNonEmpty(source.sentenceCompletionDate, source.sentence_completion_date)),
+      probationCompletedDate: normalizeDate(firstNonEmpty(source.probationCompletedDate, source.probation_completed_date)),
+      dischargeDate: normalizeDate(firstNonEmpty(source.dischargeDate, source.discharge_date)),
+      finalDischargeDate: normalizeDate(firstNonEmpty(source.finalDischargeDate, source.final_discharge_date)),
       eligibilityStatus: firstNonEmpty(source.eligibilityStatus, source.eligibility_status, "Not screened yet"),
-      estimatedEligibleDate: firstNonEmpty(source.estimatedEligibleDate, source.estimated_eligible_date),
-      packetStatus: firstNonEmpty(source.packetStatus, source.packet_status, "Not generated"),
-      recordWatchStatus: firstNonEmpty(source.recordWatchStatus, source.recordwatch_status, source.recordWatchPaused ? "Paused" : "Not Activated"),
-      paymentStatus: firstNonEmpty(source.paymentStatus, source.payment_status, "Unpaid"),
+      eligibilityDate,
+      estimatedEligibleDate: eligibilityDate,
+      eligibilityConfidence: firstNonEmpty(source.eligibilityConfidence, source.eligibility_confidence),
+      eligibilityReasons: Array.isArray(source.eligibilityReasons) ? source.eligibilityReasons : (Array.isArray(source.eligibility_reasons) ? source.eligibility_reasons : []),
+      requiredWaitingPeriod: firstNonEmpty(source.requiredWaitingPeriod, source.required_waiting_period),
+      dateUsedForCalculation: normalizeDate(firstNonEmpty(source.dateUsedForCalculation, source.date_used_for_calculation)),
+      packetStatus,
+      packetGeneratedAt: firstNonEmpty(source.packetGeneratedAt, source.packet_generated_at),
+      packetPaidAt: firstNonEmpty(source.packetPaidAt, source.packet_paid_at),
+      recordWatchStatus,
+      recordWatchPausedAt: firstNonEmpty(source.recordWatchPausedAt, source.recordwatch_paused_at),
+      paymentStatus: firstNonEmpty(source.paymentStatus, source.payment_status, packetStatus === "paid" ? "paid" : "unpaid"),
+      metadata: source.metadata && typeof source.metadata === "object" ? source.metadata : {},
       createdAt: firstNonEmpty(source.createdAt, source.created_at, updated),
       updatedAt: updated,
       lastUpdated: updated,
       deletedAt: firstNonEmpty(source.deletedAt, source.deleted_at),
       archivedAt: firstNonEmpty(source.archivedAt, source.archived_at),
-      status: firstNonEmpty(source.status, source.archivedAt || source.archived_at ? "archived" : "active")
+      status: firstNonEmpty(source.status, source.archivedAt || source.archived_at ? "archived" : (source.deletedAt || source.deleted_at ? "deleted" : "active"))
     };
   }
 
@@ -343,18 +429,23 @@
     return parts[0] ? parts.join("|") : "";
   }
 
+  function isUuid(value) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "")); }
+
   function hasMeaningfulCaseData(caseRecord) {
     const source = caseRecord || {};
     const normalized = normalizeCase(source);
-    const eligibility = String(firstNonEmpty(source.eligibilityStatus, source.eligibility_status)).trim().toLowerCase();
-    const packet = String(firstNonEmpty(source.packetStatus, source.packet_status)).trim().toLowerCase();
+    const caseNumber = firstNonEmpty(source.caseNumber, source.case_number, normalized.caseNumber);
+    const uuidOnly = caseNumber && isUuid(caseNumber) && !firstNonEmpty(normalized.courtName, normalized.county, normalized.primaryCharge, normalized.offenseCode);
+    if (uuidOnly) return false;
+    const eligibility = String(firstNonEmpty(source.eligibilityStatus, source.eligibility_status, normalized.eligibilityStatus)).trim().toLowerCase();
+    const packet = String(firstNonEmpty(source.packetStatus, source.packet_status, normalized.packetStatus)).trim().toLowerCase();
     return Boolean(firstNonEmpty(
-      source.caseNumber, source.case_number, normalized.caseNumber && normalized.caseNumber !== normalized.case_id ? normalized.caseNumber : "",
-      source.courtName, source.court_name, normalized.courtName,
-      source.charge, source.primaryCharge, normalized.primaryCharge,
-      source.offenseCode, source.offense_code, normalized.offenseCode,
+      caseNumber && caseNumber !== normalized.case_id ? caseNumber : "",
+      normalized.courtName,
+      normalized.primaryCharge,
+      normalized.offenseCode,
       eligibility && !eligibility.includes("not screened") ? eligibility : "",
-      packet && !packet.includes("not generated") ? packet : ""
+      packet && !packet.includes("not_generated") && !packet.includes("not generated") ? packet : ""
     ));
   }
 
@@ -403,8 +494,8 @@
     return dedupeCases(cases).filter(function (item) { return !item.deletedAt && !item.archivedAt && item.status !== "archived" && item.status !== "deleted"; });
   }
 
-  function loadLocalCases() { return activeCases(readJSON(LOCAL_CASES_KEY, [])); }
-  function saveLocalCases(cases) { writeJSON(LOCAL_CASES_KEY, activeCases(cases)); }
+  function loadLocalCases() { return activeCases(readJSON(FALLBACK_CASES_KEY, readJSON(LOCAL_CASES_KEY, []))); }
+  function saveLocalCases(cases) { writeJSON(FALLBACK_CASES_KEY, activeCases(cases)); }
 
   function hasProtectedHistory(caseData) {
     const id = caseData && (caseData.case_id || caseData.caseId || caseData.id || caseData.caseNumber);
@@ -412,25 +503,59 @@
     return String(caseData && (caseData.paymentStatus || caseData.packetStatus || "")).toLowerCase().match(/paid|generated/) || ledger.some(function (entry) { return id && (entry.case_id === id || entry.caseId === id || entry.case_number === caseData.caseNumber); });
   }
 
+  function caseToPacketData(caseData) {
+    const item = normalizeCase(caseData);
+    return {
+      court: {
+        state: item.caseState,
+        county: item.county,
+        name: item.courtName,
+        courtName: item.courtName,
+        court_id: item.courtId,
+        case_number: item.caseNumber,
+        caseNumber: item.caseNumber,
+        case_type: item.courtType
+      },
+      eligibility: {
+        status: item.eligibilityStatus,
+        statusLabel: item.eligibilityStatus,
+        eligibility_status: item.eligibilityStatus,
+        estimatedEligibleDate: item.estimatedEligibleDate,
+        estimated_eligible_on: item.estimatedEligibleDate,
+        eligibility_date: item.eligibilityDate,
+        confidence: item.eligibilityConfidence,
+        reasons: item.eligibilityReasons,
+        requiredWaitingPeriod: item.requiredWaitingPeriod,
+        required_waiting_period: item.requiredWaitingPeriod,
+        dateUsedForCalculation: item.dateUsedForCalculation,
+        date_used_for_calculation: item.dateUsedForCalculation,
+        rule_set_id: item.ruleSetId
+      },
+      charges: item.chargeDetails.length ? item.chargeDetails.map(function (charge) {
+        return {
+          charge_name: charge.charge_name,
+          offense_name: charge.charge_name,
+          case_number: item.caseNumber,
+          court_name: item.courtName,
+          court_county: item.county,
+          case_state: item.caseState,
+          statute_citation: charge.offense_code || item.offenseCode,
+          offense_code: charge.offense_code || item.offenseCode,
+          level: charge.offense_level || item.level,
+          charge_level: charge.offense_level || item.level,
+          disposition: item.outcome,
+          offense_date: charge.offense_date || item.offenseDate
+        };
+      }) : []
+    };
+  }
+
   function writeActiveCaseToStorage(caseData) {
     const item = normalizeCase(caseData);
     if (!item.case_id) return item;
     localStorage.setItem(ACTIVE_CASE_KEY, item.case_id);
     localStorage.setItem("recordwatchActiveCaseId", item.case_id);
-    if (item.caseNumber) localStorage.setItem("caseNumber", item.caseNumber);
-    if (item.caseState) { localStorage.setItem("caseState", item.caseState); localStorage.setItem("state", item.caseState); }
-    if (item.county) localStorage.setItem("county", item.county);
-    if (item.courtName) localStorage.setItem("court", item.courtName);
-    if (item.primaryCharge) localStorage.setItem("offense", item.primaryCharge);
-    if (item.offenseCode) localStorage.setItem("offenseCode", item.offenseCode);
-    if (item.outcome) localStorage.setItem("outcome", item.outcome);
-    if (item.eligibilityStatus) localStorage.setItem("eligibilityStatus", item.eligibilityStatus);
-    if (item.estimatedEligibleDate) localStorage.setItem("estimatedEligibleDate", item.estimatedEligibleDate);
-    const packet = getPacketData();
-    packet.court = Object.assign({}, packet.court || {}, { name: item.courtName, courtName: item.courtName, county: item.county, state: item.caseState, case_number: item.caseNumber });
-    packet.charges = item.charges.length ? item.charges.map(function (charge, index) { return { offense_name: charge, charge_name: charge, case_number: item.caseNumber, court_name: item.courtName, court_county: item.county, case_state: item.caseState, statute_citation: index === 0 ? item.offenseCode : "", level: index === 0 ? item.level : "", disposition: index === 0 ? item.outcome : "" }; }) : (packet.charges || []);
-    packet.eligibility = Object.assign({}, packet.eligibility || {}, { status: item.eligibilityStatus, statusLabel: item.eligibilityStatus, estimatedEligibleDate: item.estimatedEligibleDate, estimated_eligible_on: item.estimatedEligibleDate });
-    writeJSON("recordPathPacketData", packet);
+    writeJSON("recordPathPacketData", Object.assign({}, getPacketData(), caseToPacketData(item)));
     return item;
   }
 
@@ -439,7 +564,7 @@
     return {
       id: item.case_id,
       court: { caseNumber: item.caseNumber, courtName: item.courtName, county: item.county, caseState: item.caseState, state: item.caseState },
-      charges: item.charges.length ? item.charges.map(function (charge) { return { chargeName: charge, offense_name: charge, degree: item.level, chargeLevel: item.level }; }) : [],
+      charges: item.chargeDetails.length ? item.chargeDetails.map(function (charge) { return { chargeName: charge.charge_name, offense_name: charge.charge_name, degree: charge.offense_level || item.level, chargeLevel: charge.offense_level || item.level }; }) : [],
       outcome: { outcome: item.outcome },
       estimatedEligibleDate: item.estimatedEligibleDate,
       recordWatchStatus: item.recordWatchStatus
@@ -447,6 +572,7 @@
   }
 
   function syncRecordWatchCases(cases) {
+    if (currentUser) return;
     const rwCases = readJSON("recordwatchCases", []);
     const byId = {};
     rwCases.forEach(function (item) { if (item && item.id) byId[item.id] = item; });
@@ -455,30 +581,105 @@
   }
 
   function normalizeDbCase(row) {
+    const chargeRows = row.case_charges || row.charges || [];
     return normalizeCase({
       id: row.id,
       case_id: row.id,
       caseState: row.case_state || "",
       county: row.county || "",
-      courtName: row.court || row.court_name || "",
-      court: row.court || row.court_name || "",
+      courtName: row.court_name || row.court || "",
+      court: row.court_name || row.court || "",
+      courtType: row.court_type || "",
+      courtId: row.court_id || "",
+      ruleSetId: row.rule_set_id || "",
+      localProfileId: row.local_profile_id || "",
+      reliefType: row.relief_type || "",
       caseNumber: row.case_number || "",
-      charges: row.charges || [],
+      charges: chargeRows,
       primaryCharge: row.primary_charge || "",
+      offenseCode: row.offense_code || "",
+      offenseLevel: row.offense_level || "",
+      outcome: row.outcome || "",
+      arrestDate: row.arrest_date,
+      offenseDate: row.offense_date,
+      dispositionDate: row.disposition_date,
+      sentenceCompletionDate: row.sentence_completion_date,
+      probationCompletedDate: row.probation_completed_date,
+      dischargeDate: row.discharge_date,
+      finalDischargeDate: row.final_discharge_date,
       eligibilityStatus: row.eligibility_status || "Not screened yet",
-      estimatedEligibleDate: row.estimated_eligible_date || "",
-      packetStatus: row.packet_status || "Not generated",
-      paymentStatus: row.payment_status || "Unpaid",
-      recordWatchStatus: row.recordwatch_status || "Not Activated",
+      eligibilityDate: row.eligibility_date || "",
+      eligibilityConfidence: row.eligibility_confidence || "",
+      eligibilityReasons: row.eligibility_reasons || [],
+      requiredWaitingPeriod: row.required_waiting_period || "",
+      dateUsedForCalculation: row.date_used_for_calculation || "",
+      packetStatus: row.packet_status || "not_generated",
+      packetGeneratedAt: row.packet_generated_at,
+      packetPaidAt: row.packet_paid_at,
+      recordWatchStatus: row.recordwatch_status || "not_activated",
+      recordWatchPausedAt: row.recordwatch_paused_at,
       deletedAt: row.deleted_at,
       archivedAt: row.archived_at,
-      status: row.status,
+      metadata: row.metadata || {},
       createdAt: row.created_at,
       updatedAt: row.updated_at
     });
   }
 
-  async function refreshCases() {
+  function casePayload(caseData) {
+    const item = normalizeCase(caseData);
+    const metadata = Object.assign({}, item.metadata || {});
+    if (item.paymentStatus) metadata.payment_status = item.paymentStatus;
+    return {
+      user_id: currentUser.id,
+      case_number: item.caseNumber || null,
+      case_state: item.caseState || null,
+      county: item.county || null,
+      court_name: item.courtName || item.court || null,
+      court_type: item.courtType || null,
+      court_id: item.courtId || null,
+      rule_set_id: item.ruleSetId || null,
+      local_profile_id: item.localProfileId || null,
+      relief_type: item.reliefType || null,
+      primary_charge: item.primaryCharge || null,
+      offense_code: item.offenseCode || null,
+      offense_level: item.offenseLevel || item.level || null,
+      outcome: item.outcome || null,
+      arrest_date: item.arrestDate || null,
+      offense_date: item.offenseDate || null,
+      disposition_date: item.dispositionDate || null,
+      sentence_completion_date: item.sentenceCompletionDate || null,
+      probation_completed_date: item.probationCompletedDate || null,
+      discharge_date: item.dischargeDate || null,
+      final_discharge_date: item.finalDischargeDate || null,
+      eligibility_status: item.eligibilityStatus || null,
+      eligibility_date: item.eligibilityDate || item.estimatedEligibleDate || null,
+      eligibility_confidence: item.eligibilityConfidence || null,
+      eligibility_reasons: item.eligibilityReasons || [],
+      required_waiting_period: item.requiredWaitingPeriod || null,
+      date_used_for_calculation: item.dateUsedForCalculation || null,
+      packet_status: statusForDb(item.packetStatus, "not_generated"),
+      packet_generated_at: item.packetGeneratedAt || null,
+      packet_paid_at: item.packetPaidAt || null,
+      recordwatch_status: statusForDb(item.recordWatchStatus, "not_activated"),
+      recordwatch_paused_at: item.recordWatchPausedAt || null,
+      metadata,
+      updated_at: nowIso()
+    };
+  }
+
+  async function fetchCaseCharges(supabase, caseIds) {
+    if (!caseIds.length) return {};
+    const { data, error } = await supabase.from("case_charges").select("*").in("case_id", caseIds).eq("user_id", currentUser.id).order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []).reduce(function (map, charge) {
+      if (!map[charge.case_id]) map[charge.case_id] = [];
+      map[charge.case_id].push(charge);
+      return map;
+    }, {});
+  }
+
+  async function refreshCases(options) {
     await initUserOnly();
     if (!currentUser) {
       cachedCases = loadLocalCases();
@@ -486,11 +687,28 @@
       return cachedCases;
     }
     const supabase = await client();
-    const { data, error } = await supabase.from("cases").select("*").eq("user_id", currentUser.id).order("updated_at", { ascending: true });
-    if (error) throw new Error(error.message);
-    cachedCases = activeCases((data || []).map(normalizeDbCase));
+    const { data, error } = await supabase.from("saved_cases").select("*").eq("user_id", currentUser.id).is("deleted_at", null).order("updated_at", { ascending: true });
+    if (error) {
+      const fallback = loadLocalCases();
+      if (fallback.length && options && options.allowFallback) {
+        fallback.isFallback = true;
+        return fallback;
+      }
+      throw new Error(error.message);
+    }
+    let chargesByCase = {};
+    try {
+      chargesByCase = await fetchCaseCharges(supabase, (data || []).map(function (row) { return row.id; }));
+    } catch (chargeError) {
+      const fallback = loadLocalCases();
+      if (fallback.length && options && options.allowFallback) {
+        fallback.isFallback = true;
+        return fallback;
+      }
+      throw chargeError;
+    }
+    cachedCases = activeCases((data || []).map(function (row) { return normalizeDbCase(Object.assign({}, row, { case_charges: chargesByCase[row.id] || [] })); }));
     saveLocalCases(cachedCases);
-    syncRecordWatchCases(cachedCases);
     return cachedCases;
   }
 
@@ -508,31 +726,84 @@
   }
 
   function getCases() { return activeCases(cachedCases.length ? cachedCases : loadLocalCases()); }
-  async function getCasesAsync() { return refreshCases(); }
+  async function getCasesAsync() { return refreshCases({ allowFallback: true }); }
+
   function caseMatchesId(caseRecord, caseId, compositeKey) {
     const id = String(caseId || "").trim();
     if (!id || !caseRecord) return false;
-    return getStableCaseId(caseRecord) === id || getCaseCompositeKey(caseRecord) === compositeKey;
+    return getStableCaseId(caseRecord) === id || getCaseCompositeKey(caseRecord) === compositeKey || String(caseRecord.caseNumber || "") === id;
   }
-  function getCaseById(caseId) {
+
+  async function getCaseById(caseId) {
     const id = String(caseId || localStorage.getItem(ACTIVE_CASE_KEY) || "").trim();
+    if (!id) return null;
+    await initUserOnly();
+    if (currentUser && isUuid(id)) {
+      const supabase = await client();
+      const { data, error } = await supabase.from("saved_cases").select("*").eq("user_id", currentUser.id).eq("id", id).is("deleted_at", null).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      const charges = await fetchCaseCharges(supabase, [data.id]);
+      const found = normalizeDbCase(Object.assign({}, data, { case_charges: charges[data.id] || [] }));
+      cachedCases = activeCases(getCases().filter(function (item) { return item.case_id !== found.case_id; }).concat(found));
+      saveLocalCases(cachedCases);
+      return found;
+    }
+    if (currentUser) await refreshCases({ allowFallback: true }).catch(function () {});
     const compositeKey = getCaseCompositeKey({ caseNumber: id });
     return getCases().find(function (item) { return caseMatchesId(item, id, compositeKey); }) || null;
   }
+
   async function setActiveCase(caseId) {
-    if (!cachedCases.length) await refreshCases().catch(function () {});
-    const found = getCaseById(caseId);
+    const found = await getCaseById(caseId);
     if (!found) return null;
     return writeActiveCaseToStorage(found);
   }
+
+  async function getActiveCase() { return getCaseById(localStorage.getItem(ACTIVE_CASE_KEY)); }
+
+  async function syncCharges(caseId, caseData) {
+    const chargeRows = normalizeCase(caseData).chargeDetails;
+    const supabase = await client();
+    const deleteResult = await supabase.from("case_charges").delete().eq("case_id", caseId).eq("user_id", currentUser.id);
+    if (deleteResult.error) throw new Error(deleteResult.error.message);
+    if (!chargeRows.length) return [];
+    const payload = chargeRows.map(function (charge) {
+      return {
+        user_id: currentUser.id,
+        case_id: caseId,
+        charge_name: charge.charge_name || null,
+        offense_code: charge.offense_code || null,
+        offense_level: charge.offense_level || null,
+        offense_date: charge.offense_date || null,
+        charge_notes: charge.charge_notes || null,
+        flags: charge.flags || {},
+        updated_at: nowIso()
+      };
+    });
+    const { data, error } = await supabase.from("case_charges").insert(payload).select("*");
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+
   async function updateCase(caseId, updates) {
-    const found = getCaseById(caseId);
-    const next = normalizeCase(Object.assign({}, found || { case_id: caseId }, updates || {}, { updatedAt: nowIso(), lastUpdated: nowIso() }));
-    if (currentUser && /^[0-9a-f-]{36}$/i.test(next.case_id)) {
-      try {
-        const supabase = await client();
-        await supabase.from("cases").update({ case_state: next.caseState || null, county: next.county || null, court: next.courtName || null, case_number: next.caseNumber || null, eligibility_status: next.eligibilityStatus || null, estimated_eligible_date: next.estimatedEligibleDate || null, packet_status: next.packetStatus || null, payment_status: next.paymentStatus || null, updated_at: nowIso() }).eq("id", next.case_id).eq("user_id", currentUser.id);
-      } catch (error) { console.warn("Remote case update skipped:", error.message); }
+    await initUserOnly();
+    const found = await getCaseById(caseId);
+    if (!found) return null;
+    const next = normalizeCase(Object.assign({}, found, updates || {}, { case_id: found.case_id, id: found.case_id, updatedAt: nowIso(), lastUpdated: nowIso() }));
+    if (currentUser && isUuid(next.case_id)) {
+      const supabase = await client();
+      const payload = casePayload(next);
+      if (String(next.packetStatus).toLowerCase() === "generated" && !payload.packet_generated_at) payload.packet_generated_at = nowIso();
+      if ((String(next.packetStatus).toLowerCase() === "paid" || String(next.paymentStatus).toLowerCase() === "paid") && !payload.packet_paid_at) payload.packet_paid_at = nowIso();
+      if (String(next.recordWatchStatus).toLowerCase() === "paused" && !payload.recordwatch_paused_at) payload.recordwatch_paused_at = nowIso();
+      const { data, error } = await supabase.from("saved_cases").update(payload).eq("id", next.case_id).eq("user_id", currentUser.id).select("*").single();
+      if (error) throw new Error(error.message);
+      const charges = updates && updates.charges ? await syncCharges(next.case_id, next) : await fetchCaseCharges(supabase, [next.case_id]);
+      const saved = normalizeDbCase(Object.assign({}, data, { case_charges: Array.isArray(charges) ? charges : (charges[next.case_id] || []) }));
+      cachedCases = activeCases(getCases().filter(function (item) { return item.case_id !== saved.case_id; }).concat(saved));
+      saveLocalCases(cachedCases);
+      return saved;
     }
     const local = getCases().filter(function (item) { return item.case_id !== next.case_id; });
     local.push(next);
@@ -541,6 +812,7 @@
     syncRecordWatchCases(cachedCases);
     return next;
   }
+
   function clearActiveCaseIfMatches(caseId, compositeKey) {
     [ACTIVE_CASE_KEY, "recordwatchActiveCaseId"].forEach(function (key) {
       const value = localStorage.getItem(key);
@@ -553,38 +825,34 @@
   }
 
   function removeCaseFromLocalCollections(caseId, compositeKey) {
-    [LOCAL_CASES_KEY, "savedCases", "recordPathCases", "recordpathai_cases"].forEach(function (key) {
+    [FALLBACK_CASES_KEY, LOCAL_CASES_KEY, "savedCases", "recordPathCases", "recordpathai_cases"].forEach(function (key) {
       const collection = readJSON(key, null);
       if (!Array.isArray(collection)) return;
       writeJSON(key, activeCases(collection.filter(function (item) { return !caseMatchesId(item, caseId, compositeKey); })));
     });
     const rwCases = readJSON("recordwatchCases", null);
-    if (Array.isArray(rwCases)) {
-      writeJSON("recordwatchCases", rwCases.filter(function (item) { return item && !caseMatchesId(item, caseId, compositeKey); }));
-    }
+    if (Array.isArray(rwCases)) writeJSON("recordwatchCases", rwCases.filter(function (item) { return item && !caseMatchesId(item, caseId, compositeKey); }));
   }
 
   async function archiveCase(caseId, options) { return removeCase(caseId, Object.assign({}, options || {}, { forceArchive: true })); }
   async function deleteCase(caseId, options) { return removeCase(caseId, options || {}); }
+
   async function removeCase(caseId, options) {
     const normalizedId = String(caseId || "").trim();
     if (!normalizedId) return false;
-    if (!cachedCases.length) await refreshCases().catch(function () {});
-    const found = getCaseById(normalizedId) || { case_id: normalizedId, caseId: normalizedId, id: normalizedId };
+    await initUserOnly();
+    const found = await getCaseById(normalizedId);
+    if (!found) return false;
     const foundId = getStableCaseId(found) || normalizedId;
     const compositeKey = getCaseCompositeKey(found);
-    const archive = Boolean(options && options.forceArchive) || hasProtectedHistory(found);
-    if (currentUser && /^[0-9a-f-]{36}$/i.test(foundId)) {
-      try {
-        const supabase = await client();
-        const payload = archive ? { archived_at: nowIso(), status: "archived", updated_at: nowIso() } : { deleted_at: nowIso(), status: "deleted", updated_at: nowIso() };
-        const result = await supabase.from("cases").update(payload).eq("id", foundId).eq("user_id", currentUser.id);
-        if (result.error) throw result.error;
-      } catch (error) {
-        if (!archive) {
-          try { const supabase = await client(); await supabase.from("cases").delete().eq("id", foundId).eq("user_id", currentUser.id); } catch (deleteError) { console.warn("Remote case delete skipped:", deleteError.message); }
-        } else { console.warn("Remote case archive skipped:", error.message); }
-      }
+    const archive = Boolean(options && options.forceArchive);
+    if (currentUser && isUuid(foundId)) {
+      const supabase = await client();
+      const payload = archive ? { archived_at: nowIso(), updated_at: nowIso() } : { deleted_at: nowIso(), updated_at: nowIso() };
+      const { error } = await supabase.from("saved_cases").update(payload).eq("id", foundId).eq("user_id", currentUser.id);
+      if (error) throw new Error(error.message);
+    } else if (hasProtectedHistory(found) && !(options && options.forceArchive)) {
+      // Local anonymous cases cannot preserve server history; remove them locally without touching ledger/payment keys.
     }
     const remaining = getCases().filter(function (item) { return !caseMatchesId(item, foundId, compositeKey); });
     cachedCases = activeCases(remaining);
@@ -593,6 +861,7 @@
     clearActiveCaseIfMatches(foundId, compositeKey);
     return true;
   }
+
   function getNextStepForCase(caseData) {
     const item = normalizeCase(caseData);
     const eligibility = String(item.eligibilityStatus || "").toLowerCase();
@@ -602,52 +871,89 @@
     return "packet.html";
   }
 
+  async function findExistingRemoteCase(supabase, nextCase) {
+    if (isUuid(nextCase.case_id)) {
+      const byId = await supabase.from("saved_cases").select("*").eq("user_id", currentUser.id).eq("id", nextCase.case_id).is("deleted_at", null).maybeSingle();
+      if (byId.error) throw new Error(byId.error.message);
+      if (byId.data) return byId.data;
+    }
+    const composite = getCaseCompositeKey(nextCase);
+    if (!composite || !nextCase.caseNumber) return null;
+    const query = supabase.from("saved_cases").select("*").eq("user_id", currentUser.id).eq("case_number", nextCase.caseNumber).is("deleted_at", null);
+    if (nextCase.courtName) query.eq("court_name", nextCase.courtName);
+    if (nextCase.county) query.eq("county", nextCase.county);
+    if (nextCase.caseState) query.eq("case_state", nextCase.caseState);
+    const lookup = await query.order("updated_at", { ascending: false }).limit(1).maybeSingle();
+    if (lookup.error) throw new Error(lookup.error.message);
+    return lookup.data || null;
+  }
+
   async function saveCase(caseInput) {
-    await init();
+    await initUserOnly();
     const input = caseInput || {};
-    const collected = Object.keys(input).length ? Object.assign(collectCurrentCaseFromStorage(), input) : collectCurrentCaseFromStorage();
+    const activeId = localStorage.getItem(ACTIVE_CASE_KEY);
+    let base = {};
+    if (activeId && input && !input.case_id && !input.caseId && !input.id && currentUser) base = await getCaseById(activeId) || {};
+    const collected = Object.keys(input).length ? Object.assign({}, base, Object.keys(base).length ? {} : collectCurrentCaseFromStorage(), input) : collectCurrentCaseFromStorage();
     if (!hasMeaningfulCaseData(collected)) return null;
     const nextCase = normalizeCase(collected);
     if (!currentUser) {
-      const local = getCases().filter(function (item) { return item.case_id !== nextCase.case_id && item.caseNumber !== nextCase.caseNumber; });
+      const local = getCases().filter(function (item) { return item.case_id !== nextCase.case_id && getCaseCompositeKey(item) !== getCaseCompositeKey(nextCase); });
       local.push(nextCase);
       cachedCases = activeCases(local);
       saveLocalCases(cachedCases);
       syncRecordWatchCases(cachedCases);
+      localStorage.setItem(TEMP_DRAFT_CASE_KEY, JSON.stringify(nextCase));
       return nextCase;
     }
     const supabase = await client();
-    let existing = null;
-    if (nextCase.caseNumber) {
-      const lookup = await supabase.from("cases").select("*").eq("user_id", currentUser.id).eq("case_number", nextCase.caseNumber).maybeSingle();
-      if (lookup.error) throw new Error(lookup.error.message);
-      existing = lookup.data;
-    } else if (nextCase.id && /^[0-9a-f-]{36}$/i.test(nextCase.id)) {
-      const lookup = await supabase.from("cases").select("*").eq("user_id", currentUser.id).eq("id", nextCase.id).maybeSingle();
-      if (lookup.error) throw new Error(lookup.error.message);
-      existing = lookup.data;
-    }
-    const payload = {
-      user_id: currentUser.id,
-      case_state: nextCase.caseState || null,
-      county: nextCase.county || null,
-      court: nextCase.courtName || nextCase.court || null,
-      case_number: nextCase.caseNumber || null,
-      eligibility_status: nextCase.eligibilityStatus || null,
-      estimated_eligible_date: nextCase.estimatedEligibleDate || null,
-      packet_status: nextCase.packetStatus || null,
-      payment_status: nextCase.paymentStatus || null,
-      updated_at: nowIso()
-    };
+    const existing = await findExistingRemoteCase(supabase, nextCase);
+    const payload = casePayload(nextCase);
+    if (String(nextCase.packetStatus).toLowerCase().includes("generated") && !payload.packet_generated_at) payload.packet_generated_at = nowIso();
+    if ((String(nextCase.packetStatus).toLowerCase().includes("paid") || String(nextCase.paymentStatus).toLowerCase().includes("paid")) && !payload.packet_paid_at) payload.packet_paid_at = nowIso();
+    if (String(nextCase.recordWatchStatus).toLowerCase().includes("pause") && !payload.recordwatch_paused_at) payload.recordwatch_paused_at = nowIso();
     if (existing) payload.id = existing.id;
-    const { data, error } = await supabase.from("cases").upsert(payload).select("*").single();
+    const { data, error } = await supabase.from("saved_cases").upsert(payload).select("*").single();
     if (error) throw new Error(error.message);
-    const saved = normalizeDbCase(data);
-    const local = getCases().filter(function (item) { return item.case_id !== saved.case_id && item.caseNumber !== saved.caseNumber; });
-    local.push(saved);
-    saveLocalCases(local);
-    await refreshCases();
+    const charges = await syncCharges(data.id, nextCase);
+    const saved = normalizeDbCase(Object.assign({}, data, { case_charges: charges }));
+    cachedCases = activeCases(getCases().filter(function (item) { return item.case_id !== saved.case_id && getCaseCompositeKey(item) !== getCaseCompositeKey(saved); }).concat(saved));
+    saveLocalCases(cachedCases);
+    writeActiveCaseToStorage(saved);
     return saved;
+  }
+
+  function collectLegacyLocalCases() {
+    const cases = [];
+    OLD_CASE_KEYS.forEach(function (key) {
+      const value = readJSON(key, null);
+      if (Array.isArray(value)) cases.push.apply(cases, value);
+      else if (value && typeof value === "object") cases.push(value);
+    });
+    const temporaryDraft = readJSON(TEMP_DRAFT_CASE_KEY, null);
+    if (temporaryDraft) cases.push(temporaryDraft);
+    return activeCases(cases).filter(hasMeaningfulCaseData);
+  }
+
+  async function migrateLocalCasesToSupabase() {
+    await initUserOnly();
+    if (!currentUser) return { imported: 0 };
+    const localCases = dedupeCases(collectLegacyLocalCases());
+    let imported = 0;
+    for (const item of localCases) {
+      try {
+        await saveCase(item);
+        imported += 1;
+      } catch (error) {
+        console.warn("Local saved case migration skipped:", error.message);
+      }
+    }
+    if (imported || localCases.length) {
+      OLD_CASE_KEYS.forEach(function (key) { localStorage.removeItem(key); });
+      SENSITIVE_CASE_KEYS.forEach(function (key) { localStorage.removeItem(key); });
+      localStorage.removeItem(TEMP_DRAFT_CASE_KEY);
+    }
+    return { imported };
   }
 
   function saveDraftSnapshot(returnUrl) {
@@ -662,13 +968,17 @@
   }
 
   async function maybeImportDraftAfterLogin() {
-    const draft = readJSON(DRAFT_KEY, null);
+    const draft = readJSON(DRAFT_KEY, null) || readJSON(TEMP_DRAFT_CASE_KEY, null);
     if (!draft) return null;
     Object.keys(draft.localKeys || {}).forEach(function (key) {
       if (localStorage.getItem(key) === null) localStorage.setItem(key, draft.localKeys[key]);
     });
-    const caseData = collectCurrentCaseFromStorage();
-    if (hasMeaningfulCaseData(caseData)) await saveCase(caseData).catch(function (error) { console.warn("Draft import skipped:", error.message); });
+    const caseData = draft.case_id || draft.caseNumber || draft.case_number ? draft : collectCurrentCaseFromStorage();
+    if (hasMeaningfulCaseData(caseData)) {
+      await saveCase(caseData).catch(function (error) { console.warn("Draft import skipped:", error.message); });
+      localStorage.removeItem(TEMP_DRAFT_CASE_KEY);
+      localStorage.removeItem(DRAFT_KEY);
+    }
     return draft;
   }
 
@@ -695,6 +1005,7 @@
     const cases = readJSON(`recordPathDemoCases:${currentLegacyId}`, []);
     for (const item of cases) await saveCase(item);
     await maybeImportDraftAfterLogin();
+    await migrateLocalCasesToSupabase();
     localStorage.setItem(LEGACY_IMPORT_DISMISSED_KEY, "true");
     return { casesImported: cases.length, profileImported: Boolean(legacyUser) };
   }
@@ -715,6 +1026,7 @@
     getCases,
     getCasesAsync,
     getCaseById,
+    getActiveCase,
     setActiveCase,
     updateCase,
     deleteCase,
@@ -725,6 +1037,7 @@
     hasMeaningfulCaseData,
     saveCase,
     collectCurrentCaseFromStorage,
+    caseToPacketData,
     saveDraftSnapshot,
     getReturnUrl,
     clearReturnUrl,
@@ -732,6 +1045,7 @@
     importLegacyDemoData,
     dismissLegacyImport,
     isLoggedIn: function () { return Boolean(currentUser); },
-    keys: { USERS_KEY, SESSION_KEY, DRAFT_KEY, RETURN_KEY, LEGACY_IMPORT_DISMISSED_KEY, LOCAL_CASES_KEY, ACTIVE_CASE_KEY }
+    migrateLocalCasesToSupabase,
+    keys: { USERS_KEY, SESSION_KEY, DRAFT_KEY, RETURN_KEY, LEGACY_IMPORT_DISMISSED_KEY, LOCAL_CASES_KEY, FALLBACK_CASES_KEY, TEMP_DRAFT_CASE_KEY, ACTIVE_CASE_KEY }
   };
 }());

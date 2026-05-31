@@ -1250,7 +1250,7 @@
       }
 
       async function init() {
-        await loadCaseFromUrl();
+        if (!await loadCaseFromUrl()) return;
         const data = RecordPathDataBridge.loadPacketData();
         hydrateStaticFields(data);
         hydrateCharges(data);

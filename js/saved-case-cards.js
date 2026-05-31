@@ -33,17 +33,21 @@
     var eligibility = item.eligibilityStatus || "Not Screened";
     var packet = item.packetStatus || "Not Generated";
     var recordWatch = item.recordWatchStatus || "Not Activated";
-    var actions = options && options.recordWatchMode ?
-      '<button class="btn" type="button" data-case-action="open" data-case-id="' + esc(id) + '">Open</button>' +
-      '<button class="btn secondary" type="button" data-case-action="edit" data-case-id="' + esc(id) + '">Edit</button>' +
-      '<button class="btn secondary" type="button" data-case-action="packet" data-case-id="' + esc(id) + '">Packet</button>' +
-      '<button class="btn secondary" type="button" data-case-action="toggle-reminders" data-case-id="' + esc(id) + '">' + (recordWatch === "Paused" ? "Resume Reminders" : "Pause Reminders") + '</button>' +
-      '<button class="btn danger" type="button" data-case-action="delete" data-case-id="' + esc(id) + '">Delete / Archive</button>' :
-      '<button class="btn" type="button" data-case-action="resume" data-case-id="' + esc(id) + '">Resume</button>' +
-      '<button class="btn secondary" type="button" data-case-action="edit" data-case-id="' + esc(id) + '">Edit Record Details</button>' +
-      '<button class="btn secondary" type="button" data-case-action="packet" data-case-id="' + esc(id) + '">Open Packet</button>' +
-      '<button class="btn secondary" type="button" data-case-action="recordwatch" data-case-id="' + esc(id) + '">Open RecordWatch</button>' +
-      '<button class="btn danger" type="button" data-case-action="delete" data-case-id="' + esc(id) + '">Delete</button>';
+    var recordWatchPaused = String(recordWatch).toLowerCase().includes("paused");
+    var actions = options && options.readOnly ?
+      '<button class="btn" type="button" data-case-action="resume" data-case-id="' + esc(id) + '">View cached case</button>' +
+      '<span class="muted">Read-only cached copy</span>' :
+      (options && options.recordWatchMode ?
+        '<button class="btn" type="button" data-case-action="open" data-case-id="' + esc(id) + '">Open</button>' +
+        '<button class="btn secondary" type="button" data-case-action="edit" data-case-id="' + esc(id) + '">Edit</button>' +
+        '<button class="btn secondary" type="button" data-case-action="packet" data-case-id="' + esc(id) + '">Packet</button>' +
+        '<button class="btn secondary" type="button" data-case-action="toggle-reminders" data-case-id="' + esc(id) + '">' + (recordWatchPaused ? "Resume Reminders" : "Pause Reminders") + '</button>' +
+        '<button class="btn danger" type="button" data-case-action="delete" data-case-id="' + esc(id) + '">Delete / Archive</button>' :
+        '<button class="btn" type="button" data-case-action="resume" data-case-id="' + esc(id) + '">Resume</button>' +
+        '<button class="btn secondary" type="button" data-case-action="edit" data-case-id="' + esc(id) + '">Edit Record Details</button>' +
+        '<button class="btn secondary" type="button" data-case-action="packet" data-case-id="' + esc(id) + '">Open Packet</button>' +
+        '<button class="btn secondary" type="button" data-case-action="recordwatch" data-case-id="' + esc(id) + '">Open RecordWatch</button>' +
+        '<button class="btn danger" type="button" data-case-action="delete" data-case-id="' + esc(id) + '">Delete</button>');
     return '<article class="saved-case-card" data-case-id="' + esc(id) + '">' +
       '<div class="saved-case-header"><div><p class="eyebrow-mini">Case Number</p><h3 class="saved-case-title">' + esc(item.caseNumber || id || "No case number") + '</h3></div><span class="case-status-badge ' + statusClass(eligibility) + '">' + esc(eligibility) + '</span></div>' +
       '<div class="saved-case-status-row"><span class="case-status-badge ' + statusClass(packet) + '">Packet: ' + esc(packet) + '</span><span class="case-status-badge ' + statusClass(recordWatch) + '">RecordWatch: ' + esc(recordWatch) + '</span></div>' +
@@ -107,7 +111,7 @@
     if (action === "recordwatch") window.location.href = withCase("recordwatch-dashboard.html", item);
     if (action === "toggle-reminders") {
       var currentReminderStatus = window.RecordWatchMonitor && RecordWatchMonitor.getReminderStatus ? RecordWatchMonitor.getReminderStatus(caseId) : "active";
-      var nextStatus = item.recordWatchStatus === "Paused" || currentReminderStatus === "paused" ? "Active" : "Paused";
+      var nextStatus = String(item.recordWatchStatus || "").toLowerCase().includes("paused") || currentReminderStatus === "paused" ? "active" : "paused";
       await RecordPathUserStore.updateCase(caseId, { recordWatchStatus: nextStatus });
       if (window.RecordWatchMonitor && RecordWatchMonitor.setReminderStatus) RecordWatchMonitor.setReminderStatus(caseId, nextStatus.toLowerCase());
       showStatus(rerender, "Saved case updated.");
