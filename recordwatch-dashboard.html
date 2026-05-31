@@ -193,7 +193,7 @@
       casesContainer.addEventListener("click", function (event) {
         var button = event.target.closest("[data-case-action]");
         if (!button || !window.RecordPathSavedCaseCards) return;
-        RecordPathSavedCaseCards.handleAction(button.dataset.caseAction, button.dataset.caseId, render).catch(function (error) {
+        RecordPathSavedCaseCards.handleAction(button.dataset.caseAction, button.dataset.caseId, render, event).catch(function (error) {
           console.error(error);
           alert(error.message || "We could not update that saved case.");
         });

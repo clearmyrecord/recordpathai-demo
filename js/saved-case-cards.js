@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var DELETE_MESSAGE = "Delete this saved case? This will remove it from your dashboard and RecordWatch list. This does not delete any official court records.";
+  var DELETE_MESSAGE = "Delete this saved case? This removes it from your dashboard. It does not delete official court records or payment history.";
 
   function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
   function idOf(caseData) { return caseData && (caseData.case_id || caseData.caseId || caseData.id || caseData.caseNumber); }
@@ -59,13 +59,45 @@
   function render(container, cases, options) {
     if (!container) return;
     container.classList.add("saved-case-grid");
-    container.innerHTML = cases && cases.length ? cases.map(function (item) { return card(item, options || {}); }).join("") : emptyState();
+    var normalizedCases = cases || [];
+    if (window.RecordPathUserStore && RecordPathUserStore.normalizeCase) normalizedCases = normalizedCases.map(function (item) { return RecordPathUserStore.normalizeCase(item); });
+    container.innerHTML = normalizedCases.length ? normalizedCases.map(function (item) { return card(item, options || {}); }).join("") : emptyState();
   }
 
-  async function handleAction(action, caseId, rerender) {
+  async function refreshSavedCases(rerender, message) {
+    if (typeof rerender !== "function") return;
+    await rerender(message);
+  }
+
+  function showStatus(rerender, message) {
+    refreshSavedCases(rerender, message).catch(function (error) { console.error(error); });
+  }
+
+  async function handleDeleteCase(event, caseId, rerender) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    if (!window.RecordPathUserStore || !caseId) return;
+    if (!confirm(DELETE_MESSAGE)) return;
+    try {
+      var removed = await RecordPathUserStore.deleteCase(caseId, { preserveHistory: true });
+      if (!removed) throw new Error("Case was not removed.");
+      await refreshSavedCases(rerender, "Saved case removed.");
+    } catch (error) {
+      await refreshSavedCases(rerender, "Could not remove that saved case. Please try again.").catch(function (refreshError) { console.error(refreshError); });
+      throw error;
+    }
+  }
+
+  async function handleAction(action, caseId, rerender, event) {
     if (!window.RecordPathUserStore) return;
+    if (action === "delete") {
+      await handleDeleteCase(event, caseId, rerender);
+      return;
+    }
     var item = await RecordPathUserStore.setActiveCase(caseId);
-    if (!item && action !== "delete") {
+    if (!item) {
       alert("We could not find that saved case. Please choose another case from your dashboard.");
       return;
     }
@@ -78,12 +110,7 @@
       var nextStatus = item.recordWatchStatus === "Paused" || currentReminderStatus === "paused" ? "Active" : "Paused";
       await RecordPathUserStore.updateCase(caseId, { recordWatchStatus: nextStatus });
       if (window.RecordWatchMonitor && RecordWatchMonitor.setReminderStatus) RecordWatchMonitor.setReminderStatus(caseId, nextStatus.toLowerCase());
-      if (rerender) rerender();
-    }
-    if (action === "delete") {
-      if (!confirm(DELETE_MESSAGE)) return;
-      await RecordPathUserStore.deleteCase(caseId);
-      if (rerender) rerender();
+      showStatus(rerender, "Saved case updated.");
     }
   }
 
@@ -92,12 +119,12 @@
     container.addEventListener("click", function (event) {
       var button = event.target.closest("[data-case-action]");
       if (!button) return;
-      handleAction(button.dataset.caseAction, button.dataset.caseId, rerender).catch(function (error) {
+      handleAction(button.dataset.caseAction, button.dataset.caseId, rerender, event).catch(function (error) {
         console.error(error);
         alert(error.message || "We could not update that saved case.");
       });
     });
   }
 
-  window.RecordPathSavedCaseCards = { render: render, bind: bind, handleAction: handleAction, formatDate: fmtDate, emptyState: emptyState };
+  window.RecordPathSavedCaseCards = { render: render, bind: bind, handleAction: handleAction, handleDeleteCase: handleDeleteCase, formatDate: fmtDate, emptyState: emptyState };
 }());

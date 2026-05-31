@@ -326,12 +326,85 @@
     };
   }
 
+  function getStableCaseId(caseRecord) {
+    const source = caseRecord || {};
+    return String(firstNonEmpty(source.case_id, source.caseId, source.id, source.caseNumber, source.case_number)).trim();
+  }
+
+  function getCaseCompositeKey(caseRecord) {
+    const source = caseRecord || {};
+    const nestedCourt = source.court && typeof source.court === "object" ? source.court : {};
+    const parts = [
+      firstNonEmpty(source.caseNumber, source.case_number, nestedCourt.caseNumber),
+      firstNonEmpty(source.courtName, source.court_name, typeof source.court === "string" ? source.court : "", nestedCourt.courtName, nestedCourt.name),
+      firstNonEmpty(source.county, nestedCourt.county),
+      firstNonEmpty(source.caseState, source.case_state, nestedCourt.caseState, nestedCourt.state)
+    ].map(function (value) { return String(value || "").trim().toLowerCase(); });
+    return parts[0] ? parts.join("|") : "";
+  }
+
+  function hasMeaningfulCaseData(caseRecord) {
+    const source = caseRecord || {};
+    const normalized = normalizeCase(source);
+    const eligibility = String(firstNonEmpty(source.eligibilityStatus, source.eligibility_status)).trim().toLowerCase();
+    const packet = String(firstNonEmpty(source.packetStatus, source.packet_status)).trim().toLowerCase();
+    return Boolean(firstNonEmpty(
+      source.caseNumber, source.case_number, normalized.caseNumber && normalized.caseNumber !== normalized.case_id ? normalized.caseNumber : "",
+      source.courtName, source.court_name, normalized.courtName,
+      source.charge, source.primaryCharge, normalized.primaryCharge,
+      source.offenseCode, source.offense_code, normalized.offenseCode,
+      eligibility && !eligibility.includes("not screened") ? eligibility : "",
+      packet && !packet.includes("not generated") ? packet : ""
+    ));
+  }
+
+  function caseTimestamp(caseRecord) {
+    const source = caseRecord || {};
+    const value = firstNonEmpty(source.lastUpdated, source.updatedAt, source.updated_at, source.createdAt, source.created_at);
+    const time = Date.parse(value);
+    return Number.isNaN(time) ? 0 : time;
+  }
+
+  function usefulMerge(existing, incoming) {
+    const base = existing || {};
+    const update = incoming || {};
+    const preferIncoming = caseTimestamp(update) >= caseTimestamp(base);
+    const primary = preferIncoming ? update : base;
+    const secondary = preferIncoming ? base : update;
+    const merged = Object.assign({}, secondary, primary);
+    Object.keys(secondary).forEach(function (key) {
+      if ((merged[key] === undefined || merged[key] === null || merged[key] === "" || (Array.isArray(merged[key]) && !merged[key].length)) && secondary[key]) merged[key] = secondary[key];
+    });
+    return merged;
+  }
+
+  function dedupeCases(cases) {
+    const normalized = (cases || []).filter(hasMeaningfulCaseData).map(normalizeCase);
+    const byStable = {};
+    const stableOrder = [];
+    normalized.forEach(function (item) {
+      const key = getStableCaseId(item);
+      if (!key) return;
+      if (!byStable[key]) stableOrder.push(key);
+      byStable[key] = usefulMerge(byStable[key], item);
+    });
+    const byComposite = {};
+    const compositeOrder = [];
+    stableOrder.forEach(function (stableKey) {
+      const item = normalizeCase(byStable[stableKey]);
+      const composite = getCaseCompositeKey(item) || `id:${stableKey}`;
+      if (!byComposite[composite]) compositeOrder.push(composite);
+      byComposite[composite] = usefulMerge(byComposite[composite], item);
+    });
+    return compositeOrder.map(function (key) { return normalizeCase(byComposite[key]); });
+  }
+
   function activeCases(cases) {
-    return (cases || []).map(normalizeCase).filter(function (item) { return !item.deletedAt && !item.archivedAt && item.status !== "archived"; });
+    return dedupeCases(cases).filter(function (item) { return !item.deletedAt && !item.archivedAt && item.status !== "archived" && item.status !== "deleted"; });
   }
 
   function loadLocalCases() { return activeCases(readJSON(LOCAL_CASES_KEY, [])); }
-  function saveLocalCases(cases) { writeJSON(LOCAL_CASES_KEY, (cases || []).map(normalizeCase)); }
+  function saveLocalCases(cases) { writeJSON(LOCAL_CASES_KEY, activeCases(cases)); }
 
   function hasProtectedHistory(caseData) {
     const id = caseData && (caseData.case_id || caseData.caseId || caseData.id || caseData.caseNumber);
@@ -436,9 +509,15 @@
 
   function getCases() { return activeCases(cachedCases.length ? cachedCases : loadLocalCases()); }
   async function getCasesAsync() { return refreshCases(); }
+  function caseMatchesId(caseRecord, caseId, compositeKey) {
+    const id = String(caseId || "").trim();
+    if (!id || !caseRecord) return false;
+    return getStableCaseId(caseRecord) === id || getCaseCompositeKey(caseRecord) === compositeKey;
+  }
   function getCaseById(caseId) {
-    const id = String(caseId || localStorage.getItem(ACTIVE_CASE_KEY) || "");
-    return getCases().find(function (item) { return item.case_id === id || item.caseId === id || item.id === id || item.caseNumber === id; }) || null;
+    const id = String(caseId || localStorage.getItem(ACTIVE_CASE_KEY) || "").trim();
+    const compositeKey = getCaseCompositeKey({ caseNumber: id });
+    return getCases().find(function (item) { return caseMatchesId(item, id, compositeKey); }) || null;
   }
   async function setActiveCase(caseId) {
     if (!cachedCases.length) await refreshCases().catch(function () {});
@@ -462,33 +541,56 @@
     syncRecordWatchCases(cachedCases);
     return next;
   }
-  async function archiveCase(caseId) { return removeCase(caseId, true); }
-  async function deleteCase(caseId) { return removeCase(caseId, false); }
-  async function removeCase(caseId, forceArchive) {
+  function clearActiveCaseIfMatches(caseId, compositeKey) {
+    [ACTIVE_CASE_KEY, "recordwatchActiveCaseId"].forEach(function (key) {
+      const value = localStorage.getItem(key);
+      if (value && (value === caseId || value === compositeKey)) localStorage.removeItem(key);
+    });
+    ["currentCase", "activeCase"].forEach(function (key) {
+      const value = readJSON(key, null);
+      if (value && caseMatchesId(value, caseId, compositeKey)) localStorage.removeItem(key);
+    });
+  }
+
+  function removeCaseFromLocalCollections(caseId, compositeKey) {
+    [LOCAL_CASES_KEY, "savedCases", "recordPathCases", "recordpathai_cases"].forEach(function (key) {
+      const collection = readJSON(key, null);
+      if (!Array.isArray(collection)) return;
+      writeJSON(key, activeCases(collection.filter(function (item) { return !caseMatchesId(item, caseId, compositeKey); })));
+    });
+    const rwCases = readJSON("recordwatchCases", null);
+    if (Array.isArray(rwCases)) {
+      writeJSON("recordwatchCases", rwCases.filter(function (item) { return item && !caseMatchesId(item, caseId, compositeKey); }));
+    }
+  }
+
+  async function archiveCase(caseId, options) { return removeCase(caseId, Object.assign({}, options || {}, { forceArchive: true })); }
+  async function deleteCase(caseId, options) { return removeCase(caseId, options || {}); }
+  async function removeCase(caseId, options) {
+    const normalizedId = String(caseId || "").trim();
+    if (!normalizedId) return false;
     if (!cachedCases.length) await refreshCases().catch(function () {});
-    const found = getCaseById(caseId);
-    if (!found) return false;
-    const archive = forceArchive || hasProtectedHistory(found);
-    const stamped = normalizeCase(Object.assign({}, found, archive ? { archivedAt: nowIso(), status: "archived" } : { deletedAt: nowIso(), status: "deleted" }));
-    // TODO: Prefer Supabase deleted_at/archived_at/status columns after the cases migration is guaranteed in every environment.
-    if (currentUser && /^[0-9a-f-]{36}$/i.test(found.case_id)) {
+    const found = getCaseById(normalizedId) || { case_id: normalizedId, caseId: normalizedId, id: normalizedId };
+    const foundId = getStableCaseId(found) || normalizedId;
+    const compositeKey = getCaseCompositeKey(found);
+    const archive = Boolean(options && options.forceArchive) || hasProtectedHistory(found);
+    if (currentUser && /^[0-9a-f-]{36}$/i.test(foundId)) {
       try {
         const supabase = await client();
-        const payload = archive ? { archived_at: stamped.archivedAt, status: "archived", updated_at: nowIso() } : { deleted_at: stamped.deletedAt, status: "deleted", updated_at: nowIso() };
-        const result = await supabase.from("cases").update(payload).eq("id", found.case_id).eq("user_id", currentUser.id);
+        const payload = archive ? { archived_at: nowIso(), status: "archived", updated_at: nowIso() } : { deleted_at: nowIso(), status: "deleted", updated_at: nowIso() };
+        const result = await supabase.from("cases").update(payload).eq("id", foundId).eq("user_id", currentUser.id);
         if (result.error) throw result.error;
       } catch (error) {
         if (!archive) {
-          try { const supabase = await client(); await supabase.from("cases").delete().eq("id", found.case_id).eq("user_id", currentUser.id); } catch (deleteError) { console.warn("Remote case delete skipped:", deleteError.message); }
+          try { const supabase = await client(); await supabase.from("cases").delete().eq("id", foundId).eq("user_id", currentUser.id); } catch (deleteError) { console.warn("Remote case delete skipped:", deleteError.message); }
         } else { console.warn("Remote case archive skipped:", error.message); }
       }
     }
-    const remaining = getCases().filter(function (item) { return item.case_id !== found.case_id; });
+    const remaining = getCases().filter(function (item) { return !caseMatchesId(item, foundId, compositeKey); });
     cachedCases = activeCases(remaining);
     saveLocalCases(cachedCases);
-    const rwCases = readJSON("recordwatchCases", []).filter(function (item) { return item && item.id !== found.case_id; });
-    writeJSON("recordwatchCases", rwCases);
-    if (localStorage.getItem(ACTIVE_CASE_KEY) === found.case_id) localStorage.removeItem(ACTIVE_CASE_KEY);
+    removeCaseFromLocalCollections(foundId, compositeKey);
+    clearActiveCaseIfMatches(foundId, compositeKey);
     return true;
   }
   function getNextStepForCase(caseData) {
@@ -502,7 +604,10 @@
 
   async function saveCase(caseInput) {
     await init();
-    const nextCase = normalizeCase(Object.assign(collectCurrentCaseFromStorage(), caseInput || {}));
+    const input = caseInput || {};
+    const collected = Object.keys(input).length ? Object.assign(collectCurrentCaseFromStorage(), input) : collectCurrentCaseFromStorage();
+    if (!hasMeaningfulCaseData(collected)) return null;
+    const nextCase = normalizeCase(collected);
     if (!currentUser) {
       const local = getCases().filter(function (item) { return item.case_id !== nextCase.case_id && item.caseNumber !== nextCase.caseNumber; });
       local.push(nextCase);
@@ -563,7 +668,7 @@
       if (localStorage.getItem(key) === null) localStorage.setItem(key, draft.localKeys[key]);
     });
     const caseData = collectCurrentCaseFromStorage();
-    if (caseData.caseNumber || caseData.charges.length || caseData.court || caseData.county) await saveCase(caseData).catch(function (error) { console.warn("Draft import skipped:", error.message); });
+    if (hasMeaningfulCaseData(caseData)) await saveCase(caseData).catch(function (error) { console.warn("Draft import skipped:", error.message); });
     return draft;
   }
 
@@ -616,6 +721,8 @@
     archiveCase,
     getNextStepForCase,
     normalizeCase,
+    getStableCaseId,
+    hasMeaningfulCaseData,
     saveCase,
     collectCurrentCaseFromStorage,
     saveDraftSnapshot,
