@@ -1100,6 +1100,15 @@
 
   <script src="js/packet-data-bridge.js"></script>
   <script src="js/rules.js"></script>
+  <script src="js/rules/date-utils.js"></script>
+  <script src="js/rules/state-rules/ohio.js"></script>
+  <script src="js/rules/state-rules/nevada.js"></script>
+  <script src="js/rules/state-rules/north-carolina.js"></script>
+  <script src="js/rules/court-profiles/ohio/wood-county-common-pleas.js"></script>
+  <script src="js/rules/court-profiles/ohio/wood-county-municipal.js"></script>
+  <script src="js/rules/court-registry.js"></script>
+  <script src="js/rules/rule-resolver.js"></script>
+  <script src="js/rules/rule-engine.js"></script>
   <script src="js/recordwatch-rules.js"></script>
   <script src="js/recordwatch-notifications.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
@@ -1262,6 +1271,24 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       function calculatePacketEligibility(data) {
+        if (window.RecordPathEligibilityEngine && typeof RecordPathEligibilityEngine.resolveEligibilityForCase === "function") {
+          const centralizedResult = RecordPathEligibilityEngine.resolveEligibilityForCase(data || {});
+          if (data?.eligibility) {
+            data.eligibility.estimated_eligible_on = centralizedResult.estimatedEligibleDate;
+            data.eligibility.required_waiting_period = centralizedResult.waitingPeriodText;
+            data.eligibility.is_eligible = centralizedResult.isEligibleNow;
+            data.eligibility.eligibility_status = centralizedResult.statusLabel;
+            data.eligibility.eligibility_reason = centralizedResult.ruleCitation || centralizedResult.source;
+            data.eligibility.flags = centralizedResult.flags || [];
+          }
+          return Object.assign({ record: getSelectedPacketRecord(data), state: normalizeState(data?.court?.state || "") }, centralizedResult, {
+            parsedDischargeDate: parsePacketDate(centralizedResult.completionDate),
+            parsedDischargeIso: centralizedResult.completionDate,
+            dischargeSource: centralizedResult.completionDate,
+            waitingPeriodSatisfied: centralizedResult.isEligibleNow,
+            reason: centralizedResult.ruleCitation || centralizedResult.confidenceReason || "Resolved by the centralized eligibility rules engine."
+          });
+        }
         const record = getSelectedPacketRecord(data);
         const eligibility = data?.eligibility || {};
         const state = normalizeState(record.case_state || data?.court?.state || eligibility.state_ruleset || "");
