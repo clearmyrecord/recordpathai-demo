@@ -1100,7 +1100,17 @@
 
   <script src="js/packet-data-bridge.js"></script>
   <script src="js/rules.js"></script>
+  <script src="js/rules/date-utils.js"></script>
+  <script src="js/rules/state-rules/ohio.js"></script>
+  <script src="js/rules/state-rules/nevada.js"></script>
+  <script src="js/rules/state-rules/north-carolina.js"></script>
+  <script src="js/rules/court-profiles/ohio/wood-county-common-pleas.js"></script>
+  <script src="js/rules/court-profiles/ohio/wood-county-municipal.js"></script>
+  <script src="js/rules/court-registry.js"></script>
+  <script src="js/rules/rule-resolver.js"></script>
+  <script src="js/rules/rule-engine.js"></script>
   <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-notifications.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/translate.js"></script>
 
@@ -1263,85 +1273,99 @@ document.addEventListener("DOMContentLoaded", function () {
       function calculatePacketEligibility(data) {
         const record = getSelectedPacketRecord(data);
         const eligibility = data?.eligibility || {};
-        const state = normalizeState(record.case_state || data?.court?.state || eligibility.state_ruleset || "");
-        const dischargeSource = record.discharge_date || record.dischargeDate || record.final_discharge_date || record.finalDischargeDate || record.probation_end_date || record.probationEndDate || record.case_closed_date || record.caseClosedDate || "";
-        const parsedDischargeDate = parsePacketDate(dischargeSource);
-        const parsedDischargeIso = toIsoDate(parsedDischargeDate);
-        const levelRaw = safe(record.level || record.degree || record.charge_level || record.offense_classification || "").toUpperCase();
-        const chargeText = `${safe(record.charge_name || record.offense_name)} ${safe(record.charge_code)}`.toLowerCase();
-        const flags = [];
-        let waitYears = 1;
-        let requiredPeriod = "1 year";
-
-        if (!parsedDischargeDate) flags.push("Missing discharge date");
-        if (/\bF1\b|\bF2\b/.test(levelRaw) || /felony\s*(1|2|first|second)/i.test(levelRaw)) flags.push("F1/F2 disqualifying level");
-        if (Boolean(eligibility.has_pending_cases || record.pending_charges)) flags.push("Pending charges");
-        if (/traffic/i.test(`${safe(record.charge_name)} ${safe(record.charge_code)}`)) flags.push("Traffic offense");
-        if (Number(record.f3_felony_count || eligibility.f3_felony_count || 0) >= 3) flags.push("Three or more F3 felonies");
-        if (/domestic\s+violence/i.test(safe(record.charge_name))) flags.push("Domestic violence");
-        if (Boolean(record.sex_offense_registry || eligibility.sex_offense_registry)) flags.push("Sex offense registry");
-        if (Boolean(record.victim_under_13 || eligibility.victim_under_13)) flags.push("Victim under 13");
-        if (Boolean(record.felony_violence_offense || eligibility.felony_violence_offense)) flags.push("Felony violence offense");
-
-        if (/2921\.43/.test(chargeText) || /soliciting improper compensation/.test(chargeText)) {
-          waitYears = 7;
-          requiredPeriod = "7 years";
-        } else if (/\bF3\b/.test(levelRaw)) {
-          waitYears = 3;
-          requiredPeriod = t("packet.threeYears") === "packet.threeYears" ? "3 years" : t("packet.threeYears");
+        if (window.RecordPathEligibilityEngine && typeof window.RecordPathEligibilityEngine.resolveEligibilityForCase === "function") {
+          const resolved = window.RecordPathEligibilityEngine.resolveEligibilityForCase({
+            id: record.case_number || data?.court?.case_number || data?.court?.docket_number,
+            caseState: record.case_state || data?.court?.state || eligibility.state_ruleset,
+            county: record.court_county || data?.court?.county,
+            courtName: record.court_name || data?.court?.name,
+            courtType: data?.court?.case_type || record.court_type,
+            reliefType: eligibility.relief_type || eligibility.filing_type || "conviction_sealing",
+            charges: [{
+              chargeName: record.charge_name || record.offense_name,
+              offenseCode: record.charge_code || record.offense_code,
+              offenseLevel: record.level || record.degree || record.charge_level || record.offense_classification,
+              disposition: record.final_disposition || record.disposition || eligibility.eligibility_status,
+              pending_charges: eligibility.has_pending_cases || record.pending_charges
+            }],
+            disposition: record.final_disposition || record.disposition,
+            dispositionDate: record.disposition_date || record.dispositionDate,
+            sentenceCompletionDate: record.sentence_completion_date || record.sentenceCompletionDate,
+            probationCompletedDate: record.probation_completed_date || record.probationCompletedDate || record.probation_end_date || record.probationEndDate,
+            dischargeDate: record.discharge_date || record.dischargeDate,
+            finalDischargeDate: record.final_discharge_date || record.finalDischargeDate,
+            completionDate: record.completion_date || record.completionDate || record.case_closed_date || record.caseClosedDate,
+            pendingCharges: eligibility.has_pending_cases || record.pending_charges,
+            disqualifyingFlags: Object.assign({}, eligibility, record)
+          });
+          const estimatedDateObj = parsePacketDate(resolved.estimatedEligibleDate);
+          const waitingPeriodSatisfied = estimatedDateObj ? estimatedDateObj <= new Date() : false;
+          const isEligibleNow = resolved.eligibilityStatus === "likely_eligible";
+          const isNotYetEligible = resolved.eligibilityStatus === "not_yet_eligible";
+          const flags = (resolved.missingRequirements || []).concat(resolved.disqualifyingReasons || []);
+          const result = {
+            record,
+            state: resolved.normalizedCase?.caseState || "",
+            dischargeSource: resolved.dateUsedForCalculation || "",
+            parsedDischargeDate: parsePacketDate(resolved.dateUsedForCalculation),
+            parsedDischargeIso: resolved.dateUsedForCalculation || "",
+            waitingPeriodYears: resolved.requiredWaitingPeriod?.years || 0,
+            waitingPeriodText: resolved.requiredWaitingPeriodLabel || "—",
+            estimatedEligibleDate: resolved.estimatedEligibleDate || "",
+            waitingPeriodSatisfied,
+            isEligibleNow,
+            isNotYetEligible,
+            needsReview: resolved.eligibilityStatus === "needs_review",
+            mode: isEligibleNow ? "eligible" : (isNotYetEligible ? "not_eligible" : "unclear"),
+            statusLabel: isEligibleNow ? "Eligible now" : (isNotYetEligible ? "Not yet eligible" : "Needs Review"),
+            reliefType: resolved.packetTemplate?.packet_name || (resolved.reliefType === "conviction_sealing" ? "Ohio Record Sealing" : safe(resolved.reliefType || "Record relief")),
+            reason: (resolved.reasons || []).join(" "),
+            flags,
+            resolvedEligibility: resolved
+          };
+          if (data?.eligibility) {
+            data.eligibility.court_id = resolved.courtProfile?.court_id || "";
+            data.eligibility.rule_set_id = resolved.ruleSet?.rule_set_id || "";
+            data.eligibility.local_profile_id = resolved.courtProfile?.local_profile_id || "";
+            data.eligibility.packet_template_id = resolved.packetTemplate?.packet_template_id || "";
+            data.eligibility.estimated_eligible_on = result.estimatedEligibleDate;
+            data.eligibility.required_waiting_period = result.waitingPeriodText;
+            data.eligibility.date_used_for_calculation = result.parsedDischargeIso;
+            data.eligibility.is_eligible = result.isEligibleNow;
+            data.eligibility.eligibility_status = result.statusLabel;
+            data.eligibility.eligibility_reason = result.reason;
+            data.eligibility.eligibility_confidence = resolved.confidence;
+            data.eligibility.flags = result.flags;
+          }
+          return result;
         }
-
-        const estimatedEligibleDate = parsedDischargeIso ? addYearsIso(parsedDischargeIso, waitYears) : "";
-        const estimatedDateObj = parsePacketDate(estimatedEligibleDate);
-        const today = new Date();
-        today.setHours(12, 0, 0, 0);
-        const waitingPeriodSatisfied = Boolean(estimatedDateObj) && today >= estimatedDateObj;
-        const blockingFlags = flags.filter((flag) => flag !== "Missing discharge date");
-        const needsReview = Boolean(flags.length && (flags.includes("Missing discharge date") || blockingFlags.length));
-        const isEligibleNow = Boolean(estimatedEligibleDate) && waitingPeriodSatisfied && !blockingFlags.length;
-        const isNotYetEligible = Boolean(estimatedEligibleDate) && !waitingPeriodSatisfied && !blockingFlags.length;
-        const mode = isEligibleNow ? "eligible" : (isNotYetEligible ? "not_eligible" : "unclear");
-        const statusLabel = isEligibleNow ? "Eligible now" : (isNotYetEligible ? "Not yet eligible" : "Needs Review");
-
         const result = {
           record,
-          state,
-          dischargeSource,
-          parsedDischargeDate,
-          parsedDischargeIso,
-          waitingPeriodYears: waitYears,
-          waitingPeriodText: requiredPeriod,
-          estimatedEligibleDate,
-          waitingPeriodSatisfied,
-          isEligibleNow,
-          isNotYetEligible,
-          needsReview,
-          mode,
-          statusLabel,
-          reliefType: state === "OH" ? "Ohio Record Sealing" : safe(eligibility.relief_type || eligibility.filing_type || "Record relief"),
-          reason: isEligibleNow
-            ? "Waiting period appears satisfied and no blocking flags were found for the selected record."
-            : (isNotYetEligible ? "The selected record's waiting period has not ended yet." : "Review the selected record before filing."),
-          flags
+          state: normalizeState(record.case_state || data?.court?.state || eligibility.state_ruleset || ""),
+          dischargeSource: "",
+          parsedDischargeDate: null,
+          parsedDischargeIso: "",
+          waitingPeriodYears: 0,
+          waitingPeriodText: "—",
+          estimatedEligibleDate: "",
+          waitingPeriodSatisfied: false,
+          isEligibleNow: false,
+          isNotYetEligible: false,
+          needsReview: true,
+          mode: "unclear",
+          statusLabel: "Needs Review",
+          reliefType: safe(eligibility.relief_type || eligibility.filing_type || "Record relief"),
+          reason: "Eligibility needs review because the centralized rules engine is not loaded.",
+          flags: ["Eligibility engine not loaded"]
         };
 
         if (data?.eligibility) {
-          data.eligibility.estimated_eligible_on = result.estimatedEligibleDate;
-          data.eligibility.required_waiting_period = result.waitingPeriodText;
-          data.eligibility.is_eligible = result.isEligibleNow;
+          data.eligibility.estimated_eligible_on = "";
+          data.eligibility.required_waiting_period = "";
+          data.eligibility.is_eligible = false;
           data.eligibility.eligibility_status = result.statusLabel;
           data.eligibility.eligibility_reason = result.reason;
           data.eligibility.flags = result.flags;
-        }
-
-        if (isDevelopmentMode()) {
-          console.groupCollapsed("[Packet Eligibility] selected record result");
-          console.log("selected packet record", record);
-          console.log("parsed discharge date", result.parsedDischargeIso || null, result.parsedDischargeDate);
-          console.log("waiting period", result.waitingPeriodText, result.waitingPeriodYears);
-          console.log("estimated eligible date", result.estimatedEligibleDate || null);
-          console.log("final eligibility status", result.statusLabel, { isEligibleNow: result.isEligibleNow, mode: result.mode, flags: result.flags });
-          console.groupEnd();
         }
 
         return result;

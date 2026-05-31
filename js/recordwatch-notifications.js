@@ -131,21 +131,35 @@
     var caseId = clean(payload.case_id || payload.caseId || "demo-case");
     var events = loadEvents();
     var existing = events.find(function (item) { return item.user_id === userId && item.case_id === caseId; });
+    var nextDate = dateOnly(payload.eligibility_date || payload.eligibilityDate);
+    var dateChanged = existing && existing.eligibility_date && nextDate && existing.eligibility_date !== nextDate;
     var row = Object.assign(existing || {
       id: id("rwe"), user_id: userId, case_id: caseId, reminder_90_sent: false, reminder_30_sent: false,
       reminder_7_sent: false, reminder_day_sent: false, eligibility_notification_sent: false, created_at: new Date().toISOString()
     }, {
-      eligibility_date: dateOnly(payload.eligibility_date || payload.eligibilityDate),
+      eligibility_date: nextDate,
       eligibility_reason: clean(payload.eligibility_reason || payload.eligibilityReason),
       waiting_period: clean(payload.waiting_period || payload.waitingPeriod),
       eligibility_confidence: clean(payload.eligibility_confidence || payload.eligibilityConfidence || "medium"),
       eligibility_confidence_reason: clean(payload.eligibility_confidence_reason || payload.eligibilityConfidenceReason),
+      court_id: clean(payload.court_id || payload.courtId),
+      rule_set_id: clean(payload.rule_set_id || payload.ruleSetId),
+      local_profile_id: clean(payload.local_profile_id || payload.localProfileId),
+      packet_template_id: clean(payload.packet_template_id || payload.packetTemplateId),
+      date_used_for_calculation: clean(payload.date_used_for_calculation || payload.dateUsedForCalculation),
       eligibility_completed_at: payload.eligibility_completed_at || payload.eligibilityCompletedAt || null,
       record_details_completed_at: payload.record_details_completed_at || payload.recordDetailsCompletedAt || null,
       paid_at: payload.paid_at || payload.paidAt || null,
       packet_generated_at: payload.packet_generated_at || payload.packetGeneratedAt || null,
       updated_at: new Date().toISOString()
     });
+    if (dateChanged) {
+      row.reminder_90_sent = false;
+      row.reminder_30_sent = false;
+      row.reminder_7_sent = false;
+      row.reminder_day_sent = false;
+      row.eligibility_notification_sent = false;
+    }
     if (!existing) events.push(row);
     writeJSON(EVENTS_KEY, events);
     post("/api/recordwatch/eligibility-event", row).catch(function () {});

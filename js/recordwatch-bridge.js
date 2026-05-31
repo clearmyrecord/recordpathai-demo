@@ -147,7 +147,14 @@
       sexOffense: firstValue(charge, ["sexOffense", "isSexOffense", "isSexOffenseRegistry"]),
       domesticViolence: firstValue(charge, ["domesticViolence", "isDomesticViolenceConviction"]),
       trafficOffense: firstValue(charge, ["trafficOffense", "isTraffic"]),
-      drugOffense: firstValue(charge, ["drugOffense"])
+      drugOffense: firstValue(charge, ["drugOffense"]),
+      sentenceCompletionDate: firstValue(charge, ["sentence_completion_date", "sentenceCompletionDate"]),
+      probationCompletedDate: firstValue(charge, ["probation_completed_date", "probationCompletedDate", "probation_end_date", "probationEndDate"]),
+      dischargeDate: firstValue(charge, ["discharge_date", "dischargeDate"]),
+      finalDischargeDate: firstValue(charge, ["final_discharge_date", "finalDischargeDate"]),
+      completionDate: firstValue(charge, ["completion_date", "completionDate"]),
+      pendingCharges: firstValue(charge, ["pendingCharges", "pending_charges"]),
+      f3FelonyCount: firstValue(charge, ["f3_felony_count", "f3FelonyCount"])
     };
   }
 
@@ -181,7 +188,11 @@
       outcome: {
         outcome: firstValue(first, ["final_disposition", "outcome", "disposition"]),
         dispositionDate: firstValue(first, ["disposition_date", "dispositionDate"]),
-        finalDischargeDate: firstValue(first, ["discharge_date", "finalDischargeDate", "dischargeDate"]),
+        sentenceCompletionDate: firstValue(first, ["sentence_completion_date", "sentenceCompletionDate"]),
+        probationCompletedDate: firstValue(first, ["probation_completed_date", "probationCompletedDate", "probation_end_date", "probationEndDate"]),
+        dischargeDate: firstValue(first, ["discharge_date", "dischargeDate"]),
+        finalDischargeDate: firstValue(first, ["final_discharge_date", "finalDischargeDate", "discharge_date", "dischargeDate"]),
+        completionDate: firstValue(first, ["completion_date", "completionDate"]),
         caseClosedDate: firstValue(first, ["caseClosedDate", "case_closed_date", "discharge_date"])
       },
       sentencing: {
@@ -202,25 +213,46 @@
 
   function registerRecordWatchEligibility(caseData) {
     if (!caseData || !window.RecordWatchRules || !window.RecordWatchNotifications) return;
-    var eligibilityDate = window.RecordWatchRules.calculateEligibilityDate(caseData);
-    if (!eligibilityDate) return;
-    var status = window.RecordWatchRules.calculateCaseStatus(caseData);
+    var resolved = window.RecordWatchRules.resolveEligibilityForCase ? window.RecordWatchRules.resolveEligibilityForCase(caseData) : null;
+    var eligibilityDate = resolved && resolved.estimatedEligibleDate || window.RecordWatchRules.calculateEligibilityDate(caseData);
+    var status = resolved && resolved.eligibilityStatus || window.RecordWatchRules.calculateCaseStatus(caseData);
     var confidence = window.RecordWatchRules.calculateEligibilityConfidence ? window.RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available RecordWatch data." };
+    var userId = (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id) || (caseData.personal && (caseData.personal.email || caseData.personal.fullName)) || "demo-user";
+    if (resolved && window.RecordPathEligibilityEngine && typeof window.RecordPathEligibilityEngine.toStorageRecord === "function") {
+      caseData.eligibility = window.RecordPathEligibilityEngine.toStorageRecord(resolved, userId, caseData.id);
+      caseData.eligibilityResult = resolved;
+      localStorage.setItem("recordPathResolvedEligibility", JSON.stringify(caseData.eligibility));
+      if (eligibilityDate) localStorage.setItem("estimatedEligibleDate", eligibilityDate);
+    }
+    if (!eligibilityDate) return;
     var workflow = {};
     try { workflow = JSON.parse(localStorage.getItem("recordPathWorkflowState")) || {}; } catch (error) { workflow = {}; }
     window.RecordWatchNotifications.registerEligibilityEvent({
-      userId: (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id) || (caseData.personal && (caseData.personal.email || caseData.personal.fullName)) || "demo-user",
+      userId: userId,
       caseId: caseData.id,
       eligibilityDate: eligibilityDate,
       eligibilityReason: status,
-      waitingPeriod: window.RecordWatchRules.getRecommendedStatus(caseData),
+      waitingPeriod: resolved && resolved.requiredWaitingPeriodLabel || window.RecordWatchRules.getRecommendedStatus(caseData),
       eligibilityConfidence: confidence.level,
       eligibilityConfidenceReason: confidence.reason,
+      courtId: resolved && resolved.courtProfile && resolved.courtProfile.court_id,
+      ruleSetId: resolved && resolved.ruleSet && resolved.ruleSet.rule_set_id,
+      localProfileId: resolved && resolved.courtProfile && resolved.courtProfile.local_profile_id,
+      packetTemplateId: resolved && resolved.packetTemplate && resolved.packetTemplate.packet_template_id,
+      dateUsedForCalculation: resolved && resolved.dateUsedForCalculation,
       eligibilityCompletedAt: workflow.eligibilityCompletedAt || workflow.updatedAt || null,
       recordDetailsCompletedAt: workflow.recordDetailsCompletedAt || null,
       paidAt: localStorage.getItem("recordPathPacketPaymentComplete") === "true" ? new Date().toISOString() : null,
       packetGeneratedAt: localStorage.getItem("recordPathPacketGeneratedAt") || null
     });
+    try {
+      var cases = readJSON(CASES_KEY, []);
+      var index = cases.findIndex(function (item) { return item && item.id === caseData.id; });
+      if (index >= 0) {
+        cases[index] = caseData;
+        writeJSON(CASES_KEY, cases);
+      }
+    } catch (error) {}
   }
 
   function saveCaseFromRecordDetails(formData) {

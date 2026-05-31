@@ -71,6 +71,16 @@
     </div></section>
   </main>
   <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Authentication and saved case records are powered by Supabase.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
+  <script src="js/rules/date-utils.js"></script>
+  <script src="js/rules/state-rules/ohio.js"></script>
+  <script src="js/rules/state-rules/nevada.js"></script>
+  <script src="js/rules/state-rules/north-carolina.js"></script>
+  <script src="js/rules/court-profiles/ohio/wood-county-common-pleas.js"></script>
+  <script src="js/rules/court-profiles/ohio/wood-county-municipal.js"></script>
+  <script src="js/rules/court-registry.js"></script>
+  <script src="js/rules/rule-resolver.js"></script>
+  <script src="js/rules/rule-engine.js"></script>
+  <script src="js/recordwatch-rules.js"></script>
   <script src="js/recordwatch-notifications.js"></script><script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/i18n.js" defer></script>
   <script src="js/auth.js"></script><script>
     document.addEventListener("DOMContentLoaded", async function () {
@@ -81,7 +91,7 @@
       const latest = cases[cases.length - 1] || RecordPathUserStore.collectCurrentCaseFromStorage();
       document.getElementById("dashboardTitle").textContent = `Welcome, ${user.fullName || user.email}`;
       document.getElementById("eligibilityStatus").textContent = latest.eligibilityStatus || "Not screened yet";
-      document.getElementById("eligibleDate").textContent = latest.estimatedEligibleDate ? `Estimated eligible date: ${latest.estimatedEligibleDate}` : "Complete screening to estimate a date.";
+      document.getElementById("eligibleDate").textContent = latest.estimatedEligibleDate ? `Estimated eligible date: ${window.RecordWatchRules ? RecordWatchRules.formatDate(latest.estimatedEligibleDate) : latest.estimatedEligibleDate}` : "Complete screening to estimate a date.";
       document.getElementById("savedCaseCount").textContent = String(cases.length);
       document.getElementById("packetStatus").textContent = latest.packetStatus || "Not generated";
       document.getElementById("paymentStatus").textContent = latest.paymentStatus || "Unpaid";
@@ -108,7 +118,7 @@
       const days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(eligibilityDate) : null;
       const subscriptions = window.RecordWatchNotifications ? RecordWatchNotifications.loadSubscriptions() : [];
       const items = [
-        ["Eligibility Date", eligibilityDate || "Complete screening to estimate a date."],
+        ["Eligibility Date", eligibilityDate ? (window.RecordWatchRules ? RecordWatchRules.formatDate(eligibilityDate) : eligibilityDate) : "Complete screening to estimate a date."],
         ["Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")],
         ["Confidence", confidence ? confidence.replace(/_/g, " ") + " — " + confidenceReason : "Needs review"],
         ["Notification Status", subscriptions.length ? "Active" : "Not activated"],

@@ -127,7 +127,26 @@
   }
 
   function evaluateRecord(record) {
-    if (!record || !window.CMRRules || typeof window.CMRRules.evaluateRecordEligibility !== "function") {
+    if (!record) return null;
+
+    if (window.RecordPathEligibilityEngine && typeof window.RecordPathEligibilityEngine.resolveEligibilityForCase === "function") {
+      const resolved = window.RecordPathEligibilityEngine.resolveEligibilityForCase(record);
+      const result = {
+        eligible: Boolean(resolved.likelyEligible),
+        status: resolved.eligibilityStatus,
+        state: resolved.normalizedCase && resolved.normalizedCase.caseState,
+        reliefType: resolved.reliefType,
+        reasons: resolved.reasons || [],
+        waitingPeriod: resolved.requiredWaitingPeriodLabel,
+        earliestEligibleDate: resolved.estimatedEligibleDate,
+        manualReview: resolved.eligibilityStatus === "needs_review",
+        resolvedEligibility: resolved
+      };
+      record.eligibility = result;
+      return result;
+    }
+
+    if (!window.CMRRules || typeof window.CMRRules.evaluateRecordEligibility !== "function") {
       return null;
     }
 
