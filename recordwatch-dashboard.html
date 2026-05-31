@@ -138,18 +138,20 @@
         var confidenceReason = event && event.eligibility_confidence_reason || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).reason : "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.");
         var days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(eligibilityDate) : RecordWatchRules.daysUntil(eligibilityDate);
         var upcoming = [90, 30, 7, 0].filter(function (n) { return days !== null && days >= n; }).map(function (n) { return n === 0 ? "Eligibility day alert" : n + "-day reminder"; });
-        recordwatchWidget.innerHTML = '<div class="case-header"><div><p class="eyebrow-mini">RecordWatch widget</p><h2>Reminder & eligibility monitor</h2><p class="muted">RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.</p></div><a class="btn secondary" href="recordwatch.html#recordwatch-enrollment">Edit preferences</a></div>' +
-          '<div class="recordwatch-widget-grid">' +
-          row("Eligibility Date", RecordWatchRules.formatDate(eligibilityDate)) +
-          row("Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")) +
-          row("Confidence", confidenceText(confidence) + " — " + confidenceReason) +
-          row("Notification Status", event ? "Registered" : "Not registered yet") +
-          row("Communication Preferences", (RecordWatchNotifications.loadSubscriptions()[0] || {}).notify_sms ? "Premium SMS + email" : "Free email / in-app") +
-          row("Upcoming Alerts", upcoming.length ? upcoming.join(", ") : "No scheduled alerts") +
-          row("Reminder History", notifications.length ? notifications.slice(-4).map(function (item) { return item.subject + " (" + item.channel + ")"; }).join("; ") : "No reminders sent yet") +
-          '</div>';
+        recordwatchWidget.classList.add("recordwatch-monitor-card");
+        recordwatchWidget.innerHTML = '<div class="recordwatch-monitor-layout"><div class="case-header"><div><p class="eyebrow-mini">RecordWatch widget</p><h2>Reminder & eligibility monitor</h2><p class="muted">RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.</p></div><a class="btn secondary" href="recordwatch.html#recordwatch-enrollment">Edit preferences</a></div>' +
+          '<div class="recordwatch-monitor-grid">' +
+          statCard("Eligibility Date", RecordWatchRules.formatDate(eligibilityDate)) +
+          statCard("Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")) +
+          statCard("Confidence", confidenceText(confidence), true, confidenceReason) +
+          statCard("Notification Status", event ? "Registered" : "Not registered yet") +
+          statCard("Communication Preferences", (RecordWatchNotifications.loadSubscriptions()[0] || {}).notify_sms ? "Premium SMS + email" : "Free email / in-app", true) +
+          statCard("Upcoming Alerts", upcoming.length ? upcoming.join(", ") : "No scheduled alerts", true) +
+          statCard("Reminder History", notifications.length ? notifications.slice(-4).map(function (item) { return item.subject + " (" + item.channel + ")"; }).join("; ") : "No reminders sent yet", true, "", true) +
+          '</div></div>';
       }
 
+      function statCard(label, value, small, note, wide) { return '<article class="recordwatch-stat-card' + (wide ? ' wide' : '') + '"><span class="recordwatch-stat-label">' + esc(label) + '</span><strong class="recordwatch-stat-value' + (small ? ' small' : '') + '">' + esc(value || "Not entered") + '</strong>' + (note ? '<p class="recordwatch-stat-note">' + esc(note) + '</p>' : '') + '</article>'; }
       function confidenceText(value) { return String(value || "medium").replace(/_/g, " ").replace(/\b\w/g, function (letter) { return letter.toUpperCase(); }); }
       function confidenceLabel(caseData) { var result = RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available details." }; return confidenceText(result.level) + " — " + result.reason; }
       function row(label, value) { return '<div class="detail-row"><strong>' + esc(label) + '</strong><span>' + (String(value || "").charAt(0) === "<" ? value : esc(value || "Not entered")) + '</span></div>'; }
