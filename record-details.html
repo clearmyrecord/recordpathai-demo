@@ -1237,7 +1237,20 @@
         if (node) node.textContent = text;
       }
 
-      function init() {
+      async function loadCaseFromUrl() {
+        const caseId = new URLSearchParams(window.location.search).get("caseId");
+        if (!caseId || !window.RecordPathUserStore) return true;
+        const found = await RecordPathUserStore.setActiveCase(caseId);
+        if (!found) {
+          const form = document.getElementById("recordDetailsForm");
+          if (form) form.insertAdjacentHTML("beforebegin", '<div class="empty-state case-page-error"><h2>We could not find that saved case.</h2><p>Please choose another case from your dashboard.</p><a class="btn" href="dashboard.html">Back to dashboard</a></div>');
+          return false;
+        }
+        return true;
+      }
+
+      async function init() {
+        await loadCaseFromUrl();
         const data = RecordPathDataBridge.loadPacketData();
         hydrateStaticFields(data);
         hydrateCharges(data);

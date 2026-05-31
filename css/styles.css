@@ -2914,3 +2914,71 @@ body.home-page .cta .btn {
   border-radius: 14px;
   padding: 12px 14px;
 }
+
+
+/* Saved case cards */
+.saved-case-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.saved-case-card {
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,251,255,.94));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 24px;
+  min-width: 0;
+}
+
+.saved-case-header,
+.saved-case-status-row,
+.saved-case-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.saved-case-header { margin-bottom: 14px; }
+.saved-case-status-row { justify-content: flex-start; margin-bottom: 16px; }
+.saved-case-title { margin: 0; color: #203761; overflow-wrap: anywhere; }
+.saved-case-detail-grid { display: grid; gap: 12px; margin: 16px 0 20px; }
+.saved-case-meta {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(132, 151, 183, .22);
+}
+.saved-case-meta strong { color: #203761; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+.saved-case-meta span { color: var(--text); overflow-wrap: anywhere; }
+.saved-case-actions { justify-content: flex-start; }
+.saved-case-actions .btn { white-space: normal; }
+
+.case-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 900;
+  color: #4b5f7d;
+  background: #eef2f7;
+}
+.case-status-badge.eligible { background: var(--green-soft); color: var(--green); }
+.case-status-badge.needs-review { background: var(--amber-soft); color: var(--amber); }
+.case-status-badge.not-screened { background: #eef2f7; color: #4b5f7d; }
+.case-status-badge.generated { background: var(--blue-soft); color: var(--blue); }
+.case-status-badge.archived { background: #f1edf8; color: var(--purple); }
+
+.case-page-error { margin-bottom: 18px; }
+
+@media (max-width: 640px) {
+  .saved-case-grid { grid-template-columns: 1fr; }
+  .saved-case-card { padding: 20px; }
+  .saved-case-actions .btn { width: 100%; justify-content: center; }
+}

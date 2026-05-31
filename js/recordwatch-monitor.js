@@ -31,6 +31,10 @@
   }
   function loadTasks() { return parseJSON("recordwatchTasks", {}); }
   function saveTasks(tasks) { localStorage.setItem("recordwatchTasks", JSON.stringify(tasks || {})); }
+  function loadReminderStatuses() { return parseJSON("recordwatchReminderStatuses", {}); }
+  function saveReminderStatuses(statuses) { localStorage.setItem("recordwatchReminderStatuses", JSON.stringify(statuses || {})); }
+  function getReminderStatus(caseId) { return loadReminderStatuses()[caseId] || "active"; }
+  function setReminderStatus(caseId, status) { var statuses = loadReminderStatuses(); statuses[caseId] = status || "active"; saveReminderStatuses(statuses); return statuses[caseId]; }
 
   function generateDefaultTasks(caseId) {
     var defaults = {};
@@ -94,6 +98,8 @@
     getCaseTasks: getCaseTasks,
     updateTask: updateTask,
     calculateMonitoringStatus: calculateMonitoringStatus,
+    getReminderStatus: getReminderStatus,
+    setReminderStatus: setReminderStatus,
     exportRecordWatchData: exportRecordWatchData
   };
 }());
