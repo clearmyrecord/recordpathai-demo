@@ -6,6 +6,8 @@
   const DRAFT_KEY = "recordPathAccountDraft";
   const RETURN_KEY = "recordPathAuthReturnUrl";
   const LEGACY_IMPORT_DISMISSED_KEY = "recordPathLegacyImportDismissed";
+  const LOCAL_CASES_KEY = "recordPathSavedCases";
+  const ACTIVE_CASE_KEY = "recordPathActiveCaseId";
 
   let currentUser = null;
   let cachedCases = [];
@@ -117,7 +119,7 @@
           const { data, error } = await supabase.auth.getUser();
           if (error || !data || !data.user) {
             currentUser = null;
-            cachedCases = [];
+            cachedCases = loadLocalCases();
             return null;
           }
           const profile = await loadProfile(data.user);
@@ -127,7 +129,7 @@
         } catch (error) {
           console.warn("Supabase auth initialization skipped:", error.message);
           currentUser = null;
-          cachedCases = [];
+          cachedCases = loadLocalCases();
           return null;
         } finally {
           document.dispatchEvent(new CustomEvent("recordpath:auth-ready", { detail: { user: currentUser } }));
@@ -258,69 +260,257 @@
     const timestamp = nowIso();
     const chargeNames = charges.map(flattenCharge).filter(Boolean);
     const caseNumber = firstNonEmpty(court.case_number, first.case_number, localStorage.getItem("caseNumber"));
-    return Object.assign({
-      caseId: firstNonEmpty(caseNumber && `case_${String(caseNumber).replace(/[^a-z0-9]+/gi, "_")}`, createId("case")),
+    const generatedCaseId = firstNonEmpty(caseNumber && `case_${String(caseNumber).replace(/[^a-z0-9]+/gi, "_")}`, createId("case"));
+    const courtName = firstNonEmpty(first.court_name, court.name, court.courtName, localStorage.getItem("court"));
+    const primaryCharge = firstNonEmpty(flattenCharge(first), localStorage.getItem("offense"));
+    return normalizeCase(Object.assign({
+      case_id: generatedCaseId,
+      caseId: generatedCaseId,
       caseState: firstNonEmpty(first.case_state, court.state, eligibility.state_ruleset, localStorage.getItem("caseState"), localStorage.getItem("state")),
       county: firstNonEmpty(first.court_county, court.county, localStorage.getItem("county")),
-      court: firstNonEmpty(first.court_name, court.name, localStorage.getItem("court")),
+      courtName,
+      court: courtName,
+      courtType: firstNonEmpty(court.type, court.courtType),
       caseNumber,
-      charges: chargeNames.length ? chargeNames : [firstNonEmpty(localStorage.getItem("offense"))].filter(Boolean),
-      eligibilityStatus: firstNonEmpty(eligibility.status, eligibility.statusLabel, localStorage.getItem("eligibilityStatus"), "Not screened yet"),
-      estimatedEligibleDate: firstNonEmpty(eligibility.estimated_eligible_on, eligibility.estimatedEligibleDate, localStorage.getItem("estimatedEligibleDate")),
+      charges: chargeNames.length ? chargeNames : [primaryCharge].filter(Boolean),
+      primaryCharge,
+      offenseCode: firstNonEmpty(first.statute_citation, first.offense_code, localStorage.getItem("offenseCode")),
+      level: firstNonEmpty(first.level, first.charge_level),
+      outcome: firstNonEmpty(first.disposition, first.final_disposition, localStorage.getItem("outcome")),
+      eligibilityStatus: firstNonEmpty(eligibility.statusLabel, eligibility.status, localStorage.getItem("eligibilityStatus"), "Not screened yet"),
+      estimatedEligibleDate: firstNonEmpty(eligibility.estimatedEligibleDate, eligibility.estimated_eligible_on, localStorage.getItem("estimatedEligibleDate")),
       packetStatus: localStorage.getItem("recordPathPacketGeneratedAt") ? "Generated" : "Not generated",
+      recordWatchStatus: localStorage.getItem("recordwatchActiveCaseId") ? "Active" : "Not Activated",
       paymentStatus: (localStorage.getItem("recordPathPacketPaymentComplete") === "true" || localStorage.getItem("recordPathPaymentComplete") === "true") ? "Paid" : "Unpaid",
       createdAt: timestamp,
-      updatedAt: timestamp
-    }, overrides || {});
+      updatedAt: timestamp,
+      lastUpdated: timestamp
+    }, overrides || {}));
+  }
+
+
+  function normalizeCase(input) {
+    const source = input || {};
+    const nestedCourt = source.court && typeof source.court === "object" ? source.court : {};
+    const charges = Array.isArray(source.charges) ? source.charges : (source.primaryCharge || source.charge ? [source.primaryCharge || source.charge] : []);
+    const firstCharge = charges[0];
+    const primaryCharge = firstNonEmpty(source.primaryCharge, flattenCharge(firstCharge), typeof firstCharge === "string" ? firstCharge : "", source.offense);
+    const id = firstNonEmpty(source.case_id, source.caseId, source.id, nestedCourt.caseNumber, source.caseNumber && `case_${String(source.caseNumber).replace(/[^a-z0-9]+/gi, "_")}`);
+    const updated = firstNonEmpty(source.lastUpdated, source.updatedAt, source.updated_at, source.createdAt, source.created_at, nowIso());
+    return {
+      id,
+      case_id: id,
+      caseId: id,
+      caseNumber: firstNonEmpty(source.caseNumber, source.case_number, nestedCourt.caseNumber, id),
+      caseState: firstNonEmpty(source.caseState, source.case_state, nestedCourt.caseState, nestedCourt.state),
+      county: firstNonEmpty(source.county, nestedCourt.county),
+      courtName: firstNonEmpty(source.courtName, source.court_name, typeof source.court === "string" ? source.court : "", nestedCourt.courtName, nestedCourt.name),
+      court: firstNonEmpty(source.courtName, source.court_name, typeof source.court === "string" ? source.court : "", nestedCourt.courtName, nestedCourt.name),
+      courtType: firstNonEmpty(source.courtType, source.court_type, nestedCourt.courtType, nestedCourt.type),
+      charges: charges.map(function (charge) { return typeof charge === "string" ? charge : flattenCharge(charge); }).filter(Boolean),
+      primaryCharge,
+      offenseCode: firstNonEmpty(source.offenseCode, source.offense_code),
+      level: firstNonEmpty(source.level, source.chargeLevel),
+      outcome: firstNonEmpty(source.outcome, source.disposition),
+      eligibilityStatus: firstNonEmpty(source.eligibilityStatus, source.eligibility_status, "Not screened yet"),
+      estimatedEligibleDate: firstNonEmpty(source.estimatedEligibleDate, source.estimated_eligible_date),
+      packetStatus: firstNonEmpty(source.packetStatus, source.packet_status, "Not generated"),
+      recordWatchStatus: firstNonEmpty(source.recordWatchStatus, source.recordwatch_status, source.recordWatchPaused ? "Paused" : "Not Activated"),
+      paymentStatus: firstNonEmpty(source.paymentStatus, source.payment_status, "Unpaid"),
+      createdAt: firstNonEmpty(source.createdAt, source.created_at, updated),
+      updatedAt: updated,
+      lastUpdated: updated,
+      deletedAt: firstNonEmpty(source.deletedAt, source.deleted_at),
+      archivedAt: firstNonEmpty(source.archivedAt, source.archived_at),
+      status: firstNonEmpty(source.status, source.archivedAt || source.archived_at ? "archived" : "active")
+    };
+  }
+
+  function activeCases(cases) {
+    return (cases || []).map(normalizeCase).filter(function (item) { return !item.deletedAt && !item.archivedAt && item.status !== "archived"; });
+  }
+
+  function loadLocalCases() { return activeCases(readJSON(LOCAL_CASES_KEY, [])); }
+  function saveLocalCases(cases) { writeJSON(LOCAL_CASES_KEY, (cases || []).map(normalizeCase)); }
+
+  function hasProtectedHistory(caseData) {
+    const id = caseData && (caseData.case_id || caseData.caseId || caseData.id || caseData.caseNumber);
+    const ledger = readJSON("recordPathPurchaseLedger", readJSON("recordPathLedger", []));
+    return String(caseData && (caseData.paymentStatus || caseData.packetStatus || "")).toLowerCase().match(/paid|generated/) || ledger.some(function (entry) { return id && (entry.case_id === id || entry.caseId === id || entry.case_number === caseData.caseNumber); });
+  }
+
+  function writeActiveCaseToStorage(caseData) {
+    const item = normalizeCase(caseData);
+    if (!item.case_id) return item;
+    localStorage.setItem(ACTIVE_CASE_KEY, item.case_id);
+    localStorage.setItem("recordwatchActiveCaseId", item.case_id);
+    if (item.caseNumber) localStorage.setItem("caseNumber", item.caseNumber);
+    if (item.caseState) { localStorage.setItem("caseState", item.caseState); localStorage.setItem("state", item.caseState); }
+    if (item.county) localStorage.setItem("county", item.county);
+    if (item.courtName) localStorage.setItem("court", item.courtName);
+    if (item.primaryCharge) localStorage.setItem("offense", item.primaryCharge);
+    if (item.offenseCode) localStorage.setItem("offenseCode", item.offenseCode);
+    if (item.outcome) localStorage.setItem("outcome", item.outcome);
+    if (item.eligibilityStatus) localStorage.setItem("eligibilityStatus", item.eligibilityStatus);
+    if (item.estimatedEligibleDate) localStorage.setItem("estimatedEligibleDate", item.estimatedEligibleDate);
+    const packet = getPacketData();
+    packet.court = Object.assign({}, packet.court || {}, { name: item.courtName, courtName: item.courtName, county: item.county, state: item.caseState, case_number: item.caseNumber });
+    packet.charges = item.charges.length ? item.charges.map(function (charge, index) { return { offense_name: charge, charge_name: charge, case_number: item.caseNumber, court_name: item.courtName, court_county: item.county, case_state: item.caseState, statute_citation: index === 0 ? item.offenseCode : "", level: index === 0 ? item.level : "", disposition: index === 0 ? item.outcome : "" }; }) : (packet.charges || []);
+    packet.eligibility = Object.assign({}, packet.eligibility || {}, { status: item.eligibilityStatus, statusLabel: item.eligibilityStatus, estimatedEligibleDate: item.estimatedEligibleDate, estimated_eligible_on: item.estimatedEligibleDate });
+    writeJSON("recordPathPacketData", packet);
+    return item;
+  }
+
+  function toRecordWatchCase(caseData) {
+    const item = normalizeCase(caseData);
+    return {
+      id: item.case_id,
+      court: { caseNumber: item.caseNumber, courtName: item.courtName, county: item.county, caseState: item.caseState, state: item.caseState },
+      charges: item.charges.length ? item.charges.map(function (charge) { return { chargeName: charge, offense_name: charge, degree: item.level, chargeLevel: item.level }; }) : [],
+      outcome: { outcome: item.outcome },
+      estimatedEligibleDate: item.estimatedEligibleDate,
+      recordWatchStatus: item.recordWatchStatus
+    };
+  }
+
+  function syncRecordWatchCases(cases) {
+    const rwCases = readJSON("recordwatchCases", []);
+    const byId = {};
+    rwCases.forEach(function (item) { if (item && item.id) byId[item.id] = item; });
+    (cases || []).forEach(function (item) { const normalized = normalizeCase(item); if (!normalized.archivedAt && !normalized.deletedAt) byId[normalized.case_id] = Object.assign({}, byId[normalized.case_id] || {}, toRecordWatchCase(normalized)); });
+    writeJSON("recordwatchCases", Object.keys(byId).map(function (id) { return byId[id]; }));
   }
 
   function normalizeDbCase(row) {
-    return {
+    return normalizeCase({
       id: row.id,
-      caseId: row.id,
+      case_id: row.id,
       caseState: row.case_state || "",
       county: row.county || "",
-      court: row.court || "",
+      courtName: row.court || row.court_name || "",
+      court: row.court || row.court_name || "",
       caseNumber: row.case_number || "",
-      charges: [],
+      charges: row.charges || [],
+      primaryCharge: row.primary_charge || "",
       eligibilityStatus: row.eligibility_status || "Not screened yet",
       estimatedEligibleDate: row.estimated_eligible_date || "",
       packetStatus: row.packet_status || "Not generated",
       paymentStatus: row.payment_status || "Unpaid",
+      recordWatchStatus: row.recordwatch_status || "Not Activated",
+      deletedAt: row.deleted_at,
+      archivedAt: row.archived_at,
+      status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at
-    };
+    });
   }
 
   async function refreshCases() {
     await initUserOnly();
     if (!currentUser) {
-      cachedCases = [];
+      cachedCases = loadLocalCases();
+      syncRecordWatchCases(cachedCases);
       return cachedCases;
     }
     const supabase = await client();
     const { data, error } = await supabase.from("cases").select("*").eq("user_id", currentUser.id).order("updated_at", { ascending: true });
     if (error) throw new Error(error.message);
-    cachedCases = (data || []).map(normalizeDbCase);
+    cachedCases = activeCases((data || []).map(normalizeDbCase));
+    saveLocalCases(cachedCases);
+    syncRecordWatchCases(cachedCases);
     return cachedCases;
   }
 
   async function initUserOnly() {
     if (currentUser) return currentUser;
-    const supabase = await client();
-    const { data } = await supabase.auth.getUser();
-    if (!data || !data.user) return null;
-    currentUser = publicUser(data.user, await loadProfile(data.user));
-    return currentUser;
+    try {
+      const supabase = await client();
+      const { data } = await supabase.auth.getUser();
+      if (!data || !data.user) return null;
+      currentUser = publicUser(data.user, await loadProfile(data.user));
+      return currentUser;
+    } catch (error) {
+      return null;
+    }
   }
 
-  function getCases() { return cachedCases.slice(); }
+  function getCases() { return activeCases(cachedCases.length ? cachedCases : loadLocalCases()); }
   async function getCasesAsync() { return refreshCases(); }
+  function getCaseById(caseId) {
+    const id = String(caseId || localStorage.getItem(ACTIVE_CASE_KEY) || "");
+    return getCases().find(function (item) { return item.case_id === id || item.caseId === id || item.id === id || item.caseNumber === id; }) || null;
+  }
+  async function setActiveCase(caseId) {
+    if (!cachedCases.length) await refreshCases().catch(function () {});
+    const found = getCaseById(caseId);
+    if (!found) return null;
+    return writeActiveCaseToStorage(found);
+  }
+  async function updateCase(caseId, updates) {
+    const found = getCaseById(caseId);
+    const next = normalizeCase(Object.assign({}, found || { case_id: caseId }, updates || {}, { updatedAt: nowIso(), lastUpdated: nowIso() }));
+    if (currentUser && /^[0-9a-f-]{36}$/i.test(next.case_id)) {
+      try {
+        const supabase = await client();
+        await supabase.from("cases").update({ case_state: next.caseState || null, county: next.county || null, court: next.courtName || null, case_number: next.caseNumber || null, eligibility_status: next.eligibilityStatus || null, estimated_eligible_date: next.estimatedEligibleDate || null, packet_status: next.packetStatus || null, payment_status: next.paymentStatus || null, updated_at: nowIso() }).eq("id", next.case_id).eq("user_id", currentUser.id);
+      } catch (error) { console.warn("Remote case update skipped:", error.message); }
+    }
+    const local = getCases().filter(function (item) { return item.case_id !== next.case_id; });
+    local.push(next);
+    cachedCases = activeCases(local);
+    saveLocalCases(cachedCases);
+    syncRecordWatchCases(cachedCases);
+    return next;
+  }
+  async function archiveCase(caseId) { return removeCase(caseId, true); }
+  async function deleteCase(caseId) { return removeCase(caseId, false); }
+  async function removeCase(caseId, forceArchive) {
+    if (!cachedCases.length) await refreshCases().catch(function () {});
+    const found = getCaseById(caseId);
+    if (!found) return false;
+    const archive = forceArchive || hasProtectedHistory(found);
+    const stamped = normalizeCase(Object.assign({}, found, archive ? { archivedAt: nowIso(), status: "archived" } : { deletedAt: nowIso(), status: "deleted" }));
+    // TODO: Prefer Supabase deleted_at/archived_at/status columns after the cases migration is guaranteed in every environment.
+    if (currentUser && /^[0-9a-f-]{36}$/i.test(found.case_id)) {
+      try {
+        const supabase = await client();
+        const payload = archive ? { archived_at: stamped.archivedAt, status: "archived", updated_at: nowIso() } : { deleted_at: stamped.deletedAt, status: "deleted", updated_at: nowIso() };
+        const result = await supabase.from("cases").update(payload).eq("id", found.case_id).eq("user_id", currentUser.id);
+        if (result.error) throw result.error;
+      } catch (error) {
+        if (!archive) {
+          try { const supabase = await client(); await supabase.from("cases").delete().eq("id", found.case_id).eq("user_id", currentUser.id); } catch (deleteError) { console.warn("Remote case delete skipped:", deleteError.message); }
+        } else { console.warn("Remote case archive skipped:", error.message); }
+      }
+    }
+    const remaining = getCases().filter(function (item) { return item.case_id !== found.case_id; });
+    cachedCases = activeCases(remaining);
+    saveLocalCases(cachedCases);
+    const rwCases = readJSON("recordwatchCases", []).filter(function (item) { return item && item.id !== found.case_id; });
+    writeJSON("recordwatchCases", rwCases);
+    if (localStorage.getItem(ACTIVE_CASE_KEY) === found.case_id) localStorage.removeItem(ACTIVE_CASE_KEY);
+    return true;
+  }
+  function getNextStepForCase(caseData) {
+    const item = normalizeCase(caseData);
+    const eligibility = String(item.eligibilityStatus || "").toLowerCase();
+    if (!eligibility || eligibility.includes("not screened")) return "eligibility.html";
+    if (!item.caseNumber || !item.courtName || !item.primaryCharge) return "record-details.html";
+    if (String(item.packetStatus || "").toLowerCase().includes("generated")) return "packet.html";
+    return "packet.html";
+  }
 
   async function saveCase(caseInput) {
     await init();
-    if (!currentUser) throw new Error("Sign in before saving progress.");
-    const nextCase = Object.assign(collectCurrentCaseFromStorage(), caseInput || {});
+    const nextCase = normalizeCase(Object.assign(collectCurrentCaseFromStorage(), caseInput || {}));
+    if (!currentUser) {
+      const local = getCases().filter(function (item) { return item.case_id !== nextCase.case_id && item.caseNumber !== nextCase.caseNumber; });
+      local.push(nextCase);
+      cachedCases = activeCases(local);
+      saveLocalCases(cachedCases);
+      syncRecordWatchCases(cachedCases);
+      return nextCase;
+    }
     const supabase = await client();
     let existing = null;
     if (nextCase.caseNumber) {
@@ -336,7 +526,7 @@
       user_id: currentUser.id,
       case_state: nextCase.caseState || null,
       county: nextCase.county || null,
-      court: nextCase.court || null,
+      court: nextCase.courtName || nextCase.court || null,
       case_number: nextCase.caseNumber || null,
       eligibility_status: nextCase.eligibilityStatus || null,
       estimated_eligible_date: nextCase.estimatedEligibleDate || null,
@@ -347,8 +537,12 @@
     if (existing) payload.id = existing.id;
     const { data, error } = await supabase.from("cases").upsert(payload).select("*").single();
     if (error) throw new Error(error.message);
+    const saved = normalizeDbCase(data);
+    const local = getCases().filter(function (item) { return item.case_id !== saved.case_id && item.caseNumber !== saved.caseNumber; });
+    local.push(saved);
+    saveLocalCases(local);
     await refreshCases();
-    return normalizeDbCase(data);
+    return saved;
   }
 
   function saveDraftSnapshot(returnUrl) {
@@ -415,6 +609,13 @@
     updateCurrentUser,
     getCases,
     getCasesAsync,
+    getCaseById,
+    setActiveCase,
+    updateCase,
+    deleteCase,
+    archiveCase,
+    getNextStepForCase,
+    normalizeCase,
     saveCase,
     collectCurrentCaseFromStorage,
     saveDraftSnapshot,
@@ -424,6 +625,6 @@
     importLegacyDemoData,
     dismissLegacyImport,
     isLoggedIn: function () { return Boolean(currentUser); },
-    keys: { USERS_KEY, SESSION_KEY, DRAFT_KEY, RETURN_KEY, LEGACY_IMPORT_DISMISSED_KEY }
+    keys: { USERS_KEY, SESSION_KEY, DRAFT_KEY, RETURN_KEY, LEGACY_IMPORT_DISMISSED_KEY, LOCAL_CASES_KEY, ACTIVE_CASE_KEY }
   };
 }());
