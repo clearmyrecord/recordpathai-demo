@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ledger Admin | RecordPathAI</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+  <link rel="stylesheet" href="../css/ledger.css" />
+</head>
+<body>
+  <header class="site-header"><div class="container"><div class="header-shell header-shell-modern"><div class="header-inner"><a href="../index.html" class="site-brand"><img src="/assets/images/logo/RecordPathAI_Logo_Transparent.png" alt="RecordPathAI" class="site-logo"></a><nav class="nav"><a href="../dashboard.html">Dashboard</a><a href="../recordwatch-dashboard.html">RecordWatch</a><a href="recordwatch-admin.html">RecordWatch Admin</a></nav></div></div></div></header>
+  <main>
+    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Admin</span><h1>Purchase Ledger Admin</h1><p>Review packet purchase revenue, RecordWatch premium revenue, credits, refunds, failed payments, and recent account ledger entries.</p></div></section>
+    <section class="page-section"><div class="container recordwatch-stack"><div id="adminPermission" class="disclaimer-box" hidden>You do not have permission to view this page.</div><div class="ledger-summary-grid" id="ledgerAdminSummary"></div><section class="page-card"><h2>Recent ledger entries</h2><div class="ledger-table-wrap"><table class="ledger-table"><thead><tr><th>Date</th><th>User</th><th>Description</th><th>Case</th><th>Type</th><th>Debit</th><th>Credit</th><th>Status</th></tr></thead><tbody id="ledgerAdminRows"></tbody></table></div></section></div></section>
+  </main>
+  <script src="../js/supabase-client.js"></script><script src="../js/user-store.js"></script><script src="../js/auth.js"></script>
+  <script>
+    (function () {
+      function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
+      function money(cents) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format((Number(cents) || 0) / 100); }
+      function date(value) { var parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleString(); }
+      function isDemoAdmin(user) { return Boolean(user && (user.email === "matt@recordpathai.com" || localStorage.getItem("recordPathAdminMode") === "true")); }
+      async function fetchSummary() {
+        var headers = {};
+        if (localStorage.getItem("recordPathAdminKey")) headers["x-recordpath-admin-key"] = localStorage.getItem("recordPathAdminKey");
+        if (localStorage.getItem("recordPathAdminMode") === "true") headers["x-recordpath-demo-admin"] = "true";
+        var response = await fetch("/api/admin/ledger-summary", { headers: headers });
+        if (!response.ok) throw new Error("Admin ledger summary unavailable");
+        var json = await response.json();
+        return json.summary || {};
+      }
+      function render(summary) {
+        var cards = [
+          ["Total revenue", money(summary.total_revenue_cents)],
+          ["Packet purchase revenue", money(summary.packet_purchase_revenue_cents)],
+          ["RecordWatch premium revenue", money(summary.recordwatch_premium_revenue_cents)],
+          ["Refunds / credits", money(summary.refunds_credits_cents)],
+          ["Failed payments", money(summary.failed_payments_cents)]
+        ];
+        document.getElementById("ledgerAdminSummary").innerHTML = cards.map(function (item) { return '<article class="ledger-summary-card"><p class="eyebrow-mini">' + esc(item[0]) + '</p><h3>' + esc(item[1]) + '</h3></article>'; }).join("");
+        var rows = summary.recent_entries || [];
+        document.getElementById("ledgerAdminRows").innerHTML = rows.length ? rows.map(function (entry) { return '<tr><td>' + esc(date(entry.created_at)) + '</td><td>' + esc(entry.user_id) + '</td><td>' + esc(entry.description) + '</td><td>' + esc(entry.case_id || "—") + '</td><td>' + esc(String(entry.entry_type || "").replace(/_/g, " ")) + '</td><td class="ledger-money">' + esc(entry.debit_cents ? money(entry.debit_cents) : "—") + '</td><td class="ledger-money">' + esc(entry.credit_cents ? money(entry.credit_cents) : "—") + '</td><td><span class="ledger-status-badge ' + esc(entry.status || "posted") + '">' + esc(entry.status || "posted") + '</span></td></tr>'; }).join("") : '<tr><td colspan="8">No ledger entries yet.</td></tr>';
+      }
+      document.addEventListener("DOMContentLoaded", async function () {
+        if (!await RecordPathAuth.requireProtectedPageAsync("view ledger admin")) return;
+        var user = RecordPathUserStore.getCurrentUser();
+        if (!isDemoAdmin(user)) { document.getElementById("adminPermission").hidden = false; return; }
+        try { render(await fetchSummary()); } catch (error) { document.getElementById("adminPermission").hidden = false; document.getElementById("adminPermission").textContent = error.message; }
+      });
+    }());
+  </script>
+</body>
+</html>

@@ -129,10 +129,36 @@
   <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    localStorage.setItem("recordPathPaymentComplete", "true");
-    if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
-      RecordPathUserStore.saveCase({ paymentStatus: "Paid", packetStatus: "Ready to generate" }).catch(function (error) { console.warn("Account payment save skipped:", error); });
-    }
+    (async function () {
+      localStorage.setItem("recordPathPaymentComplete", "true");
+      if (window.RecordPathUserStore && RecordPathUserStore.ready) await RecordPathUserStore.ready;
+      if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
+        RecordPathUserStore.saveCase({ paymentStatus: "Paid", packetStatus: "Ready to generate" }).catch(function (error) { console.warn("Account payment save skipped:", error); });
+      }
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get("session_id") || params.get("sessionId") || "";
+        if (!sessionId || !window.RecordPathSupabase) return;
+        const supabase = await window.RecordPathSupabase.getClient();
+        const sessionResult = await supabase.auth.getSession();
+        const token = sessionResult && sessionResult.data && sessionResult.data.session && sessionResult.data.session.access_token;
+        if (!token) return;
+        const caseData = window.RecordPathUserStore && RecordPathUserStore.collectCurrentCaseFromStorage ? RecordPathUserStore.collectCurrentCaseFromStorage() : {};
+        const response = await fetch("/api/ledger/packet-purchase", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stripe_session_id: sessionId,
+            case_id: caseData.caseId || caseData.caseNumber || "",
+            related_packet_id: localStorage.getItem("recordPathPacketId") || "",
+            metadata: { product: "packet_generation", source: "payment-success" }
+          })
+        });
+        if (!response.ok) console.warn("Ledger entry was not posted:", await response.text());
+      } catch (error) {
+        console.warn("Ledger entry sync skipped:", error);
+      }
+    }());
   </script>
 </body>
 </html>

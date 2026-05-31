@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Dashboard | RecordPathAI</title><meta name="description" content="Track RecordPathAI eligibility, saved cases, packet status, and RecordWatch status." /><link rel="stylesheet" href="css/styles.css" /></head>
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Dashboard | RecordPathAI</title><meta name="description" content="Track RecordPathAI eligibility, saved cases, packet status, and RecordWatch status." /><link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="css/ledger.css" /></head>
 <body>
   <header class="site-header">
     <div class="container">
@@ -67,12 +68,56 @@
 
         <div id="recordWatchWidget" class="recordwatch-dashboard-grid"></div>
       </section>
+      <section class="page-card" id="purchaseLedgerSection">
+        <div class="section-heading-row">
+          <div>
+            <h2>Purchase Ledger</h2>
+            <p class="muted">Track your RecordPathAI purchases, credits, refunds, and RecordWatch activity.</p>
+          </div>
+          <button class="btn secondary" id="downloadLedgerCsv" type="button">Download Ledger CSV</button>
+        </div>
+
+        <div class="ledger-summary-grid" id="ledgerSummaryCards" aria-label="Purchase ledger summary"></div>
+
+        <div class="ledger-actions">
+          <p class="ledger-disclaimer">This ledger is for your RecordPathAI account activity. Court filing fees, attorney fees, or third-party fees may not appear unless paid through RecordPathAI.</p>
+        </div>
+
+        <div class="ledger-empty-state" id="ledgerEmptyState" hidden>Your purchases and credits will appear here after you unlock a packet or activate premium RecordWatch.</div>
+
+        <div class="ledger-table-wrap" id="ledgerTableWrap" hidden>
+          <table class="ledger-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Case</th>
+                <th>Type</th>
+                <th>Debit</th>
+                <th>Credit</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="ledgerTableBody"></tbody>
+          </table>
+        </div>
+      </section>
       <section class="page-card"><h2>Saved cases</h2><div id="caseList" class="record-list"></div></section>
     </div></section>
   </main>
   <footer class="site-footer"><div class="container"><div class="footer-shell"><div><div class="footer-brand">RecordPathAI</div><div class="footer-copy">Guided record relief workflow and court packet preparation.</div><div class="footer-disclaimer">Authentication and saved case records are powered by Supabase.</div></div><div class="footer-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="disclaimer.html">Disclaimer</a></div></div></div></footer>
-  <script src="js/packet-data-bridge.js"></script><script src="js/recordwatch-rules.js"></script><script src="js/recordwatch-notifications.js"></script><script src="js/recordwatch-bridge.js"></script><script src="js/recordwatch-monitor.js"></script><script src="js/supabase-client.js"></script><script src="js/user-store.js"></script><script src="js/i18n.js" defer></script>
-  <script src="js/auth.js"></script><script>
+  <script src="js/packet-data-bridge.js"></script>
+  <script src="js/recordwatch-rules.js"></script>
+  <script src="js/recordwatch-notifications.js"></script>
+  <script src="js/recordwatch-bridge.js"></script>
+  <script src="js/recordwatch-monitor.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/user-store.js"></script>
+  <script src="js/i18n.js" defer></script>
+  <script src="js/auth.js"></script>
+  <script src="js/dashboard-ledger.js"></script>
+  <script>
+    
     document.addEventListener("DOMContentLoaded", async function () {
       if (!await RecordPathAuth.requireProtectedPageAsync("view your dashboard")) return;
       const user = RecordPathUserStore.getCurrentUser();
@@ -87,6 +132,9 @@
       document.getElementById("paymentStatus").textContent = latest.paymentStatus || "Unpaid";
       document.getElementById("recordWatchStatus").textContent = cases.length ? "Tracking saved cases" : "Ready to start";
       const nextAction = !cases.length ? ["Continue eligibility intake", "eligibility.html"] : latest.paymentStatus !== "Paid" ? ["Review packet and payment", "packet.html"] : latest.packetStatus !== "Generated" ? ["Generate or download packet", "packet.html"] : ["Open RecordWatch", "recordwatch-dashboard.html"];
+      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
+        RecordWatchBridge.syncExistingRecordPathData();
+      }
       document.getElementById("nextAction").textContent = nextAction[0];
       document.getElementById("nextActionLink").href = nextAction[1];
       if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();

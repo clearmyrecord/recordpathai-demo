@@ -2600,7 +2600,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
           setStatus("Opening secure checkout...");
 
+          const currentUser = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser ? RecordPathUserStore.getCurrentUser() : null;
           const payload = {
+            userId: currentUser && currentUser.id,
             applicant: {
               fullName: safe(normalizedData?.petitioner?.full_name),
               email: safe(normalizedData?.petitioner?.email),
@@ -2612,6 +2614,7 @@ document.addEventListener("DOMContentLoaded", function () {
               zip: safe(normalizedData?.petitioner?.zip)
             },
             caseInfo: {
+              caseId: safe(normalizedData?.court?.case_number || normalizedData?.case_id),
               caseState: safe(normalizedData?.court?.state),
               caseNumber: safe(normalizedData?.court?.case_number),
               chargeName: safe(normalizedData?.charges?.[0]?.offense_name),
