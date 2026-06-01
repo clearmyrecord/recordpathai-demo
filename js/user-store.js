@@ -52,7 +52,6 @@
     return Array.isArray(identities) && identities.length === 0;
   }
 
-
   function decodeReturnUrl(value) {
     let current = String(value || "").trim();
     for (let i = 0; i < 4; i += 1) {
@@ -83,11 +82,14 @@
     const fallbackTarget = fallback || "dashboard.html";
     for (let i = 0; i < 4 && authPageName(target); i += 1) target = nestedReturnUrl(target) || fallbackTarget;
     if (!target || authPageName(target)) target = fallbackTarget;
+    if (/^\/\//.test(target) || (/^[a-z][a-z0-9+.-]*:/i.test(target) && !/^https?:\/\//i.test(target))) target = fallbackTarget;
     if (/^https?:\/\//i.test(target)) {
       try {
         const url = new URL(target);
         target = url.origin === window.location.origin ? `${url.pathname.replace(/^\//, "")}${url.search}${url.hash}` : fallbackTarget;
       } catch (_error) { target = fallbackTarget; }
+    } else {
+      target = target.replace(/^\/+/, "");
     }
     return target;
   }
@@ -178,14 +180,6 @@
     lastMigrationError = null;
   }
 
-  function rememberCaseLoadError(error, context) {
-    lastCaseLoadError = error || new Error("Saved cases could not be loaded.");
-    supabaseCasesUnavailable = true;
-    console.warn(context || "Supabase saved case load failed:", lastCaseLoadError);
-    document.dispatchEvent(new CustomEvent("recordpath:cases-warning", { detail: getCaseLoadStatus() }));
-    return activeCases(cachedCases);
-  }
-
   function getCaseLoadStatus() {
     return {
       lastCaseLoadError,
@@ -193,6 +187,14 @@
       supabaseCasesUnavailable,
       message: supabaseCasesUnavailable ? "We could not load your saved cases yet. Your account is still signed in." : (lastMigrationError ? "Your account is signed in, but we could not migrate local draft cases yet." : "")
     };
+  }
+
+  function rememberCaseLoadError(error, context) {
+    lastCaseLoadError = error || new Error("Saved cases could not be loaded.");
+    supabaseCasesUnavailable = true;
+    console.warn(context || "Supabase saved case load failed:", lastCaseLoadError);
+    document.dispatchEvent(new CustomEvent("recordpath:cases-warning", { detail: getCaseLoadStatus() }));
+    return activeCases(cachedCases);
   }
 
   function startCaseInitialization() {

@@ -47,11 +47,14 @@
       target = nestedReturnUrl(target) || fallbackTarget;
     }
     if (!target || authPageName(target)) target = fallbackTarget;
+    if (/^\/\//.test(target) || (/^[a-z][a-z0-9+.-]*:/i.test(target) && !/^https?:\/\//i.test(target))) target = fallbackTarget;
     if (/^https?:\/\//i.test(target)) {
       try {
         const url = new URL(target);
         target = url.origin === window.location.origin ? `${url.pathname.replace(/^\//, "")}${url.search}${url.hash}` : fallbackTarget;
       } catch (_error) { target = fallbackTarget; }
+    } else {
+      target = target.replace(/^\/+/, "");
     }
     return target;
   }
