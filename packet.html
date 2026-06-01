@@ -2745,6 +2745,13 @@ document.addEventListener("DOMContentLoaded", async function () {
         errorBox.style.display = message ? "block" : "none";
       }
 
+      function checkoutSaveDiagnostic(error) {
+        if (window.RecordPathUserStore && typeof RecordPathUserStore.getSaveErrorDiagnostic === "function") {
+          return RecordPathUserStore.getSaveErrorDiagnostic(error).message;
+        }
+        return error && error.safeDiagnostic ? error.safeDiagnostic : "Supabase save failed before checkout. Please try again or contact support.";
+      }
+
       function visibleSelectedPacketRecord() {
         const current = document.querySelector("#recordList .record-item.is-current");
         if (!current) return null;
@@ -2844,8 +2851,9 @@ document.addEventListener("DOMContentLoaded", async function () {
             checkoutCase = await saveCheckoutCaseIfNeeded(checkoutCase);
           } catch (saveError) {
             console.error("Checkout case save failed:", saveError);
-            setCheckoutError("We could not save your case before checkout. Please try again.");
-            setStatus("We could not save your case before checkout. Please try again.", "error");
+            const diagnostic = checkoutSaveDiagnostic(saveError);
+            setCheckoutError(diagnostic);
+            setStatus(diagnostic, "error");
             return;
           }
 

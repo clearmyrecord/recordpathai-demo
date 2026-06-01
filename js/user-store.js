@@ -111,6 +111,80 @@
     return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   }
 
+
+  function supabaseErrorMessage(error) {
+    return String((error && error.message) || error || "");
+  }
+
+  function supabaseErrorCode(error) {
+    return String((error && (error.code || error.status || error.name)) || "");
+  }
+
+  function classifySupabaseSaveError(error) {
+    const code = supabaseErrorCode(error).toLowerCase();
+    const message = supabaseErrorMessage(error).toLowerCase();
+    const table = String((error && error.table) || "").toLowerCase();
+    const status = Number(error && error.status);
+    if (error && error.diagnosticType) return error.diagnosticType;
+    if (table === "saved_cases" && (code === "42p01" || code === "pgrst205" || message.includes("saved_cases") && (message.includes("does not exist") || message.includes("not found")))) return "saved_cases_missing";
+    if (table === "case_charges" && (code === "42p01" || code === "pgrst205" || message.includes("case_charges") && (message.includes("does not exist") || message.includes("not found")))) return "case_charges_missing";
+    if (code === "42703" || message.includes("column") && (message.includes("does not exist") || message.includes("not found")) || message.includes("schema cache")) return "invalid_payload_columns";
+    if (code === "missing_authenticated_session" || status === 401 || message.includes("current supabase account was not found") || message.includes("sign in") || message.includes("authenticated session") || message.includes("jwt expired") || message.includes("invalid jwt")) return "missing_authenticated_session";
+    if (code === "42501" || status === 403 || message.includes("row-level security") || message.includes("violates row-level security") || message.includes("permission denied") || message.includes("not authenticated")) return "rls_policy_blocking";
+    return "supabase_error";
+  }
+
+  function safeSaveDiagnosticMessage(type) {
+    const messages = {
+      saved_cases_missing: "Supabase save failed: the saved_cases table is missing or unavailable.",
+      case_charges_missing: "Supabase save failed: the case_charges table is missing or unavailable.",
+      rls_policy_blocking: "Supabase save failed: row-level security blocked this account from saving the case.",
+      invalid_payload_columns: "Supabase save failed: the saved case payload does not match the database columns.",
+      missing_authenticated_session: "Supabase save failed: your authenticated session was not available. Please sign in again.",
+      supabase_error: "Supabase save failed before checkout. Please try again or contact support."
+    };
+    return messages[type] || messages.supabase_error;
+  }
+
+  function supabaseSaveError(error, context) {
+    const probe = {
+      code: error && error.code,
+      status: error && error.status,
+      name: error && error.name,
+      message: supabaseErrorMessage(error),
+      table: context && context.table,
+      diagnosticType: error && error.diagnosticType
+    };
+    const type = classifySupabaseSaveError(probe);
+    const wrapped = new Error(safeSaveDiagnosticMessage(type));
+    wrapped.code = (error && error.code) || (context && context.code) || "supabase_save_error";
+    wrapped.status = error && error.status;
+    wrapped.details = error && error.details;
+    wrapped.hint = error && error.hint;
+    wrapped.table = context && context.table;
+    wrapped.operation = context && context.operation;
+    wrapped.originalMessage = supabaseErrorMessage(error);
+    wrapped.diagnosticType = type;
+    wrapped.safeDiagnostic = safeSaveDiagnosticMessage(type);
+    return wrapped;
+  }
+
+  function getSaveErrorDiagnostic(error) {
+    const type = classifySupabaseSaveError(error);
+    return { type, message: safeSaveDiagnosticMessage(type) };
+  }
+
+  async function requireAuthenticatedSupabaseUser(supabase) {
+    const result = await supabase.auth.getUser();
+    if (result.error || !result.data || !result.data.user || !currentUser || result.data.user.id !== currentUser.id) {
+      const error = new Error("Missing authenticated Supabase session.");
+      error.code = "missing_authenticated_session";
+      error.diagnosticType = "missing_authenticated_session";
+      throw supabaseSaveError(error, { operation: "auth.getUser" });
+    }
+    return result.data.user;
+  }
+
   function supabaseUnavailableError(message) {
     return authError(message || (window.RecordPathSupabase && RecordPathSupabase.missingConfigMessage) || "Supabase is not configured. Ask an administrator to set the public Supabase URL and anon key.", "supabase_unavailable");
   }
@@ -834,7 +908,7 @@
     const chargeRows = normalizeCase(caseData).chargeDetails;
     const supabase = await client();
     const deleteResult = await supabase.from("case_charges").delete().eq("case_id", caseId).eq("user_id", currentUser.id);
-    if (deleteResult.error) throw new Error(deleteResult.error.message);
+    if (deleteResult.error) throw supabaseSaveError(deleteResult.error, { table: "case_charges", operation: "delete" });
     if (!chargeRows.length) return [];
     const payload = chargeRows.map(function (charge) {
       return {
@@ -850,7 +924,7 @@
       };
     });
     const { data, error } = await supabase.from("case_charges").insert(payload).select("*");
-    if (error) throw new Error(error.message);
+    if (error) throw supabaseSaveError(error, { table: "case_charges", operation: "insert" });
     return data || [];
   }
 
@@ -865,8 +939,9 @@
       if (String(next.packetStatus).toLowerCase() === "generated" && !payload.packet_generated_at) payload.packet_generated_at = nowIso();
       if ((String(next.packetStatus).toLowerCase() === "paid" || String(next.paymentStatus).toLowerCase() === "paid") && !payload.packet_paid_at) payload.packet_paid_at = nowIso();
       if (String(next.recordWatchStatus).toLowerCase() === "paused" && !payload.recordwatch_paused_at) payload.recordwatch_paused_at = nowIso();
+      await requireAuthenticatedSupabaseUser(supabase);
       const { data, error } = await supabase.from("saved_cases").update(payload).eq("id", next.case_id).eq("user_id", currentUser.id).select("*").single();
-      if (error) throw new Error(error.message);
+      if (error) throw supabaseSaveError(error, { table: "saved_cases", operation: "update" });
       const charges = updates && updates.charges ? await syncCharges(next.case_id, next) : await fetchCaseCharges(supabase, [next.case_id]);
       const saved = normalizeDbCase(Object.assign({}, data, { case_charges: Array.isArray(charges) ? charges : (charges[next.case_id] || []) }));
       cachedCases = activeCases(getCases().filter(function (item) { return item.case_id !== saved.case_id; }).concat(saved));
@@ -942,7 +1017,7 @@
   async function findExistingRemoteCase(supabase, nextCase) {
     if (isUuid(nextCase.case_id)) {
       const byId = await supabase.from("saved_cases").select("*").eq("user_id", currentUser.id).eq("id", nextCase.case_id).is("deleted_at", null).maybeSingle();
-      if (byId.error) throw new Error(byId.error.message);
+      if (byId.error) throw supabaseSaveError(byId.error, { table: "saved_cases", operation: "select" });
       if (byId.data) return byId.data;
     }
     const composite = getCaseCompositeKey(nextCase);
@@ -952,7 +1027,7 @@
     if (nextCase.county) query.eq("county", nextCase.county);
     if (nextCase.caseState) query.eq("case_state", nextCase.caseState);
     const lookup = await query.order("updated_at", { ascending: false }).limit(1).maybeSingle();
-    if (lookup.error) throw new Error(lookup.error.message);
+    if (lookup.error) throw supabaseSaveError(lookup.error, { table: "saved_cases", operation: "select" });
     return lookup.data || null;
   }
 
@@ -975,6 +1050,7 @@
       return nextCase;
     }
     const supabase = await client();
+    await requireAuthenticatedSupabaseUser(supabase);
     const existing = await findExistingRemoteCase(supabase, nextCase);
     const payload = casePayload(nextCase);
     if (String(nextCase.packetStatus).toLowerCase().includes("generated") && !payload.packet_generated_at) payload.packet_generated_at = nowIso();
@@ -982,7 +1058,7 @@
     if (String(nextCase.recordWatchStatus).toLowerCase().includes("pause") && !payload.recordwatch_paused_at) payload.recordwatch_paused_at = nowIso();
     if (existing) payload.id = existing.id;
     const { data, error } = await supabase.from("saved_cases").upsert(payload).select("*").single();
-    if (error) throw new Error(error.message);
+    if (error) throw supabaseSaveError(error, { table: "saved_cases", operation: existing ? "update" : "insert" });
     const charges = await syncCharges(data.id, nextCase);
     const saved = normalizeDbCase(Object.assign({}, data, { case_charges: charges }));
     cachedCases = activeCases(getCases().filter(function (item) { return item.case_id !== saved.case_id && getCaseCompositeKey(item) !== getCaseCompositeKey(saved); }).concat(saved));
@@ -1115,6 +1191,7 @@
     getStableCaseId,
     hasMeaningfulCaseData,
     saveCase,
+    getSaveErrorDiagnostic,
     collectCurrentCaseFromStorage,
     caseToPacketData,
     saveDraftSnapshot,
