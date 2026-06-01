@@ -2745,6 +2745,45 @@ document.addEventListener("DOMContentLoaded", async function () {
         errorBox.style.display = message ? "block" : "none";
       }
 
+      function isDevelopmentEnvironment() {
+        const host = String(window.location.hostname || "").toLowerCase();
+        return host === "localhost" || host === "127.0.0.1" || host.endsWith(".local") || new URLSearchParams(window.location.search).get("debug") === "1";
+      }
+
+      function safeCheckoutSaveError(error) {
+        return {
+          name: error?.name,
+          code: error?.code,
+          status: error?.status,
+          message: error?.message,
+          details: error?.details,
+          hint: error?.hint,
+          cause: error?.cause ? { code: error.cause.code, message: error.cause.message, details: error.cause.details, hint: error.cause.hint } : undefined,
+          supabaseError: error?.supabaseError ? { code: error.supabaseError.code, message: error.supabaseError.message, details: error.supabaseError.details, hint: error.supabaseError.hint } : undefined
+        };
+      }
+
+      function checkoutSaveFailureMessage(error) {
+        const code = String(error?.code || error?.cause?.code || error?.supabaseError?.code || "").toLowerCase();
+        const message = String(error?.message || error?.cause?.message || error?.supabaseError?.message || "");
+        const lower = message.toLowerCase();
+        if (code === "auth_session_missing") return "Please sign in again before checkout so RecordPathAI can save this packet to your account.";
+        if (code === "saved_cases_table_missing" || lower.includes("saved_cases table is missing") || lower.includes("relation") && lower.includes("saved_cases")) {
+          return "Your packet record is valid, but RecordPathAI could not save it to your account before checkout. The saved_cases database table may not be available yet. Apply supabase/migrations/20260531000000_saved_cases_source_of_truth.sql, then try again.";
+        }
+        if (code === "saved_cases_rls_blocked" || lower.includes("row-level security") || lower.includes("permission")) {
+          return "Your account is signed in, but the case could not be saved because database permissions blocked the request.";
+        }
+        if (code === "saved_cases_invalid_payload" || lower.includes("invalid saved_cases payload") || lower.includes("schema cache") || lower.includes("invalid input")) {
+          return isDevelopmentEnvironment()
+            ? `Could not save case before checkout: ${message || "invalid saved_cases payload."}`
+            : "We could not save your case before checkout. Please try again or contact support.";
+        }
+        return isDevelopmentEnvironment() && message
+          ? `Could not save case before checkout: ${message}`
+          : "We could not save your case before checkout. Please try again or contact support.";
+      }
+
       function visibleSelectedPacketRecord() {
         const current = document.querySelector("#recordList .record-item.is-current");
         if (!current) return null;
@@ -2801,7 +2840,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       async function saveCheckoutCaseIfNeeded(checkoutCase) {
         const isAuthenticated = Boolean(window.RecordPathUserStore && RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn());
-        if (!isAuthenticated) return checkoutCase;
+        if (!isAuthenticated) {
+          const authError = new Error("Please sign in before checkout so RecordPathAI can save this packet to your account.");
+          authError.code = "auth_session_missing";
+          throw authError;
+        }
         if (!window.RecordPathUserStore.saveCase) throw new Error("Save unavailable");
         const saved = await RecordPathUserStore.saveCase(Object.assign({}, checkoutCase, {
           packetStatus: isPacketPaymentComplete() ? "paid" : "Packet reviewed",
@@ -2843,9 +2886,10 @@ document.addEventListener("DOMContentLoaded", async function () {
           try {
             checkoutCase = await saveCheckoutCaseIfNeeded(checkoutCase);
           } catch (saveError) {
-            console.error("Checkout case save failed:", saveError);
-            setCheckoutError("We could not save your case before checkout. Please try again.");
-            setStatus("We could not save your case before checkout. Please try again.", "error");
+            console.error("Checkout case save failed:", safeCheckoutSaveError(saveError));
+            const saveMessage = checkoutSaveFailureMessage(saveError);
+            setCheckoutError(saveMessage);
+            setStatus(saveMessage, "error");
             return;
           }
 
