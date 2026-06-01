@@ -463,3 +463,11 @@ els.sampleCaseJson.value = JSON.stringify(getDemoCase(), null, 2);
 loadSampleCase();
 buildTemplateRecord();
 buildFieldMap();
+
+
+(function loadRecordPathI18n() {
+  if (typeof document === "undefined") return;
+  const script = document.createElement("script");
+  script.src = "../js/i18n.js";
+  document.head.appendChild(script);
+}());
