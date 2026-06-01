@@ -1419,6 +1419,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
     const finalSuccessUrl = rawSuccessUrl.includes("session_id=") ? rawSuccessUrl : `${rawSuccessUrl}${rawSuccessUrl.includes("?") ? "&" : "?"}session_id={CHECKOUT_SESSION_ID}`;
     const finalCancelUrl = safe(cancelUrl) || `${baseUrl}/packet.html?payment=cancelled`;
     const internalOrderId = `packet_${Date.now()}`;
+    const savedCaseId = safe((req.body || {}).saved_case_id || (req.body || {}).savedCaseId || caseInfo.saved_case_id || caseInfo.savedCaseId);
+    const checkoutCaseId = safe((req.body || {}).case_id || (req.body || {}).caseId || caseInfo.case_id || caseInfo.caseId || savedCaseId || caseInfo.caseNumber);
+    const checkoutCaseNumber = safe((req.body || {}).case_number || (req.body || {}).caseNumber || caseInfo.case_number || caseInfo.caseNumber);
     const wantsRecordwatchAddon = recordwatchAddon === true || recordwatchAddon === "true" || (req.body || {}).recordwatch_addon === true || (req.body || {}).recordwatchAddon === true;
     const recordwatchAddonPriceId = process.env.STRIPE_RECORDWATCH_ADDON_PRICE_ID;
     const lineItems = [
@@ -1452,7 +1455,11 @@ app.post("/api/create-checkout-session", async (req, res) => {
         recordwatchAddon: String(Boolean(wantsRecordwatchAddon)),
         recordwatchPlan: wantsRecordwatchAddon ? "addon_12_month" : "",
         userId: safe((req.body || {}).user_id || (req.body || {}).userId),
-        caseId: safe(caseInfo.caseId || caseInfo.case_id || caseInfo.caseNumber),
+        saved_case_id: savedCaseId,
+        savedCaseId,
+        case_id: checkoutCaseId,
+        caseId: checkoutCaseId,
+        case_number: checkoutCaseNumber,
 
         fullName: safe(applicant.fullName),
         email: safe(applicant.email),
@@ -1464,7 +1471,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
         zip: safe(applicant.zip),
 
         caseState: safe(caseInfo.caseState),
-        caseNumber: safe(caseInfo.caseNumber),
+        caseNumber: checkoutCaseNumber,
         chargeName: safe(caseInfo.chargeName),
         offenseCode: safe(caseInfo.offenseCode),
         chargeLevel: safe(caseInfo.chargeLevel),
