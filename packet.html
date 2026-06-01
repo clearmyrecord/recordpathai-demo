@@ -1047,6 +1047,7 @@
             </div>
 
             <div class="button-stack">
+              <div id="checkoutError" class="callout danger" style="display:none; margin-bottom:12px;" role="alert" aria-live="polite"></div>
               <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
               <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
                 <button type="button" class="debug-pdf-link" id="testPdfBtn">Test PDF Access</button>
@@ -2623,6 +2624,197 @@ document.addEventListener("DOMContentLoaded", async function () {
         return "/api/create-checkout-session";
       }
 
+      function isInternalUuid(value) {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
+      }
+
+      function firstCheckoutValue(...values) {
+        for (const value of values) {
+          if (value === undefined || value === null) continue;
+          const text = String(value).trim();
+          if (text) return text;
+        }
+        return "";
+      }
+
+      function getCheckoutCharges(source) {
+        if (!source || typeof source !== "object") return [];
+        if (Array.isArray(source.charges)) return source.charges;
+        if (Array.isArray(source.chargeDetails)) return source.chargeDetails;
+        if (Array.isArray(source.case_charges)) return source.case_charges;
+        return [];
+      }
+
+      function normalizeCheckoutCase(source) {
+        const raw = source && typeof source === "object" ? source : {};
+        const court = raw.court && typeof raw.court === "object" ? raw.court : {};
+        const charges = getCheckoutCharges(raw);
+        const primary = charges[0] && typeof charges[0] === "object" ? charges[0] : {};
+        const rawCaseId = firstCheckoutValue(raw.saved_case_id, raw.savedCaseId, raw.case_id, raw.caseId, raw.id, court.case_id, court.caseId);
+        const caseNumber = firstCheckoutValue(
+          raw.caseNumber,
+          raw.case_number,
+          raw.case_no,
+          raw.docketNumber,
+          raw.docket_number,
+          court.caseNumber,
+          court.case_number,
+          court.case_no,
+          court.docketNumber,
+          court.docket_number,
+          primary.caseNumber,
+          primary.case_number,
+          primary.case_no,
+          primary.docketNumber,
+          primary.docket_number,
+          isInternalUuid(rawCaseId) ? "" : rawCaseId
+        );
+        const chargeName = firstCheckoutValue(
+          raw.charge,
+          raw.chargeName,
+          raw.primaryCharge,
+          raw.offense,
+          raw.offenseName,
+          primary.charge,
+          primary.chargeName,
+          primary.primaryCharge,
+          primary.charge_name,
+          primary.offense,
+          primary.offenseName,
+          primary.offense_name
+        );
+        const offenseCode = firstCheckoutValue(
+          raw.offenseCode,
+          raw.offense_code,
+          raw.statute,
+          raw.statuteCode,
+          raw.charge_code,
+          primary.offenseCode,
+          primary.offense_code,
+          primary.statute,
+          primary.statuteCode,
+          primary.charge_code,
+          primary.statute_citation
+        );
+        const courtName = firstCheckoutValue(raw.courtName, raw.court_name, typeof raw.court === "string" ? raw.court : "", court.courtName, court.court_name, court.name, primary.courtName, primary.court_name);
+        const county = firstCheckoutValue(raw.county, raw.caseCounty, raw.case_county, court.county, court.caseCounty, primary.county, primary.caseCounty, primary.court_county);
+        const caseState = firstCheckoutValue(raw.caseState, raw.case_state, raw.state, court.caseState, court.case_state, court.state, primary.caseState, primary.case_state, primary.state);
+        const normalizedCharges = charges.length ? charges.map((charge) => {
+          if (typeof charge === "string") return { charge_name: charge };
+          return {
+            id: charge.id,
+            charge_name: firstCheckoutValue(charge.charge_name, charge.chargeName, charge.primaryCharge, charge.charge, charge.offense_name, charge.offenseName, charge.offense),
+            offense_code: firstCheckoutValue(charge.offense_code, charge.offenseCode, charge.statute_citation, charge.statute, charge.statuteCode, offenseCode),
+            offense_level: firstCheckoutValue(charge.offense_level, charge.offenseLevel, charge.level, charge.degree, raw.level),
+            offense_date: firstCheckoutValue(charge.offense_date, charge.offenseDate),
+            charge_notes: firstCheckoutValue(charge.charge_notes, charge.notes),
+            flags: charge.flags && typeof charge.flags === "object" ? charge.flags : {}
+          };
+        }).filter((charge) => firstCheckoutValue(charge.charge_name, charge.offense_code, charge.offense_level)) : (chargeName || offenseCode ? [{ charge_name: chargeName, offense_code: offenseCode, offense_level: firstCheckoutValue(raw.level, raw.degree, primary.level, primary.degree) }] : []);
+
+        return {
+          saved_case_id: isInternalUuid(rawCaseId) ? rawCaseId : firstCheckoutValue(raw.saved_case_id, raw.savedCaseId),
+          case_id: rawCaseId,
+          caseNumber,
+          primaryCharge: chargeName || firstCheckoutValue(normalizedCharges[0]?.charge_name),
+          offenseCode,
+          level: firstCheckoutValue(raw.level, raw.degree, primary.level, primary.degree, normalizedCharges[0]?.offense_level),
+          outcome: firstCheckoutValue(raw.outcome, raw.disposition, raw.final_disposition, primary.outcome, primary.disposition, primary.final_disposition),
+          dispositionDate: firstCheckoutValue(raw.dispositionDate, raw.disposition_date, primary.dispositionDate, primary.disposition_date),
+          dischargeDate: firstCheckoutValue(raw.dischargeDate, raw.discharge_date, primary.dischargeDate, primary.discharge_date, primary.probation_end_date),
+          courtName,
+          court: courtName,
+          county,
+          caseState,
+          charges: normalizedCharges
+        };
+      }
+
+      function validateCheckoutCase(checkoutCase) {
+        const hasCaseOrCharge = Boolean(firstCheckoutValue(checkoutCase.caseNumber, checkoutCase.primaryCharge, checkoutCase.offenseCode));
+        const hasVenue = Boolean(firstCheckoutValue(checkoutCase.courtName, checkoutCase.county, checkoutCase.caseState));
+        if (!hasCaseOrCharge) return { ok: false, message: "Please add a case number or at least one charge before checkout." };
+        if (!hasVenue) return { ok: false, message: "Please add a court, county, or state before checkout." };
+        return { ok: true };
+      }
+
+      function setCheckoutError(message) {
+        const errorBox = document.getElementById("checkoutError");
+        if (!errorBox) return;
+        errorBox.textContent = message || "";
+        errorBox.style.display = message ? "block" : "none";
+      }
+
+      function visibleSelectedPacketRecord() {
+        const current = document.querySelector("#recordList .record-item.is-current");
+        if (!current) return null;
+        const read = (label) => {
+          const row = Array.from(current.querySelectorAll(".record-line")).find((node) => node.textContent.toLowerCase().startsWith(`${label.toLowerCase()}:`));
+          if (!row) return "";
+          return row.textContent.replace(new RegExp(`^${label}:\\s*`, "i"), "").replace(/^—$/, "").trim();
+        };
+        return {
+          caseNumber: read("Case Number"),
+          charge: (current.querySelector(".record-title")?.textContent || "").replace(/^Offense\s+\d+:\s*/i, "").replace(/^—$/, "").trim(),
+          statute: read("Statute"),
+          degree: read("Degree"),
+          outcome: read("Outcome"),
+          courtName: read("Court"),
+          county: read("County")
+        };
+      }
+
+      function packetDataAsCheckoutCase() {
+        const packet = readPacketData();
+        const selected = getSelectedPacketRecord(packet);
+        return normalizeCheckoutCase(Object.assign({}, packet, selected, {
+          court: packet.court || {},
+          charges: Array.isArray(packet.charges) ? packet.charges : []
+        }));
+      }
+
+      async function resolveCheckoutCase() {
+        const urlCaseId = new URLSearchParams(window.location.search).get("caseId");
+        if (urlCaseId && window.RecordPathUserStore?.getCaseById) {
+          const fromUrl = await RecordPathUserStore.getCaseById(urlCaseId).catch(() => null);
+          const normalized = normalizeCheckoutCase(fromUrl);
+          if (validateCheckoutCase(normalized).ok) return { source: "url", checkoutCase: normalized };
+        }
+
+        if (window.RecordPathUserStore?.getActiveCase) {
+          const active = await RecordPathUserStore.getActiveCase().catch(() => null);
+          const normalized = normalizeCheckoutCase(active);
+          if (validateCheckoutCase(normalized).ok) return { source: "active", checkoutCase: normalized };
+        }
+
+        const visible = normalizeCheckoutCase(visibleSelectedPacketRecord());
+        if (validateCheckoutCase(visible).ok) return { source: "visible", checkoutCase: visible };
+
+        const packet = packetDataAsCheckoutCase();
+        if (validateCheckoutCase(packet).ok) return { source: "packet", checkoutCase: packet };
+
+        if (!(window.RecordPathUserStore && RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn())) {
+          return { source: "anonymous", checkoutCase: packet };
+        }
+        return { source: "empty", checkoutCase: packet };
+      }
+
+      async function saveCheckoutCaseIfNeeded(checkoutCase) {
+        const isAuthenticated = Boolean(window.RecordPathUserStore && RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn());
+        if (!isAuthenticated) return checkoutCase;
+        if (!window.RecordPathUserStore.saveCase) throw new Error("Save unavailable");
+        const saved = await RecordPathUserStore.saveCase(Object.assign({}, checkoutCase, {
+          packetStatus: isPacketPaymentComplete() ? "paid" : "Packet reviewed",
+          paymentStatus: isPacketPaymentComplete() ? "paid" : "unpaid"
+        }));
+        if (!saved || !(saved.case_id || saved.id)) throw new Error("Save failed");
+        return Object.assign({}, checkoutCase, normalizeCheckoutCase(saved), {
+          saved_case_id: saved.case_id || saved.id,
+          case_id: saved.case_id || saved.id,
+          caseNumber: checkoutCase.caseNumber || saved.caseNumber
+        });
+      }
+
       async function startCheckout() {
         try {
           if (!ensurePacketPrerequisites()) return;
@@ -2637,11 +2829,35 @@ document.addEventListener("DOMContentLoaded", async function () {
               : "Eligibility needs review before payment.");
           }
 
+          setCheckoutError("");
+          const resolved = await resolveCheckoutCase();
+          let checkoutCase = resolved.checkoutCase;
+          const checkoutValidation = validateCheckoutCase(checkoutCase);
+          if (!checkoutValidation.ok) {
+            setCheckoutError(checkoutValidation.message);
+            setStatus(checkoutValidation.message, "error");
+            return;
+          }
+
+          setStatus("Saving selected case before checkout...");
+          try {
+            checkoutCase = await saveCheckoutCaseIfNeeded(checkoutCase);
+          } catch (saveError) {
+            console.error("Checkout case save failed:", saveError);
+            setCheckoutError("We could not save your case before checkout. Please try again.");
+            setStatus("We could not save your case before checkout. Please try again.", "error");
+            return;
+          }
+
           setStatus("Opening secure checkout...");
 
           const currentUser = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser ? RecordPathUserStore.getCurrentUser() : null;
           const payload = {
             userId: currentUser && currentUser.id,
+            user_id: currentUser && currentUser.id,
+            saved_case_id: safe(checkoutCase.saved_case_id || checkoutCase.case_id),
+            case_id: safe(checkoutCase.case_id || checkoutCase.saved_case_id),
+            case_number: safe(checkoutCase.caseNumber),
             applicant: {
               fullName: safe(normalizedData?.petitioner?.full_name),
               email: safe(normalizedData?.petitioner?.email),
@@ -2653,17 +2869,20 @@ document.addEventListener("DOMContentLoaded", async function () {
               zip: safe(normalizedData?.petitioner?.zip)
             },
             caseInfo: {
-              caseId: safe(normalizedData?.court?.case_number || normalizedData?.case_id),
-              caseState: safe(normalizedData?.court?.state),
-              caseNumber: safe(normalizedData?.court?.case_number),
-              chargeName: safe(normalizedData?.charges?.[0]?.offense_name),
-              offenseCode: safe(normalizedData?.charges?.[0]?.statute_citation),
-              chargeLevel: safe(normalizedData?.charges?.[0]?.level),
-              disposition: safe(normalizedData?.charges?.[0]?.disposition || normalizedData?.charges?.[0]?.final_disposition),
-              dispositionDate: safe(normalizedData?.charges?.[0]?.disposition_date),
-              dischargeDate: safe(normalizedData?.charges?.[0]?.discharge_date),
-              court: safe(normalizedData?.court?.name),
-              county: safe(normalizedData?.court?.county),
+              saved_case_id: safe(checkoutCase.saved_case_id || checkoutCase.case_id),
+              savedCaseId: safe(checkoutCase.saved_case_id || checkoutCase.case_id),
+              case_id: safe(checkoutCase.case_id || checkoutCase.saved_case_id),
+              caseId: safe(checkoutCase.case_id || checkoutCase.saved_case_id || checkoutCase.caseNumber),
+              caseState: safe(checkoutCase.caseState || normalizedData?.court?.state),
+              caseNumber: safe(checkoutCase.caseNumber),
+              chargeName: safe(checkoutCase.primaryCharge || normalizedData?.charges?.[0]?.offense_name),
+              offenseCode: safe(checkoutCase.offenseCode || normalizedData?.charges?.[0]?.statute_citation),
+              chargeLevel: safe(checkoutCase.level || normalizedData?.charges?.[0]?.level),
+              disposition: safe(checkoutCase.outcome || normalizedData?.charges?.[0]?.disposition || normalizedData?.charges?.[0]?.final_disposition),
+              dispositionDate: safe(checkoutCase.dispositionDate || normalizedData?.charges?.[0]?.disposition_date),
+              dischargeDate: safe(checkoutCase.dischargeDate || normalizedData?.charges?.[0]?.discharge_date),
+              court: safe(checkoutCase.courtName || normalizedData?.court?.name),
+              county: safe(checkoutCase.county || normalizedData?.court?.county),
               estimatedEligibleDate: safe(packetEligibility.estimatedEligibleDate || normalizedData?.eligibility?.estimated_eligible_on)
             },
             eligibility: {
@@ -2691,8 +2910,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           window.location.href = data.url;
         } catch (error) {
           console.error(error);
-          setStatus(error.message || "Checkout failed.", "error");
-          alert(error.message || "Unable to open checkout.");
+          const message = error.message || "Unable to open checkout.";
+          setCheckoutError(message);
+          setStatus(message, "error");
         }
       }
 
@@ -2705,7 +2925,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       const raw = readPacketData();
       const normalizedData = buildNormalizedPacketData(raw);
       if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
-        RecordPathUserStore.saveCase({ packetStatus: isPacketPaymentComplete() ? "Ready to generate" : "Packet reviewed" }).catch(function (error) { console.warn("Account packet review save skipped:", error); });
+        const initialCheckoutCase = packetDataAsCheckoutCase();
+        if (validateCheckoutCase(initialCheckoutCase).ok) {
+          RecordPathUserStore.saveCase(Object.assign({}, initialCheckoutCase, { packetStatus: isPacketPaymentComplete() ? "Ready to generate" : "Packet reviewed" })).catch(function (error) { console.warn("Account packet review save skipped:", error); });
+        }
       }
       const packetEligibility = calculatePacketEligibility(normalizedData);
       if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
