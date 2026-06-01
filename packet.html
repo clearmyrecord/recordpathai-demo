@@ -1173,8 +1173,13 @@ document.addEventListener("DOMContentLoaded", async function () {
   ];
 
   // ✍️ Signature storage (drawn only)
+  const SIGNATURE_REQUIRED_MESSAGE = "Please draw your signature before generating your packet.";
+  const DRAWN_SIGNATURE_SELECTED_MESSAGE = "Drawn signature selected.";
   let signatureImageBytes = null;
+  let signatureDataUrl = "";
   let signaturePadHasInk = false;
+  let selectedSignatureType = "";
+  let drawnSignatureSelected = false;
 
       function setStatus(message, mode = "normal") {
         const el = document.getElementById("statusText");
@@ -1951,6 +1956,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         return bytes;
       }
 
+      function clearSignatureValidationError() {
+        if (typeof setCheckoutError === "function") setCheckoutError("");
+      }
+
       function setupSignaturePad() {
         const canvas = document.getElementById("signaturePad");
         const ctx = canvas.getContext("2d");
@@ -1966,7 +1975,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           ctx.scale(ratio, ratio);
           ctx.lineWidth = 2;
           ctx.lineCap = "round";
+          ctx.lineJoin = "round";
           ctx.strokeStyle = "#111";
+          ctx.fillStyle = "#111";
         }
 
         let drawing = false;
@@ -1979,12 +1990,35 @@ document.addEventListener("DOMContentLoaded", async function () {
           return { x: clientX - rect.left, y: clientY - rect.top };
         }
 
+        function padContainsInk() {
+          const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+          for (let i = 3; i < pixels.length; i += 4) {
+            if (pixels[i] !== 0) return true;
+          }
+          return false;
+        }
+
+        function autoSelectDrawnSignature() {
+          if (!padContainsInk()) return false;
+          selectedSignatureType = "drawn";
+          drawnSignatureSelected = true;
+          signaturePadHasInk = true;
+          signatureDataUrl = canvas.toDataURL("image/png");
+          signatureImageBytes = dataUrlToBytes(signatureDataUrl);
+          clearSignatureValidationError();
+          setStatus(DRAWN_SIGNATURE_SELECTED_MESSAGE);
+          return true;
+        }
+
         function start(event) {
           drawing = true;
-          signatureImageBytes = null;
           const p = pointFromEvent(event);
           ctx.beginPath();
+          ctx.arc(p.x, p.y, 0.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
           ctx.moveTo(p.x, p.y);
+          autoSelectDrawnSignature();
           event.preventDefault();
         }
 
@@ -1993,12 +2027,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           const p = pointFromEvent(event);
           ctx.lineTo(p.x, p.y);
           ctx.stroke();
-          signaturePadHasInk = true;
-          signatureImageBytes = null;
+          autoSelectDrawnSignature();
           event.preventDefault();
         }
 
         function end() {
+          if (drawing) autoSelectDrawnSignature();
           drawing = false;
         }
 
@@ -2009,6 +2043,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         window.clearSignaturePadCanvas = clearPad;
         window.getSignaturePadDataUrl = () => canvas.toDataURL("image/png");
+        window.signaturePadContainsInk = padContainsInk;
 
         resizeCanvas();
         window.addEventListener("resize", resizeCanvas);
@@ -2020,25 +2055,49 @@ document.addEventListener("DOMContentLoaded", async function () {
         window.addEventListener("touchend", end);
       }
 
+      function hasUsableDrawnSignature() {
+        if (window.signaturePadContainsInk && window.signaturePadContainsInk()) {
+          signaturePadHasInk = true;
+          return setDrawnSignature({ silent: true });
+        }
+        if (signatureDataUrl) return true;
+        return selectedSignatureType === "drawn" && Boolean(signatureImageBytes);
+      }
+
       function requireSavedDrawnSignature() {
-        if (signatureImageBytes) return true;
-        setStatus("Please draw your signature before generating your packet.", "error");
+        if (hasUsableDrawnSignature()) return true;
+        setCheckoutError(SIGNATURE_REQUIRED_MESSAGE);
+        setStatus(SIGNATURE_REQUIRED_MESSAGE, "error");
         return false;
       }
 
-      function setDrawnSignature() {
-        if (!signaturePadHasInk) {
-          setStatus("Please draw your signature before generating your packet.", "error");
-          return;
+      function setDrawnSignature(options = {}) {
+        const padHasInk = window.signaturePadContainsInk ? window.signaturePadContainsInk() : signaturePadHasInk;
+        if (!padHasInk) {
+          signatureDataUrl = "";
+          signatureImageBytes = null;
+          selectedSignatureType = "";
+          drawnSignatureSelected = false;
+          setCheckoutError(SIGNATURE_REQUIRED_MESSAGE);
+          setStatus(SIGNATURE_REQUIRED_MESSAGE, "error");
+          return false;
         }
-        const dataUrl = window.getSignaturePadDataUrl();
-        signatureImageBytes = dataUrlToBytes(dataUrl);
-        setStatus("Drawn signature selected.");
+        signaturePadHasInk = true;
+        selectedSignatureType = "drawn";
+        drawnSignatureSelected = true;
+        signatureDataUrl = window.getSignaturePadDataUrl();
+        signatureImageBytes = dataUrlToBytes(signatureDataUrl);
+        clearSignatureValidationError();
+        if (!options.silent) setStatus(DRAWN_SIGNATURE_SELECTED_MESSAGE);
+        return true;
       }
 
       function clearSignature() {
         signatureImageBytes = null;
+        signatureDataUrl = "";
         signaturePadHasInk = false;
+        selectedSignatureType = "";
+        drawnSignatureSelected = false;
         if (window.clearSignaturePadCanvas) window.clearSignaturePadCanvas();
         setStatus("Signature cleared.");
       }
