@@ -91,8 +91,15 @@
       form.addEventListener("submit", async function (event) {
         event.preventDefault();
         status.textContent = "Creating your account…";
-        try { await RecordPathUserStore.signup({ fullName: fullNameInput.value, email: emailInput.value, phone: phoneInput.value, password: passwordInput.value }); RecordPathUserStore.clearReturnUrl(); window.location.href = returnUrl; }
-        catch (error) { status.textContent = error.message; }
+        try {
+          const result = await RecordPathUserStore.signup({ fullName: fullNameInput.value, email: emailInput.value, phone: phoneInput.value, password: passwordInput.value });
+          if (result && result.needsEmailConfirmation) {
+            status.textContent = "Account created. Check your email to verify your account, then log in.";
+            return;
+          }
+          RecordPathUserStore.clearReturnUrl();
+          window.location.href = returnUrl;
+        } catch (error) { status.textContent = error.message; }
       });
       document.getElementById("googleLogin").addEventListener("click", async function () {
         status.textContent = "Redirecting to Google…";
