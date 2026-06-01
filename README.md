@@ -76,3 +76,12 @@ RecordPathAI uses Supabase Auth and Postgres for production accounts. Configure 
 - `SUPABASE_ANON_KEY` (or `PUBLIC_SUPABASE_ANON_KEY`)
 
 Run `supabase/migrations/20260530000000_create_profiles_and_cases.sql` in your Supabase project to create `profiles` and `cases` with row-level security policies.
+
+Packet checkout also requires `supabase/migrations/20260531000000_saved_cases_source_of_truth.sql`, which creates `public.saved_cases`, `public.case_charges`, and `public.case_events` with owner-only RLS policies. Apply it to the live Supabase project before enabling paid packet checkout:
+
+```bash
+supabase link --project-ref <project-ref>
+supabase db push
+```
+
+If the Supabase CLI is not available, paste the SQL from `supabase/migrations/20260531000000_saved_cases_source_of_truth.sql` into the Supabase SQL Editor and run it there.

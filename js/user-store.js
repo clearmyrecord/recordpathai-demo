@@ -211,6 +211,62 @@
     console.warn("Supabase saved case load failed:", error && error.message ? error.message : error);
   }
 
+
+  function classifySupabaseCaseError(error, tableName) {
+    const code = String((error && (error.code || error.status || error.name)) || "").toLowerCase();
+    const message = String((error && error.message) || error || "");
+    const lower = message.toLowerCase();
+    const table = tableName || "saved_cases";
+    if (code === "42p01" || lower.includes("relation") && lower.includes(table) && lower.includes("does not exist") || lower.includes(`could not find the table '${table}'`)) {
+      return authError(`${table} table is missing. Apply supabase/migrations/20260531000000_saved_cases_source_of_truth.sql before checkout.`, "saved_cases_table_missing", { cause: error, supabaseError: error });
+    }
+    if (code === "42501" || lower.includes("row-level security") || lower.includes("permission denied") || lower.includes("not authorized")) {
+      return authError("Your account is signed in, but the case could not be saved because database permissions blocked the request.", "saved_cases_rls_blocked", { cause: error, supabaseError: error });
+    }
+    if (code === "pgrst204" || code.startsWith("22") || lower.includes("schema cache") || lower.includes("column") && lower.includes("does not exist") || lower.includes("invalid input syntax")) {
+      return authError(`invalid ${table} payload. The case data did not match the deployed database schema.`, "saved_cases_invalid_payload", { cause: error, supabaseError: error });
+    }
+    return authError(message || `Could not save ${table}.`, "saved_cases_save_failed", { cause: error, supabaseError: error });
+  }
+
+  async function requireCaseSaveSession(supabase) {
+    const sessionResult = await supabase.auth.getSession();
+    const session = sessionResult && sessionResult.data ? sessionResult.data.session : null;
+    const authUser = session && session.user;
+    if (!authUser || !authUser.id) {
+      currentSession = null;
+      currentUser = null;
+      throw authError("Please sign in before checkout so RecordPathAI can save this packet to your account.", "auth_session_missing");
+    }
+    currentSession = session;
+    if (!currentUser || currentUser.id !== authUser.id) currentUser = publicUser(authUser, currentUser);
+    return session;
+  }
+
+  function collectCaseMetadata(original, normalized, existingMetadata) {
+    const metadata = Object.assign({}, existingMetadata || {});
+    const knownKeys = new Set([
+      "id", "case_id", "caseId", "saved_case_id", "savedCaseId", "user_id", "userId",
+      "caseNumber", "case_number", "caseState", "case_state", "state", "county", "court", "courtName", "court_name", "courtType", "court_type", "courtId", "court_id",
+      "ruleSetId", "rule_set_id", "localProfileId", "local_profile_id", "reliefType", "relief_type", "primaryCharge", "primary_charge", "charge",
+      "offenseCode", "offense_code", "offenseLevel", "offense_level", "level", "chargeLevel", "outcome", "disposition",
+      "arrestDate", "arrest_date", "offenseDate", "offense_date", "dispositionDate", "disposition_date", "sentenceCompletionDate", "sentence_completion_date",
+      "probationCompletedDate", "probation_completed_date", "dischargeDate", "discharge_date", "finalDischargeDate", "final_discharge_date",
+      "eligibilityStatus", "eligibility_status", "eligibilityDate", "eligibility_date", "estimatedEligibleDate", "estimated_eligible_date", "estimated_eligible_on",
+      "eligibilityConfidence", "eligibility_confidence", "eligibilityReasons", "eligibility_reasons", "requiredWaitingPeriod", "required_waiting_period",
+      "dateUsedForCalculation", "date_used_for_calculation", "packetStatus", "packet_status", "recordWatchStatus", "recordwatch_status",
+      "paymentStatus", "payment_status", "metadata", "charges", "chargeDetails", "case_charges", "createdAt", "created_at", "updatedAt", "updated_at", "lastUpdated",
+      "deletedAt", "deleted_at", "archivedAt", "archived_at", "status"
+    ]);
+    const unknown = {};
+    Object.keys(original || {}).forEach(function (key) {
+      if (!knownKeys.has(key)) unknown[key] = original[key];
+    });
+    if (Object.keys(unknown).length) metadata.unmapped_case_fields = Object.assign({}, metadata.unmapped_case_fields || {}, unknown);
+    if (normalized.paymentStatus) metadata.payment_status = normalized.paymentStatus;
+    return metadata;
+  }
+
   async function signup({ fullName, email, phone, password }) {
     const normalizedEmail = normalizeEmail(email);
     if (!fullName || !String(fullName).trim()) throw new Error("Full name is required.");
@@ -696,12 +752,12 @@
     });
   }
 
-  function casePayload(caseData) {
-    const item = normalizeCase(caseData);
-    const metadata = Object.assign({}, item.metadata || {});
-    if (item.paymentStatus) metadata.payment_status = item.paymentStatus;
-    return {
-      user_id: currentUser.id,
+  function casePayload(caseData, userId) {
+    const original = caseData || {};
+    const item = normalizeCase(original);
+    const metadata = collectCaseMetadata(original, item, item.metadata);
+    const payload = {
+      user_id: userId,
       case_number: item.caseNumber || null,
       case_state: item.caseState || null,
       county: item.county || null,
@@ -729,13 +785,13 @@
       required_waiting_period: item.requiredWaitingPeriod || null,
       date_used_for_calculation: item.dateUsedForCalculation || null,
       packet_status: statusForDb(item.packetStatus, "not_generated"),
-      packet_generated_at: item.packetGeneratedAt || null,
-      packet_paid_at: item.packetPaidAt || null,
       recordwatch_status: statusForDb(item.recordWatchStatus, "not_activated"),
-      recordwatch_paused_at: item.recordWatchPausedAt || null,
       metadata,
       updated_at: nowIso()
     };
+    const sourceId = firstNonEmpty(original.id, original.case_id, original.caseId, original.saved_case_id, original.savedCaseId);
+    if (isUuid(sourceId)) payload.id = sourceId;
+    return payload;
   }
 
   async function fetchCaseCharges(supabase, caseIds) {
@@ -830,28 +886,43 @@
 
   async function getActiveCase() { return getCaseById(localStorage.getItem(ACTIVE_CASE_KEY)); }
 
-  async function syncCharges(caseId, caseData) {
+  async function syncCharges(caseId, caseData, options) {
     const chargeRows = normalizeCase(caseData).chargeDetails;
     const supabase = await client();
-    const deleteResult = await supabase.from("case_charges").delete().eq("case_id", caseId).eq("user_id", currentUser.id);
-    if (deleteResult.error) throw new Error(deleteResult.error.message);
+    const userId = currentUser && currentUser.id;
+    const deleteResult = await supabase.from("case_charges").delete().eq("case_id", caseId).eq("user_id", userId);
+    if (deleteResult.error) throw classifySupabaseCaseError(deleteResult.error, "case_charges");
     if (!chargeRows.length) return [];
     const payload = chargeRows.map(function (charge) {
       return {
-        user_id: currentUser.id,
+        user_id: userId,
         case_id: caseId,
         charge_name: charge.charge_name || null,
         offense_code: charge.offense_code || null,
         offense_level: charge.offense_level || null,
         offense_date: charge.offense_date || null,
         charge_notes: charge.charge_notes || null,
-        flags: charge.flags || {},
+        flags: charge.flags && typeof charge.flags === "object" ? charge.flags : {},
         updated_at: nowIso()
       };
     });
     const { data, error } = await supabase.from("case_charges").insert(payload).select("*");
-    if (error) throw new Error(error.message);
+    if (error) throw classifySupabaseCaseError(error, "case_charges");
     return data || [];
+  }
+
+  async function syncChargesForSavedCase(caseId, caseData) {
+    try {
+      return await syncCharges(caseId, caseData);
+    } catch (error) {
+      console.error("Case charge save failed after saved_cases save succeeded:", {
+        code: error && error.code,
+        message: error && error.message,
+        details: error && error.details,
+        cause: error && error.cause
+      });
+      return [];
+    }
   }
 
   async function updateCase(caseId, updates) {
@@ -861,7 +932,7 @@
     const next = normalizeCase(Object.assign({}, found, updates || {}, { case_id: found.case_id, id: found.case_id, updatedAt: nowIso(), lastUpdated: nowIso() }));
     if (currentUser && isUuid(next.case_id)) {
       const supabase = await client();
-      const payload = casePayload(next);
+      const payload = casePayload(next, currentUser.id);
       if (String(next.packetStatus).toLowerCase() === "generated" && !payload.packet_generated_at) payload.packet_generated_at = nowIso();
       if ((String(next.packetStatus).toLowerCase() === "paid" || String(next.paymentStatus).toLowerCase() === "paid") && !payload.packet_paid_at) payload.packet_paid_at = nowIso();
       if (String(next.recordWatchStatus).toLowerCase() === "paused" && !payload.recordwatch_paused_at) payload.recordwatch_paused_at = nowIso();
@@ -942,7 +1013,7 @@
   async function findExistingRemoteCase(supabase, nextCase) {
     if (isUuid(nextCase.case_id)) {
       const byId = await supabase.from("saved_cases").select("*").eq("user_id", currentUser.id).eq("id", nextCase.case_id).is("deleted_at", null).maybeSingle();
-      if (byId.error) throw new Error(byId.error.message);
+      if (byId.error) throw classifySupabaseCaseError(byId.error, "saved_cases");
       if (byId.data) return byId.data;
     }
     const composite = getCaseCompositeKey(nextCase);
@@ -952,7 +1023,7 @@
     if (nextCase.county) query.eq("county", nextCase.county);
     if (nextCase.caseState) query.eq("case_state", nextCase.caseState);
     const lookup = await query.order("updated_at", { ascending: false }).limit(1).maybeSingle();
-    if (lookup.error) throw new Error(lookup.error.message);
+    if (lookup.error) throw classifySupabaseCaseError(lookup.error, "saved_cases");
     return lookup.data || null;
   }
 
@@ -975,15 +1046,22 @@
       return nextCase;
     }
     const supabase = await client();
+    const session = await requireCaseSaveSession(supabase);
+    const userId = session.user.id;
+    currentUser = Object.assign({}, currentUser, { id: userId });
     const existing = await findExistingRemoteCase(supabase, nextCase);
-    const payload = casePayload(nextCase);
-    if (String(nextCase.packetStatus).toLowerCase().includes("generated") && !payload.packet_generated_at) payload.packet_generated_at = nowIso();
-    if ((String(nextCase.packetStatus).toLowerCase().includes("paid") || String(nextCase.paymentStatus).toLowerCase().includes("paid")) && !payload.packet_paid_at) payload.packet_paid_at = nowIso();
-    if (String(nextCase.recordWatchStatus).toLowerCase().includes("pause") && !payload.recordwatch_paused_at) payload.recordwatch_paused_at = nowIso();
+    const payload = casePayload(nextCase, userId);
     if (existing) payload.id = existing.id;
-    const { data, error } = await supabase.from("saved_cases").upsert(payload).select("*").single();
-    if (error) throw new Error(error.message);
-    const charges = await syncCharges(data.id, nextCase);
+
+    let result;
+    if (existing && existing.id) {
+      result = await supabase.from("saved_cases").update(payload).eq("id", existing.id).eq("user_id", userId).select("*").single();
+    } else {
+      result = await supabase.from("saved_cases").insert(payload).select("*").single();
+    }
+    if (result.error) throw classifySupabaseCaseError(result.error, "saved_cases");
+    const data = result.data;
+    const charges = await syncChargesForSavedCase(data.id, nextCase);
     const saved = normalizeDbCase(Object.assign({}, data, { case_charges: charges }));
     cachedCases = activeCases(getCases().filter(function (item) { return item.case_id !== saved.case_id && getCaseCompositeKey(item) !== getCaseCompositeKey(saved); }).concat(saved));
     saveLocalCases(cachedCases);
