@@ -1119,13 +1119,42 @@
   <script src="js/workflow.js"></script>
  <script>
 document.addEventListener("DOMContentLoaded", async function () {
+      function persistResolvedPacketCase(caseData) {
+        if (!caseData || !window.RecordPathUserStore || typeof RecordPathUserStore.caseToPacketData !== "function") return null;
+        const packet = RecordPathUserStore.caseToPacketData(caseData);
+        const stableId = caseData.case_id || caseData.caseId || caseData.id || "";
+        if (stableId) {
+          packet.case_id = stableId;
+          packet.caseId = stableId;
+          packet.meta = Object.assign({}, packet.meta || {}, { saved_case_id: stableId });
+        }
+        if (window.RecordPathDataBridge && typeof RecordPathDataBridge.savePacketData === "function") {
+          RecordPathDataBridge.savePacketData(packet);
+        } else {
+          localStorage.setItem("recordPathPacketData", JSON.stringify(packet));
+        }
+        if (caseData.case_id || caseData.caseId || caseData.id) {
+          localStorage.setItem("recordPathActiveCaseId", caseData.case_id || caseData.caseId || caseData.id);
+        }
+        return packet;
+      }
+
       async function loadCaseFromUrl() {
+        if (window.RecordPathSupabase && RecordPathSupabase.ready) await RecordPathSupabase.ready.catch(function () { return null; });
+        if (window.RecordPathUserStore && RecordPathUserStore.ready) await RecordPathUserStore.ready;
         const caseId = new URLSearchParams(window.location.search).get("caseId");
-        if (!caseId || !window.RecordPathUserStore) return true;
-        const found = await RecordPathUserStore.setActiveCase(caseId);
-        if (!found) {
-          document.querySelector("main")?.insertAdjacentHTML("afterbegin", '<section class="page-section"><div class="container"><div class="empty-state case-page-error"><h2>We could not find that saved case.</h2><p>Please choose another case from your dashboard.</p><a class="btn" href="dashboard.html">Back to dashboard</a></div></div></section>');
-          return false;
+        if (caseId && window.RecordPathUserStore) {
+          const found = await RecordPathUserStore.setActiveCase(caseId);
+          if (!found) {
+            document.querySelector("main")?.insertAdjacentHTML("afterbegin", '<section class="page-section"><div class="container"><div class="empty-state case-page-error"><h2>We could not find that saved case.</h2><p>Please choose another case from your dashboard.</p><a class="btn" href="dashboard.html">Back to dashboard</a></div></div></section>');
+            return false;
+          }
+          persistResolvedPacketCase(found);
+          return true;
+        }
+        if (window.RecordPathUserStore && RecordPathUserStore.getActiveCase) {
+          const active = await RecordPathUserStore.getActiveCase().catch(function () { return null; });
+          if (active) persistResolvedPacketCase(active);
         }
         return true;
       }
@@ -1659,7 +1688,46 @@ document.addEventListener("DOMContentLoaded", async function () {
         return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
       }
 
+      function firstNonEmpty() {
+        for (const value of arguments) if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+        return "";
+      }
+
+      function normalizePacketCharge(charge) {
+        const source = charge || {};
+        return Object.assign({}, source, {
+          charge_name: firstNonEmpty(source.charge_name, source.chargeName, source.primaryCharge, source.charge, source.offense, source.offenseName, source.offense_name),
+          charge_code: firstNonEmpty(source.charge_code, source.offenseCode, source.offense_code, source.statute, source.statuteCode, source.statute_citation),
+          case_number: firstNonEmpty(source.case_number, source.caseNumber, source.case_no, source.docketNumber, source.docket_number),
+          court_name: firstNonEmpty(source.court_name, source.courtName, source.court),
+          court_county: firstNonEmpty(source.court_county, source.county, source.caseCounty),
+          case_state: firstNonEmpty(source.case_state, source.caseState, source.state),
+          level: firstNonEmpty(source.level, source.degree, source.offenseLevel, source.offense_level, source.chargeLevel),
+          final_disposition: firstNonEmpty(source.final_disposition, source.outcome, source.disposition),
+          disposition: firstNonEmpty(source.disposition, source.outcome, source.final_disposition)
+        });
+      }
+
+      function normalizeRawPacketCase(raw) {
+        const source = raw || {};
+        const charges = Array.isArray(source.charges) ? source.charges.map(normalizePacketCharge) : [];
+        if (!charges.length && firstNonEmpty(source.charge, source.chargeName, source.primaryCharge, source.offense, source.offenseName)) charges.push(normalizePacketCharge(source));
+        const first = charges[0] || {};
+        const court = source.court || {};
+        return Object.assign({}, source, {
+          charges,
+          court: Object.assign({}, court, {
+            case_number: firstNonEmpty(court.case_number, court.caseNumber, source.caseNumber, source.case_number, source.case_no, source.docketNumber, source.docket_number, first.case_number),
+            docket_number: firstNonEmpty(court.docket_number, court.docketNumber, first.case_number),
+            name: firstNonEmpty(court.name, court.courtName, court.court_name, court.court, source.courtName, source.court_name, source.court, first.court_name),
+            county: firstNonEmpty(court.county, source.county, source.caseCounty, first.court_county),
+            state: firstNonEmpty(court.state, court.caseState, court.case_state, source.caseState, source.case_state, source.state, first.case_state)
+          })
+        });
+      }
+
       function buildNormalizedPacketData(raw) {
+        raw = normalizeRawPacketCase(raw || {});
         const petitioner = raw.petitioner || {};
         const address = petitioner.address || {};
         const charges = Array.isArray(raw.charges) ? raw.charges : [];
@@ -1673,10 +1741,12 @@ document.addEventListener("DOMContentLoaded", async function () {
             .replace(/\s+/g, " ")
             .trim();
 
-        const state = normalizeState(primary.case_state || raw.court?.state || raw.meta?.source_state || "OH");
-        const county = primary.court_county || raw.court?.county || raw.meta?.source_county || "Wood County";
+        const state = normalizeState(firstNonEmpty(primary.case_state, raw.court?.state, raw.meta?.source_state, "OH"));
+        const county = firstNonEmpty(primary.court_county, raw.court?.county, raw.meta?.source_county, "Wood County");
 
-        const normalizedCharges = charges.length ? charges.map((charge) => ({
+        const normalizedCharges = charges.length ? charges.map((rawCharge) => {
+          const charge = normalizePacketCharge(rawCharge);
+          return {
           charge_name: charge.charge_name || "",
           charge_code: charge.charge_code || "",
           level: charge.level || charge.degree || "",
@@ -1711,7 +1781,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           fine_amount_due: charge.fine_amount_due || "",
           restitution_due: charge.restitution_due || "",
           notes: charge.notes || ""
-        })) : [{
+        }}) : [{
           charge_name: "",
           charge_code: "",
           level: "",
@@ -2234,10 +2304,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       function ensurePacketPrerequisites() {
         if (!window.RecordPathWorkflow) return true;
-        const missing = RecordPathWorkflow.getMissingPacketPrerequisites();
+        const missing = RecordPathWorkflow.getMissingPacketPrerequisites().map(function (message) {
+          return message === "Add at least one charge or case number." ? "Please add a case number or at least one charge before checkout." : message;
+        });
         if (!missing.length) return true;
         setStatus(missing.join(" "), "error");
-        alert(missing.join("\n"));
         return false;
       }
 
@@ -2622,13 +2693,97 @@ document.addEventListener("DOMContentLoaded", async function () {
         return "/api/create-checkout-session";
       }
 
+
+      function packetRecordValidation(data) {
+        const rawNormalized = normalizeRawPacketCase(data || readPacketData());
+        const selected = getSelectedPacketRecord(rawNormalized);
+        const hasCaseOrCharge = Boolean(firstNonEmpty(rawNormalized.court?.case_number, selected.case_number, selected.charge_name, selected.offense_name));
+        const hasCourtOrLocation = Boolean(firstNonEmpty(rawNormalized.court?.name, selected.court_name) || (firstNonEmpty(rawNormalized.court?.county, selected.court_county) && firstNonEmpty(rawNormalized.court?.state, selected.case_state)));
+        if (!hasCaseOrCharge) return { ok: false, message: "Please add a case number or at least one charge before checkout." };
+        if (!hasCourtOrLocation) return { ok: false, message: "Please add the court name or county/state before checkout." };
+        return { ok: true, normalized: buildNormalizedPacketData(rawNormalized) };
+      }
+
+      async function resolveCurrentPacketCaseForCheckout() {
+        if (window.RecordPathSupabase && RecordPathSupabase.ready) await RecordPathSupabase.ready.catch(function () { return null; });
+        if (window.RecordPathUserStore && RecordPathUserStore.ready) await RecordPathUserStore.ready;
+        const params = new URLSearchParams(window.location.search);
+        const caseId = params.get("caseId");
+        if (caseId && window.RecordPathUserStore && RecordPathUserStore.getCaseById) {
+          const found = await RecordPathUserStore.getCaseById(caseId).catch(function () { return null; });
+          if (found) {
+            persistResolvedPacketCase(found);
+            return { caseRecord: found, packetData: readPacketData() };
+          }
+        }
+        if (window.RecordPathUserStore && RecordPathUserStore.getActiveCase) {
+          const active = await RecordPathUserStore.getActiveCase().catch(function () { return null; });
+          if (active && RecordPathUserStore.hasMeaningfulCaseData && RecordPathUserStore.hasMeaningfulCaseData(active)) {
+            persistResolvedPacketCase(active);
+            return { caseRecord: active, packetData: readPacketData() };
+          }
+        }
+        const packetData = normalizeRawPacketCase(readPacketData());
+        persistPacketData(packetData);
+        return { caseRecord: null, packetData };
+      }
+
+      function caseInputFromPacketData(packetData, normalizedData) {
+        const normalized = normalizedData || buildNormalizedPacketData(packetData || readPacketData());
+        const selected = getSelectedPacketRecord(normalized);
+        const packetCaseId = firstNonEmpty(packetData?.case_id, packetData?.caseId, selected.id);
+        return {
+          case_id: packetCaseId || firstNonEmpty(normalized.court?.case_number),
+          caseId: packetCaseId || firstNonEmpty(normalized.court?.case_number),
+          caseNumber: firstNonEmpty(normalized.court?.case_number, selected.case_number),
+          caseState: firstNonEmpty(normalized.court?.state, selected.case_state),
+          county: firstNonEmpty(normalized.court?.county, selected.court_county),
+          courtName: firstNonEmpty(normalized.court?.name, selected.court_name),
+          court: firstNonEmpty(normalized.court?.name, selected.court_name),
+          primaryCharge: firstNonEmpty(selected.charge_name, selected.offense_name),
+          offenseCode: firstNonEmpty(selected.charge_code, selected.statute_citation),
+          level: firstNonEmpty(selected.level, selected.degree),
+          outcome: firstNonEmpty(selected.final_disposition, selected.disposition),
+          dispositionDate: selected.disposition_date,
+          dischargeDate: firstNonEmpty(selected.discharge_date, selected.probation_end_date),
+          charges: normalized.charges.map(function (charge) {
+            return {
+              charge_name: firstNonEmpty(charge.charge_name, charge.offense_name),
+              offense_code: firstNonEmpty(charge.charge_code, charge.statute_citation),
+              offense_level: firstNonEmpty(charge.level, charge.degree),
+              offense_date: charge.offense_date,
+              disposition: firstNonEmpty(charge.final_disposition, charge.disposition)
+            };
+          }),
+          packetStatus: "reviewed",
+          paymentStatus: "unpaid"
+        };
+      }
+
+      async function saveCurrentPacketCaseBeforeCheckout(packetData, normalizedData) {
+        if (!window.RecordPathUserStore || !RecordPathUserStore.isLoggedIn || !RecordPathUserStore.isLoggedIn()) return null;
+        const caseInput = caseInputFromPacketData(packetData, normalizedData);
+        try {
+          const saved = await RecordPathUserStore.saveCase(caseInput);
+          if (!saved || !(saved.case_id || saved.caseId || saved.id)) throw new Error("missing_saved_case_id");
+          persistResolvedPacketCase(saved);
+          return saved;
+        } catch (error) {
+          console.warn("Packet case save before checkout failed:", error);
+          throw new Error("We could not save your case before checkout. Please try again.");
+        }
+      }
+
       async function startCheckout() {
         try {
+          const resolved = await resolveCurrentPacketCaseForCheckout();
+          const raw = resolved.packetData || readPacketData();
+          const normalizedData = buildNormalizedPacketData(raw);
+          const validation = packetRecordValidation(raw);
+          if (!validation.ok) { setStatus(validation.message, "error"); return; }
           if (!ensurePacketPrerequisites()) return;
           if (!requireSavedDrawnSignature()) return;
-          if (window.RecordPathAuth && !RecordPathAuth.requireAuth("pay for and unlock your packet", "packet.html")) return;
-          const raw = readPacketData();
-          const normalizedData = buildNormalizedPacketData(raw);
+          if (window.RecordPathAuth && !await RecordPathAuth.requireAuthAsync("pay for and unlock your packet", RecordPathAuth.currentPageUrl ? RecordPathAuth.currentPageUrl() : "packet.html")) return;
           const packetEligibility = calculatePacketEligibility(normalizedData);
           if (!packetEligibility.isEligibleNow) {
             throw new Error(packetEligibility.isNotYetEligible
@@ -2638,6 +2793,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
           setStatus("Opening secure checkout...");
 
+          const savedCase = await saveCurrentPacketCaseBeforeCheckout(raw, normalizedData);
+          const savedCaseId = savedCase && (savedCase.case_id || savedCase.caseId || savedCase.id);
           const currentUser = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser ? RecordPathUserStore.getCurrentUser() : null;
           const payload = {
             userId: currentUser && currentUser.id,
@@ -2652,11 +2809,12 @@ document.addEventListener("DOMContentLoaded", async function () {
               zip: safe(normalizedData?.petitioner?.zip)
             },
             caseInfo: {
-              caseId: safe(normalizedData?.court?.case_number || normalizedData?.case_id),
+              caseId: safe(savedCaseId || normalizedData?.case_id || normalizedData?.court?.case_number),
+              saved_case_id: safe(savedCaseId),
               caseState: safe(normalizedData?.court?.state),
               caseNumber: safe(normalizedData?.court?.case_number),
-              chargeName: safe(normalizedData?.charges?.[0]?.offense_name),
-              offenseCode: safe(normalizedData?.charges?.[0]?.statute_citation),
+              chargeName: safe(normalizedData?.charges?.[0]?.offense_name || normalizedData?.charges?.[0]?.charge_name),
+              offenseCode: safe(normalizedData?.charges?.[0]?.statute_citation || normalizedData?.charges?.[0]?.charge_code),
               chargeLevel: safe(normalizedData?.charges?.[0]?.level),
               disposition: safe(normalizedData?.charges?.[0]?.disposition || normalizedData?.charges?.[0]?.final_disposition),
               dispositionDate: safe(normalizedData?.charges?.[0]?.disposition_date),
@@ -2671,7 +2829,11 @@ document.addEventListener("DOMContentLoaded", async function () {
               manualReview: packetEligibility.needsReview || Boolean(normalizedData?.eligibility?.manualReview)
             },
             amount: 5000,
-            currency: "usd"
+            currency: "usd",
+            metadata: {
+              saved_case_id: safe(savedCaseId),
+              case_id: safe(savedCaseId || normalizedData?.case_id || normalizedData?.court?.case_number)
+            }
           };
 
           const checkoutEndpoint = getCheckoutEndpoint();
@@ -2689,8 +2851,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           window.location.href = data.url;
         } catch (error) {
           console.error(error);
-          setStatus(error.message || "Checkout failed.", "error");
-          alert(error.message || "Unable to open checkout.");
+          setStatus(error.message || "Unable to open checkout.", "error");
         }
       }
 

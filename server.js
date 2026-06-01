@@ -1141,7 +1141,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
         productType: safe(productType),
         orderId: internalOrderId,
         userId: safe((req.body || {}).user_id || (req.body || {}).userId),
-        caseId: safe(caseInfo.caseId || caseInfo.case_id || caseInfo.caseNumber),
+        caseId: safe(caseInfo.caseId || caseInfo.case_id || (req.body || {}).case_id || (req.body || {}).caseId || caseInfo.caseNumber),
+        saved_case_id: safe(caseInfo.saved_case_id || caseInfo.savedCaseId || (req.body || {}).saved_case_id || (req.body || {}).savedCaseId || ((req.body || {}).metadata && (req.body || {}).metadata.saved_case_id)),
+        case_id: safe(caseInfo.case_id || caseInfo.caseId || (req.body || {}).case_id || (req.body || {}).caseId || ((req.body || {}).metadata && (req.body || {}).metadata.case_id)),
 
         fullName: safe(applicant.fullName),
         email: safe(applicant.email),

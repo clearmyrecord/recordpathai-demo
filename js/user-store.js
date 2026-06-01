@@ -48,6 +48,46 @@
     return Array.isArray(identities) && identities.length === 0;
   }
 
+
+  function decodeReturnUrl(value) {
+    let current = String(value || "").trim();
+    for (let i = 0; i < 4; i += 1) {
+      try {
+        const decoded = decodeURIComponent(current);
+        if (decoded === current) break;
+        current = decoded;
+      } catch (_error) { break; }
+    }
+    return current;
+  }
+
+  function authPageName(value) {
+    const decoded = decodeReturnUrl(value).replace(/^https?:\/\/[^/]+/i, "").replace(/^\/+/, "");
+    const page = (decoded.split(/[?#]/)[0].split("/").pop() || "").toLowerCase();
+    return page === "login.html" || page === "signup.html" ? page : "";
+  }
+
+  function nestedReturnUrl(value) {
+    const decoded = decodeReturnUrl(value);
+    const query = decoded.split("?")[1] || "";
+    const params = new URLSearchParams(query.split("#")[0] || "");
+    return params.get("returnUrl") || "";
+  }
+
+  function sanitizeReturnUrl(returnUrl, fallback) {
+    let target = decodeReturnUrl(returnUrl || "");
+    const fallbackTarget = fallback || "dashboard.html";
+    for (let i = 0; i < 4 && authPageName(target); i += 1) target = nestedReturnUrl(target) || fallbackTarget;
+    if (!target || authPageName(target)) target = fallbackTarget;
+    if (/^https?:\/\//i.test(target)) {
+      try {
+        const url = new URL(target);
+        target = url.origin === window.location.origin ? `${url.pathname.replace(/^\//, "")}${url.search}${url.hash}` : fallbackTarget;
+      } catch (_error) { target = fallbackTarget; }
+    }
+    return target;
+  }
+
   function authRedirectUrl() {
     const basePath = window.location.pathname.replace(/[^/]*$/, "");
     return `${window.location.origin}${basePath}login.html?returnUrl=${encodeURIComponent(getReturnUrl("dashboard.html"))}`;
@@ -205,9 +245,10 @@
   }
 
   async function loginWithGoogle(returnUrl) {
-    if (returnUrl) localStorage.setItem(RETURN_KEY, returnUrl);
+    const target = sanitizeReturnUrl(returnUrl || getReturnUrl("dashboard.html"), "dashboard.html");
+    if (target) localStorage.setItem(RETURN_KEY, target);
     const supabase = await client();
-    const redirectTo = `${window.location.origin}${window.location.pathname}?returnUrl=${encodeURIComponent(returnUrl || getReturnUrl("dashboard.html"))}`;
+    const redirectTo = `${window.location.origin}${window.location.pathname}?returnUrl=${encodeURIComponent(target)}`;
     const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
     if (error) throw new Error(error.message);
   }
@@ -993,7 +1034,9 @@
 
   function getReturnUrl(defaultUrl) {
     const params = new URLSearchParams(window.location.search);
-    return params.get("returnUrl") || localStorage.getItem(RETURN_KEY) || defaultUrl || "dashboard.html";
+    const target = sanitizeReturnUrl(params.get("returnUrl") || localStorage.getItem(RETURN_KEY) || defaultUrl || "dashboard.html", defaultUrl || "dashboard.html");
+    if (target) localStorage.setItem(RETURN_KEY, target);
+    return target;
   }
   function clearReturnUrl() { localStorage.removeItem(RETURN_KEY); }
 
@@ -1050,6 +1093,7 @@
     saveDraftSnapshot,
     getReturnUrl,
     clearReturnUrl,
+    sanitizeReturnUrl,
     hasLegacyDemoData,
     importLegacyDemoData,
     dismissLegacyImport,

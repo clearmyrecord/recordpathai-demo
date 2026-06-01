@@ -15,24 +15,70 @@
     return `${path}${window.location.search || ""}${window.location.hash || ""}`;
   }
 
-  function signupUrl(returnUrl) { return `${relativeRoot()}signup.html?returnUrl=${encodeURIComponent(returnUrl || currentPageUrl())}`; }
-  function loginUrl(returnUrl) { return `${relativeRoot()}login.html?returnUrl=${encodeURIComponent(returnUrl || currentPageUrl())}`; }
+  function decodeReturnUrl(value) {
+    let current = String(value || "").trim();
+    for (let i = 0; i < 4; i += 1) {
+      try {
+        const decoded = decodeURIComponent(current);
+        if (decoded === current) break;
+        current = decoded;
+      } catch (_error) { break; }
+    }
+    return current;
+  }
+
+  function authPageName(value) {
+    const decoded = decodeReturnUrl(value).replace(/^https?:\/\/[^/]+/i, "").replace(/^\/+/, "");
+    const page = (decoded.split(/[?#]/)[0].split("/").pop() || "").toLowerCase();
+    return page === "login.html" || page === "signup.html" ? page : "";
+  }
+
+  function nestedReturnUrl(value) {
+    const decoded = decodeReturnUrl(value);
+    const query = decoded.split("?")[1] || "";
+    const params = new URLSearchParams(query.split("#")[0] || "");
+    return params.get("returnUrl") || "";
+  }
+
+  function sanitizeReturnUrl(returnUrl, fallback) {
+    let target = decodeReturnUrl(returnUrl || "");
+    const fallbackTarget = fallback || "dashboard.html";
+    for (let i = 0; i < 4 && authPageName(target); i += 1) {
+      target = nestedReturnUrl(target) || fallbackTarget;
+    }
+    if (!target || authPageName(target)) target = fallbackTarget;
+    if (/^https?:\/\//i.test(target)) {
+      try {
+        const url = new URL(target);
+        target = url.origin === window.location.origin ? `${url.pathname.replace(/^\//, "")}${url.search}${url.hash}` : fallbackTarget;
+      } catch (_error) { target = fallbackTarget; }
+    }
+    return target;
+  }
+
+  function authReturnTarget(returnUrl) {
+    return sanitizeReturnUrl(returnUrl || currentPageUrl(), "dashboard.html");
+  }
+
+  function signupUrl(returnUrl) { return `${relativeRoot()}signup.html?returnUrl=${encodeURIComponent(authReturnTarget(returnUrl))}`; }
+  function loginUrl(returnUrl) { return `${relativeRoot()}login.html?returnUrl=${encodeURIComponent(authReturnTarget(returnUrl))}`; }
 
   function preserveIntake(returnUrl) {
     if (window.RecordPathUserStore && typeof RecordPathUserStore.saveDraftSnapshot === "function") RecordPathUserStore.saveDraftSnapshot(returnUrl || currentPageUrl());
   }
 
   async function ensureReady() {
+    if (window.RecordPathSupabase && RecordPathSupabase.ready) await RecordPathSupabase.ready.catch(function () { return null; });
     if (window.RecordPathUserStore && RecordPathUserStore.ready) await RecordPathUserStore.ready;
     return window.RecordPathUserStore || null;
   }
 
   function redirectToSignup(action, returnUrl) {
-    const target = returnUrl || currentPageUrl();
+    const target = authReturnTarget(returnUrl || currentPageUrl());
     preserveIntake(target);
     const label = action ? ` to ${action}` : "";
     sessionStorage.setItem("recordPathAuthPrompt", `Create an account or sign in${label}.`);
-    window.location.href = signupUrl(target);
+    window.location.href = loginUrl(target);
   }
 
   function requireAuth(action, returnUrl) {
@@ -155,7 +201,7 @@
         if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        requireAuth(node.getAttribute("data-auth-action") || node.textContent.trim(), node.getAttribute("data-return-url") || currentPageUrl());
+        requireAuth(node.getAttribute("data-auth-action") || node.textContent.trim(), authReturnTarget(node.getAttribute("data-return-url") || currentPageUrl()));
       }, true);
     });
   }
@@ -164,6 +210,7 @@
     currentPageUrl,
     signupUrl,
     loginUrl,
+    sanitizeReturnUrl,
     relativeRoot,
     preserveIntake,
     requireAuth,

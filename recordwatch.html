@@ -62,7 +62,7 @@
           <p>RecordWatch tracks your eligibility timeline and reminds you when it may be time to take action.</p>
           <div class="hero-actions">
             <a class="btn" href="eligibility.html">Start Eligibility Check</a>
-            <a class="btn secondary" href="recordwatch-dashboard.html">View Dashboard</a>
+            <a class="btn secondary" href="recordwatch-dashboard.html" data-requires-auth data-auth-action="open RecordWatch dashboard" data-return-url="recordwatch-dashboard.html">View Dashboard</a>
             <a class="btn secondary" href="recordwatch-relief.html">Relief Actions</a>
             <a class="btn secondary" href="recordwatch-intake.html">Advanced Case Intake</a>
           </div>
@@ -189,8 +189,9 @@
       var smsToggle = document.getElementById("recordwatchNotifySms");
       var smsNotice = document.getElementById("recordwatchSmsNotice");
       smsToggle.addEventListener("change", function () { smsNotice.hidden = !smsToggle.checked; });
-      document.getElementById("recordwatchEnrollmentForm").addEventListener("submit", function (event) {
+      document.getElementById("recordwatchEnrollmentForm").addEventListener("submit", async function (event) {
         event.preventDefault();
+        if (window.RecordPathAuth && !await RecordPathAuth.requireAuthAsync("activate RecordWatch", "recordwatch.html#recordwatch-enrollment")) return;
         var wantsSms = document.getElementById("recordwatchNotifySms").checked;
         var subscription = RecordWatchNotifications.registerSubscription({
           userId: (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id) || (profile.email || profile.fullName || "demo-user"),
@@ -213,10 +214,5 @@
     });
   </script>
 
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      if (window.RecordPathAuth) RecordPathAuth.requireProtectedPageAsync("open RecordWatch");
-    });
-  </script>
 </body>
 </html>

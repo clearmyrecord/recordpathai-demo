@@ -212,15 +212,18 @@
       if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
         RecordWatchBridge.syncExistingRecordPathData();
       }
-      render();
-      if (window.RecordWatchNotifications && RecordWatchNotifications.fetchRemoteData) {
-        var userId = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id;
-        RecordWatchNotifications.fetchRemoteData(userId).then(function (data) {
-          recordwatchDataNotice.textContent = data.source === "local_fallback" ? data.fallbackNote : "Showing Supabase-saved RecordWatch data synced to the latest case calculation.";
-          if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();
-          render();
-        });
-      }
+      (window.RecordPathAuth ? RecordPathAuth.requireProtectedPageAsync("open RecordWatch dashboard") : Promise.resolve(true)).then(function (authorized) {
+        if (!authorized) return;
+        render();
+        if (window.RecordWatchNotifications && RecordWatchNotifications.fetchRemoteData) {
+          var userId = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id;
+          RecordWatchNotifications.fetchRemoteData(userId).then(function (data) {
+            recordwatchDataNotice.textContent = data.source === "local_fallback" ? data.fallbackNote : "Showing Supabase-saved RecordWatch data synced to the latest case calculation.";
+            if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();
+            render();
+          });
+        }
+      });
 
       var caseIdParamHandled = false;
       async function handleCaseIdParam() {
@@ -232,11 +235,6 @@
         if (!found) recordwatchDataNotice.innerHTML = '<div class="empty-state case-page-error"><h2>We could not find that saved case.</h2><p>Please choose another case from your dashboard.</p><a class="btn" href="dashboard.html">Back to dashboard</a></div>';
       }
     }());
-  </script>
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      if (window.RecordPathAuth) RecordPathAuth.requireProtectedPageAsync("open RecordWatch");
-    });
   </script>
 </body>
 </html>

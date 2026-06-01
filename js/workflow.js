@@ -59,20 +59,42 @@
     if (!charge || typeof charge !== "object") return false;
     return [
       charge.charge_name,
+      charge.chargeName,
+      charge.primaryCharge,
+      charge.offense,
+      charge.offenseName,
       charge.offense_name,
+      charge.charge,
       charge.charge_code,
+      charge.offenseCode,
+      charge.offense_code,
+      charge.statute,
+      charge.statuteCode,
       charge.case_number,
+      charge.caseNumber,
+      charge.case_no,
+      charge.docketNumber,
+      charge.docket_number,
       charge.court_name,
+      charge.courtName,
+      charge.court,
       charge.disposition,
+      charge.outcome,
       charge.final_disposition
     ].some(hasText);
+  }
+
+  function hasPacketCaseNumber(data) {
+    const first = Array.isArray(data.charges) ? data.charges[0] || {} : {};
+    const court = data.court || {};
+    return [court.case_number, court.caseNumber, court.docketNumber, court.docket_number, data.caseNumber, data.case_number, data.case_no, data.docketNumber, data.docket_number, first.case_number, first.caseNumber, first.case_no].some(hasText);
   }
 
   function deriveRecordDetailsComplete() {
     const data = readPacketData();
     const charges = Array.isArray(data.charges) ? data.charges : [];
     const hasCharge = charges.some(hasUsableCharge);
-    const hasCaseNumber = hasText(data.court?.case_number) || hasText(localStorage.getItem("caseNumber"));
+    const hasCaseNumber = hasPacketCaseNumber(data) || hasText(localStorage.getItem("caseNumber"));
     const hasCourtRouting = hasText(data.court?.state) || hasText(data.meta?.source_state) || hasText(localStorage.getItem("caseState"));
     return Boolean((hasCharge || hasCaseNumber) && hasCourtRouting);
   }
@@ -211,7 +233,7 @@
     if (!state.recordDetailsCompleted) missing.push("Complete Record Details before packet generation.");
     const data = readPacketData();
     const charges = Array.isArray(data.charges) ? data.charges : [];
-    if (!charges.some(hasUsableCharge) && !hasText(data.court?.case_number)) missing.push("Add at least one charge or case number.");
+    if (!charges.some(hasUsableCharge) && !hasPacketCaseNumber(data)) missing.push("Add at least one charge or case number.");
     return missing;
   }
 
