@@ -16,6 +16,11 @@
   let currentUser = null;
   let cachedCases = [];
   let initPromise = null;
+  let casesReadyPromise = null;
+  let supabaseCasesUnavailable = false;
+  let lastCaseLoadError = null;
+
+  const CASES_UNAVAILABLE_WARNING = "Your account is signed in, but saved cases could not be loaded. Please contact support or run the Supabase saved_cases migration.";
 
   const LOGIN_INVALID_CREDENTIALS_MESSAGE = "Email or password is incorrect. If you just confirmed your email, use Reset Password to set a new password.";
   const SIGNUP_ACCOUNT_EXISTS_MESSAGE = "Account already exists. Please log in or reset your password.";
@@ -41,6 +46,57 @@
     const code = errorCode(error);
     const message = errorMessage(error);
     return code === "user_already_exists" || code === "email_exists" || code === "email_address_exists" || message.includes("already registered") || message.includes("already exists") || message.includes("user already");
+  }
+
+  function isCaseStoreUnavailableError(error) {
+    const code = errorCode(error);
+    const message = errorMessage(error);
+    return code === "pgrst205" || message.includes("saved_cases") || message.includes("case_charges") || message.includes("case_events") || message.includes("schema cache") || message.includes("relation does not exist");
+  }
+
+  function markCaseLoadFailure(error) {
+    lastCaseLoadError = error || null;
+    if (isCaseStoreUnavailableError(error)) supabaseCasesUnavailable = true;
+  }
+
+  function clearCaseLoadFailure() {
+    supabaseCasesUnavailable = false;
+    lastCaseLoadError = null;
+  }
+
+  function caseLoadFallback(error) {
+    markCaseLoadFailure(error);
+    const fallback = loadLocalCases();
+    fallback.isFallback = true;
+    fallback.savedCasesUnavailable = supabaseCasesUnavailable;
+    return fallback;
+  }
+
+  function loadCasesAfterAuth(context) {
+    if (!currentUser) {
+      cachedCases = loadLocalCases();
+      return Promise.resolve(cachedCases);
+    }
+    casesReadyPromise = (async function () {
+      try {
+        await maybeImportDraftAfterLogin();
+      } catch (draftError) {
+        console.warn(`Draft import skipped after ${context || "auth"}:`, draftError && draftError.message ? draftError.message : draftError);
+      }
+      try {
+        await migrateLocalCasesToSupabase();
+      } catch (migrationError) {
+        console.warn(`Local saved case migration skipped after ${context || "auth"}:`, migrationError && migrationError.message ? migrationError.message : migrationError);
+      }
+      try {
+        return await refreshCases({ allowFallback: true });
+      } catch (error) {
+        markCaseLoadFailure(error);
+        console.warn("Supabase saved case load skipped after auth:", error && error.message ? error.message : error);
+        return caseLoadFallback(error);
+      }
+    }());
+    return casesReadyPromise;
   }
 
   function signUpReturnedExistingUser(data) {
@@ -137,9 +193,7 @@
           }
           const profile = await loadProfile(data.user);
           currentUser = publicUser(data.user, profile);
-          await maybeImportDraftAfterLogin();
-          await migrateLocalCasesToSupabase();
-          await refreshCases();
+          loadCasesAfterAuth("auth");
           return currentUser;
         } catch (error) {
           console.warn("Supabase auth initialization skipped:", error.message);
@@ -181,9 +235,7 @@
         throw authError(SIGNUP_PARTIAL_SUCCESS_MESSAGE, "signup_partial_success", { accountCreated: true });
       }
     }
-    await maybeImportDraftAfterLogin();
-    await migrateLocalCasesToSupabase();
-    await refreshCases();
+    loadCasesAfterAuth("signup");
     return currentUser;
   }
 
@@ -198,9 +250,7 @@
     const profile = await loadProfile(data.user);
     currentUser = publicUser(data.user, profile);
     if (!profile) await upsertProfile(data.user, { email: normalizedEmail });
-    await maybeImportDraftAfterLogin();
-    await migrateLocalCasesToSupabase();
-    await refreshCases();
+    loadCasesAfterAuth("login");
     return currentUser;
   }
 
@@ -698,25 +748,21 @@
     const supabase = await client();
     const { data, error } = await supabase.from("saved_cases").select("*").eq("user_id", currentUser.id).is("deleted_at", null).order("updated_at", { ascending: true });
     if (error) {
-      const fallback = loadLocalCases();
-      if (fallback.length && options && options.allowFallback) {
-        fallback.isFallback = true;
-        return fallback;
-      }
-      throw new Error(error.message);
+      const caseError = new Error(error.message);
+      caseError.code = error.code;
+      caseError.status = error.status;
+      if (isCaseStoreUnavailableError(caseError) || (options && options.allowFallback)) return caseLoadFallback(caseError);
+      throw caseError;
     }
     let chargesByCase = {};
     try {
       chargesByCase = await fetchCaseCharges(supabase, (data || []).map(function (row) { return row.id; }));
     } catch (chargeError) {
-      const fallback = loadLocalCases();
-      if (fallback.length && options && options.allowFallback) {
-        fallback.isFallback = true;
-        return fallback;
-      }
+      if (isCaseStoreUnavailableError(chargeError) || (options && options.allowFallback)) return caseLoadFallback(chargeError);
       throw chargeError;
     }
     cachedCases = activeCases((data || []).map(function (row) { return normalizeDbCase(Object.assign({}, row, { case_charges: chargesByCase[row.id] || [] })); }));
+    clearCaseLoadFailure();
     saveLocalCases(cachedCases);
     return cachedCases;
   }
@@ -1023,6 +1069,7 @@
 
   window.RecordPathUserStore = {
     ready: init(),
+    get casesReady() { return casesReadyPromise || Promise.resolve(cachedCases); },
     signup,
     login,
     loginWithGoogle,
@@ -1050,6 +1097,7 @@
     saveDraftSnapshot,
     getReturnUrl,
     clearReturnUrl,
+    getCaseLoadStatus: function () { return { supabaseCasesUnavailable, lastCaseLoadError, warning: CASES_UNAVAILABLE_WARNING }; },
     hasLegacyDemoData,
     importLegacyDemoData,
     dismissLegacyImport,
