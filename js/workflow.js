@@ -204,15 +204,27 @@
     decorateNavigation();
   }
 
-  function getMissingPacketPrerequisites() {
+  function getMissingPacketWorkflowPrerequisites(actionLabel) {
     const state = getState();
+    const action = actionLabel || "packet generation";
     const missing = [];
-    if (!state.eligibilityCompleted) missing.push("Complete Check Eligibility before packet generation.");
-    if (!state.recordDetailsCompleted) missing.push("Complete Record Details before packet generation.");
+    if (!state.eligibilityCompleted) missing.push(`Complete Check Eligibility before ${action}.`);
+    if (!state.recordDetailsCompleted) missing.push(`Complete Record Details before ${action}.`);
+    return missing;
+  }
+
+  function getMissingPacketGenerationPrerequisites() {
+    const missing = getMissingPacketWorkflowPrerequisites("packet generation");
     const data = readPacketData();
     const charges = Array.isArray(data.charges) ? data.charges : [];
-    if (!charges.some(hasUsableCharge) && !hasText(data.court?.case_number)) missing.push("Add at least one charge or case number.");
+    if (!charges.some(hasUsableCharge) && !hasText(data.court?.case_number)) {
+      missing.push("Please add a case number or at least one charge before packet generation.");
+    }
     return missing;
+  }
+
+  function getMissingPacketPrerequisites() {
+    return getMissingPacketGenerationPrerequisites();
   }
 
   window.RecordPathWorkflow = {
@@ -228,6 +240,8 @@
     renderProgress,
     decorateNavigation,
     wireWorkflowLinks,
+    getMissingPacketWorkflowPrerequisites,
+    getMissingPacketGenerationPrerequisites,
     getMissingPacketPrerequisites
   };
 
