@@ -3,7 +3,7 @@
 
   const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
   const CONFIG_ENDPOINT = "/api/config/supabase";
-  const MISSING_CONFIG_MESSAGE = "Supabase is not configured. Ask an administrator to set RECORDPATH_SUPABASE_URL and RECORDPATH_SUPABASE_ANON_KEY (or SUPABASE_URL and SUPABASE_ANON_KEY) in the deployment environment.";
+  const MISSING_CONFIG_MESSAGE = "Supabase public configuration is missing. Add RECORDPATH_SUPABASE_URL and RECORDPATH_SUPABASE_ANON_KEY or SUPABASE_URL and SUPABASE_ANON_KEY.";
 
   let configPromise;
   let libraryPromise;

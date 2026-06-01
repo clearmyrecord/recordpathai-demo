@@ -8,27 +8,46 @@
     return match ? match[1] : "";
   }
 
+  function sanitizeReturnUrl(value, defaultUrl) {
+    const fallback = defaultUrl || "dashboard.html";
+    const raw = String(value || "").trim();
+    if (!raw) return fallback;
+    try {
+      const parsed = new URL(raw, window.location.origin);
+      if (parsed.origin !== window.location.origin) return fallback;
+      const fileName = (parsed.pathname.split("/").pop() || "").toLowerCase();
+      if (fileName === "login.html" || fileName === "signup.html") {
+        const nested = parsed.searchParams.get("returnUrl");
+        return nested ? sanitizeReturnUrl(nested, fallback) : fallback;
+      }
+      const relativePath = parsed.pathname.replace(/^\/+/, "") || fallback;
+      return `${relativePath}${parsed.search || ""}${parsed.hash || ""}`;
+    } catch (error) {
+      return fallback;
+    }
+  }
+
   function currentPageUrl() {
     const fileName = window.location.pathname.split("/").pop() || "index.html";
     const parentDir = window.location.pathname.split("/").filter(Boolean).slice(-2, -1)[0] || "";
     const path = relativeRoot() && parentDir ? `${parentDir}/${fileName}` : fileName;
-    return `${path}${window.location.search || ""}${window.location.hash || ""}`;
+    return sanitizeReturnUrl(`${path}${window.location.search || ""}${window.location.hash || ""}`);
   }
 
-  function signupUrl(returnUrl) { return `${relativeRoot()}signup.html?returnUrl=${encodeURIComponent(returnUrl || currentPageUrl())}`; }
-  function loginUrl(returnUrl) { return `${relativeRoot()}login.html?returnUrl=${encodeURIComponent(returnUrl || currentPageUrl())}`; }
+  function signupUrl(returnUrl) { return `${relativeRoot()}signup.html?returnUrl=${encodeURIComponent(sanitizeReturnUrl(returnUrl || currentPageUrl()))}`; }
+  function loginUrl(returnUrl) { return `${relativeRoot()}login.html?returnUrl=${encodeURIComponent(sanitizeReturnUrl(returnUrl || currentPageUrl()))}`; }
 
   function preserveIntake(returnUrl) {
     if (window.RecordPathUserStore && typeof RecordPathUserStore.saveDraftSnapshot === "function") RecordPathUserStore.saveDraftSnapshot(returnUrl || currentPageUrl());
   }
 
   async function ensureReady() {
-    if (window.RecordPathUserStore && RecordPathUserStore.ready) await RecordPathUserStore.ready;
+    if (window.RecordPathUserStore && (RecordPathUserStore.readyForAuth || RecordPathUserStore.ready)) await (RecordPathUserStore.readyForAuth || RecordPathUserStore.ready);
     return window.RecordPathUserStore || null;
   }
 
   function redirectToSignup(action, returnUrl) {
-    const target = returnUrl || currentPageUrl();
+    const target = sanitizeReturnUrl(returnUrl || currentPageUrl());
     preserveIntake(target);
     const label = action ? ` to ${action}` : "";
     sessionStorage.setItem("recordPathAuthPrompt", `Create an account or sign in${label}.`);
@@ -52,7 +71,16 @@
   }
 
   function requireProtectedPage(action) { return requireAuth(action || "open this page", currentPageUrl()); }
-  async function requireProtectedPageAsync(action) { return requireAuthAsync(action || "open this page", currentPageUrl()); }
+  async function requireProtectedPageAsync(action) {
+    const store = await ensureReady();
+    const session = store && typeof store.getCurrentSession === "function" ? store.getCurrentSession() : null;
+    if (store && store.isLoggedIn() && session) {
+      if (store.casesReady) store.casesReady.catch(function () {});
+      return true;
+    }
+    window.location.href = loginUrl(currentPageUrl());
+    return false;
+  }
 
   function addLink(container, href, text, className) {
     const a = document.createElement("a");
@@ -164,6 +192,7 @@
     currentPageUrl,
     signupUrl,
     loginUrl,
+    sanitizeReturnUrl,
     relativeRoot,
     preserveIntake,
     requireAuth,
