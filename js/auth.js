@@ -82,10 +82,13 @@
     return false;
   }
 
-  function addLink(container, href, text, className) {
+  function tr(key, params) { return window.t ? window.t(key, params) : key; }
+
+  function addLink(container, href, text, className, i18nKey) {
     const a = document.createElement("a");
     a.href = href;
-    a.textContent = text;
+    a.textContent = i18nKey ? tr(i18nKey) : text;
+    if (i18nKey) a.setAttribute("data-i18n", i18nKey);
     a.className = ["auth-utility-link", className].filter(Boolean).join(" ");
     a.setAttribute("data-auth-link", text.toLowerCase().replace(/\s+/g, "-"));
     container.appendChild(a);
@@ -101,17 +104,17 @@
     utilities.forEach(function (utility) {
       utility.querySelectorAll("[data-auth-link]").forEach(function (node) { node.remove(); });
       if (user) {
-        addLink(utility, `${relativeRoot()}dashboard.html`, "Dashboard");
-        addLink(utility, `${relativeRoot()}account.html`, "Account");
-        const logout = addLink(utility, "#logout", "Logout");
+        addLink(utility, `${relativeRoot()}dashboard.html`, "Dashboard", "", "nav.dashboard");
+        addLink(utility, `${relativeRoot()}account.html`, "Account", "", "nav.account");
+        const logout = addLink(utility, "#logout", "Logout", "", "nav.logout");
         logout.addEventListener("click", async function (event) {
           event.preventDefault();
           await RecordPathUserStore.logout();
           window.location.href = `${relativeRoot()}index.html`;
         });
       } else {
-        addLink(utility, loginUrl(currentPageUrl()), "Login", "auth-login");
-        addLink(utility, signupUrl(currentPageUrl()), "Create Account", "auth-create-account");
+        addLink(utility, loginUrl(currentPageUrl()), "Login", "auth-login", "nav.login");
+        addLink(utility, signupUrl(currentPageUrl()), "Create Account", "auth-create-account", "nav.createAccount");
       }
     });
   }
@@ -136,14 +139,14 @@
     const banner = document.createElement("div");
     banner.id = "legacyImportBanner";
     banner.className = "container info-banner";
-    banner.innerHTML = '<strong>Import demo data?</strong> We found previous browser-only RecordPathAI data. Import it into this Supabase account? <button class="btn btn-primary" type="button" data-import-demo>Import</button> <button class="btn btn-secondary" type="button" data-dismiss-demo>Not now</button> <span class="meta-note" data-import-status></span>';
+    banner.innerHTML = '<strong data-i18n="auth.importTitle">' + tr("auth.importTitle") + '</strong> <span data-i18n="auth.importPrompt">' + tr("auth.importPrompt") + '</span> <button class="btn btn-primary" type="button" data-import-demo data-i18n="buttons.import">' + tr("buttons.import") + '</button> <button class="btn btn-secondary" type="button" data-dismiss-demo data-i18n="buttons.notNow">' + tr("buttons.notNow") + '</button> <span class="meta-note" data-import-status></span>';
     main.insertBefore(banner, main.firstChild);
     banner.querySelector("[data-import-demo]").addEventListener("click", async function () {
       const status = banner.querySelector("[data-import-status]");
-      status.textContent = "Importing…";
+      status.textContent = tr("auth.importing");
       try {
         const result = await RecordPathUserStore.importLegacyDemoData();
-        status.textContent = `Imported ${result.casesImported || 0} case(s).`;
+        status.textContent = tr("auth.importedCases", { count: result.casesImported || 0 });
         setTimeout(function () { banner.remove(); window.location.reload(); }, 800);
       } catch (error) { status.textContent = error.message; }
     });
@@ -210,6 +213,7 @@
     wireHeaderMenus();
     renderHeaderLinks();
     wireAuthActionGuards(document);
+    window.addEventListener("recordpathai:languagechange", renderHeaderLinks);
     ensureReady().then(function () {
       renderHeaderLinks();
       showLegacyImportPrompt();

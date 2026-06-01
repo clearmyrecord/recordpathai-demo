@@ -9,7 +9,8 @@
     "crawl:forms": "node tools/form-crawler.js",
     "crawl:forms:ohio:tier1": "node tools/form-crawler.js --state=OH --tier=tier1",
     "crawl:forms:ohio:tier1:apply": "node tools/form-crawler.js --state=OH --tier=tier1 --apply",
-    "validate:auth": "node tools/validate-auth-flow.js"
+    "validate:auth": "node tools/validate-auth-flow.js",
+    "validate:i18n": "node tools/validate-i18n.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

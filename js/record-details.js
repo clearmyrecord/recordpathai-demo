@@ -1,4 +1,6 @@
 (function () {
+  const tr = (key, params) => window.t ? window.t(key, params) : key;
+
   const offenseList = document.getElementById("offenseList");
   const addOffenseBtn = document.getElementById("addOffenseBtn");
   const continueBtn = document.getElementById("continueBtn");
@@ -91,13 +93,13 @@
 
   function updateStatus() {
     const count = offenseList.querySelectorAll(".rd-offense").length;
-    recordStatus.textContent = count === 1 ? "1 offense added" : `${count} offenses added`;
+    recordStatus.textContent = count === 1 ? tr("recordDetails.oneOffenseAdded") : tr("recordDetails.offensesAdded", { count });
   }
 
   function renumberOffenses() {
     offenseList.querySelectorAll(".rd-offense").forEach((card, index) => {
       const title = card.querySelector(".rd-offense-head h2");
-      if (title) title.textContent = `Offense ${index + 1}`;
+      if (title) title.textContent = tr("recordDetails.offenseNumber", { number: index + 1 });
     });
   }
 
@@ -173,18 +175,18 @@
     const statusEl = card.querySelector(".court-packet-status");
 
     if (!court || !state) {
-      statusEl.textContent = "Enter a court and state to search for the official packet.";
+      statusEl.textContent = tr("recordDetails.searchPrompt");
       return;
     }
 
-    statusEl.textContent = "Searching official court forms...";
+    statusEl.textContent = tr("recordDetails.searchingForms");
 
     try {
       const res = await fetch(
         `/api/find-packet?court=${encodeURIComponent(court)}&county=${encodeURIComponent(county)}&state=${encodeURIComponent(state)}&type=sealing`
       );
 
-      if (!res.ok) throw new Error("Search failed");
+      if (!res.ok) throw new Error(tr("errors.searchFailed"));
       const data = await res.json();
 
       setHidden(card, `packet_url_${card.dataset.index}`, data.packetUrl || "");
@@ -194,13 +196,13 @@
       setHidden(card, `packet_mapping_key_${card.dataset.index}`, data.mappingKey || "");
 
       if (data.packetUrl) {
-        statusEl.innerHTML = `Found packet: <a href="${data.packetUrl}" target="_blank" rel="noopener">${escapeHtml(data.packetTitle)}</a>`;
+        statusEl.innerHTML = `${escapeHtml(tr("recordDetails.foundPacket", { title: "" })).trim()} <a href="${data.packetUrl}" target="_blank" rel="noopener">${escapeHtml(data.packetTitle)}</a>`;
       } else {
-        statusEl.textContent = "No official packet found yet.";
+        statusEl.textContent = tr("recordDetails.noPacket");
       }
     } catch (error) {
       console.error(error);
-      statusEl.textContent = "Could not find a packet right now.";
+      statusEl.textContent = tr("recordDetails.packetSearchError");
     }
   }
 
@@ -243,9 +245,9 @@
     wrap.className = "rd-field";
     const id = `state_${index}-${Math.random().toString(36).slice(2, 9)}`;
     wrap.innerHTML = `
-      <label for="${id}">State</label>
+      <label for="${id}">${escapeHtml(tr("common.state"))}</label>
       <select id="${id}" name="state_${index}">
-        <option value="">Select state</option>
+        <option value="">${escapeHtml(tr("forms.selectState"))}</option>
         ${states.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}
       </select>
     `;
@@ -258,9 +260,9 @@
     const id = `court_${index}-${Math.random().toString(36).slice(2, 9)}`;
 
     wrap.innerHTML = `
-      <label for="${id}">Court</label>
-      <input id="${id}" name="court_${index}" type="text" placeholder="Example: Wood County Court of Common Pleas" autocomplete="off" />
-      <div class="rd-helper court-packet-status">Enter a court and state to search for the official packet.</div>
+      <label for="${id}">${escapeHtml(tr("common.court"))}</label>
+      <input id="${id}" name="court_${index}" type="text" placeholder="${escapeHtml(tr("recordDetails.courtPlaceholder"))}" autocomplete="off" />
+      <div class="rd-helper court-packet-status">${escapeHtml(tr("recordDetails.searchPrompt"))}</div>
 
       <input type="hidden" name="packet_url_${index}" />
       <input type="hidden" name="packet_title_${index}" />
@@ -279,8 +281,8 @@
 
     card.innerHTML = `
       <div class="rd-offense-head">
-        <h2>Offense ${index + 1}</h2>
-        <button type="button" class="rd-btn rd-btn-secondary remove-offense-btn">Remove</button>
+        <h2>${escapeHtml(tr("recordDetails.offenseNumber", { number: index + 1 }))}</h2>
+        <button type="button" class="rd-btn rd-btn-secondary remove-offense-btn">${escapeHtml(tr("buttons.remove"))}</button>
       </div>
       <div class="rd-grid"></div>
     `;
@@ -288,51 +290,51 @@
     const grid = card.querySelector(".rd-grid");
 
     grid.appendChild(makeTextField({
-      label: "Charge Name",
+      label: tr("recordDetails.chargeName"),
       name: `charge_name_${index}`,
-      placeholder: "Start typing a charge",
+      placeholder: tr("recordDetails.chargePlaceholder"),
       suggestions: chargeLibrary
     }));
 
     grid.appendChild(makeTextField({
-      label: "Disposition / Outcome",
+      label: tr("recordDetails.dispositionOutcome"),
       name: `disposition_${index}`,
-      placeholder: "Start typing a disposition",
+      placeholder: tr("recordDetails.dispositionPlaceholder"),
       suggestions: dispositionOptions
     }));
 
     grid.appendChild(makeTextField({
-      label: "Charge Level",
+      label: tr("recordDetails.chargeLevel"),
       name: `charge_level_${index}`,
-      placeholder: "Start typing a level",
+      placeholder: tr("recordDetails.levelPlaceholder"),
       suggestions: levelOptions
     }));
 
     grid.appendChild(makeTextField({
-      label: "County",
+      label: tr("common.county"),
       name: `county_${index}`,
-      placeholder: "Example: Wood County"
+      placeholder: tr("recordDetails.countyPlaceholder")
     }));
 
     grid.appendChild(makeStateField(index));
     grid.appendChild(makeCourtField(index));
 
     grid.appendChild(makeTextField({
-      label: "Arrest Date",
+      label: tr("common.arrestDate"),
       name: `arrest_date_${index}`,
       type: "date"
     }));
 
     grid.appendChild(makeTextField({
-      label: "Case Number",
+      label: tr("common.caseNumber"),
       name: `case_number_${index}`,
-      placeholder: "Optional"
+      placeholder: tr("forms.optional")
     }));
 
     grid.appendChild(makeTextareaField({
-      label: "Notes",
+      label: tr("common.description"),
       name: `notes_${index}`,
-      placeholder: "Anything else about this offense...",
+      placeholder: tr("recordDetails.notesPlaceholder"),
       full: true
     }));
 
@@ -378,6 +380,11 @@
 
   document.addEventListener("click", function (event) {
     if (!event.target.closest(".rd-field")) closeSuggestions();
+  });
+
+  window.addEventListener("recordpathai:languagechange", function () {
+    renumberOffenses();
+    updateStatus();
   });
 
   addOffense();
