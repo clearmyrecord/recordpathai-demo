@@ -69,7 +69,10 @@
 
   async function ensureReady() {
     if (window.RecordPathSupabase && RecordPathSupabase.ready) await RecordPathSupabase.ready.catch(function () { return null; });
-    if (window.RecordPathUserStore && RecordPathUserStore.ready) await RecordPathUserStore.ready;
+    if (window.RecordPathUserStore) {
+      if (typeof RecordPathUserStore.readyForAuth === "function") await RecordPathUserStore.readyForAuth();
+      else if (RecordPathUserStore.ready) await RecordPathUserStore.ready;
+    }
     return window.RecordPathUserStore || null;
   }
 
@@ -174,7 +177,7 @@
 
   async function authDiagnostics() {
     const supabaseDiagnostics = window.RecordPathSupabase && typeof RecordPathSupabase.getDiagnostics === "function" ? await RecordPathSupabase.getDiagnostics() : {};
-    const storeReady = Boolean(window.RecordPathUserStore && RecordPathUserStore.ready);
+    const storeReady = Boolean(window.RecordPathUserStore && (RecordPathUserStore.ready || RecordPathUserStore.readyForAuth));
     const user = window.RecordPathUserStore && typeof RecordPathUserStore.getCurrentUser === "function" ? RecordPathUserStore.getCurrentUser() : null;
     const state = {
       supabaseConfigLoaded: Boolean(supabaseDiagnostics.configLoaded),

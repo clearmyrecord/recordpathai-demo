@@ -8,8 +8,8 @@ function publicSupabaseConfig() {
 export default function handler(req, res) {
   const config = publicSupabaseConfig();
   res.status(200).json({
-    url: config.url,
-    anonKey: config.anonKey,
-    configured: Boolean(config.url && config.anonKey)
+    configured: Boolean(config.url && config.anonKey),
+    supabaseUrl: config.url,
+    supabaseAnonKey: config.anonKey
   });
 }

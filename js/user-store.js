@@ -16,6 +16,10 @@
   let currentUser = null;
   let cachedCases = [];
   let initPromise = null;
+  let casesPromise = null;
+  let lastCaseLoadError = null;
+  let lastMigrationError = null;
+  let supabaseCasesUnavailable = false;
 
   const LOGIN_INVALID_CREDENTIALS_MESSAGE = "Email or password is incorrect. If you just confirmed your email, use Reset Password to set a new password.";
   const SIGNUP_ACCOUNT_EXISTS_MESSAGE = "Account already exists. Please log in or reset your password.";
@@ -164,6 +168,59 @@
     return currentUser;
   }
 
+  function clearCaseLoadWarnings() {
+    lastCaseLoadError = null;
+    supabaseCasesUnavailable = false;
+  }
+
+  function clearCaseWarnings() {
+    clearCaseLoadWarnings();
+    lastMigrationError = null;
+  }
+
+  function rememberCaseLoadError(error, context) {
+    lastCaseLoadError = error || new Error("Saved cases could not be loaded.");
+    supabaseCasesUnavailable = true;
+    console.warn(context || "Supabase saved case load failed:", lastCaseLoadError);
+    document.dispatchEvent(new CustomEvent("recordpath:cases-warning", { detail: getCaseLoadStatus() }));
+    return activeCases(cachedCases);
+  }
+
+  function getCaseLoadStatus() {
+    return {
+      lastCaseLoadError,
+      lastMigrationError,
+      supabaseCasesUnavailable,
+      message: supabaseCasesUnavailable ? "We could not load your saved cases yet. Your account is still signed in." : (lastMigrationError ? "Your account is signed in, but we could not migrate local draft cases yet." : "")
+    };
+  }
+
+  function startCaseInitialization() {
+    if (!currentUser) return Promise.resolve([]);
+    if (!casesPromise) {
+      casesPromise = (async function () {
+        try {
+          try {
+            await maybeImportDraftAfterLogin();
+            await migrateLocalCasesToSupabase();
+          } catch (migrationError) {
+            lastMigrationError = migrationError;
+            console.warn("Local draft case migration skipped:", migrationError);
+            document.dispatchEvent(new CustomEvent("recordpath:cases-warning", { detail: getCaseLoadStatus() }));
+          }
+          const cases = await refreshCases({ allowFallback: false });
+          clearCaseLoadWarnings();
+          document.dispatchEvent(new CustomEvent("recordpath:cases-ready", { detail: { cases } }));
+          return cases;
+        } catch (error) {
+          rememberCaseLoadError(error, "Supabase saved case initialization skipped:");
+          return activeCases(cachedCases);
+        }
+      }());
+    }
+    return casesPromise;
+  }
+
   async function init() {
     if (!initPromise) {
       initPromise = (async function () {
@@ -172,19 +229,19 @@
           const { data, error } = await supabase.auth.getUser();
           if (error || !data || !data.user) {
             currentUser = null;
-            cachedCases = loadLocalCases();
+            cachedCases = [];
+            casesPromise = Promise.resolve([]);
             return null;
           }
           const profile = await loadProfile(data.user);
           currentUser = publicUser(data.user, profile);
-          await maybeImportDraftAfterLogin();
-          await migrateLocalCasesToSupabase();
-          await refreshCases();
+          casesPromise = null;
+          startCaseInitialization();
           return currentUser;
         } catch (error) {
           console.warn("Supabase auth initialization skipped:", error.message);
           currentUser = null;
-          cachedCases = loadLocalCases();
+          cachedCases = [];
           return null;
         } finally {
           document.dispatchEvent(new CustomEvent("recordpath:auth-ready", { detail: { user: currentUser } }));
@@ -221,9 +278,9 @@
         throw authError(SIGNUP_PARTIAL_SUCCESS_MESSAGE, "signup_partial_success", { accountCreated: true });
       }
     }
-    await maybeImportDraftAfterLogin();
-    await migrateLocalCasesToSupabase();
-    await refreshCases();
+    initPromise = Promise.resolve(currentUser);
+    casesPromise = null;
+    startCaseInitialization();
     return currentUser;
   }
 
@@ -238,9 +295,9 @@
     const profile = await loadProfile(data.user);
     currentUser = publicUser(data.user, profile);
     if (!profile) await upsertProfile(data.user, { email: normalizedEmail });
-    await maybeImportDraftAfterLogin();
-    await migrateLocalCasesToSupabase();
-    await refreshCases();
+    initPromise = Promise.resolve(currentUser);
+    casesPromise = null;
+    startCaseInitialization();
     return currentUser;
   }
 
@@ -269,6 +326,9 @@
     await supabase.auth.signOut();
     currentUser = null;
     cachedCases = [];
+    initPromise = Promise.resolve(null);
+    casesPromise = Promise.resolve([]);
+    clearCaseWarnings();
   }
 
   async function logout() {
@@ -276,6 +336,9 @@
     await supabase.auth.signOut();
     currentUser = null;
     cachedCases = [];
+    initPromise = Promise.resolve(null);
+    casesPromise = Promise.resolve([]);
+    clearCaseWarnings();
   }
 
   async function updateCurrentUser(updates) {
@@ -732,33 +795,33 @@
   async function refreshCases(options) {
     await initUserOnly();
     if (!currentUser) {
-      cachedCases = loadLocalCases();
+      cachedCases = [];
       syncRecordWatchCases(cachedCases);
       return cachedCases;
     }
     const supabase = await client();
     const { data, error } = await supabase.from("saved_cases").select("*").eq("user_id", currentUser.id).is("deleted_at", null).order("updated_at", { ascending: true });
     if (error) {
-      const fallback = loadLocalCases();
-      if (fallback.length && options && options.allowFallback) {
-        fallback.isFallback = true;
-        return fallback;
-      }
+      const fallback = options && options.allowFallback ? activeCases(cachedCases) : [];
+      if (fallback.length && options && options.allowFallback) fallback.isFallback = true;
+      rememberCaseLoadError(new Error(error.message), "Supabase saved case query failed:");
+      if (options && options.allowFallback) return fallback;
       throw new Error(error.message);
     }
     let chargesByCase = {};
     try {
       chargesByCase = await fetchCaseCharges(supabase, (data || []).map(function (row) { return row.id; }));
     } catch (chargeError) {
-      const fallback = loadLocalCases();
-      if (fallback.length && options && options.allowFallback) {
-        fallback.isFallback = true;
-        return fallback;
-      }
+      const fallback = options && options.allowFallback ? activeCases(cachedCases) : [];
+      if (fallback.length && options && options.allowFallback) fallback.isFallback = true;
+      rememberCaseLoadError(chargeError, "Supabase case charge query failed:");
+      if (options && options.allowFallback) return fallback;
       throw chargeError;
     }
     cachedCases = activeCases((data || []).map(function (row) { return normalizeDbCase(Object.assign({}, row, { case_charges: chargesByCase[row.id] || [] })); }));
     saveLocalCases(cachedCases);
+    syncRecordWatchCases(cachedCases);
+    clearCaseLoadWarnings();
     return cachedCases;
   }
 
@@ -777,6 +840,7 @@
 
   function getCases() { return activeCases(cachedCases.length ? cachedCases : loadLocalCases()); }
   async function getCasesAsync() { return refreshCases({ allowFallback: true }); }
+  async function readyForCases() { return startCaseInitialization(); }
 
   function caseMatchesId(caseRecord, caseId, compositeKey) {
     const id = String(caseId || "").trim();
@@ -998,10 +1062,12 @@
         console.warn("Local saved case migration skipped:", error.message);
       }
     }
-    if (imported || localCases.length) {
+    if (localCases.length && imported === localCases.length) {
       OLD_CASE_KEYS.forEach(function (key) { localStorage.removeItem(key); });
       SENSITIVE_CASE_KEYS.forEach(function (key) { localStorage.removeItem(key); });
       localStorage.removeItem(TEMP_DRAFT_CASE_KEY);
+    } else if (localCases.length && imported < localCases.length) {
+      lastMigrationError = new Error("Your account is signed in, but we could not migrate local draft cases yet.");
     }
     return { imported };
   }
@@ -1025,9 +1091,14 @@
     });
     const caseData = draft.case_id || draft.caseNumber || draft.case_number ? draft : collectCurrentCaseFromStorage();
     if (hasMeaningfulCaseData(caseData)) {
-      await saveCase(caseData).catch(function (error) { console.warn("Draft import skipped:", error.message); });
-      localStorage.removeItem(TEMP_DRAFT_CASE_KEY);
-      localStorage.removeItem(DRAFT_KEY);
+      try {
+        await saveCase(caseData);
+        localStorage.removeItem(TEMP_DRAFT_CASE_KEY);
+        localStorage.removeItem(DRAFT_KEY);
+      } catch (error) {
+        lastMigrationError = error;
+        console.warn("Draft import skipped:", error.message);
+      }
     }
     return draft;
   }
@@ -1066,6 +1137,10 @@
 
   window.RecordPathUserStore = {
     ready: init(),
+    readyForAuth: init,
+    casesReady: function () { return readyForCases(); },
+    readyForCases,
+    getCaseLoadStatus,
     signup,
     login,
     loginWithGoogle,
@@ -1074,6 +1149,8 @@
     logout,
     getCurrentUser: function () { return currentUser; },
     refreshCurrentUser: init,
+    lastCaseLoadError: function () { return lastCaseLoadError; },
+    supabaseCasesUnavailable: function () { return supabaseCasesUnavailable; },
     updateCurrentUser,
     getCases,
     getCasesAsync,

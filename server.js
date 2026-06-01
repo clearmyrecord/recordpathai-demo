@@ -31,9 +31,9 @@ function publicSupabaseConfig() {
 app.get("/api/config/supabase", (req, res) => {
   const config = publicSupabaseConfig();
   res.json({
-    url: config.url,
-    anonKey: config.anonKey,
-    configured: Boolean(config.url && config.anonKey)
+    configured: Boolean(config.url && config.anonKey),
+    supabaseUrl: config.url,
+    supabaseAnonKey: config.anonKey
   });
 });
 

@@ -143,7 +143,9 @@
       }
       const latest = cases[cases.length - 1] || {};
       const savedCaseStatus = document.getElementById("savedCaseStatus");
-      if (showingCachedCases && savedCaseStatus) savedCaseStatus.textContent = "Showing cached case data. Changes will sync when your connection is restored.";
+      const caseLoadStatus = RecordPathUserStore.getCaseLoadStatus ? RecordPathUserStore.getCaseLoadStatus() : null;
+      if (savedCaseStatus && caseLoadStatus && caseLoadStatus.message) savedCaseStatus.textContent = caseLoadStatus.message;
+      else if (showingCachedCases && savedCaseStatus) savedCaseStatus.textContent = "Showing cached case data. Changes will sync when your connection is restored.";
       document.getElementById("dashboardTitle").textContent = `Welcome, ${user.fullName || user.email}`;
       document.getElementById("eligibilityStatus").textContent = latest.eligibilityStatus || "Not screened yet";
       document.getElementById("eligibleDate").textContent = latest.estimatedEligibleDate ? `Estimated eligible date: ${latest.estimatedEligibleDate}` : "Complete screening to estimate a date.";
@@ -178,7 +180,8 @@
         }
         document.getElementById("savedCaseCount").textContent = String(refreshed.length);
         const status = document.getElementById("savedCaseStatus");
-        if (status) status.textContent = isFallback ? "Showing cached case data. Changes will sync when your connection is restored." : (message || "");
+        const caseLoadStatus = RecordPathUserStore.getCaseLoadStatus ? RecordPathUserStore.getCaseLoadStatus() : null;
+        if (status) status.textContent = caseLoadStatus && caseLoadStatus.message ? caseLoadStatus.message : (isFallback ? "Showing cached case data. Changes will sync when your connection is restored." : (message || ""));
         RecordPathSavedCaseCards.render(caseList, refreshed, { readOnly: isFallback });
       });
     });
