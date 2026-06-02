@@ -1,6 +1,7 @@
 (function () {
   "use strict";
 
+  const previousRecordPathI18n = window.RecordPathI18n || null;
   const STORAGE_KEY = "recordpathai_language";
   const LEGACY_STORAGE_KEYS = ["recordpathai.lang", "recordPathLanguage", "language"];
   const DEFAULT_LANG = "en";
@@ -580,6 +581,17 @@
     return supportedLanguages.indexOf(stored) !== -1 ? stored : DEFAULT_LANG;
   }
 
+  function getPreviousTranslation(key, params, lang) {
+    if (!previousRecordPathI18n || typeof previousRecordPathI18n.t !== "function") return null;
+    try {
+      const value = previousRecordPathI18n.t(key, params);
+      if (typeof value === "string" && value && value !== key) return value;
+    } catch (error) {
+      // Ignore legacy translator errors so the current i18n layer never breaks the page.
+    }
+    return null;
+  }
+
   function warnMissing(key, lang) {
     const id = `${lang}:${key}`;
     if (missingKeys.has(id)) return;
@@ -593,6 +605,8 @@
     const fallback = flat.en[key];
     if (localized == null) {
       if (fallback == null) {
+        const previous = getPreviousTranslation(key, params, selected);
+        if (previous != null) return previous;
         warnMissing(key, selected);
         return interpolate(key, params);
       }
@@ -745,9 +759,23 @@
     document.querySelectorAll("[data-i18n], [data-i18n-html], [data-i18n-placeholder], [data-i18n-title], [data-i18n-aria-label], [data-i18n-value]").forEach(function (node) { translateNodeByAttributes(node, selected); });
     translateCommonAttributes(document, selected);
     translateVisibleText(document.body || document.documentElement, selected);
-    document.querySelectorAll("[data-language-selector]").forEach(function (selector) { selector.value = selected; });
+    document.querySelectorAll("[data-language-selector]").forEach(function (selector) {
+      selector.value = selected;
+      attachLanguageSelector(selector);
+    });
     if (observer) observer.observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["placeholder", "title", "aria-label", "value"] });
     applying = false;
+  }
+
+  function applyTranslations(root) {
+    applyLanguage(getLanguage(), root);
+  }
+
+  function onLanguageChange(callback) {
+    if (typeof callback !== "function") return function () {};
+    const handler = function (event) { callback((event.detail && event.detail.language) || getLanguage(), event); };
+    window.addEventListener("recordpathai:languagechange", handler);
+    return function () { window.removeEventListener("recordpathai:languagechange", handler); };
   }
 
   function setLanguage(lang) {
@@ -772,13 +800,15 @@
     window.confirm = function (message) { return originalConfirm.call(window, typeof message === "string" ? t(message) : message); };
   }
 
+  function attachLanguageSelector(selector) {
+    if (!selector || selector.dataset.i18nAttached === "true") return;
+    selector.dataset.i18nAttached = "true";
+    selector.addEventListener("change", function (event) { setLanguage(event.target.value); });
+  }
+
   function boot() {
     ensureLanguageSelector();
-    document.querySelectorAll("[data-language-selector]").forEach(function (selector) {
-      if (selector.dataset.i18nAttached === "true") return;
-      selector.dataset.i18nAttached = "true";
-      selector.addEventListener("change", function (event) { setLanguage(event.target.value); });
-    });
+    document.querySelectorAll("[data-language-selector]").forEach(attachLanguageSelector);
     patchDialogs();
     observer = new MutationObserver(function (mutations) {
       if (applying) return;
@@ -787,7 +817,17 @@
     applyLanguage(getLanguage());
   }
 
-  window.RecordPathI18n = { t, translate: t, getLanguage, setLanguage, applyLanguage, dictionary: translations, phraseTranslations: exactPhraseEs };
+  window.RecordPathI18n = {
+    t,
+    translate: t,
+    applyTranslations,
+    applyLanguage,
+    getLanguage,
+    setLanguage,
+    onLanguageChange,
+    dictionary: translations,
+    phraseTranslations: exactPhraseEs
+  };
   window.t = t;
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
