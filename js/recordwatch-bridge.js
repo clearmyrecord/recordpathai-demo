@@ -168,12 +168,12 @@
         defenseAttorney: firstValue(first, ["defense_attorney", "defenseAttorney"])
       },
       arrest: {
-        arrestDate: firstValue(first, ["arrest_date", "offense_date"]),
+        arrestDate: firstValue(first, ["arrest_date", "arrestDate"]),
         arrestingAgency: firstValue(first, ["arresting_agency", "arrestingAgency"]),
         bookingNumber: firstValue(first, ["booking_number", "bookingNumber"]),
-        detentionFacility: firstValue(first, ["detention_facility", "detentionFacility"]),
-        arrestState: firstValue(first, ["arrest_state", "case_state", "caseState"]),
-        arrestCounty: firstValue(first, ["arrest_county", "court_county", "county"])
+        detentionFacility: firstValue(first, ["detention_facility", "detentionFacility", "jail"]),
+        arrestState: firstValue(first, ["arrest_state", "arrestState"]),
+        arrestCounty: firstValue(first, ["arrest_county", "arrestCounty"])
       },
       charges: charges.map(mapChargeFromRecordPath).filter(function (charge) {
         return charge.chargeName || charge.statuteCode || charge.degree || charge.chargeLevel;

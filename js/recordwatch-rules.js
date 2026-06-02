@@ -35,7 +35,7 @@
 
   function getCharges(caseData) { return Array.isArray(caseData && caseData.charges) ? caseData.charges : []; }
   function getOutcome(caseData) { return normalize(caseData && caseData.outcome && caseData.outcome.outcome); }
-  function getState(caseData) { return (caseData && caseData.court && caseData.court.caseState) || (caseData && caseData.arrest && caseData.arrest.arrestState) || ""; }
+  function getState(caseData) { return (caseData && caseData.court && caseData.court.caseState) || ""; }
 
   function fallbackCompletionDateResult(caseData) {
     var outcome = (caseData && caseData.outcome) || {};

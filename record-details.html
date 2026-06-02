@@ -309,6 +309,40 @@
       font-size: 14px;
     }
 
+    .optional-intake-details {
+      display: block;
+    }
+
+    .optional-section-summary {
+      cursor: pointer;
+      list-style: none;
+      margin-bottom: 0;
+      padding-right: 28px;
+      position: relative;
+    }
+
+    .optional-section-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .optional-section-summary::after {
+      content: "+";
+      color: var(--blue-dark);
+      font-size: 28px;
+      font-weight: 800;
+      position: absolute;
+      right: 0;
+      top: 0;
+    }
+
+    .optional-intake-details[open] .optional-section-summary {
+      margin-bottom: 18px;
+    }
+
+    .optional-intake-details[open] .optional-section-summary::after {
+      content: "−";
+    }
+
     .charge-header {
       display: flex;
       justify-content: space-between;
@@ -763,20 +797,8 @@
               </div>
             </section>
 
-            <section class="intake-section" aria-labelledby="arrestSectionTitle">
-              <div class="section-head"><div><h2 id="arrestSectionTitle">2. Arrest / Booking Information</h2><p>Optional details for RecordWatch monitoring and agency tracking.</p></div></div>
-              <div class="record-grid">
-                <div class="field"><label for="arrestingAgency">Arresting Agency</label><input id="arrestingAgency" placeholder="Arresting agency" /><div class="helper">Optional agency tracking only; eligibility is not calculated from arrest details.</div></div>
-                <div class="field"><label for="bookingNumber">Booking Number</label><input id="bookingNumber" placeholder="Booking number" /></div>
-                <div class="field"><label for="arrestDate">Arrest Date</label><input id="arrestDate" type="date" /><div class="helper">When the arrest or booking occurred for agency tracking. This is separate from each charge's offense / incident date.</div></div>
-                <div class="field"><label for="detentionFacility">Jail / Detention Facility</label><input id="detentionFacility" placeholder="Jail or detention facility" /></div>
-                <div class="field"><label for="arrestCounty">Arrest County</label><input id="arrestCounty" list="countySuggestions" /></div>
-                <div class="field"><label for="arrestState">Arrest State</label><select id="arrestState"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option></select></div>
-              </div>
-            </section>
-
             <section class="intake-section" aria-labelledby="courtSectionTitle">
-              <div class="section-head"><div><h2 id="courtSectionTitle">3. Court / Case Information</h2><p>These fields drive court routing, packet generation, RecordWatch duplicate matching, and dashboard status.</p></div></div>
+              <div class="section-head"><div><h2 id="courtSectionTitle">2. Court / Case Information</h2><p>These fields drive court routing, packet generation, RecordWatch duplicate matching, and dashboard status.</p></div></div>
               <div class="record-grid">
                 <div class="field"><label for="caseState">Case State</label><select id="caseState"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option></select><div class="helper">The case state is where the case was filed.</div></div>
                 <div class="field"><label for="county">County</label><input id="county" list="countySuggestions" placeholder="County" /></div>
@@ -791,7 +813,7 @@
             <section class="intake-section" aria-labelledby="chargesSectionTitle">
               <div class="section-head">
                 <div>
-                  <h2 id="chargesSectionTitle">4. Charges</h2>
+                  <h2 id="chargesSectionTitle">3. Charges</h2>
                   <p>Add one card for each charge tied to this case.</p>
                 </div>
                 <button type="button" class="btn btn-soft" id="addOffenseBtn" data-i18n="record.addOffense">+ Add Charge</button>
@@ -801,7 +823,7 @@
             </section>
 
             <section class="intake-section" aria-labelledby="outcomeSectionTitle">
-              <div class="section-head"><div><h2 id="outcomeSectionTitle">5. Outcome / Disposition</h2><p>Use the final disposition and dates from the court docket or certified disposition.</p></div></div>
+              <div class="section-head"><div><h2 id="outcomeSectionTitle">4. Outcome / Disposition</h2><p>Use the final disposition and dates from the court docket or certified disposition.</p></div></div>
               <div class="record-grid">
                 <div class="field"><label for="finalDisposition">Outcome</label><select id="finalDisposition"><option value="">Select</option><option value="Convicted">Convicted</option><option value="Dismissed">Dismissed</option><option value="Not Guilty">Not Guilty</option><option value="Acquitted">Acquitted</option><option value="No Bill">No Bill</option><option value="Pardon">Pardon</option><option value="Intervention in Lieu">Intervention in Lieu</option><option value="Pending">Pending</option><option value="Sealed">Sealed</option><option value="Expunged">Expunged</option></select></div>
                 <div class="field"><label for="dispositionDate">Final Disposition Date</label><input id="dispositionDate" type="date" /><div class="helper">When the court entered the conviction, dismissal, or final outcome.</div></div>
@@ -810,7 +832,7 @@
             </section>
 
             <section class="intake-section" aria-labelledby="sentencingSectionTitle">
-              <div class="section-head"><div><h2 id="sentencingSectionTitle">6. Sentencing / Completion</h2><p>Completion details improve both packet screening and RecordWatch requirements tracking.</p></div></div>
+              <div class="section-head"><div><h2 id="sentencingSectionTitle">5. Sentencing / Completion</h2><p>Completion details improve both packet screening and RecordWatch requirements tracking.</p></div></div>
               <div class="record-grid">
                 <div class="field"><label for="courtCostsPaid">Court Costs Paid?</label><select id="courtCostsPaid"><option value="Unknown">Unknown</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
                 <div class="field"><label for="finesPaid">Fines Paid?</label><select id="finesPaid"><option value="Unknown">Unknown</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
@@ -818,6 +840,27 @@
                 <div class="field"><label for="fineAmountDue">Fine Amount Due</label><input id="fineAmountDue" type="number" min="0" step="0.01" placeholder="0.00" /></div>
                 <div class="field"><label for="restitutionDue">Restitution Due</label><input id="restitutionDue" type="number" min="0" step="0.01" placeholder="0.00" /></div>
               </div>
+            </section>
+
+
+
+            <section class="intake-section" aria-labelledby="arrestSectionTitle">
+              <details class="optional-intake-details">
+                <summary class="section-head optional-section-summary">
+                  <div>
+                    <h2 id="arrestSectionTitle" data-i18n="record.optionalArrestBookingTitle">Optional Arrest / Booking Details</h2>
+                    <p data-i18n="record.optionalArrestBookingHelper">Most users can skip this section. RecordPathAI uses your court, case, charge, and completion details to estimate eligibility and generate your packet. Arrest and booking details are optional tracking information.</p>
+                  </div>
+                </summary>
+                <div class="record-grid">
+                  <div class="field"><label for="arrestDate" data-i18n="record.arrestDate">Arrest Date</label><input id="arrestDate" type="date" /><div class="helper">When the arrest or booking occurred for agency tracking. This is separate from each charge's offense / incident date.</div></div>
+                  <div class="field"><label for="arrestingAgency" data-i18n="record.arrestingAgency">Arresting Agency</label><input id="arrestingAgency" placeholder="Arresting agency" data-i18n-placeholder="record.arrestingAgencyPlaceholder" /><div class="helper">Optional agency tracking only; eligibility is not calculated from arrest details.</div></div>
+                  <div class="field"><label for="detentionFacility" data-i18n="record.detentionFacility">Jail / Detention Facility</label><input id="detentionFacility" placeholder="Jail or detention facility" data-i18n-placeholder="record.detentionFacilityPlaceholder" /></div>
+                  <div class="field"><label for="bookingNumber" data-i18n="record.bookingNumber">Booking Number</label><input id="bookingNumber" placeholder="Booking number" data-i18n-placeholder="record.bookingNumberPlaceholder" /></div>
+                  <div class="field"><label for="arrestCounty" data-i18n="record.arrestCounty">Arrest County</label><input id="arrestCounty" list="countySuggestions" /></div>
+                  <div class="field"><label for="arrestState" data-i18n="record.arrestState">Arrest State</label><select id="arrestState"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option></select></div>
+                </div>
+              </details>
             </section>
 
             <div class="actions">
@@ -968,8 +1011,9 @@
           booking_number: value("bookingNumber"),
           arrest_date: value("arrestDate"),
           detention_facility: value("detentionFacility"),
-          arrest_county: value("arrestCounty"),
-          arrest_state: value("arrestState"),
+          jail: value("detentionFacility"),
+          arrest_county: value("arrestCounty") || value("county"),
+          arrest_state: value("arrestState") || value("caseState") || "OH",
           case_state: value("caseState") || "OH",
           court_county: value("county"),
           court_name: value("courtName"),
@@ -1104,9 +1148,9 @@
         setValue("arrestingAgency", first.arresting_agency);
         setValue("bookingNumber", first.booking_number);
         setValue("arrestDate", first.arrest_date);
-        setValue("detentionFacility", first.detention_facility);
-        setValue("arrestCounty", first.arrest_county || first.court_county);
-        setValue("arrestState", first.arrest_state || first.case_state);
+        setValue("detentionFacility", first.detention_facility || first.jail);
+        setValue("arrestCounty", first.arrest_county);
+        setValue("arrestState", first.arrest_state);
         setValue("caseState", first.case_state || court.state || localStorage.getItem("caseState") || localStorage.getItem("state") || "OH");
         setValue("county", first.court_county || court.county || localStorage.getItem("county"));
         setValue("courtName", first.court_name || court.name || localStorage.getItem("court"));
