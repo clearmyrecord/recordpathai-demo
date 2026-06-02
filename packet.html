@@ -1242,7 +1242,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       function getPacketGenerationState(packetEligibility) {
-        if (!packetEligibility?.isEligibleNow) return "notEligible";
+        const checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
+        if (!checkoutEligibility.canCheckout) return "notEligible";
         if (isPacketPaymentBypassEnabled()) return "devBypass";
         if (isPacketPaymentComplete()) return "eligiblePaid";
         return "eligibleUnpaid";
@@ -1286,6 +1287,209 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       function getSelectedPacketRecord(data) {
         return Array.isArray(data?.charges) && data.charges.length ? data.charges[0] : {};
+      }
+
+      const CHECKOUT_REVIEW_WARNING = "RecordPathAI estimates you may be eligible. Final approval depends on the court.";
+      let currentPacketEligibilityResult = null;
+
+      function normalizeEligibilityText(value) {
+        return safe(value).toLowerCase().replace(/[\s-]+/g, "_");
+      }
+
+      function getEligibilityDateValue(result) {
+        if (!result || typeof result !== "object") return "";
+        return firstCheckoutValue(
+          result.estimatedEligibleDate,
+          result.estimated_eligible_on,
+          result.estimated_eligible_date,
+          result.eligibilityDate,
+          result.eligibility_date,
+          result.eligibleDate,
+          result.eligible_date,
+          result.waiting_period_end_date
+        );
+      }
+
+      function getEligibilityFlags(result) {
+        if (!result || typeof result !== "object") return [];
+        const rawFlags = Array.isArray(result.flags) ? result.flags : (Array.isArray(result.blockingFlags) ? result.blockingFlags : []);
+        const nestedFlags = result.eligibility && Array.isArray(result.eligibility.flags) ? result.eligibility.flags : [];
+        return rawFlags.concat(nestedFlags).filter(Boolean).map((flag) => String(flag));
+      }
+
+      function hasCheckoutBlockingFlags(result) {
+        const flags = getEligibilityFlags(result).map((flag) => flag.toLowerCase());
+        return flags.some((flag) =>
+          flag.includes("disqual") ||
+          flag.includes("pending") ||
+          flag.includes("traffic") ||
+          flag.includes("three or more") ||
+          flag.includes("3+") ||
+          flag.includes("domestic violence") ||
+          flag.includes("sex offense") ||
+          flag.includes("registry") ||
+          flag.includes("victim under 13") ||
+          flag.includes("violence offense") ||
+          flag.includes("open warrant")
+        );
+      }
+
+      function isEligibilityDatePastOrToday(value) {
+        const parsed = parsePacketDate(value);
+        if (!parsed) return false;
+        const today = new Date();
+        today.setHours(12, 0, 0, 0);
+        return parsed <= today;
+      }
+
+      function isEligibilityDateInFuture(value) {
+        const parsed = parsePacketDate(value);
+        if (!parsed) return false;
+        const today = new Date();
+        today.setHours(12, 0, 0, 0);
+        return parsed > today;
+      }
+
+      function normalizePacketEligibilityResult(result, source = "packet") {
+        if (!result || typeof result !== "object") return null;
+        const nested = result.eligibility && typeof result.eligibility === "object" ? result.eligibility : {};
+        const statusValue = firstCheckoutValue(
+          result.eligibilityStatus,
+          result.eligibility_status,
+          result.status,
+          result.statusLabel,
+          result.mode,
+          nested.eligibilityStatus,
+          nested.eligibility_status,
+          nested.status,
+          nested.statusLabel
+        );
+        const dateValue = getEligibilityDateValue(result) || getEligibilityDateValue(nested);
+        const normalizedStatus = normalizeEligibilityText(statusValue);
+        const label = firstCheckoutValue(result.label, result.statusLabel, result.countdown, nested.label, nested.statusLabel, nested.countdown, statusValue);
+        const eligibleNow = result.eligibleNow === true || result.isEligible === true || result.isEligibleNow === true ||
+          nested.eligibleNow === true || nested.isEligible === true || nested.is_eligible === true;
+        const waitingPeriodText = firstCheckoutValue(result.waitingPeriodText, result.required_waiting_period, nested.required_waiting_period, nested.waitingPeriodText);
+        const calculationDate = firstCheckoutValue(result.completionDate, result.parsedDischargeIso, result.dischargeSource, result.date_used_for_calculation, nested.date_used_for_calculation);
+        const reasons = Array.isArray(result.reasons) ? result.reasons : (Array.isArray(result.eligibility_reasons) ? result.eligibility_reasons : []);
+        return Object.assign({}, result, {
+          source,
+          eligibilityStatus: statusValue,
+          eligibility_status: normalizedStatus,
+          statusLabel: label || statusValue,
+          estimatedEligibleDate: dateValue,
+          estimated_eligible_on: dateValue,
+          isEligibleNow: eligibleNow || result.isEligibleNow === true,
+          eligibleNow,
+          waitingPeriodText,
+          required_waiting_period: waitingPeriodText,
+          date_used_for_calculation: calculationDate,
+          eligibility_reasons: reasons.length ? reasons : [firstCheckoutValue(result.reason, result.eligibility_reason, nested.eligibility_reason)].filter(Boolean),
+          flags: getEligibilityFlags(result)
+        });
+      }
+
+      function evaluatePacketCheckoutEligibility(result) {
+        const normalized = normalizePacketEligibilityResult(result, result?.source || "packet");
+        if (!normalized) {
+          return { canCheckout: false, kind: "unknown", message: "Please complete the eligibility check before payment.", warning: "" };
+        }
+        const status = normalizeEligibilityText(firstCheckoutValue(normalized.eligibilityStatus, normalized.eligibility_status, normalized.status, normalized.statusLabel, normalized.mode));
+        const label = normalizeEligibilityText(firstCheckoutValue(normalized.label, normalized.statusLabel, normalized.countdown));
+        const dateValue = getEligibilityDateValue(normalized);
+        const hasBlocking = hasCheckoutBlockingFlags(normalized);
+        const explicitEligible = ["eligible", "likely_eligible", "eligible_now", "likely_eligible_now"].includes(status) ||
+          ["eligible", "likely_eligible", "eligible_now", "likely_eligible_now"].includes(label) ||
+          normalized.eligibleNow === true || normalized.isEligible === true || normalized.isEligibleNow === true;
+        const explicitIneligible = status.includes("ineligible") || status.includes("not_eligible") || label.includes("not_eligible") || label.includes("not_yet_eligible");
+        const pastDateEligible = Boolean(dateValue) && isEligibilityDatePastOrToday(dateValue);
+        const futureDate = Boolean(dateValue) && isEligibilityDateInFuture(dateValue);
+
+        if (hasBlocking) {
+          return { canCheckout: false, kind: "ineligible", message: "This record does not appear eligible yet based on the information entered.", warning: "", result: normalized };
+        }
+        if (explicitEligible || pastDateEligible) {
+          const warning = status.includes("needs_review") || label.includes("needs_review") || normalized.needsReview === true
+            ? CHECKOUT_REVIEW_WARNING
+            : "";
+          return { canCheckout: true, kind: warning ? "review_allowed" : "eligible", message: "", warning, result: normalized };
+        }
+        if (explicitIneligible || futureDate || normalized.isNotYetEligible === true) {
+          return { canCheckout: false, kind: "ineligible", message: "This record does not appear eligible yet based on the information entered.", warning: "", result: normalized };
+        }
+        return { canCheckout: false, kind: "unknown", message: "Please complete the eligibility check before payment.", warning: "", result: normalized };
+      }
+
+      function syncResolvedPacketEligibility(data, result) {
+        const normalized = normalizePacketEligibilityResult(result, result?.source || "packet");
+        if (!normalized) return null;
+        const checkoutEligibility = evaluatePacketCheckoutEligibility(normalized);
+        const status = checkoutEligibility.canCheckout
+          ? (checkoutEligibility.kind === "review_allowed" ? "likely_eligible" : "eligible")
+          : (checkoutEligibility.kind === "ineligible" ? "not_eligible" : "needs_review");
+        const dateValue = getEligibilityDateValue(normalized);
+        const reasons = normalized.eligibility_reasons || [];
+        const syncFields = {
+          eligibility_status: status,
+          eligibility_date: dateValue,
+          eligibility_confidence: checkoutEligibility.canCheckout ? (checkoutEligibility.kind === "review_allowed" ? "medium" : "high") : "low",
+          eligibility_reasons: reasons,
+          required_waiting_period: normalized.required_waiting_period || normalized.waitingPeriodText || "",
+          date_used_for_calculation: normalized.date_used_for_calculation || ""
+        };
+        if (data && typeof data === "object") {
+          data.eligibility = Object.assign({}, data.eligibility || {}, syncFields, {
+            estimated_eligible_on: dateValue,
+            is_eligible: checkoutEligibility.canCheckout,
+            eligibility_reason: reasons.join("; "),
+            flags: normalized.flags || []
+          });
+        }
+        currentPacketEligibilityResult = Object.assign({}, normalized, syncFields, { checkoutEligibility });
+        try {
+          localStorage.setItem("recordPathCurrentPacketEligibility", JSON.stringify(currentPacketEligibilityResult));
+        } catch {}
+        if (window.RecordWatchBridge && typeof RecordWatchBridge.registerRecordWatchEligibility === "function") {
+          try { RecordWatchBridge.registerRecordWatchEligibility(currentPacketEligibilityResult); } catch {}
+        }
+        return currentPacketEligibilityResult;
+      }
+
+      function savedCaseEligibilityCandidate(checkoutCase) {
+        if (!checkoutCase || typeof checkoutCase !== "object") return null;
+        return normalizePacketEligibilityResult({
+          eligibilityStatus: checkoutCase.eligibilityStatus || checkoutCase.eligibility_status,
+          status: checkoutCase.status || checkoutCase.eligibility_status,
+          estimatedEligibleDate: checkoutCase.estimatedEligibleDate || checkoutCase.eligibilityDate || checkoutCase.eligibility_date,
+          required_waiting_period: checkoutCase.required_waiting_period,
+          date_used_for_calculation: checkoutCase.date_used_for_calculation,
+          eligibility_reasons: checkoutCase.eligibility_reasons,
+          isEligible: checkoutCase.isEligible,
+          eligibleNow: checkoutCase.eligibleNow
+        }, "saved_case");
+      }
+
+      function resolveCurrentPacketEligibility(normalizedData, options = {}) {
+        const data = normalizedData || buildNormalizedPacketData(readPacketData());
+        const candidates = [];
+        try { candidates.push(normalizePacketEligibilityResult(calculatePacketEligibility(data), "rules_engine")); } catch (error) { console.warn("Rules-engine eligibility resolution failed:", error); }
+        candidates.push(normalizePacketEligibilityResult(currentPacketEligibilityResult, "displayed_packet"));
+        try {
+          if (window.RecordPathEligibilityEngine && typeof RecordPathEligibilityEngine.resolveEligibilityForCase === "function") {
+            candidates.push(normalizePacketEligibilityResult(RecordPathEligibilityEngine.resolveEligibilityForCase(data || {}), "recordpath_engine"));
+          }
+        } catch (error) { console.warn("RecordPath eligibility resolution failed:", error); }
+        try {
+          const rwSummary = window.RecordWatchBridge && typeof RecordWatchBridge.getRecordWatchSummary === "function" ? RecordWatchBridge.getRecordWatchSummary() : null;
+          candidates.push(normalizePacketEligibilityResult(rwSummary?.eligibilityResult || rwSummary, "recordwatch"));
+        } catch (error) { console.warn("RecordWatch eligibility resolution failed:", error); }
+        candidates.push(savedCaseEligibilityCandidate(options.checkoutCase));
+        candidates.push(normalizePacketEligibilityResult(data?.eligibility, "normalized_fallback"));
+
+        const validCandidates = candidates.filter(Boolean);
+        const eligibleCandidate = validCandidates.find((candidate) => evaluatePacketCheckoutEligibility(candidate).canCheckout);
+        const selected = eligibleCandidate || validCandidates[0] || null;
+        return syncResolvedPacketEligibility(data, selected) || selected;
       }
 
       function calculatePacketEligibility(data) {
@@ -2177,7 +2381,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       function updateEligibilitySection(data, eligibilityResult = calculatePacketEligibility(data)) {
         const charge = getSelectedPacketRecord(data);
-        const result = eligibilityResult;
+        const result = syncResolvedPacketEligibility(data, eligibilityResult) || eligibilityResult;
 
         document.getElementById("reliefTypeValue").textContent = result.reliefType || "—";
         document.getElementById("dischargeDateValue").textContent = formatDateForDisplay(result.parsedDischargeIso || result.dischargeSource);
@@ -2621,14 +2825,15 @@ document.addEventListener("DOMContentLoaded", async function () {
           paymentCallout.className = "callout success";
           paymentCallout.textContent = "Dev payment bypass active. Your packet is unlocked and ready to generate.";
         } else if (state === "eligibleUnpaid") {
+          const checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
           paymentCallout.className = "callout warning";
-          paymentCallout.textContent = "Eligible now — continue to secure checkout to unlock PDF packet generation.";
+          paymentCallout.textContent = checkoutEligibility.warning || "Eligible now — continue to secure checkout to unlock PDF packet generation.";
         } else if (packetEligibility?.isNotYetEligible) {
           paymentCallout.className = "callout danger";
           paymentCallout.innerHTML = `You are not yet eligible based on this screening. Estimated eligible date: <strong>${escapeHtml(formatDateForDisplay(packetEligibility.estimatedEligibleDate))}</strong>.`;
         } else {
           paymentCallout.className = "callout warning";
-          paymentCallout.textContent = t("packet.eligibilityUnclearWarning") === "packet.eligibilityUnclearWarning" ? "Eligibility needs review before payment or packet generation." : t("packet.eligibilityUnclearWarning");
+          paymentCallout.textContent = t("packet.eligibilityUnclearWarning") === "packet.eligibilityUnclearWarning" ? "Please complete the eligibility check before payment." : t("packet.eligibilityUnclearWarning");
         }
       }
 
@@ -2636,7 +2841,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         const raw = readPacketData();
         const normalizedData = buildNormalizedPacketData(raw);
-        const packetEligibility = calculatePacketEligibility(normalizedData);
+        const packetEligibility = resolveCurrentPacketEligibility(normalizedData);
         const state = getPacketGenerationState(packetEligibility);
 
         if (state === "eligiblePaid" || state === "devBypass") {
@@ -2925,7 +3130,27 @@ document.addEventListener("DOMContentLoaded", async function () {
         return { source: "empty", checkoutCase: packet };
       }
 
-      async function saveCheckoutCaseIfNeeded(checkoutCase) {
+      function eligibilityFieldsForSavedCase(packetEligibility) {
+        const normalized = normalizePacketEligibilityResult(packetEligibility, packetEligibility?.source || "packet");
+        if (!normalized) return {};
+        const checkoutEligibility = evaluatePacketCheckoutEligibility(normalized);
+        const status = checkoutEligibility.canCheckout
+          ? (checkoutEligibility.kind === "review_allowed" ? "likely_eligible" : "eligible")
+          : (checkoutEligibility.kind === "ineligible" ? "not_eligible" : "needs_review");
+        return {
+          eligibilityStatus: status,
+          eligibility_status: status,
+          eligibilityDate: getEligibilityDateValue(normalized),
+          eligibility_date: getEligibilityDateValue(normalized),
+          estimatedEligibleDate: getEligibilityDateValue(normalized),
+          eligibility_confidence: checkoutEligibility.canCheckout ? (checkoutEligibility.kind === "review_allowed" ? "medium" : "high") : "low",
+          eligibility_reasons: normalized.eligibility_reasons || [],
+          required_waiting_period: normalized.required_waiting_period || normalized.waitingPeriodText || "",
+          date_used_for_calculation: normalized.date_used_for_calculation || ""
+        };
+      }
+
+      async function saveCheckoutCaseIfNeeded(checkoutCase, packetEligibility = null) {
         const isAuthenticated = Boolean(window.RecordPathUserStore && RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn());
         if (!isAuthenticated) {
           const authError = new Error("Please sign in before checkout so RecordPathAI can save this packet to your account.");
@@ -2933,7 +3158,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           throw authError;
         }
         if (!window.RecordPathUserStore.saveCase) throw new Error("Save unavailable");
-        const saved = await RecordPathUserStore.saveCase(Object.assign({}, checkoutCase, {
+        const saved = await RecordPathUserStore.saveCase(Object.assign({}, checkoutCase, eligibilityFieldsForSavedCase(packetEligibility), {
           packetStatus: isPacketPaymentComplete() ? "paid" : "Packet reviewed",
           paymentStatus: isPacketPaymentComplete() ? "paid" : "unpaid"
         }));
@@ -2955,7 +3180,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (!ensureCheckoutPrerequisites()) return;
           const raw = readPacketData();
           const normalizedData = buildNormalizedPacketData(raw);
-          const packetEligibility = calculatePacketEligibility(normalizedData);
+          let packetEligibility = resolveCurrentPacketEligibility(normalizedData);
+          let checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
           const packetGenerationState = getPacketGenerationState(packetEligibility);
           if (packetGenerationState === "eligiblePaid" || packetGenerationState === "devBypass") {
             if (!ensurePacketGenerationPrerequisites()) return;
@@ -2973,12 +3199,6 @@ document.addEventListener("DOMContentLoaded", async function () {
             setStatus(authMessage, "error");
             return;
           }
-          if (!packetEligibility.isEligibleNow) {
-            throw new Error(packetEligibility.isNotYetEligible
-              ? "You are not yet eligible based on this screening."
-              : "Eligibility needs review before payment.");
-          }
-
           let resolved;
           try {
             resolved = await resolveCheckoutCase();
@@ -2990,6 +3210,15 @@ document.addEventListener("DOMContentLoaded", async function () {
             throw new Error("Please review your case details before checkout.");
           }
           let checkoutCase = resolved.checkoutCase;
+          packetEligibility = resolveCurrentPacketEligibility(normalizedData, { checkoutCase });
+          checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
+          if (!checkoutEligibility.canCheckout) {
+            throw new Error(checkoutEligibility.message);
+          }
+          if (checkoutEligibility.warning) {
+            setStatus(checkoutEligibility.warning);
+          }
+
           const checkoutValidation = validateCheckoutCase(checkoutCase);
           if (!checkoutValidation.ok) {
             setCheckoutError(checkoutValidation.message);
@@ -2999,7 +3228,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
           setStatus("Saving selected case before checkout...");
           try {
-            checkoutCase = await saveCheckoutCaseIfNeeded(checkoutCase);
+            checkoutCase = await saveCheckoutCaseIfNeeded(checkoutCase, packetEligibility);
           } catch (saveError) {
             console.error("Checkout case save failed:", safeCheckoutSaveError(saveError));
             const saveMessage = checkoutSaveFailureMessage(saveError);
@@ -3042,12 +3271,24 @@ document.addEventListener("DOMContentLoaded", async function () {
               dischargeDate: safe(checkoutCase.dischargeDate || normalizedData?.charges?.[0]?.discharge_date),
               court: safe(checkoutCase.courtName || normalizedData?.court?.name),
               county: safe(checkoutCase.county || normalizedData?.court?.county),
-              estimatedEligibleDate: safe(packetEligibility.estimatedEligibleDate || normalizedData?.eligibility?.estimated_eligible_on)
+              estimatedEligibleDate: safe(getEligibilityDateValue(packetEligibility) || normalizedData?.eligibility?.estimated_eligible_on),
+              eligibility_status: safe(normalizedData?.eligibility?.eligibility_status),
+              eligibility_date: safe(normalizedData?.eligibility?.eligibility_date),
+              eligibility_confidence: safe(normalizedData?.eligibility?.eligibility_confidence),
+              eligibility_reasons: normalizedData?.eligibility?.eligibility_reasons || [],
+              required_waiting_period: safe(normalizedData?.eligibility?.required_waiting_period),
+              date_used_for_calculation: safe(normalizedData?.eligibility?.date_used_for_calculation)
             },
             eligibility: {
-              status: safe(packetEligibility.statusLabel || normalizedData?.eligibility?.status),
+              status: safe(normalizedData?.eligibility?.eligibility_status || packetEligibility.statusLabel || normalizedData?.eligibility?.status),
+              eligibility_status: safe(normalizedData?.eligibility?.eligibility_status),
+              eligibility_date: safe(normalizedData?.eligibility?.eligibility_date),
+              eligibility_confidence: safe(normalizedData?.eligibility?.eligibility_confidence),
+              eligibility_reasons: normalizedData?.eligibility?.eligibility_reasons || [],
+              required_waiting_period: safe(normalizedData?.eligibility?.required_waiting_period),
+              date_used_for_calculation: safe(normalizedData?.eligibility?.date_used_for_calculation),
               reliefType: safe(packetEligibility.reliefType || normalizedData?.eligibility?.reliefType),
-              manualReview: packetEligibility.needsReview || Boolean(normalizedData?.eligibility?.manualReview)
+              manualReview: packetEligibility.needsReview || checkoutEligibility.kind === "review_allowed" || Boolean(normalizedData?.eligibility?.manualReview)
             },
             amount: 5000,
             currency: "usd",
@@ -3110,10 +3351,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
         const initialCheckoutCase = packetDataAsCheckoutCase();
         if (validateCheckoutCase(initialCheckoutCase).ok) {
-          RecordPathUserStore.saveCase(Object.assign({}, initialCheckoutCase, { packetStatus: isPacketPaymentComplete() ? "Ready to generate" : "Packet reviewed" })).catch(function (error) { console.warn("Account packet review save skipped:", error); });
+          RecordPathUserStore.saveCase(Object.assign({}, initialCheckoutCase, eligibilityFieldsForSavedCase(currentPacketEligibilityResult), { packetStatus: isPacketPaymentComplete() ? "Ready to generate" : "Packet reviewed" })).catch(function (error) { console.warn("Account packet review save skipped:", error); });
         }
       }
-      const packetEligibility = calculatePacketEligibility(normalizedData);
+      const packetEligibility = resolveCurrentPacketEligibility(normalizedData);
       if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
         RecordWatchBridge.syncExistingRecordPathData();
       }
@@ -3133,7 +3374,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       renderRecordWatchPanel(packetEligibility);
 
 
-      const eligibilityMode = packetEligibility.mode;
+      const checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
+      const eligibilityMode = normalizedData?.eligibility?.eligibility_status || packetEligibility.mode;
       const packetGenerationState = getPacketGenerationState(packetEligibility);
       const packetUnlocked = packetGenerationState === "eligiblePaid" || packetGenerationState === "devBypass";
       const reminderCardShouldShow = packetEligibility.isNotYetEligible;
@@ -3145,16 +3387,16 @@ document.addEventListener("DOMContentLoaded", async function () {
         localStorage.setItem(PAYMENT_STORAGE_KEY, "true");
       }
 
-      if (packetEligibility.isEligibleNow) {
-        setStatus(packetUnlocked
+      if (checkoutEligibility.canCheckout) {
+        setStatus(checkoutEligibility.warning || (packetUnlocked
           ? "Eligible now — packet ready to generate."
-          : "Eligible now — payment required to generate the PDF packet.");
+          : "Eligible now — payment required to generate the PDF packet."));
         loadAndRenderCourtInstructions(normalizedData, packetUnlocked);
-      } else if (packetEligibility.isNotYetEligible) {
-        setStatus("You are not yet eligible based on this screening.", "error");
+      } else if (checkoutEligibility.kind === "ineligible") {
+        setStatus("This record does not appear eligible yet based on the information entered.", "error");
         loadAndRenderCourtInstructions(normalizedData, false);
       } else {
-        setStatus("Eligibility needs review before payment or packet generation.", "error");
+        setStatus("Please complete the eligibility check before payment.", "error");
         loadAndRenderCourtInstructions(normalizedData, false);
       }
       const saveReminderBtn = document.getElementById("saveEligibilityReminderBtn");

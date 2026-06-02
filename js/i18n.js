@@ -179,6 +179,10 @@
       levelPlaceholder: "Start typing a level",
       notesPlaceholder: "Anything else about this offense..."
     },
+    record: {
+      offense: "Offense",
+      caseNumber: "Case Number"
+    },
     packet: {
       title: "Your Filing Packet",
       generateTitle: "Generate Packet",
@@ -203,6 +207,17 @@
       openingCheckout: "Opening secure checkout...",
       checkoutError: "We could not start checkout. Please try again.",
       generationError: "We could not generate your packet. Please review the required fields and try again.",
+      offense: "Offense",
+      caseNumber: "Case Number",
+      statute: "Statute",
+      degree: "Degree",
+      outcome: "Outcome",
+      dispositionDate: "Disposition Date",
+      dischargeDate: "Discharge Date",
+      court: "Court",
+      county: "County",
+      currentRecord: "Current packet record",
+      savedRecord: "Saved record",
       notGenerated: "Packet: Not generated"
     },
     dashboard: {
@@ -378,8 +393,12 @@
     recordDetails: {
       title: "Detalles del antecedente", pageTitle: "Ingrese los detalles de su antecedente", chargeName: "Nombre del cargo", dispositionOutcome: "Resolución / Resultado", chargeLevel: "Nivel del cargo", offenseNumber: "Delito {number}", oneOffenseAdded: "1 delito agregado", offensesAdded: "{count} delitos agregados", searchPrompt: "Ingrese un tribunal y un estado para buscar el paquete oficial.", searchingForms: "Buscando formularios oficiales del tribunal...", foundPacket: "Paquete encontrado: {title}", noPacket: "Aún no se encontró un paquete oficial.", packetSearchError: "No pudimos buscar un paquete en este momento.", courtPlaceholder: "Ejemplo: Wood County Court of Common Pleas", countyPlaceholder: "Ejemplo: Condado de Wood", chargePlaceholder: "Empiece a escribir un cargo", dispositionPlaceholder: "Empiece a escribir una resolución", levelPlaceholder: "Empiece a escribir un nivel", notesPlaceholder: "Cualquier otro dato sobre este delito..."
     },
+    record: {
+      offense: "Delito",
+      caseNumber: "Número de caso"
+    },
     packet: {
-      title: "Su paquete de presentación", generateTitle: "Generar paquete", eligibilityStatus: "Estado de elegibilidad", reliefType: "Tipo de alivio", ohioRecordSealing: "Sellado de antecedentes de Ohio", waitingPeriod: "Período de espera requerido", estimatedEligibleDate: "Fecha estimada de elegibilidad", recordWatchTracking: "Seguimiento en segundo plano de RecordWatch", pdfMapperLoaded: "Mapeador PDF cargado", template: "Plantilla", mappingJson: "JSON de mapeo", sourcePdf: "PDF de origen", mappedFields: "Campos mapeados", eligibleCheckout: "Elegible ahora — continúe al pago seguro...", stateMismatch: "Su estado de residencia y el estado del caso son diferentes. Use el estado del caso para las reglas del paquete judicial.", drawSignature: "Dibuje su firma abajo", drawnSignatureSelected: "Firma dibujada seleccionada.", signatureRequired: "Dibuje su firma antes de generar el paquete.", addCaseOrCharge: "Agregue al menos un cargo o número de caso.", saveBeforeCheckoutFailed: "No pudimos guardar su caso antes del pago.", openingCheckout: "Abriendo pago seguro...", checkoutError: "No pudimos iniciar el pago. Inténtelo de nuevo.", generationError: "No pudimos generar su paquete. Revise los campos obligatorios e inténtelo de nuevo.", notGenerated: "Paquete: no generado"
+      title: "Su paquete de presentación", generateTitle: "Generar paquete", eligibilityStatus: "Estado de elegibilidad", reliefType: "Tipo de alivio", ohioRecordSealing: "Sellado de antecedentes de Ohio", waitingPeriod: "Período de espera requerido", estimatedEligibleDate: "Fecha estimada de elegibilidad", recordWatchTracking: "Seguimiento en segundo plano de RecordWatch", pdfMapperLoaded: "Mapeador PDF cargado", template: "Plantilla", mappingJson: "JSON de mapeo", sourcePdf: "PDF de origen", mappedFields: "Campos mapeados", eligibleCheckout: "Elegible ahora — continúe al pago seguro...", stateMismatch: "Su estado de residencia y el estado del caso son diferentes. Use el estado del caso para las reglas del paquete judicial.", drawSignature: "Dibuje su firma abajo", drawnSignatureSelected: "Firma dibujada seleccionada.", signatureRequired: "Dibuje su firma antes de generar el paquete.", addCaseOrCharge: "Agregue al menos un cargo o número de caso.", saveBeforeCheckoutFailed: "No pudimos guardar su caso antes del pago.", openingCheckout: "Abriendo pago seguro...", checkoutError: "No pudimos iniciar el pago. Inténtelo de nuevo.", generationError: "No pudimos generar su paquete. Revise los campos obligatorios e inténtelo de nuevo.", offense: "Delito", caseNumber: "Número de caso", statute: "Estatuto", degree: "Grado", outcome: "Resultado", dispositionDate: "Fecha de resolución", dischargeDate: "Fecha de finalización", court: "Tribunal", county: "Condado", currentRecord: "Registro actual del paquete", savedRecord: "Registro guardado", notGenerated: "Paquete: no generado"
     },
     dashboard: {
       welcome: "Bienvenido", nextAction: "Siguiente acción", reviewPacketPayment: "Revisar paquete y pago", savedCases: "Casos guardados", purchaseLedger: "Registro de compras", totalPurchases: "Compras totales", creditsRefunds: "Créditos / Reembolsos", currentBalance: "Saldo actual", lastTransaction: "Última transacción", noTransactions: "Aún no hay transacciones", ledgerEmpty: "Sus compras y créditos aparecerán aquí cuando haya actividad disponible."
