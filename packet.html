@@ -3151,6 +3151,21 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       async function saveCheckoutCaseIfNeeded(checkoutCase, packetEligibility = null) {
+        const draftPayload = Object.assign({}, checkoutCase, eligibilityFieldsForSavedCase(packetEligibility), {
+          packetStatus: isPacketPaymentComplete() ? "paid" : "Packet reviewed",
+          paymentStatus: isPacketPaymentComplete() ? "paid" : "unpaid"
+        });
+        const wantsRecordWatchAddon = Boolean(document.getElementById("recordwatchAddon") && document.getElementById("recordwatchAddon").checked);
+        if (wantsRecordWatchAddon) {
+          localStorage.setItem("recordpathai_pending_recordwatch_enrollment", JSON.stringify({
+            plan: "premium_packet_addon",
+            status: "pending_checkout",
+            caseId: checkoutCase.case_id || checkoutCase.saved_case_id || checkoutCase.caseNumber,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }));
+        }
+        if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) await RecordPathUserStore.saveCurrentCaseDraft(draftPayload, { network: true }).catch(function (error) { console.warn("Packet case draft save skipped:", error); });
         const isAuthenticated = Boolean(window.RecordPathUserStore && RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn());
         if (!isAuthenticated) {
           const authError = new Error("Please sign in before checkout so RecordPathAI can save this packet to your account.");
@@ -3158,10 +3173,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           throw authError;
         }
         if (!window.RecordPathUserStore.saveCase) throw new Error("Save unavailable");
-        const saved = await RecordPathUserStore.saveCase(Object.assign({}, checkoutCase, eligibilityFieldsForSavedCase(packetEligibility), {
-          packetStatus: isPacketPaymentComplete() ? "paid" : "Packet reviewed",
-          paymentStatus: isPacketPaymentComplete() ? "paid" : "unpaid"
-        }));
+        const saved = await RecordPathUserStore.saveCase(draftPayload);
         if (!saved || !(saved.case_id || saved.id)) throw new Error("Save failed");
         return Object.assign({}, checkoutCase, normalizeCheckoutCase(saved), {
           saved_case_id: saved.case_id || saved.id,
@@ -3348,10 +3360,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       const raw = readPacketData();
       const normalizedData = buildNormalizedPacketData(raw);
-      if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
+      if (window.RecordPathUserStore) {
         const initialCheckoutCase = packetDataAsCheckoutCase();
         if (validateCheckoutCase(initialCheckoutCase).ok) {
-          RecordPathUserStore.saveCase(Object.assign({}, initialCheckoutCase, eligibilityFieldsForSavedCase(currentPacketEligibilityResult), { packetStatus: isPacketPaymentComplete() ? "Ready to generate" : "Packet reviewed" })).catch(function (error) { console.warn("Account packet review save skipped:", error); });
+          const packetDraft = Object.assign({}, initialCheckoutCase, eligibilityFieldsForSavedCase(currentPacketEligibilityResult), { packetStatus: isPacketPaymentComplete() ? "Ready to generate" : "Packet reviewed" });
+          if (RecordPathUserStore.saveCurrentCaseDraft) RecordPathUserStore.saveCurrentCaseDraft(packetDraft, { network: Boolean(RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn()) }).catch(function (error) { console.warn("Packet review draft save skipped:", error); });
+          else if (RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn()) RecordPathUserStore.saveCase(packetDraft).catch(function (error) { console.warn("Account packet review save skipped:", error); });
         }
       }
       const packetEligibility = resolveCurrentPacketEligibility(normalizedData);

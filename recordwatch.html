@@ -101,6 +101,7 @@
             <div><strong id="recordwatchCountdown">—</strong><span>Days Until Eligibility</span></div>
           </div>
         </div>
+        <div id="recordwatchCaseSummary" class="recordwatch-enrollment-form" aria-live="polite"></div>
         <form id="recordwatchEnrollmentForm" class="recordwatch-enrollment-form">
           <label>Email<input id="recordwatchEmail" type="email" placeholder="you@example.com" /></label>
           <label>Mobile Phone<input id="recordwatchPhone" type="tel" placeholder="(555) 555-5555" /></label>
@@ -178,21 +179,79 @@
         var found = await RecordPathUserStore.setActiveCase(urlCaseId);
         if (!found) document.querySelector("main")?.insertAdjacentHTML("afterbegin", '<section class="page-section"><div class="container"><div class="empty-state case-page-error"><h2>We could not find that saved case.</h2><p>Please choose another case from your dashboard.</p><a class="btn" href="dashboard.html">Back to dashboard</a></div></div></section>');
       }
+      function esc(value) { return String(value || "").replace(/[&<>"']/g, function (char) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char] || char; }); }
+      function row(label, value) { return '<div class="recordwatch-panel-item"><strong>' + esc(label) + '</strong><span>' + esc(value || "Not entered") + '</span></div>'; }
+      function recordWatchShapeFromDraft(draft) {
+        if (!draft) return null;
+        var charge = (draft.charges || [])[0] || {};
+        var caseFacts = draft.case || {};
+        return {
+          id: draft.savedCaseId || draft.localDraftId || draft.id,
+          personal: draft.person || {},
+          court: {
+            caseState: draft.court && draft.court.state || caseFacts.caseState,
+            county: draft.court && draft.court.county || caseFacts.county,
+            courtName: draft.court && (draft.court.name || draft.court.courtName) || caseFacts.courtName,
+            caseNumber: draft.court && draft.court.caseNumber || caseFacts.caseNumber,
+            judge: draft.court && draft.court.judge
+          },
+          charges: (draft.charges || []).map(function (item) { return { chargeName: item.charge_name || item.chargeName, statuteCode: item.offense_code || item.charge_code, chargeLevel: item.offense_level || item.degree || item.level, degree: item.offense_level || item.degree || item.level }; }),
+          outcome: {
+            outcome: caseFacts.outcome || charge.disposition || charge.final_disposition,
+            dispositionDate: caseFacts.dispositionDate || charge.disposition_date,
+            dischargeDate: caseFacts.dischargeDate || charge.discharge_date,
+            completionDate: caseFacts.dischargeDate || charge.discharge_date,
+            finalDischargeDate: caseFacts.finalDischargeDate || caseFacts.dischargeDate || charge.discharge_date
+          },
+          eligibility: draft.eligibility || {},
+          recordwatch: draft.recordwatch || {}
+        };
+      }
       if (window.RecordWatchBridge) RecordWatchBridge.syncExistingRecordPathData();
-      var active = window.RecordWatchBridge && RecordWatchBridge.getOrCreateActiveCase();
-      var date = active && window.RecordWatchRules ? RecordWatchRules.calculateEligibilityDate(active) : "";
+      var currentDraft = window.RecordPathUserStore && RecordPathUserStore.getCurrentRecordWatchCase ? await RecordPathUserStore.getCurrentRecordWatchCase() : null;
+      var active = recordWatchShapeFromDraft(currentDraft) || (window.RecordWatchBridge && RecordWatchBridge.getOrCreateActiveCase());
+      var date = active && (active.eligibility && (active.eligibility.estimatedEligibleDate || active.eligibility.eligibilityDate) || (window.RecordWatchRules ? RecordWatchRules.calculateEligibilityDate(active) : ""));
       var days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(date) : null;
-      var profile = window.RecordWatchMonitor ? RecordWatchMonitor.loadProfile() : (active && active.personal) || {};
-      document.getElementById("recordwatchEmail").value = profile.email || localStorage.getItem("email") || "";
-      document.getElementById("recordwatchPhone").value = profile.phone || localStorage.getItem("phone") || "";
+      var profile = Object.assign({}, active && active.personal || {}, window.RecordWatchMonitor ? RecordWatchMonitor.loadProfile() : {});
+      var prefs = currentDraft && currentDraft.recordwatch || {};
+      document.getElementById("recordwatchEmail").value = prefs.email || profile.email || localStorage.getItem("email") || "";
+      document.getElementById("recordwatchPhone").value = prefs.phone || profile.phone || localStorage.getItem("phone") || "";
+      document.getElementById("recordwatchNotifyEmail").checked = prefs.emailNotifications !== false;
+      document.getElementById("recordwatchNotifySms").checked = Boolean(prefs.smsNotifications);
       document.getElementById("recordwatchEstimatedDate").textContent = window.RecordWatchRules ? RecordWatchRules.formatDate(date) : "Not available yet";
       document.getElementById("recordwatchCountdown").textContent = days === null ? "—" : (days <= 0 ? "Eligible now" : String(days));
+      var summary = document.getElementById("recordwatchCaseSummary");
+      if (summary) {
+        if (active && (active.court && (active.court.caseNumber || active.court.courtName) || active.charges && active.charges.length)) {
+          var firstCharge = active.charges && active.charges[0] || {};
+          summary.innerHTML = '<h3>Monitoring this saved case</h3><div class="recordwatch-panel-grid">' +
+            row("Case number", active.court.caseNumber) + row("Court", active.court.courtName) + row("County / State", [active.court.county, active.court.caseState].filter(Boolean).join(", ")) +
+            row("Charge", firstCharge.chargeName) + row("Statute / level", [firstCharge.statuteCode, firstCharge.degree || firstCharge.chargeLevel].filter(Boolean).join(" — ")) + row("Outcome", active.outcome && active.outcome.outcome) + '</div>';
+        } else {
+          summary.innerHTML = '<h3>No saved case found</h3><p class="meta-note">Start with Eligibility Check or Enter Record Details so RecordWatch can monitor your case without re-entry.</p><div class="recordwatch-actions"><a class="btn" href="eligibility.html">Start with Eligibility Check</a><a class="btn secondary" href="record-details.html">Enter Record Details</a></div>';
+        }
+      }
       var smsToggle = document.getElementById("recordwatchNotifySms");
       var smsNotice = document.getElementById("recordwatchSmsNotice");
       smsToggle.addEventListener("change", function () { smsNotice.hidden = !smsToggle.checked; });
       document.getElementById("recordwatchEnrollmentForm").addEventListener("submit", function (event) {
         event.preventDefault();
         var wantsSms = document.getElementById("recordwatchNotifySms").checked;
+        var recordwatchPrefs = {
+          email: document.getElementById("recordwatchEmail").value,
+          phone: document.getElementById("recordwatchPhone").value,
+          emailNotifications: document.getElementById("recordwatchNotifyEmail").checked,
+          smsNotifications: wantsSms,
+          plan: "free",
+          status: "active",
+          updatedAt: new Date().toISOString(),
+          createdAt: prefs.createdAt || new Date().toISOString()
+        };
+        localStorage.setItem("recordpathai_recordwatch_draft", JSON.stringify(recordwatchPrefs));
+        localStorage.setItem("recordpathai_pending_recordwatch_enrollment", JSON.stringify(Object.assign({ caseId: active && active.id }, recordwatchPrefs)));
+        if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) {
+          RecordPathUserStore.saveCurrentCaseDraft({ recordwatch: recordwatchPrefs, recordWatchStatus: "active", eligibilityDate: date, estimatedEligibleDate: date }, { network: true }).catch(function (error) { console.warn("RecordWatch draft sync skipped:", error); });
+        }
         var subscription = RecordWatchNotifications.registerSubscription({
           userId: (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id) || (profile.email || profile.fullName || "demo-user"),
           caseId: active && active.id || "demo-case",
@@ -214,10 +273,5 @@
     });
   </script>
 
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      if (window.RecordPathAuth) RecordPathAuth.requireProtectedPageAsync("open RecordWatch");
-    });
-  </script>
 </body>
 </html>

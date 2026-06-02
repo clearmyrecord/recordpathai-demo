@@ -838,6 +838,14 @@
       };
 
       localStorage.setItem("recordPathEligibilityIntake", JSON.stringify(packetProfile));
+      if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) {
+        RecordPathUserStore.saveCurrentCaseDraft({
+          person: { firstName: firstName, lastName: lastName, fullName: fullName, email: email, phone: phone, residenceState: residenceState },
+          caseState: caseState,
+          eligibility: { status: "Intake started", eligibilityStatus: "Intake started" },
+          packet: packetProfile
+        }, { localOnly: true, network: false }).catch(function (error) { console.warn("Eligibility draft save skipped:", error); });
+      }
 
       if (window.RecordPathWorkflow && (fullName || email) && caseState) {
         RecordPathWorkflow.markEligibilityComplete({ eligibilityCompletedAt: new Date().toISOString() });

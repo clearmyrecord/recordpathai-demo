@@ -111,7 +111,19 @@
 
       async function getSavedCases() {
         if (!window.RecordPathUserStore) return RecordWatchMonitor.loadCases();
-        try { return await RecordPathUserStore.getCasesAsync(); } catch (error) { return RecordWatchMonitor.loadCases(); }
+        try {
+          var cases = await RecordPathUserStore.getCasesAsync();
+          var current = RecordPathUserStore.getCurrentRecordWatchCase ? await RecordPathUserStore.getCurrentRecordWatchCase() : null;
+          if (current && current.case && RecordPathUserStore.hasMeaningfulCaseData(current.case) && !cases.some(function (item) { return item.case_id === current.case.case_id || item.caseNumber === current.case.caseNumber; })) cases.push(current.case);
+          return cases;
+        } catch (error) {
+          var fallback = RecordWatchMonitor.loadCases();
+          try {
+            var currentFallback = RecordPathUserStore.getCurrentRecordWatchCase ? await RecordPathUserStore.getCurrentRecordWatchCase() : null;
+            if (currentFallback && currentFallback.case) fallback.push(currentFallback.case);
+          } catch (ignored) {}
+          return fallback;
+        }
       }
 
       async function render() {
@@ -160,9 +172,10 @@
 
 
       function toRecordWatchCase(caseData) {
-        if (caseData && caseData.court && typeof caseData.court === "object") return caseData;
+        if (caseData && caseData.court && typeof caseData.court === "object" && caseData.court.caseNumber) return caseData;
         var item = window.RecordPathUserStore && RecordPathUserStore.normalizeCase ? RecordPathUserStore.normalizeCase(caseData) : caseData;
-        return { id: item.case_id || item.caseId || item.id, court: { caseNumber: item.caseNumber, courtName: item.courtName || item.court, county: item.county, caseState: item.caseState }, charges: (item.charges && item.charges.length ? item.charges : [item.primaryCharge]).filter(Boolean).map(function (charge) { return { chargeName: charge, degree: item.level, chargeLevel: item.level }; }), outcome: { outcome: item.outcome }, recordWatchStatus: item.recordWatchStatus, estimatedEligibleDate: item.estimatedEligibleDate };
+        var chargeRows = item.chargeDetails && item.chargeDetails.length ? item.chargeDetails : (item.charges || []).map(function (charge) { return typeof charge === "string" ? { charge_name: charge } : charge; });
+        return { id: item.case_id || item.caseId || item.id, court: { caseNumber: item.caseNumber, courtName: item.courtName || item.court, county: item.county, caseState: item.caseState }, charges: (chargeRows.length ? chargeRows : [{ charge_name: item.primaryCharge, offense_level: item.level }]).filter(function (charge) { return charge && (charge.charge_name || charge.chargeName || item.primaryCharge); }).map(function (charge) { return { chargeName: charge.charge_name || charge.chargeName || item.primaryCharge, statuteCode: charge.offense_code || charge.charge_code || item.offenseCode, degree: charge.offense_level || charge.degree || item.level, chargeLevel: charge.offense_level || charge.degree || item.level }; }), outcome: { outcome: item.outcome, dispositionDate: item.dispositionDate, dischargeDate: item.dischargeDate, completionDate: item.dischargeDate, finalDischargeDate: item.finalDischargeDate || item.dischargeDate }, recordWatchStatus: item.recordWatchStatus, estimatedEligibleDate: item.estimatedEligibleDate, eligibility: { estimatedEligibleDate: item.estimatedEligibleDate, eligibilityDate: item.eligibilityDate, status: item.eligibilityStatus } };
       }
 
       function renderRecordWatchWidget(cases) {
