@@ -60,6 +60,19 @@
     translation: {
       disclaimer: "Translation is provided for convenience and may not replace official court translation services."
     },
+    record: {
+      optionalArrestBookingTitle: "Optional Arrest / Booking Details",
+      optionalArrestBookingHelper: "Most users can skip this section. RecordPathAI uses your court, case, charge, and completion details to estimate eligibility and generate your packet. Arrest and booking details are optional tracking information.",
+      arrestDate: "Arrest Date",
+      arrestingAgency: "Arresting Agency",
+      arrestingAgencyPlaceholder: "Arresting agency",
+      detentionFacility: "Jail / Detention Facility",
+      detentionFacilityPlaceholder: "Jail or detention facility",
+      bookingNumber: "Booking Number",
+      bookingNumberPlaceholder: "Booking number",
+      arrestCounty: "Arrest County",
+      arrestState: "Arrest State"
+    },
     nav: {
       home: "Home",
       how: "How It Works",
@@ -352,6 +365,19 @@
     },
     lang: { label: "Acceso de idioma", english: "English", spanish: "Español" },
     translation: { disclaimer: "La traducción se ofrece para su conveniencia y no reemplaza los servicios oficiales de traducción del tribunal." },
+    record: {
+      optionalArrestBookingTitle: "Detalles opcionales de arresto / registro",
+      optionalArrestBookingHelper: "La mayoría de los usuarios puede omitir esta sección. RecordPathAI usa los datos del tribunal, caso, cargo y finalización para estimar la elegibilidad y generar su paquete. Los datos de arresto y registro son información opcional de seguimiento.",
+      arrestDate: "Fecha de arresto",
+      arrestingAgency: "Agencia que realizó el arresto",
+      arrestingAgencyPlaceholder: "Agencia que realizó el arresto",
+      detentionFacility: "Cárcel / Centro de detención",
+      detentionFacilityPlaceholder: "Cárcel o centro de detención",
+      bookingNumber: "Número de registro",
+      bookingNumberPlaceholder: "Número de registro",
+      arrestCounty: "Condado del arresto",
+      arrestState: "Estado del arresto"
+    },
     nav: {
       home: "Inicio", how: "Cómo funciona", eligibility: "Elegibilidad", recordDetails: "Detalles del antecedente", packetGeneration: "Generación del paquete", recordWatch: "RecordWatch", courtAccess: "Acceso para tribunales", packet: "Paquete", dashboard: "Panel", account: "Cuenta", login: "Iniciar sesión", logout: "Cerrar sesión", createAccount: "Crear cuenta", checkEligibility: "Comenzar revisión gratuita de elegibilidad"
     },
@@ -406,6 +432,13 @@
   const exactPhraseEs = {
     "RecordPathAI Mapper V3": "Mapeador RecordPathAI V3",
     "RecordPathAI Legal": "Legal de RecordPathAI",
+    "Optional Arrest / Booking Details": "Detalles opcionales de arresto / registro",
+    "Most users can skip this section. RecordPathAI uses your court, case, charge, and completion details to estimate eligibility and generate your packet. Arrest and booking details are optional tracking information.": "La mayoría de los usuarios puede omitir esta sección. RecordPathAI usa los datos del tribunal, caso, cargo y finalización para estimar la elegibilidad y generar su paquete. Los datos de arresto y registro son información opcional de seguimiento.",
+    "Jail / Detention Facility": "Cárcel / Centro de detención",
+    "Arrest County": "Condado del arresto",
+    "Arrest State": "Estado del arresto",
+    "Booking number": "Número de registro",
+    "Jail or detention facility": "Cárcel o centro de detención",
     "Account": "Cuenta",
     "Account settings": "Configuración de la cuenta",
     "Update your Supabase account profile.": "Actualice su perfil de cuenta de Supabase.",
@@ -516,9 +549,10 @@
     "Judge": "Juez",
     "Prosecutor": "Fiscal",
     "Defense Attorney": "Abogado defensor",
-    "Booking Number": "Número de registro de arresto",
+    "Booking Number": "Número de registro",
     "Arresting Agency": "Agencia que realizó el arresto",
     "Detention Facility": "Centro de detención",
+    "Jail / Detention Facility": "Cárcel / Centro de detención",
     "Case Number:": "Número de caso:",
     "Eligible now": "Elegible ahora",
     "Not screened yet": "Aún no evaluado",
