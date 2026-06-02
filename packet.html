@@ -2293,25 +2293,43 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
       }
 
-      function showPrerequisiteErrors(missing, target = "status") {
-        if (!missing.length) return true;
-        const message = missing.join(" ");
+      function showPrerequisiteErrors(missing, target = "status", fallbackMessage = "Please complete the required information before continuing.") {
+        const messages = Array.isArray(missing) ? missing.filter(Boolean) : [];
+        if (!messages.length) return true;
+        const message = messages.join(" ") || fallbackMessage;
         if (target === "checkout") setCheckoutError(message);
         setStatus(message, "error");
         return false;
       }
 
+      function failCheckoutPrerequisite(message) {
+        const visibleMessage = message || "Please complete the required information before checkout.";
+        setCheckoutError(visibleMessage);
+        setStatus(visibleMessage, "error");
+        return false;
+      }
+
       function ensurePacketGenerationPrerequisites() {
-        if (!window.RecordPathWorkflow) return true;
-        const getter = RecordPathWorkflow.getMissingPacketGenerationPrerequisites || RecordPathWorkflow.getMissingPacketPrerequisites;
-        return showPrerequisiteErrors(getter ? getter() : []);
+        try {
+          if (!window.RecordPathWorkflow) return true;
+          const getter = RecordPathWorkflow.getMissingPacketGenerationPrerequisites || RecordPathWorkflow.getMissingPacketPrerequisites;
+          return showPrerequisiteErrors(getter ? getter() : [], "status", "Please complete packet requirements before generating your packet.");
+        } catch (error) {
+          console.error("Packet prerequisite check failed:", error);
+          return showPrerequisiteErrors(["Packet requirements could not be verified. Please refresh and try again."], "status");
+        }
       }
 
       function ensureCheckoutPrerequisites() {
-        if (!window.RecordPathWorkflow) return true;
-        const getter = RecordPathWorkflow.getMissingPacketWorkflowPrerequisites;
-        const missing = getter ? getter("checkout") : [];
-        return showPrerequisiteErrors(missing, "checkout");
+        try {
+          if (!window.RecordPathWorkflow) return true;
+          const getter = RecordPathWorkflow.getMissingPacketWorkflowPrerequisites;
+          const missing = getter ? getter("checkout") : [];
+          return showPrerequisiteErrors(missing, "checkout", "Please complete eligibility and record details before checkout.");
+        } catch (error) {
+          console.error("Checkout prerequisite check failed:", error);
+          return failCheckoutPrerequisite("Checkout requirements could not be verified. Please refresh and try again.");
+        }
       }
 
       async function generateSealingPdf() {
@@ -2614,21 +2632,20 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
       }
 
-      async function handlePrimaryPacketAction() {
+      async function handlePrimaryPacketAction(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
         const raw = readPacketData();
         const normalizedData = buildNormalizedPacketData(raw);
         const packetEligibility = calculatePacketEligibility(normalizedData);
         const state = getPacketGenerationState(packetEligibility);
 
-        if (state === "eligibleUnpaid") {
-          await startCheckout();
-          return;
-        }
-
         if (state === "eligiblePaid" || state === "devBypass") {
           if (!ensurePacketGenerationPrerequisites()) return;
           await generateSealingPdf();
+          return;
         }
+
+        await startCheckout(event);
       }
       function buildReminderData(normalizedData, eligibilityMode = "not_eligible", eligibilityResult = calculatePacketEligibility(normalizedData)) {
         return {
@@ -2928,22 +2945,50 @@ document.addEventListener("DOMContentLoaded", async function () {
         });
       }
 
-      async function startCheckout() {
+      async function startCheckout(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        console.log("[packet checkout] Pay button clicked");
+        setCheckoutError("");
+        setStatus("Preparing secure checkout...");
+
         try {
-          setCheckoutError("");
           if (!ensureCheckoutPrerequisites()) return;
-          if (!requireSavedDrawnSignature()) return;
-          if (window.RecordPathAuth && !RecordPathAuth.requireAuth("pay for and unlock your packet", "packet.html")) return;
           const raw = readPacketData();
           const normalizedData = buildNormalizedPacketData(raw);
           const packetEligibility = calculatePacketEligibility(normalizedData);
+          const packetGenerationState = getPacketGenerationState(packetEligibility);
+          if (packetGenerationState === "eligiblePaid" || packetGenerationState === "devBypass") {
+            if (!ensurePacketGenerationPrerequisites()) return;
+            await generateSealingPdf();
+            return;
+          }
+          if (!requireSavedDrawnSignature()) {
+            setCheckoutError(SIGNATURE_REQUIRED_MESSAGE);
+            setStatus(SIGNATURE_REQUIRED_MESSAGE, "error");
+            return;
+          }
+          if (window.RecordPathAuth && !RecordPathAuth.requireAuth("pay for and unlock your packet", "packet.html")) {
+            const authMessage = "Please sign in before checkout so RecordPathAI can save this packet to your account.";
+            setCheckoutError(authMessage);
+            setStatus(authMessage, "error");
+            return;
+          }
           if (!packetEligibility.isEligibleNow) {
             throw new Error(packetEligibility.isNotYetEligible
               ? "You are not yet eligible based on this screening."
               : "Eligibility needs review before payment.");
           }
 
-          const resolved = await resolveCheckoutCase();
+          let resolved;
+          try {
+            resolved = await resolveCheckoutCase();
+          } catch (resolveError) {
+            console.error("Checkout case resolution failed:", resolveError);
+            throw new Error("Please review your case details before checkout.");
+          }
+          if (!resolved || !resolved.checkoutCase) {
+            throw new Error("Please review your case details before checkout.");
+          }
           let checkoutCase = resolved.checkoutCase;
           const checkoutValidation = validateCheckoutCase(checkoutCase);
           if (!checkoutValidation.ok) {
@@ -3010,21 +3055,45 @@ document.addEventListener("DOMContentLoaded", async function () {
           };
 
           const checkoutEndpoint = getCheckoutEndpoint();
-          const response = await fetch(checkoutEndpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
+          let response;
+          let responseText = "";
+          let data = null;
+          try {
+            response = await fetch(checkoutEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            responseText = await response.text();
+            console.log("[packet checkout] create-checkout-session response", {
+              status: response.status,
+              ok: response.ok,
+              body: responseText.slice(0, 1000)
+            });
+            if (responseText) {
+              try {
+                data = JSON.parse(responseText);
+              } catch (parseError) {
+                console.error("[packet checkout] checkout response was not JSON:", parseError);
+              }
+            }
+          } catch (fetchError) {
+            console.error("[packet checkout] create-checkout-session request failed:", fetchError);
+            throw new Error("Secure checkout could not be opened. Please try again.");
+          }
 
-          const data = await response.json();
-          if (!response.ok || !data?.url) {
-            throw new Error(data?.error || "Could not start checkout.");
+          if (!response.ok) {
+            throw new Error("Secure checkout could not be opened. Please try again.");
+          }
+
+          if (!data?.url) {
+            throw new Error("Checkout session was created, but no Stripe URL was returned.");
           }
 
           window.location.href = data.url;
         } catch (error) {
-          console.error(error);
-          const message = error.message || "Unable to open checkout.";
+          console.error("[packet checkout] checkout failed:", error);
+          const message = error.message || "Secure checkout could not be opened. Please try again.";
           setCheckoutError(message);
           setStatus(message, "error");
         }
@@ -3050,7 +3119,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       document.getElementById("testPdfBtn")?.addEventListener("click", testPdfAccess);
-      document.getElementById("generateSealingBtn")?.addEventListener("click", handlePrimaryPacketAction);
+      const generateBtn = document.getElementById("generateSealingBtn");
+      if (generateBtn) generateBtn.addEventListener("click", startCheckout);
       document.getElementById("openSourceBtn")?.addEventListener("click", openSourcePdf);
       document.getElementById("useDrawnSigBtn").addEventListener("click", setDrawnSignature);
       document.getElementById("clearPadBtn").addEventListener("click", clearSignature);
