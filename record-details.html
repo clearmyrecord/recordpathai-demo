@@ -868,6 +868,7 @@
               <button type="button" id="saveProgressBtn" class="btn btn-secondary">Save Progress</button>
               <button type="button" id="continueBtn" class="btn btn-primary">Continue to Packet</button>
             </div>
+            <p class="record-status" id="saveStatus" aria-live="polite">Changes save automatically.</p>
           </form>
 
           <aside class="recordwatch-panel" aria-live="polite">
@@ -933,6 +934,7 @@
       const saveProgressBtn = document.getElementById("saveProgressBtn");
       const recordStatus = document.getElementById("recordStatus");
       let offenseCounter = 0;
+      let autosaveTimer = null;
 
       function value(id) {
         const field = document.getElementById(id);
@@ -1205,6 +1207,84 @@
         });
       }
 
+      function buildCurrentCasePayload(profile, shared, charges) {
+        const first = charges[0] || {};
+        return {
+          person: {
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            fullName: profile.fullName,
+            dateOfBirth: profile.dateOfBirth,
+            email: profile.email,
+            phone: profile.phone,
+            residenceState: profile.residenceState
+          },
+          court: {
+            state: shared.case_state,
+            county: shared.court_county,
+            name: shared.court_name,
+            courtName: shared.court_name,
+            caseNumber: shared.case_number,
+            judge: shared.judge_name,
+            prosecutor: shared.prosecutor_agency,
+            defenseAttorney: shared.defense_attorney
+          },
+          caseState: shared.case_state,
+          county: shared.court_county,
+          courtName: shared.court_name,
+          court: shared.court_name,
+          caseNumber: shared.case_number,
+          judgeName: shared.judge_name,
+          primaryCharge: first.charge_name,
+          offenseCode: first.charge_code,
+          level: first.degree || first.level || first.charge_level,
+          outcome: shared.final_disposition,
+          dispositionDate: shared.disposition_date,
+          dischargeDate: shared.discharge_date,
+          charges: charges.map(function (charge) {
+            return Object.assign({}, charge, {
+              offense_code: charge.charge_code || charge.offense_code,
+              offense_level: charge.degree || charge.level || charge.charge_level,
+              offense_date: charge.offense_date
+            });
+          }),
+          metadata: {
+            judge_name: shared.judge_name,
+            prosecutor_agency: shared.prosecutor_agency,
+            defense_attorney: shared.defense_attorney,
+            court_costs_paid: shared.courtCostsPaid,
+            fines_paid: shared.finesPaid,
+            restitution_paid: shared.restitutionPaid
+          }
+        };
+      }
+
+      function setSaveStatus(message) {
+        const node = document.getElementById("saveStatus");
+        if (node) node.textContent = message;
+      }
+
+      function persistCurrentCaseDraft(payload, syncAccount) {
+        if (!window.RecordPathUserStore || !RecordPathUserStore.saveCurrentCaseDraft) return Promise.resolve(null);
+        const authenticated = RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn();
+        return RecordPathUserStore.saveCurrentCaseDraft(payload, { localOnly: !syncAccount, network: Boolean(syncAccount) }).then(function (saved) {
+          setSaveStatus(syncAccount && authenticated ? "Saved to your account" : (authenticated ? "Saved locally; account sync on continue" : "Saved locally"));
+          return saved;
+        }).catch(function (error) {
+          console.warn("Current case draft save skipped:", error);
+          setSaveStatus("Saved locally");
+          return null;
+        });
+      }
+
+      function scheduleAutosave() {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(function () {
+          const result = saveDraft(false);
+          persistCurrentCaseDraft(result.casePayload, false);
+        }, 800);
+      }
+
       function saveDraft(syncRecordWatchCase) {
         const data = RecordPathDataBridge.loadPacketData();
         const profile = collectProfile();
@@ -1251,15 +1331,12 @@
           RecordPathWorkflow.renderProgress("record-details");
           RecordPathWorkflow.decorateNavigation();
         }
-        if (syncRecordWatchCase && window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
-          try {
-            RecordPathUserStore.saveCase({ packetStatus: "Draft saved" }).catch(function (error) { console.warn("Account draft save skipped:", error); });
-          } catch (error) {
-            console.warn("Account case save skipped:", error);
-          }
+        const casePayload = buildCurrentCasePayload(profile, shared, charges);
+        if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) {
+          persistCurrentCaseDraft(casePayload, Boolean(syncRecordWatchCase));
         }
         renderRecordWatchPanel();
-        return { data, charges };
+        return { data, charges, casePayload };
       }
 
       function hasRecordDetailsCompletion(charges) {
@@ -1309,29 +1386,31 @@
         });
 
         if (saveProgressBtn) {
-          saveProgressBtn.addEventListener("click", function () {
+          saveProgressBtn.addEventListener("click", async function () {
             const result = saveDraft(false);
             if (window.RecordPathAuth && !RecordPathAuth.requireAuth("save progress", "record-details.html")) return;
             if (!result.charges.length && !value("caseNumber")) {
               alert("Add at least one charge or case number before saving progress.");
               return;
             }
-            saveDraft(true);
-            alert("Progress saved to your local demo account.");
+            await persistCurrentCaseDraft(result.casePayload, true);
+            alert((window.RecordPathUserStore && RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn()) ? "Progress saved to your account." : "Progress saved locally.");
           });
         }
 
-        continueBtn.addEventListener("click", function () {
+        continueBtn.addEventListener("click", async function () {
           const result = saveDraft(true);
           if (!hasRecordDetailsCompletion(result.charges)) {
             alert("Add at least one charge or case number before continuing.");
             return;
           }
+          await persistCurrentCaseDraft(result.casePayload, true);
           window.location.href = "packet.html";
         });
 
-        document.getElementById("recordDetailsForm").addEventListener("change", function () { saveDraft(false); });
-        document.getElementById("recordDetailsForm").addEventListener("blur", function () { saveDraft(false); }, true);
+        document.getElementById("recordDetailsForm").addEventListener("input", scheduleAutosave);
+        document.getElementById("recordDetailsForm").addEventListener("change", scheduleAutosave);
+        document.getElementById("recordDetailsForm").addEventListener("blur", scheduleAutosave, true);
       }
 
       init();

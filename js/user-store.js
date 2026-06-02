@@ -10,6 +10,10 @@
   const FALLBACK_CASES_KEY = "recordPathCachedCases";
   const TEMP_DRAFT_CASE_KEY = "temporaryDraftCase";
   const ACTIVE_CASE_KEY = "recordPathActiveCaseId";
+  const CURRENT_CASE_DRAFT_KEY = "recordpathai_current_case_draft";
+  const AI_ACTIVE_CASE_KEY = "recordpathai_active_case_id";
+  const RECORDWATCH_DRAFT_KEY = "recordpathai_recordwatch_draft";
+  const PENDING_RECORDWATCH_KEY = "recordpathai_pending_recordwatch_enrollment";
   const OLD_CASE_KEYS = ["recordPathSavedCases", "recordPathCachedCases", "savedCases", "recordPathCases", "recordpathai_cases", "recordwatchCases", "currentCase", "activeCase"];
   const SENSITIVE_CASE_KEYS = ["caseNumber", "caseState", "state", "county", "court", "offense", "offenseCode", "outcome", "eligibilityStatus", "estimatedEligibleDate", "dispositionDate", "dischargeDate", "recordPathPacketData", "recordPathEligibilityIntake"];
 
@@ -194,7 +198,7 @@
           markCaseLoadError(error);
         }
         try {
-          await migrateLocalCasesToSupabase();
+          await migrateLocalDraftToSupabase();
         } catch (error) {
           lastDraftMigrationError = error;
           console.warn("Local draft migration skipped:", error.message);
@@ -623,6 +627,125 @@
   function loadLocalCases() { return activeCases(readJSON(FALLBACK_CASES_KEY, readJSON(LOCAL_CASES_KEY, []))); }
   function saveLocalCases(cases) { writeJSON(FALLBACK_CASES_KEY, activeCases(cases)); }
 
+  function isBlankCaseValue(value) {
+    return value === undefined || value === null || String(value).trim() === "" || (Array.isArray(value) && !value.length);
+  }
+
+  function mergeChargesNoBlank(existing, incoming) {
+    const current = Array.isArray(existing) ? existing.slice() : [];
+    const updates = Array.isArray(incoming) ? incoming : [];
+    updates.forEach(function (charge, index) {
+      if (!charge || typeof charge !== "object") return;
+      const normalized = normalizeCharges({ charges: [charge] })[0] || charge;
+      const key = String(firstNonEmpty(normalized.id, normalized.charge_name, normalized.offense_code, index)).trim().toLowerCase();
+      let foundIndex = current.findIndex(function (item, itemIndex) {
+        const itemKey = String(firstNonEmpty(item && item.id, item && (item.charge_name || item.chargeName || item.offense_name), item && (item.offense_code || item.offenseCode || item.statute_citation), itemIndex)).trim().toLowerCase();
+        return key && itemKey === key;
+      });
+      if (foundIndex < 0 && index < current.length) foundIndex = index;
+      if (foundIndex >= 0) current[foundIndex] = mergeNonBlank(current[foundIndex], normalized);
+      else if (firstNonEmpty(normalized.charge_name, normalized.offense_code, normalized.offense_level)) current.push(normalized);
+    });
+    return current;
+  }
+
+  function mergeNonBlank(existing, incoming) {
+    const base = existing && typeof existing === "object" && !Array.isArray(existing) ? Object.assign({}, existing) : {};
+    Object.keys(incoming || {}).forEach(function (key) {
+      const value = incoming[key];
+      if (key === "charges" || key === "chargeDetails" || key === "case_charges") {
+        const mergedCharges = mergeChargesNoBlank(base.chargeDetails || base.charges || [], value);
+        if (mergedCharges.length) { base.charges = mergedCharges; base.chargeDetails = mergedCharges; }
+        return;
+      }
+      if (Array.isArray(value)) {
+        if (value.length) base[key] = value;
+        return;
+      }
+      if (value && typeof value === "object") {
+        base[key] = mergeNonBlank(base[key], value);
+        return;
+      }
+      if (!isBlankCaseValue(value)) base[key] = value;
+    });
+    return base;
+  }
+
+  function normalizeCurrentCaseDraft(input) {
+    const source = input || {};
+    const normalized = normalizeCase(Object.assign({}, source, source.packet || {}, source.case || {}));
+    const packet = source.packet && typeof source.packet === "object" ? source.packet : caseToPacketData(normalized);
+    const person = Object.assign({}, source.person || {}, {
+      fullName: firstNonEmpty(source.person && source.person.fullName, source.fullName, packet.petitioner && packet.petitioner.full_name, localStorage.getItem("fullName")),
+      email: firstNonEmpty(source.person && source.person.email, source.email, packet.petitioner && packet.petitioner.email, localStorage.getItem("email")),
+      phone: firstNonEmpty(source.person && source.person.phone, source.phone, packet.petitioner && packet.petitioner.phone, localStorage.getItem("phone")),
+      dateOfBirth: firstNonEmpty(source.person && source.person.dateOfBirth, source.dateOfBirth, packet.petitioner && packet.petitioner.dob, localStorage.getItem("dateOfBirth"))
+    });
+    const draftId = firstNonEmpty(source.localDraftId, source.id, source.case_id, source.caseId, localStorage.getItem(AI_ACTIVE_CASE_KEY), localStorage.getItem(ACTIVE_CASE_KEY), createId("draft"));
+    return {
+      id: firstNonEmpty(source.id, normalized.case_id, draftId),
+      localDraftId: firstNonEmpty(source.localDraftId, isUuid(normalized.case_id) ? "" : normalized.case_id, draftId),
+      savedCaseId: firstNonEmpty(source.savedCaseId, source.saved_case_id, isUuid(normalized.case_id) ? normalized.case_id : ""),
+      person: person,
+      court: Object.assign({}, source.court && typeof source.court === "object" ? source.court : {}, {
+        state: firstNonEmpty(normalized.caseState, source.caseState),
+        county: firstNonEmpty(normalized.county),
+        name: firstNonEmpty(normalized.courtName),
+        courtName: firstNonEmpty(normalized.courtName),
+        caseNumber: firstNonEmpty(normalized.caseNumber),
+        judge: firstNonEmpty(source.judge, source.judgeName, source.judge_name, source.metadata && source.metadata.judge_name)
+      }),
+      charges: normalized.chargeDetails,
+      eligibility: Object.assign({}, source.eligibility || {}, {
+        status: firstNonEmpty(normalized.eligibilityStatus),
+        eligibilityStatus: firstNonEmpty(normalized.eligibilityStatus),
+        estimatedEligibleDate: firstNonEmpty(normalized.estimatedEligibleDate),
+        eligibilityDate: firstNonEmpty(normalized.eligibilityDate),
+        confidence: firstNonEmpty(normalized.eligibilityConfidence),
+        reasons: normalized.eligibilityReasons || []
+      }),
+      recordwatch: Object.assign({}, source.recordwatch || source.recordWatch || {}),
+      packet: packet,
+      case: normalized,
+      updatedAt: firstNonEmpty(source.updatedAt, source.updated_at, normalized.updatedAt, nowIso())
+    };
+  }
+
+  function currentDraftToCase(draft) {
+    draft = normalizeCurrentCaseDraft(draft);
+    const first = draft.charges[0] || {};
+    return normalizeCase(Object.assign({}, draft.case || {}, {
+      id: firstNonEmpty(draft.savedCaseId, draft.localDraftId, draft.id),
+      case_id: firstNonEmpty(draft.savedCaseId, draft.localDraftId, draft.id),
+      savedCaseId: draft.savedCaseId,
+      caseState: draft.court.state,
+      county: draft.court.county,
+      courtName: firstNonEmpty(draft.court.name, draft.court.courtName),
+      court: firstNonEmpty(draft.court.name, draft.court.courtName),
+      caseNumber: draft.court.caseNumber,
+      charges: draft.charges,
+      primaryCharge: firstNonEmpty(first.charge_name, first.chargeName),
+      offenseCode: firstNonEmpty(first.offense_code, first.charge_code),
+      level: firstNonEmpty(first.offense_level, first.degree, first.level),
+      outcome: firstNonEmpty(draft.case && draft.case.outcome, first.disposition, first.final_disposition),
+      dispositionDate: firstNonEmpty(draft.case && draft.case.dispositionDate, first.disposition_date),
+      dischargeDate: firstNonEmpty(draft.case && draft.case.dischargeDate, first.discharge_date),
+      eligibilityStatus: firstNonEmpty(draft.eligibility.eligibilityStatus, draft.eligibility.status),
+      eligibilityDate: firstNonEmpty(draft.eligibility.eligibilityDate, draft.eligibility.estimatedEligibleDate),
+      estimatedEligibleDate: firstNonEmpty(draft.eligibility.estimatedEligibleDate, draft.eligibility.eligibilityDate),
+      metadata: mergeNonBlank(draft.case && draft.case.metadata, { person: draft.person, recordwatch: draft.recordwatch, judge_name: draft.court.judge })
+    }));
+  }
+
+  function readCurrentDraft() { return normalizeCurrentCaseDraft(readJSON(CURRENT_CASE_DRAFT_KEY, {})); }
+  function writeCurrentDraft(draft) {
+    const normalized = normalizeCurrentCaseDraft(Object.assign({}, draft || {}, { updatedAt: nowIso() }));
+    writeJSON(CURRENT_CASE_DRAFT_KEY, normalized);
+    const activeId = firstNonEmpty(normalized.savedCaseId, normalized.localDraftId, normalized.id);
+    if (activeId) { localStorage.setItem(AI_ACTIVE_CASE_KEY, activeId); localStorage.setItem(ACTIVE_CASE_KEY, activeId); localStorage.setItem("recordwatchActiveCaseId", activeId); }
+    return normalized;
+  }
+
   function hasProtectedHistory(caseData) {
     const id = caseData && (caseData.case_id || caseData.caseId || caseData.id || caseData.caseNumber);
     const ledger = readJSON("recordPathPurchaseLedger", readJSON("recordPathLedger", []));
@@ -680,8 +803,10 @@
     const item = normalizeCase(caseData);
     if (!item.case_id) return item;
     localStorage.setItem(ACTIVE_CASE_KEY, item.case_id);
+    localStorage.setItem(AI_ACTIVE_CASE_KEY, item.case_id);
     localStorage.setItem("recordwatchActiveCaseId", item.case_id);
     writeJSON("recordPathPacketData", Object.assign({}, getPacketData(), caseToPacketData(item)));
+    writeCurrentDraft(mergeNonBlank(readCurrentDraft(), normalizeCurrentCaseDraft(item)));
     return item;
   }
 
@@ -859,7 +984,7 @@
   }
 
   async function getCaseById(caseId) {
-    const id = String(caseId || localStorage.getItem(ACTIVE_CASE_KEY) || "").trim();
+    const id = String(caseId || localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY) || "").trim();
     if (!id) return null;
     await initUserOnly();
     if (currentUser && isUuid(id)) {
@@ -884,7 +1009,7 @@
     return writeActiveCaseToStorage(found);
   }
 
-  async function getActiveCase() { return getCaseById(localStorage.getItem(ACTIVE_CASE_KEY)); }
+  async function getActiveCase() { return getCaseById(localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY)); }
 
   async function syncCharges(caseId, caseData, options) {
     const chargeRows = normalizeCase(caseData).chargeDetails;
@@ -1030,10 +1155,10 @@
   async function saveCase(caseInput) {
     await initUserOnly();
     const input = caseInput || {};
-    const activeId = localStorage.getItem(ACTIVE_CASE_KEY);
+    const activeId = localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY);
     let base = {};
     if (activeId && input && !input.case_id && !input.caseId && !input.id && currentUser) base = await getCaseById(activeId) || {};
-    const collected = Object.keys(input).length ? Object.assign({}, base, Object.keys(base).length ? {} : collectCurrentCaseFromStorage(), input) : collectCurrentCaseFromStorage();
+    const collected = Object.keys(input).length ? mergeNonBlank(mergeNonBlank(Object.keys(base).length ? base : collectCurrentCaseFromStorage(), readCurrentDraft().case || {}), input) : mergeNonBlank(collectCurrentCaseFromStorage(), readCurrentDraft().case || {});
     if (!hasMeaningfulCaseData(collected)) return null;
     const nextCase = normalizeCase(collected);
     if (!currentUser) {
@@ -1043,6 +1168,7 @@
       saveLocalCases(cachedCases);
       syncRecordWatchCases(cachedCases);
       localStorage.setItem(TEMP_DRAFT_CASE_KEY, JSON.stringify(nextCase));
+      writeActiveCaseToStorage(nextCase);
       return nextCase;
     }
     const supabase = await client();
@@ -1067,6 +1193,96 @@
     saveLocalCases(cachedCases);
     writeActiveCaseToStorage(saved);
     return saved;
+  }
+
+
+  async function getCurrentCaseDraft() {
+    await initUserOnly().catch(function () { return null; });
+    const candidates = [];
+    if (currentUser) {
+      const activeId = localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY);
+      if (activeId) {
+        const active = await getCaseById(activeId).catch(function () { return null; });
+        if (active) candidates.push(active);
+      }
+      if (!candidates.length) {
+        const cases = await refreshCases({ allowFallback: true }).catch(function () { return getCases(); });
+        if (cases && cases.length) candidates.push(cases[cases.length - 1]);
+      }
+    }
+    candidates.push(readCurrentDraft());
+    candidates.push(readJSON(TEMP_DRAFT_CASE_KEY, {}));
+    candidates.push(collectCurrentCaseFromStorage());
+    const mergedCase = candidates.reduce(function (merged, candidate) {
+      if (!candidate || !hasMeaningfulCaseData(candidate.case || candidate)) return merged;
+      return mergeNonBlank(merged, candidate.case ? currentDraftToCase(candidate) : candidate);
+    }, {});
+    const draft = normalizeCurrentCaseDraft(mergedCase);
+    if (hasMeaningfulCaseData(draft.case)) writeCurrentDraft(draft);
+    return draft;
+  }
+
+  async function saveCurrentCaseDraft(caseData, options) {
+    options = options || {};
+    await initUserOnly().catch(function () { return null; });
+    const existingDraft = readCurrentDraft();
+    let baseCase = currentDraftToCase(existingDraft);
+    const activeId = localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY);
+    if (currentUser && activeId) {
+      const remote = await getCaseById(activeId).catch(function () { return null; });
+      if (remote) baseCase = mergeNonBlank(baseCase, remote);
+    }
+    const incomingCase = caseData && caseData.person || caseData && caseData.court || caseData && caseData.recordwatch ? currentDraftToCase(caseData) : normalizeCase(caseData || {});
+    const mergedCase = mergeNonBlank(baseCase, incomingCase);
+    const mergedDraft = mergeNonBlank(existingDraft, normalizeCurrentCaseDraft(Object.assign({}, mergedCase, caseData || {})));
+    writeCurrentDraft(mergedDraft);
+    if (currentUser && options.localOnly !== true && options.network !== false && hasMeaningfulCaseData(mergedCase)) {
+      const saved = await saveCase(mergedCase);
+      if (saved) return writeCurrentDraft(mergeNonBlank(mergedDraft, normalizeCurrentCaseDraft(Object.assign({}, saved, { savedCaseId: saved.case_id || saved.id }))));
+    }
+    if (!currentUser && hasMeaningfulCaseData(mergedCase)) {
+      await saveCase(mergedCase);
+    }
+    return mergedDraft;
+  }
+
+  function getActiveCaseId() { return localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY) || localStorage.getItem("recordwatchActiveCaseId") || ""; }
+  function setActiveCaseId(id) {
+    const value = String(id || "").trim();
+    if (!value) return "";
+    localStorage.setItem(AI_ACTIVE_CASE_KEY, value);
+    localStorage.setItem(ACTIVE_CASE_KEY, value);
+    localStorage.setItem("recordwatchActiveCaseId", value);
+    return value;
+  }
+
+  async function migrateLocalDraftToSupabase() {
+    await initUserOnly();
+    if (!currentUser) return { imported: 0 };
+    const draft = readCurrentDraft();
+    const pendingRecordWatch = readJSON(PENDING_RECORDWATCH_KEY, null) || readJSON(RECORDWATCH_DRAFT_KEY, null);
+    let imported = 0;
+    if (hasMeaningfulCaseData(draft.case)) {
+      const saved = await saveCase(currentDraftToCase(draft));
+      if (saved) {
+        imported += 1;
+        const nextDraft = writeCurrentDraft(mergeNonBlank(draft, normalizeCurrentCaseDraft(Object.assign({}, saved, { savedCaseId: saved.case_id || saved.id }))));
+        if (pendingRecordWatch) {
+          nextDraft.recordwatch = mergeNonBlank(nextDraft.recordwatch, pendingRecordWatch);
+          nextDraft.recordwatch.caseId = saved.case_id || saved.id;
+          writeCurrentDraft(nextDraft);
+          writeJSON(RECORDWATCH_DRAFT_KEY, nextDraft.recordwatch);
+          localStorage.removeItem(PENDING_RECORDWATCH_KEY);
+        }
+      }
+    }
+    const legacyResult = await migrateLocalCasesToSupabase().catch(function (error) { lastDraftMigrationError = error; return { imported: 0 }; });
+    return { imported: imported + (legacyResult.imported || 0) };
+  }
+
+  async function getCurrentRecordWatchCase() {
+    const draft = await getCurrentCaseDraft();
+    return hasMeaningfulCaseData(draft.case) ? draft : null;
   }
 
   function collectLegacyLocalCases() {
@@ -1159,7 +1375,7 @@
     const cases = readJSON(`recordPathDemoCases:${currentLegacyId}`, []);
     for (const item of cases) await saveCase(item);
     await maybeImportDraftAfterLogin();
-    await migrateLocalCasesToSupabase();
+    await migrateLocalDraftToSupabase();
     localStorage.setItem(LEGACY_IMPORT_DISMISSED_KEY, "true");
     return { casesImported: cases.length, profileImported: Boolean(legacyUser) };
   }
@@ -1185,6 +1401,12 @@
     getCaseById,
     getActiveCase,
     setActiveCase,
+    getCurrentCaseDraft,
+    saveCurrentCaseDraft,
+    getActiveCaseId,
+    setActiveCaseId,
+    migrateLocalDraftToSupabase,
+    getCurrentRecordWatchCase,
     updateCase,
     deleteCase,
     archiveCase,
@@ -1207,6 +1429,6 @@
     get lastDraftMigrationError() { return lastDraftMigrationError; },
     get supabaseCasesUnavailable() { return supabaseCasesUnavailable; },
     sanitizeReturnUrl,
-    keys: { USERS_KEY, SESSION_KEY, DRAFT_KEY, RETURN_KEY, LEGACY_IMPORT_DISMISSED_KEY, LOCAL_CASES_KEY, FALLBACK_CASES_KEY, TEMP_DRAFT_CASE_KEY, ACTIVE_CASE_KEY }
+    keys: { USERS_KEY, SESSION_KEY, DRAFT_KEY, RETURN_KEY, LEGACY_IMPORT_DISMISSED_KEY, LOCAL_CASES_KEY, FALLBACK_CASES_KEY, TEMP_DRAFT_CASE_KEY, ACTIVE_CASE_KEY, CURRENT_CASE_DRAFT_KEY, AI_ACTIVE_CASE_KEY, RECORDWATCH_DRAFT_KEY, PENDING_RECORDWATCH_KEY }
   };
 }());
