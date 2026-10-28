@@ -37,7 +37,20 @@ app.get("/api/config/supabase", (req, res) => {
   });
 });
 
-app.use(express.static(process.cwd()));
+// Never expose server source, deployment configuration, tests or internal tooling as public files.
+app.use((req, res, next) => {
+  const pathname = decodeURIComponent(req.path).toLowerCase();
+  const segments = pathname.split("/").filter(Boolean);
+  const blockedDirs = new Set([".git", ".github", "node_modules", "supabase", "tools", "tests", "src", "api"]);
+  const blockedFiles = new Set(["server.js", "package.json", "package-lock.json", ".env", ".gitignore"]);
+  if (segments.some(s => s.startsWith(".") || blockedDirs.has(s)) ||
+      segments.some(s => blockedFiles.has(s)) ||
+      /\\.(?:js\\.map|ts|sql|yaml|yml|log|bak|key|pem)$/i.test(pathname)) {
+    return res.status(404).end();
+  }
+  next();
+});
+app.use(express.static(process.cwd(), { dotfiles: "deny" }));
 
 const recordwatchMemory = {
   subscriptions: [],
@@ -676,7 +689,7 @@ async function getAdminLedgerSummary() {
 function isAdminRequest(req) {
   const configuredKey = process.env.RECORDWATCH_ADMIN_KEY || "";
   if (configuredKey && req.get("x-recordpath-admin-key") === configuredKey) return true;
-  if (process.env.RECORDWATCH_DEMO_ADMIN === "true" && req.get("x-recordpath-demo-admin") === "true") return true;
+  // Demo-only admin bypass intentionally disabled.
   return false;
 }
 
