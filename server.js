@@ -1275,6 +1275,10 @@ app.post("/api/recordwatch/inbound-sms", async (req, res) => {
 });
 
 app.post("/api/recordwatch/subscribe", async (req, res) => {
+  const authorizedUser = await requireApiUser(req, res);
+  if (!authorizedUser) return;
+  if (req.method === "GET") req.query.user_id = authorizedUser.id;
+  else req.body = { ...(req.body || {}), user_id: authorizedUser.id, userId: authorizedUser.id };
   try {
     const subscription = upsertRecordwatchSubscription(req.body || {});
     let event = null;
@@ -1286,6 +1290,10 @@ app.post("/api/recordwatch/subscribe", async (req, res) => {
 });
 
 app.get("/api/recordwatch/subscriptions", async (req, res) => {
+  const authorizedUser = await requireApiUser(req, res);
+  if (!authorizedUser) return;
+  if (req.method === "GET") req.query.user_id = authorizedUser.id;
+  else req.body = { ...(req.body || {}), user_id: authorizedUser.id, userId: authorizedUser.id };
   const userId = safe(req.query.user_id || req.query.userId);
   if (!userId) return res.status(400).json({ ok: false, error: "user_id is required" });
   const supabaseRows = await fetchRecordwatchRows("recordwatch_subscriptions", userId);
@@ -1294,6 +1302,10 @@ app.get("/api/recordwatch/subscriptions", async (req, res) => {
 });
 
 app.post("/api/recordwatch/eligibility-event", async (req, res) => {
+  const authorizedUser = await requireApiUser(req, res);
+  if (!authorizedUser) return;
+  if (req.method === "GET") req.query.user_id = authorizedUser.id;
+  else req.body = { ...(req.body || {}), user_id: authorizedUser.id, userId: authorizedUser.id };
   try {
     const event = upsertRecordwatchEvent(req.body || {});
     res.json({ ok: true, persistence: supabaseRestConfig() ? "supabase" : "memory", event });
@@ -1303,6 +1315,10 @@ app.post("/api/recordwatch/eligibility-event", async (req, res) => {
 });
 
 app.get("/api/recordwatch/events", async (req, res) => {
+  const authorizedUser = await requireApiUser(req, res);
+  if (!authorizedUser) return;
+  if (req.method === "GET") req.query.user_id = authorizedUser.id;
+  else req.body = { ...(req.body || {}), user_id: authorizedUser.id, userId: authorizedUser.id };
   const userId = safe(req.query.user_id || req.query.userId);
   if (!userId) return res.status(400).json({ ok: false, error: "user_id is required" });
   const supabaseRows = await fetchRecordwatchRows("recordwatch_eligibility_events", userId);
@@ -1311,6 +1327,10 @@ app.get("/api/recordwatch/events", async (req, res) => {
 });
 
 app.get("/api/recordwatch/notifications", async (req, res) => {
+  const authorizedUser = await requireApiUser(req, res);
+  if (!authorizedUser) return;
+  if (req.method === "GET") req.query.user_id = authorizedUser.id;
+  else req.body = { ...(req.body || {}), user_id: authorizedUser.id, userId: authorizedUser.id };
   const userId = safe(req.query.user_id || req.query.userId);
   if (!userId) return res.status(400).json({ ok: false, error: "user_id is required" });
   const supabaseRows = await fetchRecordwatchRows("recordwatch_notifications", userId);
@@ -1319,6 +1339,10 @@ app.get("/api/recordwatch/notifications", async (req, res) => {
 });
 
 app.get("/api/recordwatch/preferences", async (req, res) => {
+  const authorizedUser = await requireApiUser(req, res);
+  if (!authorizedUser) return;
+  if (req.method === "GET") req.query.user_id = authorizedUser.id;
+  else req.body = { ...(req.body || {}), user_id: authorizedUser.id, userId: authorizedUser.id };
   const userId = safe(req.query.user_id || req.query.userId);
   if (!userId) return res.status(400).json({ ok: false, error: "user_id is required" });
   const supabaseRows = await fetchRecordwatchRows("user_notification_preferences", userId);
@@ -1327,6 +1351,10 @@ app.get("/api/recordwatch/preferences", async (req, res) => {
 });
 
 app.post("/api/recordwatch/preferences", async (req, res) => {
+  const authorizedUser = await requireApiUser(req, res);
+  if (!authorizedUser) return;
+  if (req.method === "GET") req.query.user_id = authorizedUser.id;
+  else req.body = { ...(req.body || {}), user_id: authorizedUser.id, userId: authorizedUser.id };
   try {
     const preferences = upsertMemoryPreferences(req.body || {});
     await persistRecordwatchRow("user_notification_preferences", preferences, "user_id");
@@ -1337,6 +1365,10 @@ app.post("/api/recordwatch/preferences", async (req, res) => {
 });
 
 app.post("/api/recordwatch/court-status", async (req, res) => {
+  const authorizedUser = await requireApiUser(req, res);
+  if (!authorizedUser) return;
+  if (req.method === "GET") req.query.user_id = authorizedUser.id;
+  else req.body = { ...(req.body || {}), user_id: authorizedUser.id, userId: authorizedUser.id };
   try {
     const payload = req.body || {};
     const status = normalizeRecordwatchStatus(payload.status);
@@ -1373,6 +1405,7 @@ app.post("/api/recordwatch/court-status", async (req, res) => {
 });
 
 app.post("/api/recordwatch/run-daily", async (req, res) => {
+  if (!isAdminRequest(req)) return res.status(403).json({ ok: false, error: "Admin access required" });
   try {
     res.json({ ok: true, result: await runRecordwatchDailyJob() });
   } catch (error) {
