@@ -60,15 +60,24 @@
   function loadNotifications() { return readJSON(NOTIFICATIONS_KEY, []); }
   function loadPreferences(userId) { return Object.assign(defaultPreferences(userId), readJSON(PREFERENCES_KEY, {})); }
 
+  async function authHeaders() {
+    if (!window.RecordPathSupabase || !window.RecordPathSupabase.getClient) throw new Error("Authentication unavailable");
+    var client = await window.RecordPathSupabase.getClient();
+    var sessionResult = await client.auth.getSession();
+    var token = sessionResult && sessionResult.data && sessionResult.data.session && sessionResult.data.session.access_token;
+    if (!token) throw new Error("Sign in required for remote RecordWatch access");
+    return { Authorization: "Bearer " + token };
+  }
+
   async function apiGet(path, userId) {
-    var response = await fetch(path + "?user_id=" + encodeURIComponent(userId || currentUserId()));
+    var response = await fetch(path + "?user_id=" + encodeURIComponent(userId || currentUserId()), { headers: await authHeaders() });
     if (!response.ok) throw new Error("RecordWatch API fetch failed");
     return response.json();
   }
 
   async function post(url, payload) {
     if (!window.fetch || location.protocol === "file:") throw new Error("RecordWatch API unavailable");
-    var response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    var response = await fetch(url, { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, await authHeaders()), body: JSON.stringify(payload) });
     if (!response.ok) throw new Error("RecordWatch API save failed");
     return response.json();
   }
@@ -228,7 +237,7 @@
     });
     writeJSON(EVENTS_KEY, events);
     notifications = notifications.concat(runPacketAbandonmentCheck(now));
-    post("/api/recordwatch/run-daily", { source: "browser-preview" }).catch(function () {});
+    // Daily jobs must be triggered by authenticated server-side scheduling, never a public browser.
     return notifications;
   }
 
