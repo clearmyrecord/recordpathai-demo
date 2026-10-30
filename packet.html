@@ -1232,6 +1232,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         const sessionId = params.get("session_id") || sessionStorage.getItem(CHECKOUT_SESSION_KEY) || "";
         if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId)) return false;
         try {
+          const resolved = await resolveCheckoutCase();
+          const savedCaseId = resolved?.checkoutCase?.saved_case_id || "";
+          if (!isInternalUuid(savedCaseId)) return false;
           if (!window.RecordPathSupabase) return false;
           const supabase = await window.RecordPathSupabase.getClient();
           const sessionResult = await supabase.auth.getSession();
@@ -1240,11 +1243,11 @@ document.addEventListener("DOMContentLoaded", async function () {
           const response = await fetch("/api/packet/verify-payment", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: "Bearer " + accessToken },
-            body: JSON.stringify({ session_id: sessionId }),
+            body: JSON.stringify({ session_id: sessionId, case_id: savedCaseId }),
             cache: "no-store"
           });
           const result = await response.json();
-          if (response.ok && result.paid === true && result.sessionId === sessionId) {
+          if (response.ok && result.paid === true && result.sessionId === sessionId && result.caseId === savedCaseId) {
             verifiedPacketSessionId = sessionId;
             sessionStorage.setItem(CHECKOUT_SESSION_KEY, sessionId);
             return true;
