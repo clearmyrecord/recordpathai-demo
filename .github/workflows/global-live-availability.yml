@@ -1,0 +1,44 @@
+name: Verify worldwide public fallback
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Confirm public global site responds and contains approved content
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error,time
+          base="https://recordpathai-global-public.onrender.com"
+          for uri,needle in [
+            ("/","PUBLIC RECORD DISCOVERY"),
+            ("/self-search.html","Search My Court Records"),
+            ("/resources/entrepreneurship.html","Entrepreneurship"),
+            ("/assets/styles.css","--navy"),
+            ("/js/recordpath-home.js","use strict")
+          ]:
+            for attempt in range(5):
+              try:
+                with urllib.request.urlopen(base+uri,timeout=40) as resp:
+                  text=resp.read(150000).decode("utf8")
+                  assert resp.status==200,(uri,resp.status)
+                  assert needle in text,(uri,"missing marker")
+                  if uri in ("/","/self-search.html"):
+                    assert 'noindex' in text,(uri,"missing mirror noindex")
+                  print("Verified public worldwide endpoint:",uri)
+                  break
+              except (urllib.error.HTTPError,urllib.error.URLError,TimeoutError):
+                if attempt==4:raise
+                time.sleep(5)
+          for secret in ["/server.js","/.env","/package.json","/sql/001_wood_county.sql","/tools/build-global-public.cjs"]:
+            try:
+              urllib.request.urlopen(base+secret,timeout=40)
+              raise AssertionError("Private build file exposed: "+secret)
+            except urllib.error.HTTPError as e:
+              assert e.code==404,(secret,e.code)
+          print("Global fallback serves no application source or secret-like files")
+          PY
