@@ -5,7 +5,7 @@ import { verifiedPacketSession,verifiedRecordwatchSession,safeCheckoutRedirect,a
 const userId = "test-user-9";
 const packet = {
   id:"cs_test_a1",status:"complete",payment_status:"paid",currency:"usd",amount_total:5000,
-  metadata:{productType:"record-sealing-packet",userId}
+  metadata:{productType:"record-sealing-packet",userId,saved_case_id:"00000000-0000-4000-8000-000000000001"}
 };
 const watch = {
   id:"cs_test_a2",status:"complete",payment_status:"paid",currency:"usd",
@@ -13,6 +13,8 @@ const watch = {
 };
 test("Packet unlock depends on server-authenticated paid Stripe session ownership",()=>{
  assert.equal(verifiedPacketSession(packet,userId),true);
+ assert.equal(verifiedPacketSession(packet,userId,"00000000-0000-4000-8000-000000000001"),true);
+ assert.equal(verifiedPacketSession(packet,userId,"00000000-0000-4000-8000-000000000002"),false);
  for (const override of [
   {payment_status:"unpaid"},{status:"open"},{amount_total:4999},
   {currency:"eur"},{metadata:{productType:"record-sealing-packet",userId:"another"}},
@@ -53,6 +55,8 @@ test("Source routes never promote browser local storage or confirmation booleans
  assert(server.includes("const checkoutUser = await requireApiUser(req, res)"));
  assert(server.includes("userId: checkoutUser.id"));
  assert(packetPage.includes('await syncPaymentCompletionFromUrl();'));
+ assert(packetPage.includes('case_id: savedCaseId'));
+ assert(server.includes('if (!isUuid(savedCaseId))'));
  assert(!packetPage.includes('localStorage.setItem(PAYMENT_STORAGE_KEY, "true")'));
  assert(!success.includes('localStorage.setItem("recordPathPaymentComplete", "true")'));
  assert(success.includes('"/api/packet/verify-payment"'));

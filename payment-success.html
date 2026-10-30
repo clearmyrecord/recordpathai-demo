@@ -158,7 +158,7 @@
         sessionStorage.setItem("recordPathStripeCheckoutSessionId", sessionId);
         heading.textContent = "Payment verified. Your packet is unlocked.";
         description.textContent = "Your purchase is confirmed. Return to your packet to generate it.";
-        returnLink.href = "packet.html?session_id=" + encodeURIComponent(sessionId);
+        returnLink.href = "packet.html?session_id=" + encodeURIComponent(sessionId) + (result.caseId ? "&caseId=" + encodeURIComponent(result.caseId) : "");
         returnLink.hidden = false;
         // Ledger posting is idempotent and never determines access by itself.
         try {
