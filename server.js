@@ -1516,35 +1516,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
         recordwatchPlan: wantsRecordwatchAddon ? "addon_12_month" : "",
         userId: checkoutUser.id,
         saved_case_id: savedCaseId,
-        savedCaseId,
-        case_id: checkoutCaseId,
-        caseId: checkoutCaseId,
-        case_number: checkoutCaseNumber,
+        case_id: checkoutCaseId
+        // Do not send criminal charges, dates, names, addresses or phone to Stripe metadata.
 
-        fullName: safe(applicant.fullName),
-        email: safe(applicant.email),
-        phone: safe(applicant.phone),
-        street: safe(applicant.street),
-        apartment: safe(applicant.apartment),
-        city: safe(applicant.city),
-        residenceState: safe(applicant.residenceState),
-        zip: safe(applicant.zip),
-
-        caseState: safe(caseInfo.caseState),
-        caseNumber: checkoutCaseNumber,
-        chargeName: safe(caseInfo.chargeName),
-        offenseCode: safe(caseInfo.offenseCode),
-        chargeLevel: safe(caseInfo.chargeLevel),
-        disposition: safe(caseInfo.disposition),
-        dispositionDate: safe(caseInfo.dispositionDate),
-        dischargeDate: safe(caseInfo.dischargeDate),
-        court: safe(caseInfo.court),
-        county: safe(caseInfo.county),
-        estimatedEligibleDate: safe(caseInfo.estimatedEligibleDate),
-
-        eligibilityStatus: safe(eligibility.status),
-        reliefType: safe(eligibility.reliefType),
-        manualReview: String(!!eligibility.manualReview)
       }
     });
 
