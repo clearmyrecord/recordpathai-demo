@@ -1,0 +1,54 @@
+name: Live court-search smoke checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Verify standalone preview and private-backend safety without submitting case data
+        run: |
+          python3 - <<'PY'
+          import json,time,urllib.request,urllib.error
+          def request(url,method="GET",headers=None):
+              last=None
+              for attempt in range(4):
+                  try:
+                      req=urllib.request.Request(url,method=method,headers=headers or {})
+                      try:
+                          with urllib.request.urlopen(req,timeout=45) as res:
+                              return res.status,res.headers,res.read(200000)
+                      except urllib.error.HTTPError as e:
+                          return e.code,e.headers,e.read(200000)
+                  except (TimeoutError,urllib.error.URLError) as e:
+                      last=e
+                      time.sleep(5)
+              raise RuntimeError(f"Endpoint unavailable: {url}: {last}")
+          preview="https://recordpathai-court-search-preview.onrender.com/"
+          backend="https://recordpathai-private-search-backend.onrender.com"
+          code,headers,body=request(preview)
+          assert code==200,(preview,code)
+          html=body.decode("utf8")
+          assert 'id="find"' in html
+          assert 'Search your court records' in html
+          assert 'name="robots" content="noindex' in html
+          print("Preview accessible via HTTPS, noindex and search form present")
+          code,_,body=request(backend+"/health")
+          assert code==200,(code,body[:200])
+          print("Private search backend health responds")
+          origin="https://recordpathai-court-search-preview.onrender.com"
+          code,h,_=request(backend+"/api/record-search",method="OPTIONS",headers={
+              "Origin":origin,"Access-Control-Request-Method":"POST"
+          })
+          assert code==204,(code,"preflight")
+          assert h.get("Access-Control-Allow-Origin")==origin
+          print("Approved preview origin passes CORS preflight")
+          code,_,body=request(backend+"/ready")
+          assert code in (200,503),code
+          data=json.loads(body)
+          assert data.get("publicSearchEnabled") is False,"Unexpected case publication"
+          print("Publication gate remains disabled; database status:",data.get("database"))
+          PY
