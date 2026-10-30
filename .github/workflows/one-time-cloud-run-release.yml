@@ -1,0 +1,56 @@
+name: One-time guarded RecordPathAI Cloud Run release
+on:
+  push:
+    branches: [main]
+    paths: [ops/launch-cloudrun.txt]
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: recordpathai-existing-production
+  cancel-in-progress: false
+jobs:
+  deploy-if-authorized:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'recordpathai-production' }}
+      CLOUD_RUN_REGION: ${{ vars.CLOUD_RUN_REGION || 'us-west1' }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'recordpathai' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify release files
+        run: |
+          node --check server.js
+          bash -n scripts/deploy-existing-cloudrun.sh
+          test -f self-search.html
+          node -e 'if(require("./package.json").engines.node!=="22")process.exit(1)'
+      - name: Confirm OIDC deployment identity exists without disclosing secrets
+        id: auth-ready
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOY_SA: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$WIF_PROVIDER" ] && [ -n "$DEPLOY_SA" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Cloud Run release skipped: configure GCP Workload Identity provider and deployment service account in the protected production environment."
+          fi
+      - name: Authenticate using short-lived credentials
+        if: steps.auth-ready.outputs.available == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.auth-ready.outputs.available == 'true'
+      - name: Deploy only existing service and rollback if search fails
+        if: steps.auth-ready.outputs.available == 'true'
+        run: bash scripts/deploy-existing-cloudrun.sh
