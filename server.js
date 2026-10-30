@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import cors from "cors";
 import path from "path";
 import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect, assertFixedPacketAmount, PACKET_PRICE_CENTS } from "./src/payment-security.js";
+import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
 
 const app = express();
@@ -1641,45 +1642,24 @@ app.get("/api/find-packet", async (req, res) => {
 
 app.get("/api/fetch-pdf", async (req, res) => {
   try {
-    const url = String(req.query.url || "");
-
-    if (!url.startsWith("http")) {
-      return res.status(400).send("Invalid URL");
-    }
-
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
-
-    const allowed =
-      host.includes("court") ||
-      host.includes("clerk") ||
-      host.endsWith(".gov") ||
-      host.endsWith(".us");
-
-    if (!allowed) {
-      return res.status(403).send("Only official court sources are allowed");
-    }
-
-    const pdfResponse = await fetch(url);
-
-    if (!pdfResponse.ok) {
-      return res.status(502).send("Could not fetch PDF");
-    }
-
-    const contentType = pdfResponse.headers.get("content-type") || "";
-
-    if (!contentType.includes("pdf")) {
-      return res.status(400).send("Source is not a PDF");
-    }
-
-    const bytes = Buffer.from(await pdfResponse.arrayBuffer());
-
+    const sourceUrl = await validateOfficialPdfSource(req.query.url);
+    // Never follow redirects: an official domain might redirect to a private host.
+    const pdfResponse = await fetch(sourceUrl, {
+      redirect: "error",
+      signal: AbortSignal.timeout(20000),
+      headers: { Accept: "application/pdf" }
+    });
+    const pdf = await readBoundedPdfResponse(pdfResponse);
     res.setHeader("Content-Type", "application/pdf");
-    res.send(bytes);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Content-Disposition", "attachment; filename=\"official-court-form.pdf\"");
+    return res.send(pdf);
   } catch (error) {
-    console.error("PDF fetch error:", error);
-
-    res.status(500).send("Failed to fetch PDF");
+    console.warn("Court PDF proxy request denied:", error?.message || "unknown error");
+    return res.status(400).json({
+      ok: false,
+      error: "Could not fetch this court PDF safely. Open the original official court link instead."
+    });
   }
 });
 
