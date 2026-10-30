@@ -457,7 +457,7 @@
       dateUsedForCalculation: firstNonEmpty(eligibility.dateUsedForCalculation, eligibility.date_used_for_calculation),
       packetStatus: localStorage.getItem("recordPathPacketGeneratedAt") ? "generated" : "not_generated",
       recordWatchStatus: localStorage.getItem("recordwatchActiveCaseId") ? "active" : "not_activated",
-      paymentStatus: (localStorage.getItem("recordPathPacketPaymentComplete") === "true" || localStorage.getItem("recordPathPaymentComplete") === "true") ? "paid" : "unpaid",
+      paymentStatus: "unpaid", // Legacy browser flags are never authoritative payment evidence.
       createdAt: timestamp,
       updatedAt: timestamp,
       lastUpdated: timestamp
