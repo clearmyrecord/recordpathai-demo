@@ -17,6 +17,7 @@ jobs:
           for uri,needle in [
             ("/","PUBLIC RECORD DISCOVERY"),
             ("/self-search.html","Search My Court Records"),
+            ("/launch.html","PUBLIC BETA"),
             ("/resources/entrepreneurship.html","Entrepreneurship"),
             ("/assets/styles.css","--navy"),
             ("/js/recordpath-home.js","use strict")
