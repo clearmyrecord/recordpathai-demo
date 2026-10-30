@@ -1,13 +1,14 @@
 // Payment release gates must depend on Stripe server-side facts, not browser flags.
 export const PACKET_PRICE_CENTS = 5000;
-export function verifiedPacketSession(session, userId) {
+export function verifiedPacketSession(session, userId, caseId = null) {
   const m = session?.metadata || {};
   return Boolean(session?.id && session.status === "complete" &&
     session.payment_status === "paid" && session.currency === "usd" &&
     Number.isSafeInteger(session.amount_total) &&
     session.amount_total >= PACKET_PRICE_CENTS &&
     m.productType === "record-sealing-packet" &&
-    m.userId && m.userId === userId);
+    m.userId && m.userId === userId &&
+    (!caseId || m.saved_case_id === caseId || m.case_id === caseId));
 }
 export function verifiedRecordwatchSession(session, userId) {
   const m = session?.metadata || {};
