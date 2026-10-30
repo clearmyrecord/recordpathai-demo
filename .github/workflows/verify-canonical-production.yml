@@ -41,6 +41,12 @@ jobs:
                        'recordPathStripeCheckoutSessionId' in success else "not_verified"))
           except Exception as e:
               print("PRODUCTION_PACKET_CHECK_UNAVAILABLE",type(e).__name__)
+          try:
+              with urllib.request.urlopen(root+"/launch.html",timeout=45) as response:
+                  html=response.read(100000).decode("utf8","replace")
+                  print("PRODUCTION_PUBLIC_BETA_PAGE=" + ("present" if response.status==200 and "PUBLIC BETA" in html else "not_verified"))
+          except Exception as e:
+              print("PRODUCTION_PUBLIC_BETA_PAGE=not_verified",type(e).__name__)
           # Probe only anonymous status codes; never print API response bodies or account data.
           for url,method in [
               ("/api/config/supabase","GET"),
