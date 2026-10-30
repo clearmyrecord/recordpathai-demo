@@ -1,0 +1,31 @@
+name: Verify canonical RecordPathAI deployment
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Inspect public canonical site without names or case queries
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error
+          root="https://recordpathai.com"
+          for path in ("/","/self-search.html"):
+              try:
+                  req=urllib.request.Request(root+path,headers={"User-Agent":"RecordPathAI-deployment-check/1.0"})
+                  with urllib.request.urlopen(req,timeout=45) as response:
+                      data=response.read(200000).decode("utf8","replace")
+                      print("Production HTTPS check",path,"HTTP",response.status,
+                            "guided_search_page",('id="find"' in data),
+                            "latest_home_search_nav",('href="self-search.html"' in data))
+                      if path=="/self-search.html" and 'id="find"' in data:
+                          print("PRODUCTION_SEARCH_RELEASE=present")
+                      elif path=="/self-search.html":
+                          print("PRODUCTION_SEARCH_RELEASE=not_verified")
+              except Exception as e:
+                  print("PRODUCTION_CHECK_UNAVAILABLE",path,type(e).__name__)
+          PY
