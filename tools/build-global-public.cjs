@@ -5,6 +5,7 @@ const fs=require("node:fs"),path=require("node:path");
 const root=process.cwd(),out=path.join(root,"global-public-build");
 const files=[
   "index.html",
+  "launch.html",
   "self-search.html",
   "assets/styles.css",
   "js/recordpath-home.js",
@@ -22,6 +23,13 @@ for(const file of files){
     content=content.replaceAll('href="mugshot-removal.html"','href="https://recordpathai.com/mugshot-removal.html"');
     content=content.replaceAll('href="privacy.html"','href="https://recordpathai.com/privacy.html"');
     content=content.replace("</head>",'<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head>');
+  }
+  if(file==="launch.html"){
+    // Duplicate global fallback is a convenience mirror, not a separately indexable canonical page.
+    content=content.replace('name="robots" content="index,follow"','name="robots" content="noindex,nofollow,noarchive"');
+    content=content.replaceAll('href="eligibility.html"','href="https://recordpathai.com/eligibility.html"');
+    content=content.replaceAll('href="mugshot-removal.html"','href="https://recordpathai.com/mugshot-removal.html"');
+    content=content.replaceAll('href="privacy.html"','href="https://recordpathai.com/privacy.html"');
   }
   if(file==="self-search.html"){
     content=content.replaceAll('href="eligibility.html"','href="https://recordpathai.com/eligibility.html"');
