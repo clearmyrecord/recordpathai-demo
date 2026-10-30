@@ -1507,7 +1507,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
       success_url: finalSuccessUrl,
       cancel_url: finalCancelUrl,
       client_reference_id: internalOrderId,
-      customer_email: safe(applicant.email) || undefined,
+      customer_email: checkoutUser.email || undefined,
       line_items: lineItems,
       metadata: {
         productType: "record-sealing-packet",
@@ -1515,9 +1515,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
         recordwatchAddon: String(Boolean(wantsRecordwatchAddon)),
         recordwatchPlan: wantsRecordwatchAddon ? "addon_12_month" : "",
         userId: checkoutUser.id,
-        saved_case_id: savedCaseId,
-        case_id: checkoutCaseId
-        // Do not send criminal charges, dates, names, addresses or phone to Stripe metadata.
+        saved_case_id: isUuid(savedCaseId) ? savedCaseId : "",
+        case_id: isUuid(checkoutCaseId) ? checkoutCaseId : ""
+        // Do not send criminal charges, case numbers, dates or addresses to Stripe metadata.
 
       }
     });
