@@ -1,0 +1,37 @@
+name: Production deploy safeguards
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked production packages and check syntax
+        run: |
+          npm ci --ignore-scripts --omit=dev
+          node --check server.js
+          bash -n scripts/deploy-existing-cloudrun.sh
+          node - <<'NODE'
+          const assert=require("node:assert/strict");
+          const fs=require("node:fs");
+          const pkg=require("./package.json");
+          const lock=require("./package-lock.json");
+          assert.equal(pkg.engines.node,"22");
+          assert.equal(lock.packages[""].engines.node,"22");
+          assert(fs.existsSync("self-search.html"));
+          const deploy=fs.readFileSync("scripts/deploy-existing-cloudrun.sh","utf8");
+          assert(deploy.includes('gcloud run services describe'));
+          assert(deploy.includes('gcloud run services update-traffic'));
+          assert(!deploy.includes('PUBLIC_SEARCH_ENABLED=true'));
+          NODE
+      - name: Security regression tests
+        run: npm run test:security
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

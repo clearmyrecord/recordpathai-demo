@@ -9,29 +9,26 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
-      GCP_PROJECT: ${{ vars.GCP_PROJECT_ID }}
-      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
-      CLOUD_RUN_REGION: ${{ vars.CLOUD_RUN_REGION }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'recordpathai-production' }}
+      CLOUD_RUN_REGION: ${{ vars.CLOUD_RUN_REGION || 'us-west1' }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'recordpathai' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Validate application before deployment
+      - name: Validate deploy target and runtime
         run: |
           node --check server.js
-          node --check js/recordpath-home.js
+          node -p 'require("./package.json").engines.node'
           test -f self-search.html
-          test -n "$GCP_PROJECT" || (echo "Missing GCP_PROJECT_ID repository variable" && exit 1)
-          test -n "$CLOUD_RUN_SERVICE" || (echo "Missing CLOUD_RUN_SERVICE repository variable" && exit 1)
-          test -n "$CLOUD_RUN_REGION" || (echo "Missing CLOUD_RUN_REGION repository variable" && exit 1)
+          test -f scripts/deploy-existing-cloudrun.sh
+          bash -n scripts/deploy-existing-cloudrun.sh
       - name: Authenticate with short-lived Google identity
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Deploy existing Cloud Run service
-        run: |
-          gcloud run deploy "$CLOUD_RUN_SERVICE" --source . \
-            --project "$GCP_PROJECT" --region "$CLOUD_RUN_REGION" --quiet
+      - name: Deploy existing Cloud Run service and roll back on failed smoke test
+        run: bash scripts/deploy-existing-cloudrun.sh
