@@ -1,0 +1,15 @@
+name: Guided search checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check js/recordpath-home.js
+      - run: node -e "const fs=require('fs'),vm=require('vm'); const h=fs.readFileSync('self-search.html','utf8'); const code=h.split('<script>')[1].split('</script>')[0]; new vm.Script(code); if(!h.includes('method:\"POST\"'))process.exit(1)"
