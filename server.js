@@ -889,7 +889,8 @@ app.post("/api/packet/verify-payment", async (req, res) => {
     if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
       return res.status(400).json({ ok: false, error: "Valid Stripe checkout session required" });
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    if (!verifiedPacketSession(session, user.id))
+    const requestedCaseId = safe((req.body || {}).case_id || (req.body || {}).saved_case_id);
+    if (!verifiedPacketSession(session, user.id, requestedCaseId || null))
       return res.status(403).json({ ok: false, paid: false, error: "Payment not verified for this account" });
     res.setHeader("Cache-Control", "no-store, private");
     return res.json({ ok: true, paid: true, sessionId: session.id, caseId: session.metadata.saved_case_id || session.metadata.case_id || null });
