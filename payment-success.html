@@ -120,9 +120,9 @@
         class="site-logo"
       >
     </a>
-    <h1>Payment received. Your packet is unlocked.</h1>
-    <p>Your court-ready packet and e-filing-ready packet tools are now available.</p>
-    <a href="packet.html?payment=success" class="payment-return">Return to Packet</a>
+    <h1>Verifying your payment...</h1>
+    <p>Verifying your Stripe payment before unlocking the packet.</p>
+    <a href="packet.html" class="payment-return" hidden>Return to Packet</a>
   </div>
 
   <script src="js/i18n.js" defer></script>
@@ -130,33 +130,52 @@
   <script src="js/auth.js"></script>
   <script>
     (async function () {
-      localStorage.setItem("recordPathPaymentComplete", "true");
-      if (window.RecordPathUserStore && RecordPathUserStore.ready) await RecordPathUserStore.ready;
-      if (window.RecordPathUserStore && RecordPathUserStore.isLoggedIn()) {
-        RecordPathUserStore.saveCase({ paymentStatus: "Paid", packetStatus: "Ready to generate" }).catch(function (error) { console.warn("Account payment save skipped:", error); });
-      }
+      // Only Stripe verification by the authenticated server can unlock a packet.
+      localStorage.removeItem("recordPathPaymentComplete");
+      const heading = document.querySelector(".wrap h1");
+      const description = document.querySelector(".wrap p");
+      const returnLink = document.querySelector(".payment-return");
+      heading.textContent = "Verifying your payment...";
+      description.textContent = "Checking your Stripe payment securely before unlocking the packet.";
+      returnLink.hidden = true;
+      const sessionId = new URLSearchParams(window.location.search).get("session_id") || "";
       try {
-        const params = new URLSearchParams(window.location.search);
-        const sessionId = params.get("session_id") || params.get("sessionId") || "";
-        if (!sessionId || !window.RecordPathSupabase) return;
+        if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId)) throw new Error("Missing checkout reference");
+        if (!window.RecordPathSupabase) throw new Error("Sign in required");
         const supabase = await window.RecordPathSupabase.getClient();
-        const sessionResult = await supabase.auth.getSession();
-        const token = sessionResult && sessionResult.data && sessionResult.data.session && sessionResult.data.session.access_token;
-        if (!token) return;
-        const caseData = window.RecordPathUserStore && RecordPathUserStore.collectCurrentCaseFromStorage ? RecordPathUserStore.collectCurrentCaseFromStorage() : {};
-        const response = await fetch("/api/ledger/packet-purchase", {
+        const authResult = await supabase.auth.getSession();
+        const token = authResult?.data?.session?.access_token;
+        if (!token) throw new Error("Sign in required");
+        const verify = await fetch("/api/packet/verify-payment", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            stripe_session_id: sessionId,
-            case_id: caseData.caseId || caseData.caseNumber || "",
-            related_packet_id: localStorage.getItem("recordPathPacketId") || "",
-            metadata: { product: "packet_generation", source: "payment-success" }
-          })
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          body: JSON.stringify({ session_id: sessionId }),
+          cache: "no-store"
         });
-        if (!response.ok) console.warn("Ledger entry was not posted:", await response.text());
+        const result = await verify.json();
+        if (!verify.ok || result.paid !== true || result.sessionId !== sessionId)
+          throw new Error("Payment not verified for this account");
+        sessionStorage.setItem("recordPathStripeCheckoutSessionId", sessionId);
+        heading.textContent = "Payment verified. Your packet is unlocked.";
+        description.textContent = "Your purchase is confirmed. Return to your packet to generate it.";
+        returnLink.href = "packet.html?session_id=" + encodeURIComponent(sessionId);
+        returnLink.hidden = false;
+        // Ledger posting is idempotent and never determines access by itself.
+        try {
+          await fetch("/api/ledger/packet-purchase", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+            body: JSON.stringify({ stripe_session_id: sessionId }),
+            cache: "no-store"
+          });
+        } catch (_) { /* Verification succeeded; ledger can recover separately. */ }
       } catch (error) {
-        console.warn("Ledger entry sync skipped:", error);
+        sessionStorage.removeItem("recordPathStripeCheckoutSessionId");
+        heading.textContent = "Payment verification is required.";
+        description.textContent = "Sign in to the account used for checkout and retry verification. No new payment is required.";
+        returnLink.textContent = "Sign in and verify";
+        returnLink.href = "login.html?returnUrl=" + encodeURIComponent("payment-success.html?session_id=" + sessionId);
+        returnLink.hidden = false;
       }
     }());
   </script>
