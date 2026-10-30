@@ -1511,7 +1511,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
       customer_email: safe(applicant.email) || undefined,
       line_items: lineItems,
       metadata: {
-        productType: safe(productType),
+        productType: "record-sealing-packet",
         orderId: internalOrderId,
         recordwatchAddon: String(Boolean(wantsRecordwatchAddon)),
         recordwatchPlan: wantsRecordwatchAddon ? "addon_12_month" : "",
