@@ -2,6 +2,7 @@ import express from "express";
 import Stripe from "stripe";
 import cors from "cors";
 import path from "path";
+import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect, assertFixedPacketAmount, PACKET_PRICE_CENTS } from "./src/payment-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
 
 const app = express();
@@ -894,41 +895,59 @@ app.get("/api/ledger/summary", async (req, res) => {
   }
 });
 
+app.post("/api/packet/verify-payment", async (req, res) => {
+  try {
+    const user = await requireApiUser(req, res);
+    if (!user) return;
+    if (!stripe) return res.status(503).json({ ok: false, error: "Stripe verification is unavailable" });
+    const sessionId = safe((req.body || {}).stripe_session_id || (req.body || {}).session_id);
+    if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
+      return res.status(400).json({ ok: false, error: "Valid Stripe checkout session required" });
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (!verifiedPacketSession(session, user.id))
+      return res.status(403).json({ ok: false, paid: false, error: "Payment not verified for this account" });
+    res.setHeader("Cache-Control", "no-store, private");
+    return res.json({ ok: true, paid: true, sessionId: session.id, caseId: session.metadata.saved_case_id || session.metadata.case_id || null });
+  } catch (error) {
+    console.error("Packet verification failed", error?.type || error?.name || "unknown");
+    return res.status(502).json({ ok: false, paid: false, error: "Payment verification unavailable" });
+  }
+});
+
 app.post("/api/ledger/packet-purchase", async (req, res) => {
   try {
     const user = await requireApiUser(req, res);
     if (!user) return;
-    const payload = req.body || {};
-    let session = null;
-    if (payload.stripe_session_id || payload.stripeSessionId) {
-      if (!stripe) return res.status(503).json({ ok: false, error: "Stripe verification is not configured" });
-      session = await stripe.checkout.sessions.retrieve(safe(payload.stripe_session_id || payload.stripeSessionId));
-      if (session.payment_status !== "paid") return res.status(402).json({ ok: false, error: "Payment is not confirmed" });
-    } else if (payload.payment_confirmed !== true && payload.paymentConfirmed !== true) {
-      return res.status(402).json({ ok: false, error: "Payment is not confirmed" });
-    }
-    const metadata = Object.assign({}, payload.metadata || {}, session && session.metadata ? session.metadata : {}, {
-      product: "packet_generation",
-      idempotency_key: safe(payload.idempotency_key || payload.idempotencyKey || (session && session.id) || `packet:${user.id}:${payload.case_id || payload.caseId || "unknown"}`)
+    if (!stripe) return res.status(503).json({ ok: false, error: "Stripe verification is unavailable" });
+    const sessionId = safe((req.body || {}).stripe_session_id || (req.body || {}).stripeSessionId);
+    if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
+      return res.status(400).json({ ok: false, error: "Stripe checkout session required" });
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (!verifiedPacketSession(session, user.id))
+      return res.status(403).json({ ok: false, error: "Payment not verified for this account" });
+    const metadata = Object.assign({}, session.metadata, {
+      product: "packet_generation", idempotency_key: "packet:" + session.id
     });
     const entry = await createLedgerEntry({
       user_id: user.id,
-      case_id: payload.case_id || payload.caseId || (session && session.metadata && (session.metadata.caseId || session.metadata.caseNumber)),
+      case_id: session.metadata.saved_case_id || session.metadata.case_id || null,
       entry_type: "packet_purchase",
       description: "RecordPathAI packet unlock",
-      amount_cents: 5000,
-      debit_cents: 5000,
+      amount_cents: PACKET_PRICE_CENTS,
+      debit_cents: PACKET_PRICE_CENTS,
       credit_cents: 0,
       status: "posted",
-      stripe_session_id: (session && session.id) || payload.stripe_session_id || payload.stripeSessionId || null,
-      stripe_payment_intent_id: (session && session.payment_intent) || payload.stripe_payment_intent_id || payload.stripePaymentIntentId || null,
-      stripe_customer_id: (session && session.customer) || payload.stripe_customer_id || payload.stripeCustomerId || null,
-      related_packet_id: payload.related_packet_id || payload.relatedPacketId || (session && session.client_reference_id) || null,
+      stripe_session_id: session.id,
+      stripe_payment_intent_id: session.payment_intent || null,
+      stripe_customer_id: session.customer || null,
+      related_packet_id: session.client_reference_id || null,
       metadata
     }, { userId: user.id });
-    res.json({ ok: true, entry, duplicate: entry.duplicate === true });
+    res.setHeader("Cache-Control", "no-store, private");
+    return res.json({ ok: true, paid: true, entry, duplicate: entry.duplicate === true });
   } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
+    console.error("Packet ledger verification failed", error?.type || error?.name || "unknown");
+    return res.status(502).json({ ok: false, error: "Payment verification unavailable" });
   }
 });
 
@@ -936,35 +955,33 @@ app.post("/api/ledger/recordwatch-subscription", async (req, res) => {
   try {
     const user = await requireApiUser(req, res);
     if (!user) return;
-    const payload = req.body || {};
-    let session = null;
-    if (payload.stripe_session_id || payload.stripeSessionId) {
-      if (!stripe) return res.status(503).json({ ok: false, error: "Stripe verification is not configured" });
-      session = await stripe.checkout.sessions.retrieve(safe(payload.stripe_session_id || payload.stripeSessionId));
-      if (session.payment_status !== "paid") return res.status(202).json({ ok: true, posted: false, reason: "Payment is not confirmed" });
-    } else if (payload.payment_confirmed !== true && payload.paymentConfirmed !== true) {
-      return res.status(202).json({ ok: true, posted: false, reason: "Payment is not confirmed" });
-    }
-    const amount = Math.max(0, Number.parseInt(payload.amount_cents ?? payload.amountCents ?? 0, 10) || 0);
-    if (!amount) return res.status(400).json({ ok: false, error: "amount_cents is required for confirmed RecordWatch billing" });
+    if (!stripe) return res.status(503).json({ ok: false, error: "Stripe verification unavailable" });
+    const sessionId = safe((req.body || {}).stripe_session_id || (req.body || {}).stripeSessionId);
+    if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
+      return res.status(400).json({ ok: false, error: "Stripe checkout session required" });
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (!verifiedRecordwatchSession(session, user.id))
+      return res.status(403).json({ ok: false, error: "Payment not verified for this account" });
+    const plan = session.metadata.plan;
+    const amount = RECORDWATCH_PLAN_AMOUNTS[plan];
     const entry = await createLedgerEntry({
       user_id: user.id,
-      case_id: payload.case_id || payload.caseId,
+      case_id: session.metadata.saved_case_id || session.metadata.case_id || null,
       entry_type: "recordwatch_subscription",
-      description: safe(payload.description, "RecordWatch Premium subscription"),
-      amount_cents: amount,
-      debit_cents: amount,
-      credit_cents: 0,
+      description: "RecordWatch Premium subscription",
+      amount_cents: amount, debit_cents: amount, credit_cents: 0,
       status: "posted",
-      stripe_session_id: (session && session.id) || payload.stripe_session_id || payload.stripeSessionId || null,
-      stripe_payment_intent_id: (session && session.payment_intent) || payload.stripe_payment_intent_id || payload.stripePaymentIntentId || null,
-      stripe_customer_id: (session && session.customer) || payload.stripe_customer_id || payload.stripeCustomerId || null,
-      related_recordwatch_subscription_id: payload.related_recordwatch_subscription_id || payload.relatedRecordwatchSubscriptionId || null,
-      metadata: Object.assign({}, payload.metadata || {}, { product: "recordwatch_premium", idempotency_key: safe(payload.idempotency_key || payload.idempotencyKey || (session && session.id)) })
+      stripe_session_id: session.id,
+      stripe_payment_intent_id: session.payment_intent || null,
+      stripe_customer_id: session.customer || null,
+      metadata: Object.assign({}, session.metadata, {
+        product: "recordwatch_premium", idempotency_key: "recordwatch:" + session.id
+      })
     }, { userId: user.id });
-    res.json({ ok: true, posted: true, entry, duplicate: entry.duplicate === true });
+    return res.json({ ok: true, posted: true, entry, duplicate: entry.duplicate === true });
   } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
+    console.error("RecordWatch ledger verification failed", error?.type || error?.name || "unknown");
+    return res.status(502).json({ ok: false, error: "Payment verification unavailable" });
   }
 });
 
@@ -1184,9 +1201,8 @@ app.post("/api/recordwatch/verify-checkout", async (req, res) => {
     const sessionId = safe((req.body || {}).session_id || (req.body || {}).sessionId);
     if (!sessionId) return res.status(400).json({ ok: false, error: "session_id is required" });
     const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["subscription"] });
-    if (!session || (session.metadata && session.metadata.user_id && session.metadata.user_id !== user.id)) return res.status(403).json({ ok: false, error: "Checkout session does not belong to this user" });
-    if (session.payment_status !== "paid" && session.status !== "complete") return res.status(402).json({ ok: false, error: "Payment is not confirmed" });
-    const plan = normalizePremiumRecordwatchPlan((session.metadata && session.metadata.plan) || (req.body || {}).plan) || "monthly";
+    if (!verifiedRecordwatchSession(session, user.id)) return res.status(403).json({ ok: false, error: "Payment is not confirmed for this account" });
+    const plan = session.metadata.plan;
     const subscriptionObject = typeof session.subscription === "object" ? session.subscription : null;
     const period = recordwatchPlanPeriod(plan);
     const subscription = await upsertPremiumRecordwatchSubscription({
@@ -1433,10 +1449,10 @@ app.get("/api/recordwatch/admin-summary", async (req, res) => {
 
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
+    const checkoutUser = await requireApiUser(req, res);
+    if (!checkoutUser) return;
     if (!stripe) {
-      return res.status(500).json({
-        error: "Missing STRIPE_SECRET_KEY"
-      });
+      return res.status(503).json({ error: "Stripe checkout is not configured" });
     }
 
     const {
@@ -1451,19 +1467,18 @@ app.post("/api/create-checkout-session", async (req, res) => {
       cancelUrl
     } = req.body || {};
 
-    const numericAmount = Number(amount);
-
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      return res.status(400).json({
-        error: "Invalid amount"
-      });
-    }
+    try { assertFixedPacketAmount(amount, currency); }
+    catch (error) { return res.status(400).json({ error: error.message }); }
+    const numericAmount = PACKET_PRICE_CENTS;
 
     const baseUrl = getBaseUrl(req);
 
-    const rawSuccessUrl = safe(successUrl) || `${baseUrl}/payment-success.html`;
-    const finalSuccessUrl = rawSuccessUrl.includes("session_id=") ? rawSuccessUrl : `${rawSuccessUrl}${rawSuccessUrl.includes("?") ? "&" : "?"}session_id={CHECKOUT_SESSION_ID}`;
-    const finalCancelUrl = safe(cancelUrl) || `${baseUrl}/packet.html?payment=cancelled`;
+    let finalSuccessUrl, finalCancelUrl;
+    try {
+      const rawSuccessUrl = safeCheckoutRedirect(successUrl, baseUrl, "/payment-success.html");
+      finalSuccessUrl = rawSuccessUrl.includes("session_id=") ? rawSuccessUrl : `${rawSuccessUrl}${rawSuccessUrl.includes("?") ? "&" : "?"}session_id={CHECKOUT_SESSION_ID}`;
+      finalCancelUrl = safeCheckoutRedirect(cancelUrl, baseUrl, "/packet.html?payment=cancelled");
+    } catch (error) { return res.status(400).json({ error: error.message }); }
     const internalOrderId = `packet_${Date.now()}`;
     const savedCaseId = safe((req.body || {}).saved_case_id || (req.body || {}).savedCaseId || caseInfo.saved_case_id || caseInfo.savedCaseId);
     const checkoutCaseId = safe((req.body || {}).case_id || (req.body || {}).caseId || caseInfo.case_id || caseInfo.caseId || savedCaseId || caseInfo.caseNumber);
@@ -1500,7 +1515,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
         orderId: internalOrderId,
         recordwatchAddon: String(Boolean(wantsRecordwatchAddon)),
         recordwatchPlan: wantsRecordwatchAddon ? "addon_12_month" : "",
-        userId: safe((req.body || {}).user_id || (req.body || {}).userId),
+        userId: checkoutUser.id,
         saved_case_id: savedCaseId,
         savedCaseId,
         case_id: checkoutCaseId,
