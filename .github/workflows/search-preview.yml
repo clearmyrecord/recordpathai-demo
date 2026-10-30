@@ -1,0 +1,34 @@
+name: Standalone court search preview
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tools/build-search-preview.cjs
+      - name: Confirm preview is source-safe and JavaScript parses
+        run: |
+          node - <<'NODE'
+          const fs=require("node:fs"),path=require("node:path"),vm=require("node:vm"),assert=require("node:assert/strict");
+          const dir="search-preview-build";
+          const files=fs.readdirSync(dir).sort();
+          assert.deepEqual(files,["assets","index.html","robots.txt"]);
+          assert.deepEqual(fs.readdirSync(path.join(dir,"assets")),["styles.css"]);
+          const html=fs.readFileSync(path.join(dir,"index.html"),"utf8");
+          assert(html.includes('name="robots" content="noindex'));
+          assert(html.includes('https://recordpathai.com/eligibility.html'));
+          assert(!html.includes('href="eligibility.html"'));
+          const inline=html.split("<script>")[1]?.split("</script>")[0];
+          assert(inline);
+          new vm.Script(inline);
+          assert(html.includes('method:"POST"'));
+          console.log("Safe static preview validated; no private backend files included.");
+          NODE
