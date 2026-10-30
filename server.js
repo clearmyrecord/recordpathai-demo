@@ -737,21 +737,19 @@ function safe(value, fallback = "") {
 }
 
 function getBaseUrl(req) {
-  const envUrl = safe(process.env.PUBLIC_APP_URL);
-
-  if (envUrl) {
-    return envUrl.replace(/\/+$/, "");
+  // Do not construct Stripe redirect links from untrusted Host/X-Forwarded headers.
+  const configured = safe(process.env.PUBLIC_APP_URL);
+  if (configured) {
+    try {
+      const url = new URL(configured);
+      if (url.protocol === "https:" && !url.username && !url.password)
+        return url.origin;
+    } catch {}
   }
-
-  const protoHeader = safe(req.headers["x-forwarded-proto"]);
-  const hostHeader = safe(req.headers["x-forwarded-host"]) || safe(req.get("host"));
-  const protocol = protoHeader || req.protocol || "https";
-
-  if (!hostHeader) {
-    return "http://localhost:8080";
-  }
-
-  return `${protocol}://${hostHeader}`;
+  const host = safe(req.get("host"));
+  if (/^(localhost|127\\.0\\.0\\.1)(:[0-9]{2,5})?$/i.test(host))
+    return "http://" + host;
+  return "https://recordpathai.com";
 }
 
 function normalizeCourtName(input) {
