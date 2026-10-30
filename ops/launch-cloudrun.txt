@@ -1,0 +1,6 @@
+RecordPathAI production release attempt, October 30, 2026.
+
+Merge this file together with the one-time guarded Cloud Run release workflow.
+The workflow will attempt deployment ONLY if Google Cloud OIDC identity settings are already provided.
+It targets the existing Cloud Run service in the established project and region and rolls back on search smoke failure.
+No court cases are imported or published. No Render database credentials are changed.
