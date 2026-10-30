@@ -1,0 +1,29 @@
+name: Refresh patched npm lock for release
+on:
+  push:
+    branches:
+      - feature/cloud-run-deployment-workflow-20261030
+permissions:
+  contents: write
+jobs:
+  patch-dependencies:
+    if: github.repository == 'clearmyrecord/recordpathai-demo'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/cloud-run-deployment-workflow-20261030
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Patch vulnerable production dependencies within existing version constraints
+        run: npm audit fix --package-lock-only --ignore-scripts --no-fund
+      - name: Commit audited lockfile to feature branch
+        run: |
+          if ! git diff --quiet -- package-lock.json package.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json package.json
+            git commit -m "Refresh npm lockfile to patched dependency versions"
+            git push origin HEAD:feature/cloud-run-deployment-workflow-20261030
+          fi
