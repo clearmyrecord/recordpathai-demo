@@ -39,20 +39,6 @@ app.get("/api/config/supabase", (req, res) => {
   });
 });
 
-// Never expose server source, deployment configuration, tests or internal tooling as public files.
-app.use((req, res, next) => {
-  const pathname = decodeURIComponent(req.path).toLowerCase();
-  const segments = pathname.split("/").filter(Boolean);
-  const blockedDirs = new Set([".git", ".github", "node_modules", "supabase", "tools", "tests", "src", "api"]);
-  const blockedFiles = new Set(["server.js", "package.json", "package-lock.json", ".env", ".gitignore"]);
-  if (segments.some(s => s.startsWith(".") || blockedDirs.has(s)) ||
-      segments.some(s => blockedFiles.has(s)) ||
-      /\\.(?:js\\.map|ts|sql|yaml|yml|log|bak|key|pem)$/i.test(pathname)) {
-    return res.status(404).end();
-  }
-  next();
-});
-app.use(express.static(process.cwd(), { dotfiles: "deny" }));
 
 const recordwatchMemory = {
   subscriptions: [],
@@ -1634,6 +1620,23 @@ app.get("/api/fetch-pdf", async (req, res) => {
     });
   }
 });
+
+// API routes are registered first so the source-file firewall cannot block /api/*.
+// Unknown API paths and sensitive directories still fall through to the protected static layer.
+// Never expose server source, deployment configuration, tests or internal tooling as public files.
+app.use((req, res, next) => {
+  const pathname = decodeURIComponent(req.path).toLowerCase();
+  const segments = pathname.split("/").filter(Boolean);
+  const blockedDirs = new Set([".git", ".github", "node_modules", "supabase", "tools", "tests", "src", "api"]);
+  const blockedFiles = new Set(["server.js", "package.json", "package-lock.json", ".env", ".gitignore"]);
+  if (segments.some(s => s.startsWith(".") || blockedDirs.has(s)) ||
+      segments.some(s => blockedFiles.has(s)) ||
+      /\\.(?:js\\.map|ts|sql|yaml|yml|log|bak|key|pem)$/i.test(pathname)) {
+    return res.status(404).end();
+  }
+  next();
+});
+app.use(express.static(process.cwd(), { dotfiles: "deny" }));
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(process.cwd(), "index.html"));
