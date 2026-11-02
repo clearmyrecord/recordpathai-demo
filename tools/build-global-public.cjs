@@ -6,10 +6,12 @@ const root=process.cwd(),out=path.join(root,"global-public-build");
 const files=[
   "index.html",
   "start.html",
+  "pilot-demo.html",
   "launch.html",
   "self-search.html",
   "assets/styles.css",
   "js/recordpath-home.js",
+  "js/pilot-demo.js",
   "resources/entrepreneurship.html",
   "resources/resources.js"
 ];
@@ -24,18 +26,23 @@ for(const file of files){
     content=content.replaceAll('href="mugshot-removal.html"','href="https://recordpathai.com/mugshot-removal.html"');
     content=content.replaceAll('href="privacy.html"','href="https://recordpathai.com/privacy.html"');
     // These pages are on the canonical app but not bundled into the public mirror.
-    content=content.replaceAll('href="pilot-demo.html"','href="https://recordpathai.com/pilot-demo.html"');
+    // The fictional pilot demo is included in this public-only mirror.
     content=content.replaceAll('href="terms.html"','href="https://recordpathai.com/terms.html"');
     content=content.replaceAll('href="how-it-works.html"','href="https://recordpathai.com/how-it-works.html"');
     content=content.replace("</head>",'<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head>');
   }
   if(file==="start.html"){
     // This browser-only planner is safe to mirror; the full legal and filing flows remain on the canonical service.
-    for(const page of ["eligibility.html","mugshot-removal.html","privacy.html","terms.html","pilot-demo.html"]){
+    for(const page of ["eligibility.html","mugshot-removal.html","privacy.html","terms.html"]){
       content=content.replaceAll('href="'+page+'"','href="https://recordpathai.com/'+page+'"');
       content=content.replaceAll("'"+page+"'","'https://recordpathai.com/"+page+"'");
     }
     content=content.replace("</head>",'<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head>');
+  }
+  if(file==="pilot-demo.html"){
+    // Fictional records only. No private court exports or backend code are bundled.
+    content=content.replaceAll('href="eligibility.html"','href="https://recordpathai.com/eligibility.html"');
+    content=content.replace("</head>",'<meta name="referrer" content="no-referrer"></head>');
   }
   if(file==="launch.html"){
     // Duplicate global fallback is a convenience mirror, not a separately indexable canonical page.
