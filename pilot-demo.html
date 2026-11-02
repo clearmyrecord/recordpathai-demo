@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="description" content="Interactive synthetic pilot demonstration of RecordPathAI court-case search and record refresh safeguards.">
+<title>RecordPathAI | Court Records Pilot Demo</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#202734;background:#f4f6fa}
+*{box-sizing:border-box}body{margin:0}a{color:#125ea5}header{background:#121e30;color:white;padding:15px clamp(16px,5vw,72px);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+header a{color:#fff;text-decoration:none}header strong{font-size:1.15rem}main{max-width:1060px;margin:0 auto;padding:32px 18px 64px}
+h1{font-size:clamp(1.8rem,4vw,2.8rem);line-height:1.15;margin:10px 0 12px}h2{font-size:1.25rem}
+p{line-height:1.55}.muted{color:#576170}.eyebrow{letter-spacing:.11em;text-transform:uppercase;color:#335ea4;font-size:.75rem;font-weight:700}
+.panel{background:#fff;border:1px solid #dce3eb;border-radius:15px;padding:22px;margin-top:22px;box-shadow:0 3px 14px #13284d0d}
+.notice{border-left:4px solid #c74d34;background:#fff6f2;padding:14px 17px;border-radius:4px}
+.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.field{flex:1;min-width:220px}label{display:block;font-weight:650;font-size:.9rem;margin-bottom:7px}
+input,select{width:100%;font:inherit;padding:12px;border:1px solid #a9b6c6;border-radius:8px;background:white;color:inherit}
+button{font:inherit;padding:12px 16px;cursor:pointer;border:0;border-radius:8px;background:#bf3232;color:white;font-weight:700}
+button.secondary{background:#e9eef5;color:#1a3150}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #4689da;outline-offset:2px}
+.examples{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.examples button{padding:8px 12px}.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:14px;margin-top:15px}
+.record{border:1px solid #d7e0e9;border-radius:10px;padding:17px;background:#fafcfe}.record h3{margin:2px 0 8px;font-size:1.1rem}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:14px 0;font-size:.91rem}
+dt{color:#5a6775}dd{margin:0;overflow-wrap:anywhere}.charge{border-top:1px solid #dce3eb;margin-top:12px;padding-top:12px}
+.charge p{margin:3px 0}.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}.step{border-left:3px solid #7798be;padding-left:12px}
+footer{padding:26px;text-align:center;border-top:1px solid #d6dde8;color:#536073;font-size:.89rem}
+#status{margin-top:16px;font-weight:600}small{font-size:.8rem}.summary{font-weight:600;color:#224d79}
+</style></head>
+<body>
+<header><a href="index.html"><strong>RecordPath<span style="color:#6da1eb">AI</span></strong></a><a href="index.html">Back to main website</a></header>
+<main><div class="eyebrow">Partner demonstration · Wood County Common Pleas prototype</div>
+<h1>Court-record discovery with built-in privacy safeguards</h1>
+<p>Test the case search, charge/disposition structure, and suppression behavior that RecordPathAI is developing for court and community partners.</p>
+<div class="notice"><strong>Illustrative demo — not a live court database.</strong> All names, identifiers, and case details on this page are fictional. No Wood County case records have been uploaded, indexed, or published here. The live site currently directs record searches to official courts.</div>
+<section class="panel" aria-labelledby="searchTitle">
+<h2 id="searchTitle">Try the demonstration search</h2>
+<form id="pilotSearch" class="controls">
+<div class="field"><label for="mode">Search by</label><select id="mode"><option value="name">Person's name</option><option value="case">Case number</option></select></div>
+<div class="field"><label for="q">Search fictional records</label><input id="q" type="text" maxlength="120" minlength="2" placeholder="e.g., Alex Example" required autocomplete="off"></div>
+<button type="submit">Search demo</button>
+</form>
+<div class="examples" aria-label="Example searches">
+<button class="secondary" type="button" data-query="Alex Example" data-mode="name">Try Alex Example</button>
+<button class="secondary" type="button" data-query="Taylor Sample" data-mode="name">Try Taylor Sample</button>
+<button class="secondary" type="button" data-query="DEMO-2008-002" data-mode="case">Try a case number</button>
+</div>
+<p id="status" role="status" aria-live="polite">Enter a name or use an example.</p>
+<div id="results" class="results"></div>
+</section>
+<section class="panel">
+<h2>What happens when a record is sealed or expunged?</h2>
+<p>A refreshed report can omit cases that are no longer publicly available. The importer must compare a complete refreshed period against the same prior period and suppress missing records, rather than treating a monthly feed as a replacement.</p>
+<p id="refreshSummary" class="summary"></p>
+<p class="muted"><small>This is a simulated suppression example, not confirmation that any real court case has been sealed. A snapshot alone cannot provide immediate notification of future changes.</small></p>
+</section>
+<section class="panel"><h2>How a court data feed would work</h2>
+<div class="two">
+<div class="step"><strong>1. Receive</strong><p>Accept an authorized court-generated fixed-width extract through a controlled, private process.</p></div>
+<div class="step"><strong>2. Normalize</strong><p>Link each case with its parties, aliases and charges, while omitting sensitive personal fields.</p></div>
+<div class="step"><strong>3. Verify</strong><p>Check source permissions, record restrictions, identity, and current public status.</p></div>
+<div class="step"><strong>4. Suppress &amp; correct</strong><p>Remove records after a verified sealing/expungement update and accept free correction requests.</p></div>
+</div></section>
+<section class="panel"><h2>Exploring a partnership?</h2>
+<p>RecordPathAI is seeking feedback from courts, university alumni networks and community organizations on an independent, no-integration guided filing workflow. This is not a court-approved program, and it does not provide legal advice or guarantee eligibility.</p>
+<p><a href="eligibility.html">Explore the separate eligibility workflow</a> · <a href="mailto:matt@recordpathai.com?subject=RecordPathAI%20pilot%20inquiry">Contact RecordPathAI</a></p>
+</section></main>
+<footer>RecordPathAI · Demonstration environment · Synthetic data only · No legal advice · Not for employment, housing, credit, or other regulated screening.</footer>
+<script src="js/pilot-demo.js" defer></script>
+</body></html>
