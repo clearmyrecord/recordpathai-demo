@@ -48,14 +48,14 @@ fi
 
 if ! curl -fLsS --max-time 60 "$URL/pilot-demo.html" | grep -qi 'Illustrative demo'; then
   echo "Fictional pilot page unavailable after deploy; reverting traffic to $OLD_REV" >&2
-  gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \\
+  gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \
     --to-revisions "$OLD_REV=100" --quiet
   exit 5
 fi
 
 if ! curl -fLsS --max-time 60 "$URL/js/pilot-demo.js" | grep -q 'DEMO-2006-001'; then
   echo "Fictional pilot search script unavailable after deploy; reverting traffic to $OLD_REV" >&2
-  gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \\
+  gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \
     --to-revisions "$OLD_REV=100" --quiet
   exit 5
 fi
