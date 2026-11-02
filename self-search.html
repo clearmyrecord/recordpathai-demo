@@ -1,67 +1,232 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="canonical" href="https://recordpathai.com/self-search.html"><title>Search My Court Records | RecordPathAI</title>
-<meta name="description" content="Find Ohio, Nevada, and Florida official court search portals, search by name or case number on the source site, and explore record relief options.">
-<meta name="robots" content="index,follow">
-<meta property="og:type" content="website">
-<meta property="og:title" content="Search Official Court Records | RecordPathAI">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Search Your Court Records | RecordPathAI</title>
+<meta name="description" content="Find official court case-search portals in Ohio, Nevada, and Florida. Search your own records at the source and explore possible record-relief options.">
+<link rel="canonical" href="https://recordpathai.com/self-search.html">
+<meta property="og:title" content="Search Your Court Records | RecordPathAI">
 <meta property="og:url" content="https://recordpathai.com/self-search.html">
-<meta property="og:description" content="Find official court record portals and guided next steps. We do not publish a live nationwide personal-record database.">
-<link rel="stylesheet" href="assets/styles.css">
-<style>body{background:#f5f8fb;color:#172739}main{max-width:920px;margin:34px auto;padding:20px}.search-card{background:white;border:1px solid #dce4ef;padding:24px;border-radius:16px;margin:18px 0}.field{margin:12px 0}.field label{display:block;font-weight:700;margin-bottom:7px}.field input,.field select{box-sizing:border-box;padding:12px;width:100%;max-width:520px;border:1px solid #9baebf;border-radius:8px;font:inherit}.result{padding:18px;border:1px solid #d6e0e9;border-radius:10px;margin:12px 0;background:white}.notice{color:#3c5266;line-height:1.6}a{color:#1262aa}button{cursor:pointer;padding:12px 20px;border:0;border-radius:8px;background:#c52c41;color:white;font-weight:700}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #4288c2}small{color:#536b7c}</style></head>
-<body><main><p><a href="index.html">RecordPathAI Home</a> / Search My Records</p>
-<h1>Search your court records</h1><p class="notice">Find the appropriate official court search. If an approved Wood County index becomes active, verified matches may also appear here. A missing result never proves that no record exists. No login or payment is required.</p>
-<section class="search-card"><form id="find">
-<div class="field"><label for="state">State</label><select id="state" required><option value="">Choose a state</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="FL">Florida</option></select></div>
-<div class="field"><label for="court">Court</label><select id="court" required><option value="">Select state first</option></select></div>
-<div class="field"><label for="mode">Search by</label><select id="mode"><option value="name">Full name</option><option value="case">Case number</option></select></div>
-<div class="field"><label for="query">Search text</label><input id="query" type="text" minlength="2" maxlength="120" required autocomplete="off" placeholder="Full name or case number"></div>
-<button type="submit">Find records</button></form>
-<p class="notice"><small>Search text stays in your browser for official-portal referrals. Only if the Wood County approved index is enabled will submitting send your name or case number to RecordPathAI's separate search service by private POST. Court websites have their own privacy practices.</small></p>
-<p id="status" role="status" aria-live="polite"></p><div id="results"></div></section>
-<section class="search-card"><h2>After you find a case</h2><p>Verify the identity and disposition using the court's official docket before taking action. Then explore a <a href="eligibility.html">free eligibility check</a> or <a href="mugshot-removal.html">correction and removal options</a>. RecordPathAI is independent and is not a court or law firm.</p></section>
-<p class="notice">This is not a background-screening tool and must not be used for employment, rental, credit, or insurance eligibility decisions. Records may be confidential, sealed, expunged, corrected, or missing from the online portal.</p></main>
+<style>
+:root{color-scheme:light;--navy:#081d30;--blue:#1f7ec1;--red:#ed3245;--ink:#122335;--muted:#586b7d;--line:#dce5eb;--bg:#f4f7fb;--white:#fff;font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink)}
+a{color:#005ca0}a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #6aabdb;outline-offset:2px}
+header{background:var(--navy);color:white;padding:18px max(18px,calc((100vw - 1080px)/2));display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+header a{color:white;text-decoration:none}.brand{font-size:1.4rem;font-weight:850}.brand span{color:#62b2fc}header nav{display:flex;gap:20px;flex-wrap:wrap;font-size:.88rem}
+main{max-width:1080px;padding:30px 18px 65px;margin:auto}
+.hero{padding:16px 0 18px;max-width:850px}
+.eyebrow{font-size:.77rem;letter-spacing:.13em;font-weight:800;text-transform:uppercase;color:#26629b}
+h1{font-size:clamp(2rem,4.8vw,3.5rem);line-height:1.12;margin:10px 0}h2{font-size:1.3rem;margin-top:0}
+p{line-height:1.58}.lead{font-size:1.08rem;color:#3c5165}.muted{color:var(--muted)}.small{font-size:.83rem}
+.panel{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:clamp(18px,3vw,30px);margin:20px 0;box-shadow:0 9px 25px rgba(28,50,78,.045)}
+.notice{background:#edf4fb;border-left:4px solid #3578b5;padding:14px 18px;border-radius:7px;font-size:.94rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:15px}
+label{display:block;font-size:.93rem;font-weight:750;margin:0 0 7px}
+input,select{border:1px solid #b3c3d0;border-radius:9px;padding:13px 12px;width:100%;font:inherit;color:inherit;background:white}
+input::placeholder{color:#768795}.radio{display:flex;gap:20px;flex-wrap:wrap;margin:14px 0 20px}
+.radio label{font-weight:550;display:flex;align-items:center;gap:9px;margin:0}
+.radio input{width:auto}button,.btn{border:0;border-radius:9px;background:#d9233e;color:white;font:inherit;font-weight:750;padding:13px 18px;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
+.btn-alt{background:var(--navy)}.btn-quiet{background:#eaf1f8;color:#193e60}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.hidden{display:none!important}
+.result{border:1px solid #d8e4ee;background:#fbfdff;border-radius:12px;padding:18px;margin-top:16px}
+.result h3{margin:0 0 8px;font-size:1.12rem}.result p{margin:.4rem 0}
+.value{font-weight:700;word-break:break-word}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+.step{padding:3px 14px;border-left:3px solid #5695c9}
+.step strong{display:block;margin-bottom:4px}.step p{margin:0;color:var(--muted);font-size:.91rem}
+footer{border-top:1px solid #d9e3ec;text-align:center;padding:27px 18px;color:var(--muted);font-size:.83rem}
+@media(max-width:600px){header{padding:16px}main{padding-top:16px}.actions .btn,.actions button{width:100%}}
+</style>
+</head>
+<body>
+<header>
+<a class="brand" href="index.html">RecordPath<span>AI</span></a>
+<nav aria-label="Main navigation">
+<a href="index.html">Home</a>
+<a href="start.html">Start Here</a>
+<a href="eligibility.html">Free Eligibility Check</a>
+<a href="pilot-demo.html">Explore Demo</a>
+</nav>
+</header>
+<main>
+<section class="hero">
+<div class="eyebrow">Free · No account required · Official sources</div>
+<h1>Find your own court records.</h1>
+<p class="lead">Start with your state and court, then open the official court website to look up your name or case number. Once you find a case, come back to check possible sealing, expungement, or correction options.</p>
+<div class="notice"><strong>How this works:</strong> RecordPathAI finds the appropriate official court search for you. Official court portals provide current case details. Wood County results are returned only when an authorized, current, individually approved index is active. The historical extracts are not currently available for public search.</div>
+</section>
+<section class="panel" aria-labelledby="search-heading">
+<h2 id="search-heading">Start your court-record search</h2>
+<form id="selfSearch" novalidate>
+<div class="grid">
+<div><label for="state">State</label><select id="state" required><option value="">Choose a state</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="FL">Florida</option></select></div>
+<div><label for="court">Court or area</label><select id="court" required disabled><option value="">Select a state first</option></select></div>
+</div>
+<fieldset style="border:0;padding:0;margin:20px 0 0">
+<legend style="font-weight:750">What do you know?</legend>
+<div class="radio">
+<label><input type="radio" name="mode" value="name" checked> My name</label>
+<label><input type="radio" name="mode" value="case"> My case number</label>
+</div>
+</fieldset>
+<div class="grid" id="nameFields">
+<div><label for="first">First name</label><input id="first" name="first" type="text" autocomplete="given-name" maxlength="70" placeholder="First name"></div>
+<div><label for="last">Last name</label><input id="last" name="last" type="text" autocomplete="family-name" maxlength="70" placeholder="Last name"></div>
+</div>
+<div id="caseFields" class="hidden">
+<label for="caseNumber">Case number</label><input id="caseNumber" name="caseNumber" maxlength="120" placeholder="As shown on your court documents">
+</div>
+<div class="actions">
+<button type="submit">Find my official court search</button>
+<button type="reset" class="btn-quiet">Clear</button>
+</div>
+</form>
+<p id="message" role="status" aria-live="polite" class="small muted">Typing into this form does not send your information anywhere. After submission, a Wood County name or case number is sent to our private search service only if its approved index is enabled. Otherwise the search remains in your browser and you can open the official court portal.</p>
+<div id="matchedSource" class="hidden" aria-live="polite"></div>
+</section>
+<section class="panel">
+<h2>After you find a case</h2>
+<div class="steps">
+<div class="step"><strong>1. Confirm the match</strong><p>Check identifying details on the official court portal. A matching name alone may not identify you.</p></div>
+<div class="step"><strong>2. Read the outcome</strong><p>Look for the final disposition, filing date, and any subsequent court orders.</p></div>
+<div class="step"><strong>3. Check your options</strong><p>Use RecordPathAI's independent eligibility workflow. Court orders and filing requirements still control.</p></div>
+<div class="step"><strong>4. Correct outdated data</strong><p>Ask the relevant records holder about errors or outdated listings; no payment is required to report errors on our site.</p></div>
+</div>
+<div class="actions"><a class="btn btn-alt" href="start.html">Get my free next-step plan</a><a class="btn btn-quiet" href="eligibility.html">Free eligibility check</a><a class="btn btn-quiet" href="mugshot-removal.html">Correction or removal options</a></div>
+</section>
+<section class="panel">
+<h2>Important information</h2>
+<p class="muted">Public court coverage varies. Sealed, expunged, confidential, and older cases may not appear; a blank search does not establish that no record exists. Each official court operates independently and may require its own search criteria or a CAPTCHA. No court has endorsed RecordPathAI. Our service is informational and must not be used for employment, tenant, credit, insurance, or other regulated screening decisions.</p>
+</section>
+</main>
+<footer>RecordPathAI.com · Independent record-relief guidance · <a href="privacy.html">Privacy policy</a> · <a href="terms.html">Terms</a> · <a href="mailto:matt@recordpathai.com">Support</a></footer>
 <script>
-(()=>{"use strict";
+(function(){
+"use strict";
 const courts={
- OH:[["wood","Wood County Common Pleas","https://clerkofcourt.co.wood.oh.us/169/Dockets-Online"],["ohio","Other Ohio courts","https://www.supremecourt.ohio.gov/courts/judicial-system/ohio-trial-courts/"]],
- NV:[["clark","Clark County District Court","https://www.clarkcountycourts.us/Anonymous/default.aspx"],["lasvegas","Las Vegas Justice Court","https://lvjcpa.clarkcountynv.gov/Anonymous/default.aspx"],["nevada","Other Nevada courts","https://nvcourts.gov/aoc/how_do_i/find_a_court"]],
- FL:[["orange","Orange County Clerk of Courts","https://myeclerk.myorangeclerk.com/cases/search"],["florida","Other Florida courts","https://www.flcourts.gov/Florida-Courts"]]
+OH:[
+{id:"wood-cp",name:"Wood County Common Pleas",url:"https://clerkofcourt.co.wood.oh.us/169/Dockets-Online",scope:"Wood County felony-level Common Pleas records; use the clerk's CourtView link.",tip:"For a name search, follow the court's instructions. An older or restricted case may be unavailable online."},
+{id:"bg-muni",name:"Bowling Green Municipal Court",url:"https://www.bgcourt.org/",scope:"Bowling Green Municipal Court; separate from Wood County Common Pleas.",tip:"Use the municipal court's case search or contact instructions."},
+{id:"oh-other",name:"Other Ohio court",url:"https://www.supremecourt.ohio.gov/courts/judicial-system/ohio-trial-courts/",scope:"Find the correct county, municipal, or Common Pleas court in Ohio.",tip:"Select your court from the official Ohio court directory."}
+],
+NV:[
+{id:"clark-district",name:"Clark County District Court",url:"https://www.clarkcountycourts.us/Anonymous/default.aspx",scope:"Eighth Judicial District Court civil and criminal records.",tip:"Choose District Civil/Criminal Records in the official portal."},
+{id:"lv-justice",name:"Las Vegas Justice Court",url:"https://lvjcpa.clarkcountynv.gov/Anonymous/default.aspx",scope:"Las Vegas Township Justice Court cases.",tip:"Choose criminal records from the official Odyssey Public Access page."},
+{id:"nv-other",name:"Other Nevada court",url:"https://nvcourts.gov/aoc/how_do_i/find_a_court",scope:"Find other district, justice, or municipal courts in Nevada.",tip:"Select the appropriate court and follow its public-record instructions."}
+],
+FL:[
+{id:"orange",name:"Orange County Clerk of Courts",url:"https://myeclerk.myorangeclerk.com/cases/search",scope:"Orange County Circuit and County Court public case search.",tip:"Enter the first and last name separately or use a case number. Anonymous visitors must complete a CAPTCHA."},
+{id:"fl-other",name:"Other Florida court",url:"https://www.flcourts.gov/Florida-Courts",scope:"Find the relevant Florida court and local clerk.",tip:"Choose the county clerk that handled your case and use its records search."}
+]
 };
-const get=id=>document.getElementById(id),api="https://recordpathai-private-search-backend.onrender.com";
-const state=get("state"),court=get("court"),status=get("status"),results=get("results");
-state.addEventListener("change",()=>{
- court.replaceChildren();const choices=courts[state.value]||[];
- const p=document.createElement("option");p.value="";p.textContent="Choose court";court.append(p);
- choices.forEach(c=>{const o=document.createElement("option");o.value=c[0];o.textContent=c[1];court.append(o)});
-});
-function text(node,tag,value){const el=document.createElement(tag);el.textContent=String(value||"");node.append(el);return el}
-get("find").addEventListener("submit",async ev=>{
- ev.preventDefault();results.replaceChildren();
- const selected=(courts[state.value]||[]).find(c=>c[0]===court.value),query=get("query").value.trim(),mode=get("mode").value;
- if(!selected||query.length<2||(mode==="name"&&!query.includes(" "))){status.textContent="Select a court and enter a full name or case number.";return}
- const card=document.createElement("div");card.className="result";text(card,"h2",selected[1]);
- const a=document.createElement("a");a.href=selected[2];a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open official court search";card.append(a);results.append(card);
- status.textContent="An official court source was identified. No individual record has been verified.";
- if(state.value!=="OH"||selected[0]!=="wood")return;
+const $=id=>document.getElementById(id);
+const state=$("state"),court=$("court"),form=$("selfSearch"),result=$("matchedSource"),message=$("message");
+const nameFields=$("nameFields"),caseFields=$("caseFields");
+function mode(){return document.querySelector('input[name="mode"]:checked').value}
+function resetResults(){result.textContent="";result.classList.add("hidden")}
+function updateMode(){
+const asCase=mode()==="case";
+nameFields.classList.toggle("hidden",asCase);
+caseFields.classList.toggle("hidden",!asCase);
+resetResults();
+}
+function updateCourt(){
+court.replaceChildren();
+const opts=courts[state.value]||[];
+court.disabled=!opts.length;
+const prompt=document.createElement("option");prompt.value="";prompt.textContent=opts.length?"Choose the court":"Select a state first";court.append(prompt);
+for(const opt of opts){const e=document.createElement("option");e.value=opt.id;e.textContent=opt.name;court.append(e)}
+resetResults();
+}
+state.addEventListener("change",updateCourt);
+court.addEventListener("change",resetResults);
+document.querySelectorAll('input[name="mode"]').forEach(input=>input.addEventListener("change",updateMode));
+form.addEventListener("reset",()=>{setTimeout(()=>{updateCourt();updateMode();message.textContent="Search details cleared."},0)});
+function addText(parent,tag,value,cls){
+const el=document.createElement(tag);el.textContent=value;if(cls)el.className=cls;parent.append(el);return el;
+}
+function button(label,cls,onClick){
+const b=document.createElement("button");b.type="button";b.className=cls;b.textContent=label;b.addEventListener("click",onClick);return b;
+}
+const API="https://recordpathai-private-search-backend.onrender.com";
+async function woodSearch(card,query,isCase){
+ const state=document.createElement("p");state.className="muted";
+ state.textContent="Checking whether Wood County has approved searchable records...";
+ card.append(state);
  try{
-  const ready=await fetch(api+"/ready",{cache:"no-store",credentials:"omit",signal:AbortSignal.timeout(18000)});
-  const availability=await ready.json();
-  if(!availability.ready||!availability.publicSearchEnabled){status.textContent="Wood County's approved RecordPathAI index is not currently available. Use the official source above; this is not a no-record result.";return}
-  const response=await fetch(api+"/api/record-search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({state:"OH",county:"wood",mode,query}),cache:"no-store",referrerPolicy:"no-referrer",credentials:"omit",signal:AbortSignal.timeout(15000)});
-  if(!response.ok)throw Error("Search not available");
-  const data=await response.json(),matches=Array.isArray(data.verifiedMatches)?data.verifiedMatches:[];
-  status.textContent=matches.length?matches.length+" individually verified, approved matches returned. Confirm identity with the court.":"No currently approved match returned; this does not establish the absence of a court record.";
-  matches.forEach(hit=>{
-   const box=document.createElement("div");box.className="result";
-   text(box,"h3","Case "+hit.caseNumber);
-   text(box,"p","Filed: "+String(hit.filingDate||"Not supplied").slice(0,10));
-   if(hit.terminationDescription)text(box,"p","Latest disposition: "+hit.terminationDescription);
-   (hit.defendants||[]).forEach(d=>{text(box,"p","Party: "+d.name);(d.charges||[]).forEach(ch=>text(box,"p",String(ch.description||"Charge")+" — "+String(ch.disposition||"Status not supplied")))});
-   text(box,"small","Verified on: "+String(hit.verifiedAt||"Not supplied"));
-   results.append(box);
+  // Check availability without submitting someone's personal search terms.
+  const readiness=await fetch(API+"/ready",{method:"GET",cache:"no-store",signal:AbortSignal.timeout(8000)});
+  const info=await readiness.json();
+  if(!info.ready||!info.publicSearchEnabled){
+   state.textContent="RecordPathAI's Wood County case index is not available yet. The court has not supplied an authorized historical, current-status-verified dataset for public search. This is not a 'no record found' result.";
+   return;
+  }
+  const response=await fetch(API+"/api/record-search",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({state:"OH",county:"wood",mode:isCase?"case":"name",query}),
+   cache:"no-store",referrerPolicy:"no-referrer",credentials:"omit",
+   signal:AbortSignal.timeout(12000)
   });
- }catch{status.textContent="RecordPathAI's private index is unavailable. Please search the official court source instead."}
+  if(!response.ok)throw new Error("Search temporarily unavailable");
+  const payload=await response.json();
+  const matches=Array.isArray(payload.verifiedMatches)?payload.verifiedMatches:[];
+  state.textContent=matches.length
+    ?"RecordPathAI found "+matches.length+" verified, approved Wood County case result(s) below. Confirm identity before proceeding."
+    :"No verified, approved case was returned by the current RecordPathAI index. That does not mean no court record exists.";
+  for(const hit of matches){
+   const item=document.createElement("div");item.className="result";
+   addText(item,"h3","Case "+String(hit.caseNumber||"Unknown"));
+   if(hit.filingDate)addText(item,"p","Filed: "+String(hit.filingDate).slice(0,10));
+   if(hit.terminationDescription)addText(item,"p","Last recorded disposition: "+hit.terminationDescription);
+   if(hit.terminationDate)addText(item,"p","Disposition date: "+String(hit.terminationDate).slice(0,10));
+   for(const defendant of (hit.defendants||[])){
+    addText(item,"p","Named party: "+defendant.name,"value");
+    for(const ch of (defendant.charges||[]))
+     addText(item,"p",String(ch.description||"Charge")+" — "+String(ch.disposition||"Disposition unavailable"));
+   }
+   addText(item,"p","Please confirm this is your case. This is not a legal eligibility determination.","small muted");
+   card.append(item);
+  }
+ }catch(err){
+  state.textContent="The private record index cannot be reached or is unavailable. No court case search result could be verified. You can use the official court source below instead.";
+ }
+}
+form.addEventListener("submit",async event=>{
+ event.preventDefault();resetResults();
+ const selected=(courts[state.value]||[]).find(c=>c.id===court.value);
+ if(!selected){message.textContent="Choose your state and court to continue.";return}
+ const isCase=mode()==="case";
+ const first=$("first").value.trim(),last=$("last").value.trim(),number=$("caseNumber").value.trim();
+ if(isCase?number.length<2:first.length<2||last.length<2){
+  message.textContent=isCase?"Enter your case number.":"Enter both your first and last name.";return;
+ }
+ const query=isCase?number:(first+" "+last);
+ const card=document.createElement("div");card.className="result";
+ addText(card,"h3",selected.name);
+ addText(card,"p",selected.scope);
+ const instruction=document.createElement("p");instruction.className="muted";instruction.textContent=selected.tip;card.append(instruction);
+ if(selected.id==="wood-cp")await woodSearch(card,query,isCase);
+ else addText(card,"p","This court has no authorized RecordPathAI case index yet. The official court search is the available source; this is not a record match.","muted");
+ const detail= document.createElement("details");
+ const summary=document.createElement("summary");summary.textContent="Show the search terms I entered";
+ const p=document.createElement("p");p.textContent=query;
+ detail.append(summary,p);card.append(detail);
+ const buttons=document.createElement("div");buttons.className="actions";
+ const copy=button("Copy my "+(isCase?"case number":"name"),"btn-quiet",async()=>{
+  try{
+   if(!navigator.clipboard||!window.isSecureContext)throw new Error("Clipboard unavailable");
+   await navigator.clipboard.writeText(query);
+   message.textContent="Copied. Paste it into the official court search.";
+  }catch(err){message.textContent="Automatic copy unavailable. Select the displayed text and copy it manually."}
+ });
+ const open=document.createElement("a");open.className="btn";open.href=selected.url;open.target="_blank";open.rel="noopener noreferrer";
+ open.textContent="Open official court records";buttons.append(copy,open);card.append(buttons);
+ result.append(card);result.classList.remove("hidden");
+ message.textContent=selected.id==="wood-cp"?"Wood County record index availability checked.":"Official court location identified; RecordPathAI has not searched that court's records.";
+ result.scrollIntoView({behavior:"smooth",block:"nearest"});
 });
 })();
-</script></body></html>
+</script>
+</body></html>
