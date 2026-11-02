@@ -21,13 +21,22 @@ jobs:
           const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict"),vm=require("node:vm");
           const dir="global-public-build";
           const expected=[
-            "assets/styles.css","index.html","js/recordpath-home.js","launch.html","resources/entrepreneurship.html","resources/resources.js","robots.txt","self-search.html"
+            "assets/styles.css","index.html","js/recordpath-home.js","launch.html","resources/entrepreneurship.html","resources/resources.js","robots.txt","self-search.html","start.html"
           ].sort();
           function walk(root,pre=""){return fs.readdirSync(root,{withFileTypes:true}).flatMap(f=>f.isDirectory()?walk(path.join(root,f.name),pre+f.name+"/"):[pre+f.name]);}
           assert.deepEqual(walk(dir).sort(),expected);
           const home=fs.readFileSync(path.join(dir,"index.html"),"utf8");
           const search=fs.readFileSync(path.join(dir,"self-search.html"),"utf8");
           assert(home.includes('href="self-search.html"'));
+          const planner=fs.readFileSync(path.join(dir,"start.html"),"utf8");
+          assert(planner.includes('id="planner"'));
+          assert(planner.includes('No names or case numbers collected'));
+          assert(planner.includes('name="robots" content="noindex'));
+          assert(!home.includes('id="query"'));
+          assert(home.includes('href="start.html"'));
+          const plannerScript=planner.split("<script>")[1]?.split("</script>")[0];
+          assert(plannerScript);
+          new vm.Script(plannerScript);
           const launch=fs.readFileSync(path.join(dir,"launch.html"),"utf8");
           assert(launch.includes("PUBLIC BETA"));
           assert(launch.includes('name="robots" content="noindex'));
