@@ -12,7 +12,7 @@ for cmd in gcloud curl python3; do
   command -v "$cmd" >/dev/null || { echo "Missing required tool: $cmd" >&2; exit 2; }
 done
 
-test -f package.json && test -f self-search.html || {
+test -f package.json && test -f self-search.html && test -f pilot-demo.html && test -f js/pilot-demo.js || {
   echo "Run from the RecordPathAI website source directory" >&2; exit 2;
 }
 node --check server.js || exit 2
@@ -39,12 +39,26 @@ echo "Deploying with existing service environment and identity settings preserve
 gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" --quiet
 
 URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format='value(status.url)')"
-if [ -z "$URL" ] || ! curl -fLsS --max-time 60 "$URL/self-search.html" | grep -qi 'Search My Court Records'; then
+if [ -z "$URL" ] || ! curl -fLsS --max-time 60 "$URL/self-search.html" | grep -qi 'Find your own court records'; then
   echo "New guided search failed smoke check; reverting traffic to $OLD_REV" >&2
   gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \
     --to-revisions "$OLD_REV=100" --quiet
   exit 5
 fi
 
-echo "Cloud Run deployment verified: $URL/self-search.html"
+if ! curl -fLsS --max-time 60 "$URL/pilot-demo.html" | grep -qi 'Illustrative demo'; then
+  echo "Fictional pilot page unavailable after deploy; reverting traffic to $OLD_REV" >&2
+  gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \\
+    --to-revisions "$OLD_REV=100" --quiet
+  exit 5
+fi
+
+if ! curl -fLsS --max-time 60 "$URL/js/pilot-demo.js" | grep -q 'DEMO-2006-001'; then
+  echo "Fictional pilot search script unavailable after deploy; reverting traffic to $OLD_REV" >&2
+  gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \\
+    --to-revisions "$OLD_REV=100" --quiet
+  exit 5
+fi
+
+echo "Cloud Run deployment verified: $URL/self-search.html and $URL/pilot-demo.html"
 echo "Public court-record indexing remains OFF until court authorization and status review."
