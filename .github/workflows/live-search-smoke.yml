@@ -32,8 +32,8 @@ jobs:
           code,headers,body=request(preview)
           assert code==200,(preview,code)
           html=body.decode("utf8")
-          assert 'id="find"' in html
-          assert 'Search your court records' in html
+          assert 'id="selfSearch"' in html
+          assert 'Find your own court records' in html
           assert 'name="robots" content="noindex' in html
           print("Preview accessible via HTTPS, noindex and search form present")
           code,_,body=request(backend+"/health")
