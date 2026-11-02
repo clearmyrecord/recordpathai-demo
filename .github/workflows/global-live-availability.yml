@@ -16,7 +16,8 @@ jobs:
           base="https://recordpathai-global-public.onrender.com"
           for uri,needle in [
             ("/","PUBLIC BETA"),
-            ("/self-search.html","Search My Court Records"),
+            ("/self-search.html","Find your own court records"),
+            ("/start.html","Build your next-step plan"),
             ("/launch.html","PUBLIC BETA"),
             ("/resources/entrepreneurship.html","Entrepreneurship"),
             ("/assets/styles.css","--navy"),
@@ -28,7 +29,7 @@ jobs:
                   text=resp.read(150000).decode("utf8")
                   assert resp.status==200,(uri,resp.status)
                   assert needle in text,(uri,"missing marker")
-                  if uri in ("/","/self-search.html"):
+                  if uri in ("/","/self-search.html","/start.html"):
                     assert 'noindex' in text,(uri,"missing mirror noindex")
                   print("Verified public worldwide endpoint:",uri)
                   break
