@@ -2,3 +2,17 @@
 /* Match the logo used by the original RecordPathAI pages. */
 .nav .original-site-logo{display:block;width:auto;height:56px;max-width:min(275px,65vw);object-fit:contain}
 @media(max-width:650px){.nav .original-site-logo{height:44px;max-width:65vw}}
+
+/* Public beta availability guidance — responsive and accessible. */
+.availability{background:#fff}
+.availability-grid{max-width:1250px;margin:0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.availability-card{display:flex;flex-direction:column;gap:12px;background:#f8fbfe;border:1px solid #d5e4ef;border-radius:16px;padding:27px;box-shadow:0 6px 22px rgba(8,38,66,.035)}
+.availability-tag{width:max-content;font-size:11px;letter-spacing:1.2px;font-weight:850;color:#0c5f80;background:#e5f5fa;border-radius:30px;padding:7px 11px}
+.availability-card h3{font-size:22px;margin:4px 0 0;color:#09283f}
+.availability-card p{font-size:15px;line-height:1.7;color:#40566b;margin:0 0 8px;flex:1}
+.availability-card a{font-weight:800;color:#065e9d;text-decoration:underline;text-underline-offset:3px}
+.availability-note{max-width:1250px;margin:22px auto 0;padding:19px 22px;background:#eef5fb;border:1px solid #c8dfef;border-radius:12px;color:#253f53;line-height:1.65}
+.availability-note a{color:#065e9d;text-decoration:underline;font-weight:700}
+.tab:focus-visible,.menu:focus-visible,.close:focus-visible,.availability a:focus-visible,.nav a:focus-visible{outline:3px solid #ffcf5c;outline-offset:3px}
+@media(max-width:900px){.availability-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:650px){.availability-grid{grid-template-columns:1fr}.availability-card{padding:22px}.availability-note{padding:16px}}
