@@ -22,6 +22,9 @@ for(const file of files){
     content=content.replaceAll('href="eligibility.html"','href="https://recordpathai.com/eligibility.html"');
     content=content.replaceAll('href="mugshot-removal.html"','href="https://recordpathai.com/mugshot-removal.html"');
     content=content.replaceAll('href="privacy.html"','href="https://recordpathai.com/privacy.html"');
+    // These pages are on the canonical app but not bundled into the public mirror.
+    content=content.replaceAll('href="pilot-demo.html"','href="https://recordpathai.com/pilot-demo.html"');
+    content=content.replaceAll('href="terms.html"','href="https://recordpathai.com/terms.html"');
     content=content.replace("</head>",'<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head>');
   }
   if(file==="launch.html"){
