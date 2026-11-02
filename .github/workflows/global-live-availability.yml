@@ -15,7 +15,7 @@ jobs:
           import urllib.request,urllib.error,time
           base="https://recordpathai-global-public.onrender.com"
           for uri,needle in [
-            ("/","PUBLIC RECORD DISCOVERY"),
+            ("/","PUBLIC BETA"),
             ("/self-search.html","Search My Court Records"),
             ("/launch.html","PUBLIC BETA"),
             ("/resources/entrepreneurship.html","Entrepreneurship"),
