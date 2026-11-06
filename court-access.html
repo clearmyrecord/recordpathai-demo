@@ -1,222 +1,117 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Court Access &amp; Filing Integration | RecordPathAI</title>
-  <meta name="description" content="Court Access and filing integration tools for courts, clerks, agencies, and justice-system partners reviewing structured record-sealing packets." />
-  <link rel="canonical" href="https://recordpathai.com/court-access.html" />
-  <link rel="stylesheet" href="css/styles.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#071b30">
+<title>For Courts &amp; Clerks | Customer-Facing Record Relief Pilot | RecordPathAI</title>
+<meta name="description" content="RecordPathAI is an independent customer-facing record-relief service. Explore a proposed Wood County pilot for more complete applications, less clerk rework, and accurate source-backed records without required court software integration.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://recordpathai.com/court-access.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="RecordPathAI | For Courts & Clerks">
+<meta property="og:description" content="A customer-facing pathway to more complete record-relief applications. A proposed Wood County pilot for data accuracy, filing efficiency and responsible transparency.">
+<meta property="og:url" content="https://recordpathai.com/court-access.html">
+<style>
+:root{--navy:#071b30;--navy2:#0b2b46;--ink:#10283b;--muted:#4c6478;--pale:#f4f8fc;--line:#d9e5ef;--accent:#1781bd;--red:#d9213d}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#fff;color:var(--ink);font:16px/1.65 Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+a{color:#0968a3}a:focus-visible{outline:3px solid #ffc447;outline-offset:4px}.skip{position:absolute;left:10px;top:-80px;background:white;padding:12px;z-index:10}.skip:focus{top:10px}
+.nav{background:var(--navy);padding:18px max(20px,calc((100vw - 1160px)/2));display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:17px}.nav a{color:white;text-decoration:none}.brand{font-size:23px;font-weight:850;letter-spacing:-.7px;white-space:nowrap}.brand span{color:#64bcf4}.nav nav{display:flex;flex-wrap:wrap;gap:20px;font-size:13px;font-weight:750}.nav nav a[aria-current=page]{color:#88d3ff}
+.hero{background:radial-gradient(circle at 85% 25%,#174967,transparent 43%),linear-gradient(125deg,#061727,#0c2b43);color:white;padding:72px 20px 76px}.wrap{max-width:1100px;margin:0 auto}.eyebrow{font-size:12px;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:#61b8ed}.hero h1{font-size:clamp(37px,5vw,60px);line-height:1.08;letter-spacing:-.045em;max-width:890px;margin:14px 0 20px}.hero .lead{max-width:830px;font-size:19px;line-height:1.65;color:#d8e8f3;margin:0}.hero-actions{margin-top:28px;display:flex;flex-wrap:wrap;gap:12px}.button{display:inline-flex;align-items:center;justify-content:center;padding:13px 19px;border-radius:9px;background:#fff;color:#103a59;text-decoration:none;font-weight:850}.button.primary{background:#e82e47;color:white}.button.outline{background:transparent;border:1px solid #9ac3d9;color:white}.labels{display:flex;flex-wrap:wrap;gap:9px;margin-top:26px}.labels span{border:1px solid #42627b;background:#0d314b;border-radius:30px;padding:7px 12px;color:#d4e7f4;font-weight:650;font-size:12px}
+.section{padding:70px 20px}.section.soft{background:var(--pale)}.section.dark{background:#092338;color:white}.section.dark p{color:#d4e6f1}.section.dark a{color:#9cdbff}.section h2{font-size:clamp(27px,3.2vw,40px);letter-spacing:-.035em;line-height:1.15;margin:0 0 18px}.intro{color:var(--muted);max-width:890px;margin:0 0 25px}.section.dark .intro{color:#d4e6f1}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.card{padding:25px;border:1px solid var(--line);border-radius:15px;background:white;box-shadow:0 4px 20px rgba(10,42,70,.035)}.card h3{font-size:19px;margin:0 0 10px;line-height:1.3}.card p,.card li{color:var(--muted);margin:0}.card ul{padding-left:19px;margin:10px 0 0}.card li+li{margin-top:7px}.card .num{display:inline-block;color:#0a6aa6;font-size:13px;font-weight:900;letter-spacing:.08em;margin-bottom:8px}.card.accent{background:#f1f8ff;border-color:#b7d7ed}.card.amber{background:#fffaf1;border-color:#e7d9b7}.section.dark .card{color:var(--ink)}.mini{font-size:13px;color:var(--muted);line-height:1.6}.note{border-left:4px solid var(--accent);background:#eaf5fc;padding:17px 20px;border-radius:5px;line-height:1.7;margin:23px 0 0}.note strong{color:#113950}.bullets{padding-left:23px;max-width:950px}.bullets li{padding-bottom:12px}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:24px 0}.metric{background:white;border:1px solid var(--line);border-radius:12px;padding:17px}.metric b{display:block;font-size:25px;letter-spacing:-.03em}.metric span{font-size:12px;color:var(--muted)}table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden}th,td{text-align:left;padding:13px 15px;border-bottom:1px solid #e0e9ef}th{background:#dfeef8;font-size:13px}tr:last-child td{border-bottom:0}.table-wrap{overflow-x:auto;border:1px solid #c9deec;border-radius:12px}.fine{font-size:13px;line-height:1.7;color:var(--muted)}.pill{display:inline-block;border-radius:20px;padding:4px 10px;font-weight:800;font-size:12px;background:#e5f2fa;color:#185877}.ref-list{font-size:14px;line-height:1.9;padding-left:22px}.footer{background:#061727;color:#d8e9f2;padding:34px 20px}.footer a{color:#a9dfff}.footer .fine{color:#b7cddd}.footer strong{font-size:22px}.cta-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:26px}
+@media(max-width:760px){.hero{padding:52px 20px}.section{padding:48px 20px}.grid,.grid.three,.metrics{grid-template-columns:1fr}.card{padding:21px}.nav nav{gap:12px}.hero-actions{flex-direction:column;align-items:stretch}.button{text-align:center}th,td{padding:11px;font-size:13px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
 </head>
-<body class="court-access-page">
-  <header class="site-header">
-    <div class="container">
-      <div class="header-utility" aria-label="Utility navigation">
-        <div class="language-access language-access-utility">
-          <span class="language-icon" aria-hidden="true">🌐</span>
-          <label for="language-selector" data-i18n="lang.label">Language Access</label>
-          <select id="language-selector" data-language-selector>
-            <option value="en" data-i18n="lang.english">English</option>
-            <option value="es" data-i18n="lang.spanish">Español</option>
-          </select>
-        </div>
-        <div class="auth-utility" data-auth-utility></div>
-      </div>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<header class="nav"><a class="brand" href="index.html" aria-label="RecordPathAI homepage">RecordPath<span>AI</span></a><nav aria-label="Main navigation"><a href="index.html">Home</a><a href="start.html">Start Here</a><a href="self-search.html">Court Finder</a><a href="eligibility.html">Eligibility</a><a href="court-access.html" aria-current="page">For Courts</a></nav></header>
+<main id="main">
+<section class="hero">
+<div class="wrap">
+<div class="eyebrow">For court administrators, clerks &amp; justice partners</div>
+<h1>Helping people prepare better record-relief applications. Helping courts receive them.</h1>
+<p class="lead"><strong>RecordPathAI is an independent, customer-facing platform</strong> that helps people locate official records, review potential sealing or expungement pathways, and prepare more accurate, court-specific application packets. We are not asking courts to purchase or operate our software.</p>
+<div class="labels"><span>Customer-facing service</span><span>Proposed Wood County pilot</span><span>No required court integration</span><span>No court endorsement implied</span></div>
+<div class="hero-actions"><a class="button primary" href="mailto:Matt@RecordPathAI.com?subject=RecordPathAI%20Court%20Pilot%20Discussion">Discuss a court pilot</a><a class="button outline" href="#wood-county">Review the Wood County proposal</a><a class="button outline" href="start.html">See the customer starting point</a></div>
+</div>
+</section>
 
-      <div class="header-shell header-shell-modern">
-        <div class="header-inner">
-          <a href="index.html" class="site-brand">
-            <img
-              src="/assets/images/logo/RecordPathAI_Logo_Transparent.png"
-              alt="RecordPathAI"
-              class="site-logo"
-            >
-          </a>
+<section class="section" id="model"><div class="wrap">
+<div class="eyebrow">The model</div><h2>A customer service, not a replacement court system.</h2>
+<p class="intro">Customers choose whether to use RecordPathAI's information and packet-preparation assistance. Courts retain control of filing rules, accepted formats, fees, records, staff procedures and judicial decisions.</p>
+<div class="grid">
+<article class="card"><div class="num">CUSTOMER EXPERIENCE</div><h3>What individuals use RecordPathAI for</h3><ul><li>Find the right official court portal and verify case outcomes.</li><li>Understand potential eligibility, exclusions and waiting-period questions.</li><li>Identify missing conviction, supervision and final-discharge evidence.</li><li>Organize and prepare forms for personal review and filing under the court's rules.</li></ul></article>
+<article class="card accent"><div class="num">COURT EXPERIENCE</div><h3>What stays with the court</h3><ul><li>Receive filings through existing approved paper or electronic channels.</li><li>Determine acceptance, fees, schedules and applicable procedures.</li><li>Make all legal and judicial determinations.</li><li>Choose whether to consider any future voluntary technology collaboration.</li></ul></article>
+</div>
+<p class="note"><strong>Important:</strong> RecordPathAI is not a court, government agency or law firm. It does not represent that any Ohio court has approved, partnered with, endorsed or integrated the service. Direct automated court filing and dedicated court-side dashboards are <strong>proposed future features</strong>, not available court connections.</p>
+</div></section>
 
-          <button class="menu-toggle" type="button" aria-controls="primary-navigation" aria-expanded="false">
-            <span class="menu-toggle-line"></span>
-            <span class="menu-toggle-line"></span>
-            <span class="menu-toggle-line"></span>
-            <span class="sr-only">Toggle navigation</span>
-          </button>
+<section class="section soft" id="wood-county"><div class="wrap">
+<div class="eyebrow">Proposed 90-day demonstration</div><h2>Wood County Court of Common Pleas pilot</h2>
+<p class="intro">A voluntary, limited pilot would test whether customer-prepared record-relief packets can be made more complete and easier to process, without accessing or changing Wood County's case-management system. The pilot is a proposal only; it has not been approved by the Court.</p>
+<div class="grid">
+<article class="card"><div class="num">01 · RECORD ACCURACY</div><h3>Verify the actual outcome</h3><p>Keep initial charges, amended charges, dismissed counts and final convictions separate. Record the source of each disposition rather than assuming an arrest charge became a conviction.</p></article>
+<article class="card"><div class="num">02 · APPLICATION COMPLETENESS</div><h3>Use both dates the form needs</h3><p>Capture the conviction or disposition date and the date sentence conditions or supervision actually ended, with separate final-discharge evidence before applying statutory waiting periods.</p></article>
+<article class="card"><div class="num">03 · COURT-APPROVED FILING</div><h3>Prepare; then use authorized channels</h3><p>Guide customers through existing Wood County forms and filing instructions. Explore future online submission only if the Court and Clerk authorize it.</p></article>
+<article class="card"><div class="num">04 · OPTIONAL RESEARCH</div><h3>Officer identification and transparency</h3><p>Separately examine whether arresting-officer names, roles and agencies can be accurately supported by lawfully accessible records, without adding work to the sealing application process.</p></article>
+</div>
+<div class="note"><strong>Why the date distinction matters:</strong> The Wood County Criminal Extract Report field labeled “Termination Date” is drawn from the most recently inserted case-disposition record. It does <em>not</em>, by itself, establish that community control, parole, post-release control or all other sentence conditions ended. Actual sentence termination and final discharge must be independently verified. A missing value must be flagged—not guessed.</div>
+<div class="metrics"><div class="metric"><b>27 years</b><span>Historical Wood County reporting periods reviewed, 2000–October 2026</span></div><div class="metric"><b>54</b><span>Extract files across filing-date and case-termination-date report variants</span></div><div class="metric"><b>27,300</b><span>Filed-charge row occurrences under preliminary review; not unique people or convictions</span></div></div>
+<p class="fine">These are preliminary historical extract metrics and include possible repeat occurrences. Some charge labels remain unmapped, and many charge outcomes require docket verification. They do not tell us how many individuals qualify for sealing or expungement. Past extracts may not reflect later sealing or expungement orders; current restricted status must be independently respected before any downstream use.</p>
+</div></section>
 
-          <nav class="nav" id="primary-navigation" aria-label="Primary navigation">
-            <a href="index.html" data-i18n="nav.home">Home</a>
-            <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
-            <a href="eligibility.html" data-i18n="nav.eligibility">Eligibility</a>
-            <a href="record-details.html" data-i18n="nav.recordDetails">Record Details</a>
-            <a href="recordwatch-dashboard.html" data-i18n="nav.recordWatch">RecordWatch</a>
-            <a href="court-access.html" class="active" aria-current="page" data-i18n="nav.courtAccess">Court Access</a>
-            <a href="eligibility.html" class="nav-cta" data-i18n="nav.checkEligibility">Start Free Eligibility Check</a>
-          </nav>
-        </div>
-      </div>
-    </div>
-  </header>
+<section class="section" id="financial-benefits"><div class="wrap">
+<div class="eyebrow">Operational &amp; fiscal opportunity</div><h2>Less preventable rework. More accessible, lawful filings.</h2>
+<p class="intro">Better-prepared customer submissions may lower staff time spent clarifying incomplete packets. If more genuinely eligible residents complete the filing process, total lawful fee collections could also rise. These outcomes are hypotheses to test, not promised savings or revenue.</p>
+<div class="grid">
+<article class="card accent"><h3>Measure administrative efficiency</h3><ul><li>Percentage of packets complete on first review.</li><li>Missing-document and correction-request rates.</li><li>Staff minutes spent on intake clarification.</li><li>Filing rejection or return rates, with reasons.</li></ul></article>
+<article class="card"><h3>Measure actual access and fee activity</h3><ul><li>Customer conversion from guidance to completed application.</li><li>Number of submitted, accepted and fee-waived applications.</li><li>Gross filing fees actually collected.</li><li>Statutory state and county/municipal distributions, if documented.</li></ul></article>
+</div>
+<h3 style="margin-top:30px">Illustration only: filing fees, not a revenue forecast</h3>
+<p>Wood County currently lists a <strong>$100 filing fee</strong> for sealing criminal conviction or records, unless a qualifying poverty affidavit is accepted. Ohio Revised Code § 2953.32 provides for a $50 application fee plus a local fee of up to $50, with statutory allocation of collected amounts.</p>
+<div class="table-wrap"><table><thead><tr><th>Hypothetical additional paid filings</th><th>Gross fees at $100 each</th><th>Potential 40% county/municipal general-fund share</th></tr></thead><tbody><tr><td>25</td><td>$2,500</td><td>$1,000</td></tr><tr><td>50</td><td>$5,000</td><td>$2,000</td></tr><tr><td>100</td><td>$10,000</td><td>$4,000</td></tr></tbody></table></div>
+<p class="fine">All scenarios assume paid filings and the currently posted maximum $100 fee. Figures are not estimates of eligible residents or predicted new filings. Fee waivers, actual fees, case types and changes in law will affect results; under the cited statutory allocation, 60% goes to the state and 40% to a county or municipal general fund as applicable. These are <strong>not direct discretionary Court operating revenues</strong>, nor is any net fiscal benefit established without measuring workload and costs. See the <a href="https://clerkofcourt.co.wood.oh.us/189/Criminal-Division-of-the-Clerk-of-Courts" rel="noopener">Wood County Clerk criminal division fee schedule</a> and <a href="https://codes.ohio.gov/ohio-revised-code/section-2953.32" rel="noopener">Ohio Revised Code § 2953.32</a>.</p>
+</div></section>
 
-  <main>
-    <section class="page-hero">
-      <div class="container hero-card court-hero-card">
-        <span class="eyebrow">Institutional partner access</span>
-        <h1>Court Access &amp; Filing Integration</h1>
-        <p>RecordPathAI helps courts, clerks, agencies, and justice-system partners receive structured record-sealing packets, review user-submitted documents, manage approval workflows, and prepare for online filing integration.</p>
-        <div class="hero-actions court-cta-grid">
-          <a class="btn" href="mailto:matt@recordpathai.com">Request Court Access</a>
-          <a class="btn secondary" href="mailto:matt@recordpathai.com">Partner With RecordPathAI</a>
-          <a class="btn secondary" href="#technical-integration">Review Integration Options</a>
-          <a class="btn secondary" href="mailto:matt@recordpathai.com">Contact Platform Administrator</a>
-        </div>
-      </div>
-    </section>
+<section class="section soft" id="pilot-timeline"><div class="wrap">
+<div class="eyebrow">Low-burden test plan</div><h2>Proposed 90-day pilot phases</h2>
+<div class="grid three">
+<article class="card"><div class="num">DAYS 01–30</div><h3>Requirements and synthetic demonstration</h3><p>Document court forms and current submission practices; use fictional case examples. Agree on evaluation measures and approval requirements.</p></article>
+<article class="card"><div class="num">DAYS 31–60</div><h3>Voluntary limited evaluation</h3><p>Subject to approvals and customer consent, test completed packet quality and source verification. Continue existing court filing channels.</p></article>
+<article class="card"><div class="num">DAYS 61–90</div><h3>Report and recommendations</h3><p>Compare completeness and time measures; document blockers, privacy lessons and whether a larger pilot is warranted.</p></article>
+</div>
+<p class="note">No required API, clerk dashboard, case-management connection, automated judicial eligibility decision or operational change is assumed. Any real-case data processing, staff participation or electronic-filing integration would require separate authorization.</p>
+</div></section>
 
-    <section class="page-section" id="court-benefits">
-      <div class="container section-card">
-        <h2>How Courts Benefit</h2>
-        <p class="section-copy">RecordPathAI is building future tools for clerks and court administrators designed to:</p>
-        <div class="court-feature-grid">
-          <div class="mini-card">✓ Reduce incomplete filings</div>
-          <div class="mini-card">✓ Improve packet consistency</div>
-          <div class="mini-card">✓ Reduce manual data entry</div>
-          <div class="mini-card">✓ Standardize applicant information</div>
-          <div class="mini-card">✓ Support future electronic filing integrations</div>
-          <div class="mini-card">✓ Improve applicant communication</div>
-        </div>
-      </div>
-    </section>
+<section class="section" id="transparency"><div class="wrap">
+<div class="eyebrow">Optional, separate workstream</div><h2>Verified officer identification for public accountability</h2>
+<p class="intro">The Clerk's historical extracts do not provide a reliable structured arresting-officer field. A separate feasibility study could evaluate what public records, if any, lawfully establish an officer's name, agency and actual role in a specific case. The Court would not be asked to create police records it does not maintain.</p>
+<ul class="bullets">
+<li><strong>Source first:</strong> distinguish arresting, investigating, reporting and charging personnel; preserve document provenance and verification status.</li>
+<li><strong>Fairness:</strong> distinguish allegations, charges and findings; never portray an officer's involvement as proof of misconduct.</li>
+<li><strong>Privacy and restrictions:</strong> exclude sealed, expunged, confidential or otherwise restricted case information and avoid public release of unverified identifications.</li>
+<li><strong>Separate operations:</strong> keep this research optional and independent of an individual's ability to prepare and submit an application for record relief.</li>
+</ul>
+</div></section>
 
-    <section class="page-section" id="future-court-access-model">
-      <div class="container section-card">
-        <h2>Future Court Access Model</h2>
-        <p class="section-copy">Consumers pay RecordPathAI for packet preparation.</p>
-        <p class="section-copy">Courts are not charged to receive properly prepared packets.</p>
-        <p class="section-copy">Future optional integrations may include:</p>
-        <div class="court-feature-grid">
-          <div class="mini-card">Electronic filing</div>
-          <div class="mini-card">Status updates</div>
-          <div class="mini-card">Clerk review queues</div>
-          <div class="mini-card">Court dashboards</div>
-          <div class="mini-card">Filing analytics</div>
-        </div>
-        <p class="section-copy court-model-goal">The goal is to reduce administrative burden while improving access to justice.</p>
-      </div>
-    </section>
+<section class="section dark" id="contact"><div class="wrap">
+<div class="eyebrow">Court and clerk outreach</div><h2>Discuss whether an initial demonstration would be useful.</h2>
+<p>We welcome feedback from Wood County Court administration, the Clerk's Office and appropriate state court data stakeholders. RecordPathAI is independently operated and seeks a voluntary review of feasibility, safeguards and measurable outcomes.</p>
+<div class="cta-row"><a class="button primary" href="mailto:Matt@RecordPathAI.com?subject=Wood%20County%20RecordPathAI%20Pilot">Email Matt@RecordPathAI.com</a><a class="button" href="start.html">View the customer experience</a></div>
+<p class="fine" style="color:#cbdfea;margin-top:20px">Matthew Ryan Tunstall · Founder, RecordPathAI · <a href="mailto:Matt@RecordPathAI.com">Matt@RecordPathAI.com</a></p>
+</div></section>
 
-    <section class="page-section" id="court-dashboard">
-      <div class="container section-card">
-        <h2>Court &amp; Clerk Dashboard</h2>
-        <p class="section-copy">Court Access is a partner-facing workspace for onboarded court personnel, clerk teams, agency administrators, and authorized justice-system reviewers. The dashboard is designed to help court-side users review completed user packets, verify required fields, inspect supporting documents, flag missing information, and manage submission status using role-based access and audit trails.</p>
-        <div class="court-feature-grid">
-          <div class="mini-card">Court-side dashboard access</div>
-          <div class="mini-card">Document verification</div>
-          <div class="mini-card">Required-field review</div>
-          <div class="mini-card">Missing-information flags</div>
-          <div class="mini-card">Administrative review queues</div>
-          <div class="mini-card">Role-based access</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="page-section" id="online-filing-intake">
-      <div class="container section-card">
-        <h2>Online Filing Intake</h2>
-        <p class="section-copy">RecordPathAI is designed to route completed packets from eligible users to participating clerks or court partners for clerk review, acceptance, correction, or filing preparation. Intake workflows can support structured packet submission, secure packet transmission, jurisdiction-specific packet routing, filing status updates, and court-approved submission rules for participating jurisdictions.</p>
-        <div class="court-data-grid">
-          <article class="mini-card"><h3>Structured packets</h3><p>Packet data is organized into consistent fields for review, validation, document inspection, and downstream filing preparation.</p></article>
-          <article class="mini-card"><h3>Participating courts</h3><p>Routing can be configured around participating courts, onboarded clerks, agency partners, and jurisdiction-specific submission rules.</p></article>
-          <article class="mini-card"><h3>Secure transmission</h3><p>The platform architecture supports secure packet transfer patterns, correction requests, notification workflows, and status updates.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section class="page-section" id="review-workflow">
-      <div class="container section-card">
-        <h2>Review &amp; Approval Workflow</h2>
-        <p class="section-copy">Court Access separates consumer packet preparation from court-side administrative review so partner teams can manage each packet according to local filing procedures and clerk review requirements.</p>
-        <div class="court-process-list review-stage-list">
-          <article><span>1</span><p>Packet submitted</p></article>
-          <article><span>2</span><p>Clerk review</p></article>
-          <article><span>3</span><p>Missing information flagged</p></article>
-          <article><span>4</span><p>Corrections requested</p></article>
-          <article><span>5</span><p>Packet accepted</p></article>
-          <article><span>6</span><p>Filing prepared</p></article>
-          <article><span>7</span><p>Status updated</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section class="page-section" id="technical-integration">
-      <div class="container section-card">
-        <h2>Technical Integration</h2>
-        <p class="section-copy">The platform is being structured for API-ready connections, jurisdiction-specific templates, court routing rules, structured data validation, audit trails, notification workflows, and compatibility with future court case-management systems. Integration planning focuses on e-filing readiness, template configuration by jurisdiction, court-approved workflows, and future case-management system integration where participating courts or agencies choose to onboard.</p>
-        <div class="court-feature-grid">
-          <div class="mini-card">API-ready architecture</div>
-          <div class="mini-card">Jurisdiction-specific templates</div>
-          <div class="mini-card">Court routing rules</div>
-          <div class="mini-card">Structured data validation</div>
-          <div class="mini-card">Audit trails</div>
-          <div class="mini-card">Notification workflows</div>
-          <div class="mini-card">Future CMS integration</div>
-          <div class="mini-card">E-filing readiness</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="page-section" id="court-onboarding">
-      <div class="container section-card">
-        <h2>Court Onboarding</h2>
-        <p class="section-copy">Courts, clerks, agencies, and justice-system partners can configure the operational rules that determine how packets are prepared for review, routed to the right administrative queue, corrected when information is missing, and tracked through status updates.</p>
-        <div class="court-data-grid">
-          <article class="mini-card"><h3>Filing requirements</h3><p>Configure local filing requirements, accepted packet formats, required documents, and submission procedures.</p></article>
-          <article class="mini-card"><h3>Review permissions</h3><p>Define review permissions, role-based access, administrative reviewer roles, and court-side dashboard visibility.</p></article>
-          <article class="mini-card"><h3>Workflow labels</h3><p>Set notification workflows, status labels, correction request stages, and jurisdiction-specific templates.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section class="page-section" id="integration-cta">
-      <div class="container section-card court-interest-card">
-        <h2>Build a Court-Approved Intake Path</h2>
-        <p class="section-copy">RecordPathAI works with participating courts, onboarded clerks, agencies, administrators, and integration partners to plan structured packet intake, clerk review, filing preparation, and future e-filing integrations according to local procedures.</p>
-        <div class="hero-actions court-cta-grid">
-          <a class="btn" href="mailto:matt@recordpathai.com">Request Court Access</a>
-          <a class="btn secondary" href="mailto:matt@recordpathai.com">Partner With RecordPathAI</a>
-          <a class="btn secondary" href="#technical-integration">Review Integration Options</a>
-          <a class="btn secondary" href="mailto:matt@recordpathai.com">Contact Platform Administrator</a>
-        </div>
-        <p class="court-access-disclaimer">RecordPathAI is not a law firm and does not provide legal advice. Eligibility results are estimates based on information provided by the user and applicable rules. Court filing fees, attorney fees, and other third-party costs are separate from RecordPathAI services. Filing availability, acceptance, review procedures, and online submission options depend on each participating court, agency, or jurisdiction.</p>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <div class="container">
-      <div class="footer-shell">
-        <div>
-          <div class="footer-brand">RecordPathAI</div>
-          <div class="footer-copy" data-i18n="footer.copy">Guided record relief workflow and court packet preparation.</div>
-          <div class="footer-disclaimer" data-i18n="footer.legal">RecordPathAI is not a law firm and does not provide legal advice. Eligibility results are estimates based on information provided by the user and applicable rules. Court filing fees, attorney fees, and other third-party costs are separate from RecordPathAI services.</div>
-        </div>
-        <div class="footer-links">
-          <a href="index.html" data-i18n="nav.home">Home</a>
-          <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
-          <a href="eligibility.html" data-i18n="nav.eligibility">Eligibility</a>
-          <a href="recordwatch.html" data-i18n="nav.recordWatch">RecordWatch</a>
-          <a href="terms.html" data-i18n="footer.terms">Terms</a>
-          <a href="privacy.html" data-i18n="footer.privacy">Privacy</a>
-          <a href="disclaimer.html" data-i18n="footer.disclaimer">Disclaimer</a>
-        </div>
-      </div>
-    </div>
-    <div class="container">
-      <p class="translation-disclaimer" data-i18n="translation.disclaimer">Translation is provided for convenience and may not replace official court translation services.</p>
-    </div>
-  </footer>
-
-  <script src="js/supabase-client.js"></script>
-  <script src="js/user-store.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/workflow.js"></script>
-  <script src="js/i18n.js"></script>
-  <script src="js/court-access.js"></script>
-</body>
-</html>
+<section class="section soft" id="sources"><div class="wrap">
+<h2>Official sources and scope</h2>
+<ol class="ref-list">
+<li><a href="https://codes.ohio.gov/ohio-revised-code/section-2953.32" rel="noopener">Ohio Revised Code § 2953.32</a>: conviction sealing/expungement requirements and fee allocation.</li>
+<li><a href="https://clerkofcourt.co.wood.oh.us/189/Criminal-Division-of-the-Clerk-of-Courts" rel="noopener">Wood County Clerk of Courts — Criminal Division</a>: official filing fee information and court forms.</li>
+<li><a href="https://clerkofcourt.co.wood.oh.us/174/Forms" rel="noopener">Wood County Clerk — Forms</a>: available conviction and dismissal sealing forms.</li>
+<li>Wood County Clerk of Courts, Criminal Extract Report field breakdown and historical extract deliveries to RecordPathAI (2000–October 2026); preliminary private analysis, not an official court audit.</li>
+</ol>
+<p class="fine">This page describes a proposed pilot and future possibilities, not a court partnership, a legal eligibility determination or an operational direct-filing service. RecordPathAI does not provide legal advice. Official court instructions and current law control. Do not use this site for employment, housing, credit, insurance or other FCRA-regulated screening.</p>
+</div></section>
+</main>
+<footer class="footer"><div class="wrap"><strong>RecordPathAI</strong><p class="fine">Independent customer-facing record-relief guidance and application-preparation service. No court affiliation or endorsement.</p><p><a href="index.html">Home</a> · <a href="start.html">Start Here</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="mailto:Matt@RecordPathAI.com">Contact</a></p></div></footer>
+</body></html>
