@@ -1,0 +1,263 @@
+{
+  "schemaVersion": "recordpathai.form-candidate.v1",
+  "id": "GA:STATEWIDE:ARREST-AGENCY:RECORD-RESTRICTION:5FE841DE2630",
+  "jurisdiction": {
+    "state": "GA",
+    "county": "Statewide",
+    "courtType": "arrest-agency",
+    "courtName": "GBI / arresting agency"
+  },
+  "form": {
+    "type": "record-restriction",
+    "title": "Request to Restrict Arrest Record — arrests prior to July 1, 2013"
+  },
+  "source": {
+    "url": "https://gbi.georgia.gov/document/publication/request-restrict-arrest-record-instructions-and-request-form/download",
+    "pageUrl": "https://gbi.georgia.gov/services/georgia-criminal-history-record-restrictions",
+    "discoveredAt": "2026-11-07T00:00:00Z",
+    "verifiedAt": null,
+    "sourceNotes": "Unverified crawler candidate"
+  },
+  "pdf": {
+    "localPath": "assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf",
+    "sha256": "5fe841de263070f192ddfb0e322e41b2c2a97e8d07e7e643e98fdf780aefa1ab",
+    "bytes": 449903,
+    "pageCount": 4
+  },
+  "mapping": {
+    "status": "draft",
+    "approvedForPdfSha256": null,
+    "suggestions": [
+      {
+        "page": 2,
+        "name": "petitioner.full_name",
+        "type": "text",
+        "x": 134,
+        "y": 287,
+        "width": 540,
+        "height": 22,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "petitioner.dob",
+        "type": "date",
+        "x": 172,
+        "y": 322,
+        "width": 196,
+        "height": 22,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "petitioner.phone",
+        "type": "text",
+        "x": 211,
+        "y": 389,
+        "width": 144,
+        "height": 22,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "petitioner.email",
+        "type": "text",
+        "x": 399,
+        "y": 389,
+        "width": 279,
+        "height": 22,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "petitioner.address.line1",
+        "type": "text",
+        "x": 183,
+        "y": 426,
+        "width": 492,
+        "height": 22,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "petitioner.address.city",
+        "type": "text",
+        "x": 119,
+        "y": 460,
+        "width": 278,
+        "height": 22,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "petitioner.address.state",
+        "type": "text",
+        "x": 436,
+        "y": 460,
+        "width": 117,
+        "height": 22,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "petitioner.address.zip",
+        "type": "text",
+        "x": 615,
+        "y": 460,
+        "width": 70,
+        "height": 22,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "charges.0.arresting_agency",
+        "type": "text",
+        "x": 196,
+        "y": 497,
+        "width": 480,
+        "height": 22,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "charges.0.arrest_date",
+        "type": "date",
+        "x": 181,
+        "y": 533,
+        "width": 495,
+        "height": 22,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "charges.0.charge_name",
+        "type": "text",
+        "x": 240,
+        "y": 564,
+        "width": 436,
+        "height": 23,
+        "confidence": 0.75,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 2,
+        "name": "signatures.petitioner_signature_name",
+        "type": "signature",
+        "x": 146,
+        "y": 798,
+        "width": 353,
+        "height": 22,
+        "confidence": 0.64,
+        "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
+        "source": "ga-pre2013-layout"
+      },
+      {
+        "page": 3,
+        "name": "generated.current_date",
+        "type": "date",
+        "x": 605,
+        "y": 146,
+        "width": 145,
+        "height": 24,
+        "confidence": 0.58,
+        "reason": "Nearby text label: Date Request Received: _________________________________________________________________",
+        "source": "label-match"
+      },
+      {
+        "page": 3,
+        "name": "generated.current_date",
+        "type": "date",
+        "x": 605,
+        "y": 347,
+        "width": 145,
+        "height": 24,
+        "confidence": 0.58,
+        "reason": "Nearby text label: Date of Arrest: _________________________________________________________________________",
+        "source": "label-match"
+      },
+      {
+        "page": 3,
+        "name": "generated.current_date",
+        "type": "date",
+        "x": 605,
+        "y": 933,
+        "width": 145,
+        "height": 24,
+        "confidence": 0.58,
+        "reason": "Nearby text label: Record Restriction Form Page 2 of 3 Effective Date: 07/01/2013",
+        "source": "label-match"
+      },
+      {
+        "page": 4,
+        "name": "generated.current_date",
+        "type": "date",
+        "x": 605,
+        "y": 150,
+        "width": 145,
+        "height": 24,
+        "confidence": 0.58,
+        "reason": "Nearby text label: Date Request Received: ___________________________________________________________",
+        "source": "label-match"
+      },
+      {
+        "page": 4,
+        "name": "generated.current_date",
+        "type": "date",
+        "x": 605,
+        "y": 582,
+        "width": 145,
+        "height": 24,
+        "confidence": 0.58,
+        "reason": "Nearby text label: If additional Charges from same Arrest Date, other than those identified on Page 2, are",
+        "source": "label-match"
+      },
+      {
+        "page": 4,
+        "name": "generated.current_date",
+        "type": "date",
+        "x": 605,
+        "y": 933,
+        "width": 145,
+        "height": 24,
+        "confidence": 0.58,
+        "reason": "Nearby text label: Record Restriction Form Page 3 of 3 Effective Date: 07/01/2013",
+        "source": "label-match"
+      }
+    ],
+    "diagnostics": [
+      "Georgia pre-2013 arrest restriction detected. Only Section One applicant fields suggested; SSN and race/sex require separate secure manual completion. Sections Two/Three are for arresting agency and prosecutor. Never use for arrests on or after 2013-07-01.",
+      "All coordinates are draft suggestions in the mapper's 1.25x reference viewport."
+    ],
+    "profile": "ga-prior-2013-record-restriction"
+  },
+  "review": {
+    "status": "pending_review",
+    "sourceVerified": false,
+    "mappingApproved": false,
+    "legalRoutingApproved": false,
+    "reviewedAt": null,
+    "reviewer": null
+  },
+  "active": false
+}
