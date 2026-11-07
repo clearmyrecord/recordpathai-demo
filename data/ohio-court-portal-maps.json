@@ -43,7 +43,10 @@
         "unsupportedOrUnavailable": [],
         "captureMethod": "human_review_of_live_official_portal",
         "lastInspectedAt": null,
-        "reviewer": null
+        "reviewer": null,
+        "onlineFilingFields": [],
+        "pdfFormFields": [],
+        "fieldAvailabilityNotes": []
       },
       "mappings": {
         "status": "not_approved",
@@ -54,7 +57,9 @@
       "courtIdentityReviewed": true,
       "formMappingApproved": false,
       "automaticRecordLookupEnabled": false,
-      "comments": "Official clerk page verified as this court's docket landing page. The JavaScript CourtView search form and fields have not been independently inspected, so no search or record-detail field is claimed available."
+      "comments": "Official clerk page verified as this court's docket landing page. The JavaScript CourtView search form and fields have not been independently inspected, so no search or record-detail field is claimed available.",
+      "filingFormLinks": [],
+      "filingFormsReviewed": false
     }
   ]
 }
