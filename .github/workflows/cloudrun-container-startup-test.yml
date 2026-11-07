@@ -1,0 +1,42 @@
+name: Cloud Run Node.js container smoke test
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify source packaging and credentials exclusions
+        run: |
+          set -euo pipefail
+          grep -q '^FROM node:22-' Dockerfile
+          grep -Fq 'CMD ["node", "server.js"]' Dockerfile
+          grep -Fq 'gha-creds-*.json' .dockerignore
+          grep -Fq 'gha-creds-*.json' .gcloudignore
+          node --check server.js
+      - name: Build production image with a real Node.js 22 runtime
+        run: docker build --pull -t recordpathai-cloudrun-smoke:ci .
+      - name: Start and verify Node.js service responds on Cloud Run PORT
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="$(docker run --rm --detach --publish 127.0.0.1:18080:8080 --env PORT=8080 --env RECORDWATCH_DISABLE_SCHEDULER=true recordpathai-cloudrun-smoke:ci)"
+          trap 'docker logs "$container" || true; docker stop "$container" >/dev/null || true' EXIT
+          docker exec "$container" node --version
+          docker exec "$container" npm --version
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:18080/self-search.html -o /tmp/recordpathai-smoke.html; then
+              grep -qi 'Find your own court records' /tmp/recordpathai-smoke.html
+              curl -fsS --max-time 2 http://127.0.0.1:18080/api/config/supabase >/dev/null
+              echo "Node.js container serves HTTP successfully on PORT=8080"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Container did not become healthy" >&2
+          exit 1
