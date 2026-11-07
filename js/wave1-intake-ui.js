@@ -70,6 +70,7 @@
     };
     const needed=assessment.requirements.filter(x=>
       x.source==="court-pdf-mapping"&&validator.validKey(x.key)&&
+      !/(ssn|social_security|bank|account_number)/i.test(x.key)&&
       !existingScreen.has(x.key)&&
       !(isDetails&&((x.key.startsWith("charges."))||document.getElementById(knownIds[x.key])))&&
       !/^signatures\.|^generated\./.test(x.key)&&
