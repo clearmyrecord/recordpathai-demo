@@ -22,7 +22,7 @@ jobs:
           dest='assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf'
           mkdir -p "$(dirname "$dest")"
           curl --fail --location --retry 3 --max-time 90 --proto '=https' --tlsv1.2 \
-            'https://clerkofcourt.co.wood.oh.us/wp-content/uploads/2024/02/Application-for-Sealing-2953.33.pdf' \
+            'https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/143/Application-for-Sealing-295333-Dismissal-PDF' \
             --output "$dest"
           test "$(wc -c < "$dest")" -ge 1500
           test "$(wc -c < "$dest")" -le 15000000
@@ -30,7 +30,7 @@ jobs:
           pdfinfo "$dest" | grep -q '^Pages:'
           pdftotext -layout "$dest" - | grep -qi '2953.33'
           pdftotext -layout "$dest" - | grep -qi 'NOT GUILTY'
-          printf 'source=https://clerkofcourt.co.wood.oh.us/wp-content/uploads/2024/02/Application-for-Sealing-2953.33.pdf\n' > /tmp/recordpath-source.txt
+          printf 'source=https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/143/Application-for-Sealing-295333-Dismissal-PDF\n' > /tmp/recordpath-source.txt
           sha256sum "$dest" | tee -a /tmp/recordpath-source.txt
           pdfinfo "$dest" | grep '^Pages:' | tee -a /tmp/recordpath-source.txt
       - name: Commit verified PDF to source branch
