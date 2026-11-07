@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>RecordPathAI PDF Mapper V7</title>
+
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #f3f6fb;
+      --panel: #ffffff;
+      --line: #d9e2f0;
+      --text: #1c2740;
+      --muted: #64748b;
+      --primary: #1d4ed8;
+      --primary-dark: #1e40af;
+      --accent: #eff6ff;
+      --danger: #dc2626;
+      --success: #059669;
+      --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      --radius: 16px;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 320px 1fr 340px;
+      gap: 16px;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fbff;
+    }
+
+    .panel-header h2,
+    .panel-header h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .panel-body {
+      padding: 16px 18px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea,
+    input[type="file"] {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .btn-secondary:hover {
+      background: #cbd5e1;
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .btn-danger:hover {
+      opacity: 0.92;
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: #fff;
+    }
+
+    .btn-success:hover {
+      opacity: 0.92;
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btn-row-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .workspace {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .topbar {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .topbar-left,
+    .topbar-right {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      background: #eef2ff;
+      color: #3730a3;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .viewer-shell {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      overflow: auto;
+      min-height: 70vh;
+    }
+
+    .pdf-stage-wrap {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100%;
+    }
+
+    .pdf-stage {
+      position: relative;
+      display: inline-block;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+    }
+
+    #pdfCanvas {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: auto;
+    }
+
+    .field-box {
+      position: absolute;
+      border: 2px solid #2563eb;
+      background: rgba(37, 99, 235, 0.12);
+      cursor: move;
+      user-select: none;
+      border-radius: 6px;
+      min-width: 20px;
+      min-height: 20px;
+    }
+
+    .field-box.selected {
+      border-color: #dc2626;
+      background: rgba(220, 38, 38, 0.12);
+      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+    }
+
+    .field-label {
+      position: absolute;
+      top: -22px;
+      left: 0;
+      background: rgba(15, 23, 42, 0.9);
+      color: #fff;
+      font-size: 11px;
+      padding: 3px 6px;
+      border-radius: 6px;
+      white-space: nowrap;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .resize-handle {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      right: -6px;
+      bottom: -6px;
+      background: #2563eb;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      cursor: nwse-resize;
+    }
+
+    .field-list {
+      display: grid;
+      gap: 10px;
+      max-height: 240px;
+      overflow: auto;
+    }
+
+    .field-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      background: #fff;
+    }
+
+    .field-item:hover {
+      background: #f8fafc;
+    }
+
+    .field-item.active {
+      border-color: var(--primary);
+      background: #eff6ff;
+    }
+
+    .field-item-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .field-item-sub {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .small-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-top: 6px;
+      margin-bottom: 6px;
+    }
+
+    .json-box {
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12px;
+      min-height: 180px;
+    }
+
+
+    .field-key-panel {
+      border-top: 1px solid var(--line);
+      margin-top: 4px;
+      padding-top: 14px;
+    }
+
+    .field-key-search {
+      margin-bottom: 10px;
+    }
+
+    .field-key-list {
+      display: grid;
+      gap: 12px;
+      max-height: 360px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .field-key-group {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .field-key-group-title {
+      background: #f8fafc;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .field-key-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 10px;
+      border-bottom: 1px solid #eef2f7;
+    }
+
+    .field-key-row:last-child {
+      border-bottom: 0;
+    }
+
+    .field-key-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    .field-key-name {
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12px;
+      color: #0f172a;
+      word-break: break-all;
+    }
+
+    .copy-field-name-btn {
+      padding: 7px 9px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .field-key-empty {
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      display: none;
+    }
+
+    .grid-overlay.visible {
+      display: block;
+    }
+
+    .coord-label {
+      position: absolute;
+      font-size: 10px;
+      color: rgba(30, 41, 59, 0.85);
+      background: rgba(255, 255, 255, 0.75);
+      padding: 1px 3px;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+
+    #overlay {
+      z-index: 2;
+    }
+
+    .nudge-controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      max-width: 180px;
+    }
+
+
+    .auto-map-pane { border: 1px solid #bad6f5; background: #f4f9ff;
+      border-radius: 14px; padding: 12px; display: grid; gap: 9px; }
+    .auto-map-pane h3 { margin: 0; font-size: 17px; }
+    .auto-map-summary { font-size: 13px; line-height: 1.45; color: #344154; }
+    .auto-map-suggestions { max-height: 310px; overflow: auto; display: grid; gap: 7px; }
+    .auto-map-suggestion { border: 1px solid #d5e3f4; background: white; border-radius: 9px;
+      padding: 7px; display: grid; gap: 3px; font-size: 12px; }
+    .auto-map-suggestion-head { display: flex; align-items: flex-start; gap: 6px; }
+    .auto-map-suggestion-head strong { flex: 1; overflow-wrap:anywhere; }
+    .auto-map-suggestion button { font-size: 11px; padding: 4px 6px; }
+    .auto-map-preview { position: absolute; border: 2px dashed #0f766e;
+      border-radius: 4px; background: rgba(15,118,110,.1); pointer-events: none; }
+    .auto-map-preview.low { border-color: #c97b16; background: rgba(251,191,36,.09); }
+
+    .auto-map-status { white-space: pre-wrap; }
+    .pipeline-pane { background:#fcfcff; border:1px solid #d1d9e7; border-radius:14px;
+      padding:12px; display:grid; gap:10px; }
+    .pipeline-pane h3 { margin:0; font-size:17px; }
+    .pipeline-pane input, .pipeline-pane select, .pipeline-pane textarea {
+      width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:8px;
+      background:white; font-size:13px; }
+    .pipeline-pane label { font-weight:700; font-size:12px; color:#334155; }
+    .pipeline-status { color:#334155; font-size:12px; white-space:pre-wrap;
+      overflow-wrap:anywhere; padding:8px; border-radius:9px; background:#eff6ff; }
+    .pipeline-results { overflow:auto; max-height:225px; font-size:12px; }
+    .pipeline-results table { width:100%; border-collapse:collapse; }
+    .pipeline-results th, .pipeline-results td {
+      border-bottom:1px solid #dde4ed; padding:5px; text-align:left; word-break:break-word;}
+    .pipeline-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .pipeline-actions .btn { white-space:normal; }
+
+    @media (max-width: 1200px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .workspace {
+        order: -1;
+      }
+
+      .viewer-shell {
+        min-height: 55vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Left Panel -->
+    <aside class="panel">
+      <div class="panel-header">
+        <h2>PDF Mapper V7</h2>
+      </div>
+      <div class="panel-body stack">
+        <div>
+          <label class="label" for="pdfUpload">Upload PDF</label>
+          <input type="file" id="pdfUpload" accept="application/pdf" />
+        </div>
+        <section class="auto-map-pane" aria-labelledby="autoMapTitle">
+          <h3 id="autoMapTitle">Smart field suggestions</h3>
+          <p class="muted" style="margin:0">Offline PDF text and layout detection. Suggestions are never submitted, charged, or exported until you review them.</p>
+          <button type="button" id="loadWoodPdfBtn" class="btn btn-secondary">Load Wood County § 2953.33 PDF</button>
+          <button type="button" id="scanPdfBtn" class="btn btn-primary" disabled>Scan PDF for fields</button>
+          <div class="auto-map-summary" id="autoMapStatus" role="status" aria-live="polite">Load a PDF to scan it automatically.</div>
+          <div class="btn-row">
+            <button type="button" class="btn btn-success" id="applyHighBtn" disabled>Apply strong matches</button>
+            <button type="button" class="btn btn-secondary" id="applyCheckedBtn" disabled>Apply selected</button>
+          </div>
+          <button type="button" class="btn btn-secondary" id="clearSuggestionsBtn" disabled>Clear suggestions</button>
+          <div id="autoMapSuggestions" class="auto-map-suggestions" aria-label="Suggested fields and confidence levels"></div>
+          <div class="auto-map-summary">The source form, signature, charge rows, and field coordinates still require human review.</div>
+        </section>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="addTextFieldBtn">Add Text</button>
+          <button class="btn btn-secondary" id="addCheckboxBtn">Add Checkbox</button>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="addDateBtn">Add Date</button>
+          <button class="btn btn-secondary" id="addSignatureBtn">Add Signature</button>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-danger" id="deleteFieldBtn">Delete Selected</button>
+          <button class="btn btn-secondary" id="duplicateFieldBtn">Duplicate</button>
+        </div>
+
+        <div>
+          <div class="section-title">Page Fields</div>
+          <div id="fieldList" class="field-list"></div>
+        </div>
+
+        <div>
+          <div class="section-title">Import / Export</div>
+          <div class="btn-row">
+            <button class="btn btn-success" id="exportJsonBtn">Export JSON</button>
+            <button class="btn btn-secondary" id="importJsonBtn">Import JSON</button>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-secondary" id="downloadJsonBtn">Download Mapping JSON</button>
+        <div>
+          <label class="label" for="jsonInput">JSON</label>
+          <textarea
+            id="jsonInput"
+            class="json-box"
+            placeholder="Exported JSON will appear here. You can also paste JSON here and click Import JSON."
+          ></textarea>
+        </div>
+
+
+        <section class="pipeline-pane" aria-labelledby="pipelineTitle">
+          <h3 id="pipelineTitle">Scraper → mapper → prefill</h3>
+          <p class="muted" style="margin:0">Import a crawler-generated form manifest with its official source and PDF fingerprint. A changed PDF blocks auto-fill until it is mapped and reviewed again.</p>
+          <div>
+            <label for="candidateManifestUpload">Import form candidate JSON</label>
+            <input type="file" id="candidateManifestUpload" accept=".json,application/json" />
+          </div>
+          <button type="button" id="loadCandidatePdfBtn" class="btn btn-secondary" disabled>Open candidate PDF from assets</button>
+          <div><label for="candidateState">Court state</label><input id="candidateState" maxlength="2" value="OH" /></div>
+          <div><label for="candidateCounty">County</label><input id="candidateCounty" maxlength="100" value="Wood" /></div>
+          <div><label for="candidateCourtType">Court type</label><input id="candidateCourtType" value="court-of-common-pleas" maxlength="100" /></div>
+          <div><label for="candidateFormType">Form type</label>
+            <select id="candidateFormType">
+              <option value="sealing-dismissal">Sealing: dismissal / not guilty</option>
+              <option value="sealing-conviction">Sealing: conviction</option>
+              <option value="sealing-nonconviction">Other nonconviction</option>
+              <option value="expungement">Expungement</option>
+              <option value="unknown">Unknown / needs classification</option>
+            </select>
+          </div>
+          <div><label for="candidateSourceUrl">Original government form URL</label>
+            <input id="candidateSourceUrl" maxlength="2048" value="https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/143/Application-for-Sealing-295333-Dismissal-PDF" />
+          </div>
+          <button type="button" id="createDraftCandidateBtn" class="btn btn-secondary" disabled>Bind PDF and create draft manifest</button>
+          <div class="pipeline-status" id="candidateStatus" role="status" aria-live="polite">No source-bound manifest selected.</div>
+          <div class="pipeline-actions">
+            <button type="button" class="btn btn-secondary" id="downloadCandidateBtn" disabled>Download review bundle</button>
+            <button type="button" class="btn btn-secondary" id="showExampleBtn">Load synthetic record</button>
+          </div>
+          <div>
+            <label for="syntheticDataInput">Synthetic record JSON (never uploaded)</label>
+            <textarea id="syntheticDataInput" rows="5" placeholder="Use the synthetic sample, or paste a synthetic normalized case record. Real case records are not supported in this preview."></textarea>
+          </div>
+          <div class="pipeline-actions">
+            <button type="button" class="btn btn-primary" id="previewFieldValuesBtn" disabled>Preview field values</button>
+            <button type="button" class="btn btn-success" id="downloadSyntheticPdfBtn" disabled>Download synthetic PDF</button>
+          </div>
+          <div id="pipelineResults" class="pipeline-results" aria-label="Prefill preview"></div>
+          <p class="muted" style="margin:0">Draft previews are watermarked and cannot be used for filing. Scrapers may discover sources and suggest mappings; activation still requires source verification, mapping approval, and case-specific consent.</p>
+        </section>
+        <p class="muted">
+          Use this tool to map fields over a PDF form. Each box stores its page,
+          position, size, field type, and name.
+        </p>
+      </div>
+    </aside>
+
+    <!-- Center Workspace -->
+    <main class="workspace">
+      <div class="topbar">
+        <div class="topbar-left">
+          <span class="badge" id="fileStatus">No PDF loaded</span>
+          <span class="badge" id="pageStatus">Page 0 / 0</span>
+          <span class="badge" id="zoomStatus">Zoom 100%</span>
+        </div>
+
+        <div class="topbar-right">
+          <button class="btn btn-secondary" id="prevPageBtn">Prev</button>
+          <button class="btn btn-secondary" id="nextPageBtn">Next</button>
+          <button class="btn btn-secondary" id="zoomOutBtn">-</button>
+          <button class="btn btn-secondary" id="zoomInBtn">+</button>
+          <button class="btn btn-secondary" id="fitWidthBtn">Fit Width</button>
+          <button class="btn btn-secondary" id="showGridBtn">Show Grid</button>
+          <button class="btn btn-secondary" id="hideGridBtn">Hide Grid</button>
+          <span class="badge" id="coordStatus">X: 0 Y: 0 Page: 0</span>
+        </div>
+      </div>
+
+      <div class="viewer-shell">
+        <div class="pdf-stage-wrap">
+          <div class="pdf-stage" id="pdfStage">
+            <canvas id="pdfCanvas"></canvas>
+            <canvas id="gridOverlay" class="grid-overlay"></canvas>
+            <div id="overlay"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Right Panel -->
+    <aside class="panel">
+      <div class="panel-header">
+        <h3>Selected Field</h3>
+      </div>
+      <div class="panel-body stack">
+        <div>
+          <label class="label" for="fieldName">Field Name</label>
+          <input type="text" id="fieldName" placeholder="ex: petitioner_name" />
+        </div>
+
+        <div>
+          <label class="label" for="fieldType">Field Type</label>
+          <select id="fieldType">
+            <option value="text">Text</option>
+            <option value="checkbox">Checkbox</option>
+            <option value="date">Date</option>
+            <option value="signature">Signature</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="label" for="fieldPlaceholder">Placeholder / Notes</label>
+          <input
+            type="text"
+            id="fieldPlaceholder"
+            placeholder="Optional admin note"
+          />
+        </div>
+
+        <div class="small-grid">
+          <div>
+            <label class="label" for="fieldX">X</label>
+            <input type="number" id="fieldX" step="1" />
+          </div>
+          <div>
+            <label class="label" for="fieldY">Y</label>
+            <input type="number" id="fieldY" step="1" />
+          </div>
+        </div>
+
+        <div class="small-grid">
+          <div>
+            <label class="label" for="fieldWidth">Width</label>
+            <input type="number" id="fieldWidth" step="1" />
+          </div>
+          <div>
+            <label class="label" for="fieldHeight">Height</label>
+            <input type="number" id="fieldHeight" step="1" />
+          </div>
+        </div>
+
+        <div>
+          <label class="label" for="fieldPage">Page</label>
+          <input type="number" id="fieldPage" min="1" step="1" />
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="updateFieldBtn">Update Field</button>
+          <button class="btn btn-secondary" id="clearSelectionBtn">Clear</button>
+        </div>
+
+        <div>
+          <div class="section-title">Nudge Selected Field</div>
+          <div class="nudge-controls">
+            <div></div><button class="btn btn-secondary" id="nudgeUpBtn">↑</button><div></div>
+            <button class="btn btn-secondary" id="nudgeLeftBtn">←</button><button class="btn btn-secondary" id="nudgeFiveBtn">+5px</button><button class="btn btn-secondary" id="nudgeRightBtn">→</button>
+            <div></div><button class="btn btn-secondary" id="nudgeDownBtn">↓</button><div></div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="copyFieldJsonBtn">Copy Field JSON</button>
+          <button class="btn btn-secondary" id="applyJudgeFixBtn">Apply Judge Fix</button>
+        </div>
+
+        <p class="muted"><strong>Align fields to the underline, not the printed label.</strong></p>
+
+        <p class="muted">
+          Drag and resize fields directly on the PDF, or edit their values here.
+        </p>
+
+        <div class="field-key-panel" aria-labelledby="fieldNameKeyTitle">
+          <div class="section-title" id="fieldNameKeyTitle">Field Name Key</div>
+          <p class="muted">Supported packet paths from normalized <code>packet.html</code> data. Use the exact field name in mappings.</p>
+          <label class="label" for="fieldKeySearch">Search field names</label>
+          <input class="field-key-search" type="text" id="fieldKeySearch" placeholder="Search label or JSON path" />
+          <div id="fieldNameKeyList" class="field-key-list"></div>
+        </div>
+
+      </div>
+    </aside>
+  </div>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="js/pdf-auto-map.js"></script>
+  <script src="js/form-pipeline-core.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+
+    const pdfUpload = document.getElementById("pdfUpload");
+    const pipeline = window.RecordPathFormPipeline;
+    const candidateManifestUpload = document.getElementById("candidateManifestUpload");
+    const loadCandidatePdfBtn = document.getElementById("loadCandidatePdfBtn");
+    const candidateState = document.getElementById("candidateState");
+    const candidateCounty = document.getElementById("candidateCounty");
+    const candidateCourtType = document.getElementById("candidateCourtType");
+    const candidateFormType = document.getElementById("candidateFormType");
+    const candidateSourceUrl = document.getElementById("candidateSourceUrl");
+    const createDraftCandidateBtn = document.getElementById("createDraftCandidateBtn");
+    const candidateStatus = document.getElementById("candidateStatus");
+    const downloadCandidateBtn = document.getElementById("downloadCandidateBtn");
+    const showExampleBtn = document.getElementById("showExampleBtn");
+    const syntheticDataInput = document.getElementById("syntheticDataInput");
+    const previewFieldValuesBtn = document.getElementById("previewFieldValuesBtn");
+    const downloadSyntheticPdfBtn = document.getElementById("downloadSyntheticPdfBtn");
+    const pipelineResults = document.getElementById("pipelineResults");
+    const loadWoodPdfBtn = document.getElementById("loadWoodPdfBtn");
+    const scanPdfBtn = document.getElementById("scanPdfBtn");
+    const autoMapStatus = document.getElementById("autoMapStatus");
+    const autoMapSuggestions = document.getElementById("autoMapSuggestions");
+    const applyHighBtn = document.getElementById("applyHighBtn");
+    const applyCheckedBtn = document.getElementById("applyCheckedBtn");
+    const clearSuggestionsBtn = document.getElementById("clearSuggestionsBtn");
+    const downloadJsonBtn = document.getElementById("downloadJsonBtn");
+    const pdfCanvas = document.getElementById("pdfCanvas");
+    const overlay = document.getElementById("overlay");
+    const pdfStage = document.getElementById("pdfStage");
+
+    const fileStatus = document.getElementById("fileStatus");
+    const pageStatus = document.getElementById("pageStatus");
+    const zoomStatus = document.getElementById("zoomStatus");
+
+    const prevPageBtn = document.getElementById("prevPageBtn");
+    const nextPageBtn = document.getElementById("nextPageBtn");
+    const zoomInBtn = document.getElementById("zoomInBtn");
+    const zoomOutBtn = document.getElementById("zoomOutBtn");
+    const fitWidthBtn = document.getElementById("fitWidthBtn");
+    const showGridBtn = document.getElementById("showGridBtn");
+    const hideGridBtn = document.getElementById("hideGridBtn");
+    const coordStatus = document.getElementById("coordStatus");
+    const gridOverlay = document.getElementById("gridOverlay");
+
+    const addTextFieldBtn = document.getElementById("addTextFieldBtn");
+    const addCheckboxBtn = document.getElementById("addCheckboxBtn");
+    const addDateBtn = document.getElementById("addDateBtn");
+    const addSignatureBtn = document.getElementById("addSignatureBtn");
+    const deleteFieldBtn = document.getElementById("deleteFieldBtn");
+    const duplicateFieldBtn = document.getElementById("duplicateFieldBtn");
+
+    const exportJsonBtn = document.getElementById("exportJsonBtn");
+    const importJsonBtn = document.getElementById("importJsonBtn");
+    const jsonInput = document.getElementById("jsonInput");
+    const fieldList = document.getElementById("fieldList");
+
+    const fieldNameInput = document.getElementById("fieldName");
+    const fieldTypeInput = document.getElementById("fieldType");
+    const fieldPlaceholderInput = document.getElementById("fieldPlaceholder");
+    const fieldXInput = document.getElementById("fieldX");
+    const fieldYInput = document.getElementById("fieldY");
+    const fieldWidthInput = document.getElementById("fieldWidth");
+    const fieldHeightInput = document.getElementById("fieldHeight");
+    const fieldPageInput = document.getElementById("fieldPage");
+    const updateFieldBtn = document.getElementById("updateFieldBtn");
+    const clearSelectionBtn = document.getElementById("clearSelectionBtn");
+    const nudgeUpBtn = document.getElementById("nudgeUpBtn");
+    const nudgeDownBtn = document.getElementById("nudgeDownBtn");
+    const nudgeLeftBtn = document.getElementById("nudgeLeftBtn");
+    const nudgeRightBtn = document.getElementById("nudgeRightBtn");
+    const nudgeFiveBtn = document.getElementById("nudgeFiveBtn");
+    const copyFieldJsonBtn = document.getElementById("copyFieldJsonBtn");
+    const applyJudgeFixBtn = document.getElementById("applyJudgeFixBtn");
+    const fieldKeySearch = document.getElementById("fieldKeySearch");
+    const fieldNameKeyList = document.getElementById("fieldNameKeyList");
+
+    let pdfDoc = null;
+    let currentPage = 1;
+    let currentScale = 1.25;
+    let mappings = [];
+    let selectedFieldId = null;
+    let nextFieldId = 1;
+
+    let showGrid = false;
+    let activeCandidate = null;
+    let currentPdfSha256 = "";
+    let currentPdfBytes = null;
+    let lastSyntheticPlan = null;
+    const BASE_SCALE = window.RecordPathPdfAutoMap?.BASE_SCALE || 1.25;
+    const WOOD_PDF_ASSET = "./assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf";
+    let baseViewport = { width: 765, height: 990 };
+    let suggestions = [];
+    let pdfGeneration = 0;
+    const zoomRatio = () => currentScale / BASE_SCALE;
+    const referenceWidth = () => overlay.clientWidth / zoomRatio();
+    const referenceHeight = () => overlay.clientHeight / zoomRatio();
+    const overlapsManual = (suggestion) => mappings.some(m => Number(m.page)===Number(suggestion.page) &&
+      m.name===suggestion.name && Math.abs(m.x-suggestion.x)<110 && Math.abs(m.y-suggestion.y)<35);
+
+
+
+    const FIELD_NAME_KEY_GROUPS = [
+      {
+        title: "petitioner.*",
+        fields: [
+          ["Full legal name", "petitioner.full_name"],
+          ["First name (derived alias)", "petitioner.first_name"],
+          ["Middle name", "petitioner.middle_name"],
+          ["Last name (derived alias)", "petitioner.last_name"],
+          ["Date of birth", "petitioner.dob"],
+          ["Full SSN", "petitioner.ssn_full"],
+          ["Last 4 SSN", "petitioner.ssn_last4"],
+          ["Phone", "petitioner.phone"],
+          ["Email", "petitioner.email"],
+          ["Address line 1", "petitioner.address.line1"],
+          ["Address line 2", "petitioner.address.line2"],
+          ["City", "petitioner.address.city"],
+          ["Residence state", "petitioner.address.state"],
+          ["ZIP", "petitioner.address.zip"],
+          ["Residence county", "petitioner.address.county"]
+        ]
+      },
+      {
+        title: "court.*",
+        fields: [
+          ["Case state", "court.state"],
+          ["County", "court.county"],
+          ["Court name", "court.name"],
+          ["Department", "court.department"],
+          ["Docket number", "court.docket_number"],
+          ["Case number", "court.case_number"],
+          ["Judge name", "court.judge_name"],
+          ["Case type", "court.case_type"],
+          ["Court address line 1", "court.address.line1"],
+          ["Court address city", "court.address.city"],
+          ["Court address state", "court.address.state"],
+          ["Court address ZIP", "court.address.zip"]
+        ]
+      },
+      {
+        title: "case.*",
+        fields: [
+          ["Filing date", "case.filing_date"],
+          ["Hearing date", "case.hearing_date"],
+          ["Incident count", "case.incident_count"],
+          ["Conviction count", "case.conviction_count"],
+          ["Dismissal count", "case.dismissal_count"],
+          ["Overall disposition summary", "case.overall_disposition_summary"],
+          ["Petition reason", "case.petition_reason"],
+          ["Rehabilitation statement", "case.rehabilitation_statement"],
+          ["Supporting statement", "case.supporting_statement"]
+        ]
+      },
+      {
+        title: "charges[0].* (mapper path uses charges.0.*)",
+        fields: [
+          ["Charge / offense name", "charges.0.charge_name"],
+          ["Statute / code", "charges.0.charge_code"],
+          ["Degree / level", "charges.0.level"],
+          ["Offense classification", "charges.0.offense_classification"],
+          ["Arrest date", "charges.0.arrest_date"],
+          ["Citation date", "charges.0.citation_date"],
+          ["Offense date", "charges.0.offense_date"],
+          ["Outcome / disposition", "charges.0.disposition"],
+          ["Final disposition", "charges.0.final_disposition"],
+          ["Disposition date", "charges.0.disposition_date"],
+          ["Sentencing date", "charges.0.sentencing_date"],
+          ["Release date", "charges.0.release_date"],
+          ["Probation / discharge date", "charges.0.probation_end_date"],
+          ["Final discharge date", "charges.0.discharge_date"],
+          ["Waiting period end date", "charges.0.waiting_period_end_date"],
+          ["Case number", "charges.0.case_number"],
+          ["Court name", "charges.0.court_name"],
+          ["Court county", "charges.0.court_county"],
+          ["Judge name", "charges.0.judge_name"],
+          ["Case state", "charges.0.case_state"],
+          ["Arresting agency", "charges.0.arresting_agency"],
+          ["Prosecutor agency", "charges.0.prosecutor_agency"],
+          ["Dismissed checkbox", "charges.0.is_dismissed"],
+          ["Convicted checkbox", "charges.0.is_convicted"],
+          ["Sealable checkbox", "charges.0.is_sealable"],
+          ["Pending charges flag", "charges.0.pending_charges"],
+          ["Sex offense registry flag", "charges.0.sex_offense_registry"],
+          ["Victim under 13 flag", "charges.0.victim_under_13"],
+          ["Felony violence flag", "charges.0.felony_violence_offense"],
+          ["F3 felony count", "charges.0.f3_felony_count"],
+          ["Ineligible reason", "charges.0.ineligible_reason"],
+          ["Fine amount due", "charges.0.fine_amount_due"],
+          ["Restitution due", "charges.0.restitution_due"],
+          ["Charge notes", "charges.0.notes"]
+        ]
+      },
+      {
+        title: "eligibility.*",
+        fields: [
+          ["State ruleset", "eligibility.state_ruleset"],
+          ["Filing type", "eligibility.filing_type"],
+          ["Is eligible", "eligibility.is_eligible"],
+          ["Eligibility status", "eligibility.eligibility_status"],
+          ["Eligibility reason", "eligibility.eligibility_reason"],
+          ["Estimated eligible on", "eligibility.estimated_eligible_on"],
+          ["Waiting period complete", "eligibility.waiting_period_complete"],
+          ["Pending cases flag", "eligibility.has_pending_cases"],
+          ["Outstanding fines flag", "eligibility.has_outstanding_fines"],
+          ["Open warrants flag", "eligibility.has_open_warrants"],
+          ["Requires prosecutor notice", "eligibility.requires_prosecutor_notice"],
+          ["Requires hearing", "eligibility.requires_hearing"],
+          ["Requires fingerprints", "eligibility.requires_fingerprints"],
+          ["Requires certified disposition", "eligibility.requires_certified_disposition"],
+          ["Eligibility notes", "eligibility.notes"]
+        ]
+      },
+      {
+        title: "signature.*",
+        fields: [
+          ["Petitioner signature name", "signature.petitioner_signature_name"],
+          ["Attorney signature name", "signature.attorney_signature_name"],
+          ["DA delegate signature", "signature.district_attorney_delegate_signature"],
+          ["DA delegate bar number", "signature.district_attorney_delegate_bar_number"],
+          ["Petition signed day", "signature.petition_signed_day"],
+          ["Petition signed month", "signature.petition_signed_month"],
+          ["Petition signed year", "signature.petition_signed_year"],
+          ["Affidavit signed day", "signature.affidavit_signed_day"],
+          ["Affidavit signed month", "signature.affidavit_signed_month"],
+          ["Affidavit signed year", "signature.affidavit_signed_year"]
+        ]
+      },
+      {
+        title: "dates.*",
+        fields: [
+          ["Current date", "dates.current_date"],
+          ["Current day", "dates.current_day"],
+          ["Current month", "dates.current_month"],
+          ["Current year", "dates.current_year"]
+        ]
+      }
+    ];
+
+    let interaction = {
+      mode: null,
+      fieldId: null,
+      startX: 0,
+      startY: 0,
+      startLeft: 0,
+      startTop: 0,
+      startWidth: 0,
+      startHeight: 0
+    };
+
+
+
+    function renderFieldNameKey() {
+      if (!fieldNameKeyList) return;
+      const query = (fieldKeySearch?.value || "").trim().toLowerCase();
+      const groups = FIELD_NAME_KEY_GROUPS.map((group) => ({
+        title: group.title,
+        fields: group.fields.filter(([label, name]) => {
+          if (!query) return true;
+          return label.toLowerCase().includes(query) || name.toLowerCase().includes(query) || group.title.toLowerCase().includes(query);
+        })
+      })).filter((group) => group.fields.length);
+
+      if (!groups.length) {
+        fieldNameKeyList.innerHTML = '<div class="field-key-empty">No field names match your search.</div>';
+        return;
+      }
+
+      fieldNameKeyList.innerHTML = groups.map((group) => `
+        <div class="field-key-group">
+          <div class="field-key-group-title">${escapeHtml(group.title)}</div>
+          ${group.fields.map(([label, name]) => `
+            <div class="field-key-row">
+              <div>
+                <div class="field-key-label">${escapeHtml(label)}</div>
+                <div class="field-key-name">${escapeHtml(name)}</div>
+              </div>
+              <button type="button" class="btn btn-secondary copy-field-name-btn" data-field-name="${escapeHtml(name)}">Copy</button>
+            </div>
+          `).join("")}
+        </div>
+      `).join("");
+    }
+
+    async function copyFieldName(name, button) {
+      try {
+        await navigator.clipboard.writeText(name);
+      } catch (err) {
+        const scratch = document.createElement("textarea");
+        scratch.value = name;
+        document.body.appendChild(scratch);
+        scratch.select();
+        document.execCommand("copy");
+        scratch.remove();
+      }
+
+      if (fieldNameInput) fieldNameInput.value = name;
+      if (button) {
+        const original = button.textContent;
+        button.textContent = "Copied";
+        setTimeout(() => { button.textContent = original; }, 900);
+      }
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function getCurrentPageFields() {
+      return mappings.filter((f) => Number(f.page) === Number(currentPage));
+    }
+
+    function getSelectedField() {
+      return mappings.find((f) => f.id === selectedFieldId) || null;
+    }
+
+    function setSelectedField(id) {
+      selectedFieldId = id;
+      renderOverlay();
+      renderFieldList();
+      populateFieldEditor();
+    }
+
+    function clearSelectedField() {
+      selectedFieldId = null;
+      renderOverlay();
+      renderFieldList();
+      populateFieldEditor();
+    }
+
+    function createField(type) {
+      if (!pdfDoc) {
+        alert("Please upload a PDF first.");
+        return;
+      }
+
+      const field = {
+        id: nextFieldId++,
+        name: `${type}_${Date.now()}`,
+        type,
+        placeholder: "",
+        page: currentPage,
+        x: 60,
+        y: 60,
+        width: type === "checkbox" ? 24 : 180,
+        height: type === "checkbox" ? 24 : 28
+      };
+
+      mappings.push(field);
+      setSelectedField(field.id);
+      renderOverlay();
+      renderFieldList();
+      populateFieldEditor();
+    }
+
+    async function loadPdfFromFile(file) {
+      const generation = ++pdfGeneration;
+
+      const arrayBuffer = await file.arrayBuffer();
+      if(arrayBuffer.byteLength<100||arrayBuffer.byteLength>12*1024*1024)
+        throw new Error("Invalid or oversized PDF (12 MB maximum).");
+      const magic=new Uint8Array(arrayBuffer,0,5);
+      if(String.fromCharCode(...magic)!=="%PDF-")throw new Error("Uploaded file is not a PDF.");
+      const hash=await crypto.subtle.digest("SHA-256",arrayBuffer);
+      const sha256=Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
+      const safeBytes=new Uint8Array(arrayBuffer.slice(0));
+      const nextDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      if (generation!==pdfGeneration) { await nextDoc.destroy(); return; }
+
+      pdfDoc = nextDoc;
+      currentPdfSha256=sha256;
+      currentPdfBytes=safeBytes;
+      currentPage = 1;
+      // Never apply old form's suggestions to a newly loaded document.
+      suggestions = [];
+      mappings = [];
+      selectedFieldId = null;
+      nextFieldId = 1;
+      const first = await pdfDoc.getPage(1);
+      const viewport = first.getViewport({ scale: BASE_SCALE });
+      baseViewport = { width: viewport.width, height: viewport.height };
+      fileStatus.textContent = file.name;
+
+      scanPdfBtn.disabled = false;
+      createDraftCandidateBtn.disabled=false;
+      await renderPage(currentPage);
+      await scanPdfForSuggestions(generation);
+      refreshPipelineStatus();
+    }
+
+    async function renderPage(pageNum) {
+      if (!pdfDoc) return;
+
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: currentScale });
+
+      const canvasContext = pdfCanvas.getContext("2d");
+      pdfCanvas.width = viewport.width;
+      pdfCanvas.height = viewport.height;
+      pdfCanvas.style.width = viewport.width + "px";
+      pdfCanvas.style.height = viewport.height + "px";
+
+      overlay.style.width = viewport.width + "px";
+      overlay.style.height = viewport.height + "px";
+      pdfStage.style.width = viewport.width + "px";
+      pdfStage.style.height = viewport.height + "px";
+
+      const renderContext = {
+        canvasContext,
+        viewport
+      };
+
+      await page.render(renderContext).promise;
+      pageStatus.textContent = `Page ${currentPage} / ${pdfDoc.numPages}`;
+      zoomStatus.textContent = `Zoom ${Math.round(currentScale * 100)}%`;
+
+      drawGrid();
+      renderOverlay();
+      renderFieldList();
+      populateFieldEditor();
+    }
+
+    function drawGrid() {
+      const width = pdfCanvas.width;
+      const height = pdfCanvas.height;
+      gridOverlay.width = width;
+      gridOverlay.height = height;
+      gridOverlay.style.width = width + "px";
+      gridOverlay.style.height = height + "px";
+      const ctx = gridOverlay.getContext("2d");
+      ctx.clearRect(0, 0, width, height);
+
+      for (let x = 0; x <= width; x += 25) {
+        const major = x % 100 === 0;
+        ctx.strokeStyle = major ? "rgba(15,23,42,0.35)" : "rgba(148,163,184,0.35)";
+        ctx.lineWidth = major ? 1.2 : 0.6;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+        if (major) {
+          ctx.fillStyle = "rgba(15,23,42,0.85)";
+          ctx.font = "10px Arial";
+          ctx.fillText(String(x), x + 2, 10);
+        }
+      }
+
+      for (let y = 0; y <= height; y += 25) {
+        const major = y % 100 === 0;
+        ctx.strokeStyle = major ? "rgba(15,23,42,0.35)" : "rgba(148,163,184,0.35)";
+        ctx.lineWidth = major ? 1.2 : 0.6;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+        if (major) {
+          ctx.fillStyle = "rgba(15,23,42,0.85)";
+          ctx.font = "10px Arial";
+          ctx.fillText(String(y), 2, y + 10);
+        }
+      }
+      gridOverlay.classList.toggle("visible", showGrid);
+    }
+
+    function nudgeSelectedField(dx, dy, step = 1) {
+      const field = getSelectedField();
+      if (!field) return;
+      field.x = clamp(field.x + dx * step, 0, Math.max(0, referenceWidth() - field.width));
+      field.y = clamp(field.y + dy * step, 0, Math.max(0, referenceHeight() - field.height));
+      renderOverlay();
+      renderFieldList();
+      populateFieldEditor();
+    }
+
+    function renderOverlay() {
+      overlay.innerHTML = "";
+
+      const pageFields = getCurrentPageFields();
+
+      pageFields.forEach((field) => {
+        const box = document.createElement("div");
+        box.className = "field-box" + (field.id === selectedFieldId ? " selected" : "");
+        box.style.left = (field.x * zoomRatio()) + "px";
+        box.style.top = (field.y * zoomRatio()) + "px";
+        box.style.width = (field.width * zoomRatio()) + "px";
+        box.style.height = (field.height * zoomRatio()) + "px";
+        box.dataset.id = field.id;
+
+        const label = document.createElement("div");
+        label.className = "field-label";
+        label.textContent = `${field.name} (${field.type})`;
+
+        const handle = document.createElement("div");
+        handle.className = "resize-handle";
+
+        box.appendChild(label);
+        box.appendChild(handle);
+
+        box.addEventListener("mousedown", (e) => {
+          e.stopPropagation();
+          setSelectedField(field.id);
+
+          const rect = overlay.getBoundingClientRect();
+          interaction.startX = e.clientX - rect.left;
+          interaction.startY = e.clientY - rect.top;
+          interaction.fieldId = field.id;
+          interaction.startLeft = field.x;
+          interaction.startTop = field.y;
+          interaction.startWidth = field.width;
+          interaction.startHeight = field.height;
+
+          if (e.target.classList.contains("resize-handle")) {
+            interaction.mode = "resize";
+          } else {
+            interaction.mode = "drag";
+          }
+
+          document.addEventListener("mousemove", onPointerMove);
+          document.addEventListener("mouseup", onPointerUp);
+        });
+
+        overlay.appendChild(box);
+      });
+      // Dashed boxes show suggestions before a human accepts them.
+      suggestions.filter(s => s.checked && Number(s.page)===Number(currentPage) && !overlapsManual(s)).forEach(s => {
+        const ghost=document.createElement("div");
+        ghost.className="auto-map-preview"+(s.confidence<.85?" low":"");
+        ghost.style.left=(s.x*zoomRatio())+"px";
+        ghost.style.top=(s.y*zoomRatio())+"px";
+        ghost.style.width=(s.width*zoomRatio())+"px";
+        ghost.style.height=(s.height*zoomRatio())+"px";
+        ghost.title=s.name+" — "+Math.round(100*s.confidence)+"% suggestion";
+        overlay.appendChild(ghost);
+      });
+    }
+
+    function onPointerMove(e) {
+      const field = mappings.find((f) => f.id === interaction.fieldId);
+      if (!field) return;
+
+      const rect = overlay.getBoundingClientRect();
+      const currentX = e.clientX - rect.left;
+      const currentY = e.clientY - rect.top;
+      const dx = (currentX - interaction.startX) / zoomRatio();
+      const dy = (currentY - interaction.startY) / zoomRatio();
+
+      if (interaction.mode === "drag") {
+        field.x = clamp(interaction.startLeft + dx, 0, referenceWidth() - field.width);
+        field.y = clamp(interaction.startTop + dy, 0, referenceHeight() - field.height);
+      }
+
+      if (interaction.mode === "resize") {
+        field.width = clamp(interaction.startWidth + dx, 20, referenceWidth() - field.x);
+        field.height = clamp(interaction.startHeight + dy, 20, referenceHeight() - field.y);
+      }
+
+      renderOverlay();
+      renderFieldList();
+      populateFieldEditor();
+    }
+
+    function onPointerUp() {
+      interaction.mode = null;
+      interaction.fieldId = null;
+      document.removeEventListener("mousemove", onPointerMove);
+      document.removeEventListener("mouseup", onPointerUp);
+    }
+
+    function renderFieldList() {
+      refreshPipelineStatus();
+      const pageFields = getCurrentPageFields();
+      fieldList.innerHTML = "";
+
+      if (!pageFields.length) {
+        fieldList.innerHTML = `<div class="muted">No mapped fields on this page yet.</div>`;
+        return;
+      }
+
+      pageFields.forEach((field) => {
+        const item = document.createElement("div");
+        item.className = "field-item" + (field.id === selectedFieldId ? " active" : "");
+        item.innerHTML = `
+          <div class="field-item-title">${escapeHtml(field.name)}</div>
+          <div class="field-item-sub">
+            Type: ${escapeHtml(field.type)}<br>
+            X: ${Math.round(field.x)}, Y: ${Math.round(field.y)}<br>
+            W: ${Math.round(field.width)}, H: ${Math.round(field.height)}
+          </div>
+        `;
+        item.addEventListener("click", () => setSelectedField(field.id));
+        fieldList.appendChild(item);
+      });
+    }
+
+    function populateFieldEditor() {
+      const field = getSelectedField();
+
+      if (!field) {
+        fieldNameInput.value = "";
+        fieldTypeInput.value = "text";
+        fieldPlaceholderInput.value = "";
+        fieldXInput.value = "";
+        fieldYInput.value = "";
+        fieldWidthInput.value = "";
+        fieldHeightInput.value = "";
+        fieldPageInput.value = currentPage || "";
+        return;
+      }
+
+      fieldNameInput.value = field.name || "";
+      fieldTypeInput.value = field.type || "text";
+      fieldPlaceholderInput.value = field.placeholder || "";
+      fieldXInput.value = Math.round(field.x);
+      fieldYInput.value = Math.round(field.y);
+      fieldWidthInput.value = Math.round(field.width);
+      fieldHeightInput.value = Math.round(field.height);
+      fieldPageInput.value = field.page;
+    }
+
+    function updateSelectedFieldFromForm() {
+      const field = getSelectedField();
+      if (!field) {
+        alert("Select a field first.");
+        return;
+      }
+
+      field.name = fieldNameInput.value.trim() || field.name;
+      field.type = fieldTypeInput.value;
+      field.placeholder = fieldPlaceholderInput.value.trim();
+
+      field.x = clamp(Number(fieldXInput.value) || 0, 0, Math.max(0, referenceWidth() - 20));
+      field.y = clamp(Number(fieldYInput.value) || 0, 0, Math.max(0, referenceHeight() - 20));
+      field.width = clamp(Number(fieldWidthInput.value) || 20, 20, referenceWidth() - field.x);
+      field.height = clamp(Number(fieldHeightInput.value) || 20, 20, referenceHeight() - field.y);
+
+      const requestedPage = clamp(
+        Number(fieldPageInput.value) || currentPage,
+        1,
+        pdfDoc ? pdfDoc.numPages : 1
+      );
+      field.page = requestedPage;
+
+      if (field.page !== currentPage) {
+        clearSelectedField();
+      }
+
+      renderOverlay();
+      renderFieldList();
+      populateFieldEditor();
+    }
+
+    function deleteSelectedField() {
+      const field = getSelectedField();
+      if (!field) {
+        alert("Select a field first.");
+        return;
+      }
+
+      mappings = mappings.filter((f) => f.id !== field.id);
+      clearSelectedField();
+      renderOverlay();
+      renderFieldList();
+    }
+
+    function duplicateSelectedField() {
+      const field = getSelectedField();
+      if (!field) {
+        alert("Select a field first.");
+        return;
+      }
+
+      const copy = {
+        ...field,
+        id: nextFieldId++,
+        name: field.name + "_copy",
+        x: clamp(field.x + 12, 0, Math.max(0, referenceWidth() - field.width)),
+        y: clamp(field.y + 12, 0, Math.max(0, referenceHeight() - field.height))
+      };
+
+      mappings.push(copy);
+      setSelectedField(copy.id);
+      renderOverlay();
+      renderFieldList();
+      populateFieldEditor();
+    }
+
+
+    function exportJson() {
+      const payload = {
+        version: 7,
+        exportedAt: new Date().toISOString(),
+        document: fileStatus.textContent,
+        pageCount: pdfDoc ? pdfDoc.numPages : 0,
+        pageWidth: Math.round(baseViewport.width),
+        pageHeight: Math.round(baseViewport.height),
+        reviewRequired: true,
+        mappings
+      };
+
+      jsonInput.value = JSON.stringify(payload, null, 2);
+    }
+
+    function downloadJson() {
+      if(!pdfDoc){ alert("Load the source form before downloading a mapping."); return; }
+      exportJson();
+      const blob = new Blob([jsonInput.value], {type:"application/json;charset=utf-8"});
+      const url = URL.createObjectURL(blob);
+      const link=document.createElement("a");
+      link.href=url;
+      link.download="recordpathai-mapping-v7.json";
+      document.body.append(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
+
+    function importJson() {
+      const raw = jsonInput.value.trim();
+      if (!raw) {
+        alert("Paste JSON first.");
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(raw);
+
+        if (Array.isArray(parsed)) {
+          mappings = parsed;
+        } else if (Array.isArray(parsed.mappings)) {
+          mappings = parsed.mappings;
+        } else {
+          throw new Error("Invalid JSON format.");
+        }
+
+        const ids = mappings.map((f) => Number(f.id) || 0);
+        nextFieldId = (ids.length ? Math.max(...ids) : 0) + 1;
+        clearSelectedField();
+        renderOverlay();
+        renderFieldList();
+        populateFieldEditor();
+        alert("Mappings imported.");
+      } catch (err) {
+        alert("Import failed: " + err.message);
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    if (fieldKeySearch) fieldKeySearch.addEventListener("input", renderFieldNameKey);
+    if (fieldNameKeyList) {
+      fieldNameKeyList.addEventListener("click", (event) => {
+        const button = event.target.closest(".copy-field-name-btn");
+        if (!button) return;
+        copyFieldName(button.dataset.fieldName || "", button);
+      });
+    }
+    renderFieldNameKey();
+
+    overlay.addEventListener("mousedown", (e) => {
+      if (e.target === overlay) {
+        clearSelectedField();
+      }
+    });
+
+    overlay.addEventListener("mousemove", (e) => {
+      const rect = overlay.getBoundingClientRect();
+      const x = clamp(Math.round((e.clientX - rect.left)/zoomRatio()), 0, referenceWidth());
+      const y = clamp(Math.round((e.clientY - rect.top)/zoomRatio()), 0, referenceHeight());
+      coordStatus.textContent = `X: ${x} Y: ${y} Page: ${currentPage || 0}`;
+    });
+
+    pdfUpload.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        await loadPdfFromFile(file);
+      } catch (err) {
+        console.error(err);
+        alert("Failed to load PDF.");
+      }
+    });
+
+    addTextFieldBtn.addEventListener("click", () => createField("text"));
+    addCheckboxBtn.addEventListener("click", () => createField("checkbox"));
+    addDateBtn.addEventListener("click", () => createField("date"));
+    addSignatureBtn.addEventListener("click", () => createField("signature"));
+
+    deleteFieldBtn.addEventListener("click", deleteSelectedField);
+    duplicateFieldBtn.addEventListener("click", duplicateSelectedField);
+
+    exportJsonBtn.addEventListener("click", exportJson);
+    downloadJsonBtn.addEventListener("click", downloadJson);
+    importJsonBtn.addEventListener("click", importJson);
+
+    updateFieldBtn.addEventListener("click", updateSelectedFieldFromForm);
+    clearSelectionBtn.addEventListener("click", clearSelectedField);
+
+    prevPageBtn.addEventListener("click", async () => {
+      if (!pdfDoc || currentPage <= 1) return;
+      currentPage -= 1;
+      clearSelectedField();
+      await renderPage(currentPage);
+    });
+
+    nextPageBtn.addEventListener("click", async () => {
+      if (!pdfDoc || currentPage >= pdfDoc.numPages) return;
+      currentPage += 1;
+      clearSelectedField();
+      await renderPage(currentPage);
+    });
+
+    zoomInBtn.addEventListener("click", async () => {
+      if (!pdfDoc) return;
+      currentScale = Math.min(currentScale + 0.2, 3);
+      await renderPage(currentPage);
+    });
+
+    zoomOutBtn.addEventListener("click", async () => {
+      if (!pdfDoc) return;
+      currentScale = Math.max(currentScale - 0.2, 0.4);
+      await renderPage(currentPage);
+    });
+
+
+    showGridBtn.addEventListener("click", () => {
+      showGrid = true;
+      gridOverlay.classList.add("visible");
+    });
+
+    hideGridBtn.addEventListener("click", () => {
+      showGrid = false;
+      gridOverlay.classList.remove("visible");
+    });
+
+    [
+      [nudgeUpBtn, 0, -1],
+      [nudgeDownBtn, 0, 1],
+      [nudgeLeftBtn, -1, 0],
+      [nudgeRightBtn, 1, 0]
+    ].forEach(([btn, dx, dy]) => {
+      btn.addEventListener("click", (e) => {
+        const step = e.shiftKey ? 5 : 1;
+        nudgeSelectedField(dx, dy, step);
+      });
+    });
+
+    nudgeFiveBtn.addEventListener("click", () => nudgeSelectedField(1, 0, 5));
+
+    copyFieldJsonBtn.addEventListener("click", async () => {
+      const field = getSelectedField();
+      if (!field) {
+        alert("Select a field first.");
+        return;
+      }
+      const payload = JSON.stringify(field, null, 2);
+      try {
+        await navigator.clipboard.writeText(payload);
+        alert("Selected field JSON copied.");
+      } catch {
+        jsonInput.value = payload;
+        alert("Clipboard unavailable. JSON placed in textarea.");
+      }
+    });
+
+    applyJudgeFixBtn.addEventListener("click", () => {
+      const target = mappings.find((f) => f.name === "judge_name");
+      const fix = { name: "judge_name", page: 4, x: 535, y: 175, width: 160, height: 25 };
+      if (target) {
+        Object.assign(target, fix);
+      } else {
+        mappings.push({ id: nextFieldId++, type: "text", placeholder: "", ...fix });
+      }
+      renderOverlay();
+      renderFieldList();
+      populateFieldEditor();
+      alert("Judge field fix applied.");
+    });
+
+    fitWidthBtn.addEventListener("click", async () => {
+      if (!pdfDoc) return;
+
+      const viewerShell = document.querySelector(".viewer-shell");
+      const page = await pdfDoc.getPage(currentPage);
+      const unscaled = page.getViewport({ scale: 1 });
+
+      const availableWidth = Math.max(300, viewerShell.clientWidth - 60);
+      currentScale = availableWidth / unscaled.width;
+      await renderPage(currentPage);
+    });
+
+
+    async function scanPdfForSuggestions(generation=pdfGeneration) {
+      if(!pdfDoc) return;
+      scanPdfBtn.disabled=true;
+      autoMapStatus.textContent="Reading form fields and text locally…";
+      const allPages=[];
+      try {
+        for(let n=1;n<=pdfDoc.numPages;n++){
+          const page=await pdfDoc.getPage(n);
+          const vp=page.getViewport({scale:BASE_SCALE});
+          const content=await page.getTextContent();
+          const items=(content.items||[]).filter(x=>typeof x.str==="string"&&x.transform).map(x=>{
+            const xy=vp.convertToViewportPoint(x.transform[4],x.transform[5]);
+            const h=Math.max(7,Math.abs(x.height||x.transform[3]||10)*BASE_SCALE);
+            return {str:x.str,x:xy[0],y:xy[1]-h,width:Math.max(0,(x.width||0)*BASE_SCALE),height:h};
+          });
+          const anns=await page.getAnnotations({intent:"display"});
+          const annotations=(anns||[]).filter(a=>Array.isArray(a.rect)).map(a=>{
+            const r=vp.convertToViewportRectangle(a.rect);
+            return {subtype:a.subtype,fieldName:a.fieldName,alternativeText:a.alternativeText,fieldType:a.fieldType,rect:r};
+          });
+          allPages.push({number:n,width:vp.width,height:vp.height,items,annotations});
+        }
+        if(generation!==pdfGeneration) return;
+        const result=window.RecordPathPdfAutoMap.analyzePages(allPages);
+        suggestions=result.suggestions.map((item,index)=>({
+          ...item,id:index+1,checked:item.confidence>=.85&&item.type!=="signature"
+        }));
+
+        // Crawler suggestions are never trusted over re-analysis of the selected PDF.
+        autoMapStatus.textContent=result.suggestions.length+" draft field locations found ("+
+          result.profile+"). "+result.diagnostics.join(" ");
+        renderSuggestionControls();
+        renderOverlay();
+      } catch(error) {
+        autoMapStatus.textContent="Auto scan unavailable: "+String(error?.message||error)+
+          ". Manual mapping remains available.";
+      } finally {
+        if(generation===pdfGeneration)scanPdfBtn.disabled=false;
+      }
+    }
+
+    function renderSuggestionControls(){
+      autoMapSuggestions.replaceChildren();
+      applyCheckedBtn.disabled=!suggestions.length;
+      applyHighBtn.disabled=!suggestions.some(s=>s.confidence>=.85&&s.type!=="signature");
+      clearSuggestionsBtn.disabled=!suggestions.length;
+      for(const entry of suggestions){
+        const row=document.createElement("div");row.className="auto-map-suggestion";
+        const head=document.createElement("div");head.className="auto-map-suggestion-head";
+        const check=document.createElement("input");check.type="checkbox";
+        check.checked=entry.checked;check.setAttribute("aria-label","Select "+entry.name+" page "+entry.page);
+        check.addEventListener("change",()=>{entry.checked=check.checked;renderOverlay();});
+        const name=document.createElement("strong");name.textContent=entry.name;
+        const goto=document.createElement("button");goto.type="button";goto.className="btn btn-secondary";
+        goto.textContent="Page "+entry.page;goto.addEventListener("click",async()=>{
+          if(!pdfDoc)return;currentPage=entry.page;await renderPage(currentPage);
+          document.querySelector(".viewer-shell")?.scrollTo({top:0,behavior:"smooth"});
+        });
+        head.append(check,name,goto);
+        const detail=document.createElement("span");
+        detail.textContent=Math.round(entry.confidence*100)+"% confidence · "+entry.source+
+          (overlapsManual(entry)?" · already mapped":"");
+        const note=document.createElement("span");note.textContent=entry.reason||"Inspect placement before applying";
+        note.style.color="#64748b";
+        row.append(head,detail,note);autoMapSuggestions.append(row);
+      }
+    }
+    function applySuggestions(onlyHigh=false){
+      if(!pdfDoc)return;
+      let added=0,already=0;
+      for(const entry of suggestions){
+        if(!entry.checked)continue;
+        if(onlyHigh && (entry.confidence<.85 || entry.type==="signature"))continue;
+        if(overlapsManual(entry)){already++;continue;}
+        // Keep drafts bounded to the original page's 1.25x reference viewport.
+        if(entry.page<1||entry.page>pdfDoc.numPages||entry.x<0||entry.y<0||
+          entry.width<12||entry.height<8) continue;
+        mappings.push({
+          id:nextFieldId++,name:entry.name,type:entry.type,page:entry.page,
+          x:entry.x,y:entry.y,width:entry.width,height:entry.height,
+          placeholder:"Draft ("+entry.source+"). Manually verify."
+        });
+        added++;
+      }
+      autoMapStatus.textContent="Added "+added+" draft fields; "+already+
+        " existing mappings kept. Inspect every page and adjust coordinates before exporting.";
+      renderSuggestionControls();renderOverlay();renderFieldList();populateFieldEditor();
+    }
+    async function loadWoodPdf(){
+      loadWoodPdfBtn.disabled=true;
+      try {
+        const response=await fetch(WOOD_PDF_ASSET,{cache:"no-store"});
+        if(!response.ok)throw new Error("Source PDF not available ("+response.status+")");
+        const blob=await response.blob();
+        if(blob.size<1000 || blob.size>15000000)throw new Error("Unexpected source PDF size");
+        const file=new File([blob],"wood-county-2953-33-nonconviction.pdf",{type:"application/pdf"});
+        await loadPdfFromFile(file);
+      } catch(error) {
+        autoMapStatus.textContent="Could not load Wood County asset: "+String(error?.message||error);
+      } finally {loadWoodPdfBtn.disabled=false;}
+    }
+    loadWoodPdfBtn.addEventListener("click",loadWoodPdf);
+    scanPdfBtn.addEventListener("click",()=>scanPdfForSuggestions());
+    applyHighBtn.addEventListener("click",()=>applySuggestions(true));
+    applyCheckedBtn.addEventListener("click",()=>applySuggestions(false));
+    clearSuggestionsBtn.addEventListener("click",()=>{
+      suggestions=[];autoMapStatus.textContent="Suggestions cleared; any applied mappings are preserved.";
+      renderSuggestionControls();renderOverlay();
+    });
+    if(new URLSearchParams(window.location.search).get("form")==="wood-nonconviction"){
+      loadWoodPdf();
+    }
+
+
+    const syntheticExample = {
+      meta:{synthetic:true,source:"RecordPathAI fabricated QA case"},
+      petitioner:{
+        full_name:"Alex Sample",first_name:"Alex",last_name:"Sample",
+        email:"alex.sample@example.test",phone:"555-0100",
+        address:{line1:"123 Example Street",line2:"Unit 2",city:"Sampletown",state:"OH",zip:"43000"}
+      },
+      court:{state:"OH",county:"Wood",name:"Wood County Court of Common Pleas",
+        case_number:"TEST-2026-001",judge_name:"Sample Judge"},
+      charges:[
+        {charge_name:"Test charge A",charge_code:"0000.00",level:"M1",disposition_date:"2020-05-01"},
+        {charge_name:"Test charge B",charge_code:"0000.01",level:"M2",disposition_date:"2020-05-01"},
+        {charge_name:"Test charge C",charge_code:"0000.02",level:"M3",disposition_date:"2020-05-01"},
+        {charge_name:"Test charge D",charge_code:"0000.03",level:"M4",disposition_date:"2020-05-01"}
+      ],
+      generated:{current_date:"2026-11-07"},
+      eligibility:{is_eligible:false}
+    };
+    function refreshPipelineStatus(note="") {
+      loadCandidatePdfBtn.disabled=!(activeCandidate?.pdf?.localPath);
+      downloadCandidateBtn.disabled=!activeCandidate || !pdfDoc ||
+        activeCandidate.pdf.sha256!==currentPdfSha256;
+      const matched=Boolean(activeCandidate && currentPdfSha256 &&
+        activeCandidate.pdf.sha256===currentPdfSha256);
+      previewFieldValuesBtn.disabled=!matched || !mappings.length;
+      downloadSyntheticPdfBtn.disabled=!matched || !mappings.length;
+      if(!activeCandidate) {
+        candidateStatus.textContent=note|| (currentPdfSha256
+          ? "PDF fingerprint "+currentPdfSha256.slice(0,16)+"… — create a draft form manifest or import a crawler candidate."
+          : "Upload the PDF or import a crawler candidate to begin.");
+        return;
+      }
+      const r=pipeline.validateCandidate(activeCandidate);
+      candidateStatus.textContent=(note?note+"\n":"")+
+        "Candidate: "+activeCandidate.id+"\n"+
+        "Court: "+activeCandidate.jurisdiction.state+" / "+
+          activeCandidate.jurisdiction.county+" / "+activeCandidate.jurisdiction.courtType+"\n"+
+        "Source: "+activeCandidate.source.url+"\n"+
+        "Review: "+activeCandidate.review.status+"; mapping: "+activeCandidate.mapping.status+"\n"+
+        (matched?"PDF SHA-256 verified against manifest."
+          : "PDF is not loaded or SHA-256 differs from manifest: field plan blocked.")+
+        (!r.ok?"\nManifest errors: "+r.errors.join("; "):"");
+    }
+    async function importCandidateFile(file){
+      if(!file)return;
+      if(file.size>1024*1024)throw new Error("Candidate JSON maximum is 1 MB");
+      const parsed=JSON.parse(await file.text());
+      const validation=pipeline.validateCandidate(parsed);
+      if(!validation.ok)throw new Error(validation.errors.join("; "));
+      activeCandidate=parsed;
+      lastSyntheticPlan=null;
+      candidateState.value=parsed.jurisdiction.state;
+      candidateCounty.value=parsed.jurisdiction.county;
+      candidateCourtType.value=parsed.jurisdiction.courtType;
+      candidateFormType.value=parsed.form.type;
+      candidateSourceUrl.value=parsed.source.url;
+      refreshPipelineStatus("Scraper manifest imported. Verify the original PDF before applying mappings.");
+    }
+    function inferLocalPath(){
+      if(fileStatus.textContent==="wood-county-2953-33-nonconviction.pdf" ||
+          fileStatus.textContent==="application-for-sealing-2953-33-dismissal.pdf")
+        return "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf";
+      return "";
+    }
+    function makeDraftCandidate(){
+      if(!pdfDoc||!currentPdfSha256)throw new Error("Load a PDF first");
+      const src=candidateSourceUrl.value.trim();
+      const old=activeCandidate;
+      activeCandidate=pipeline.draftCandidate({
+        state:candidateState.value.trim().toUpperCase(),county:candidateCounty.value.trim(),
+        courtType:candidateCourtType.value.trim(),courtName:old?.jurisdiction?.courtName||"Court name pending verification",
+        formType:candidateFormType.value,
+        title:old?.form?.title || fileStatus.textContent,
+        sourceUrl:src,sourcePageUrl:old?.source?.pageUrl||src,
+        pdfPath:inferLocalPath(),
+        sha256:currentPdfSha256,bytes:currentPdfBytes.length,
+        pageCount:pdfDoc.numPages,discoveredAt:new Date().toISOString(),
+        suggestions:suggestions.map(({id,checked,...values})=>values)
+      });
+      lastSyntheticPlan=null;
+      refreshPipelineStatus("Created review-only candidate bound to this exact PDF.");
+      return activeCandidate;
+    }
+    function downloadJsonFile(name,payload){
+      const blob=new Blob([JSON.stringify(payload,null,2)+"\n"],{type:"application/json"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");a.href=url;a.download=name;
+      document.body.append(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1500);
+    }
+    function downloadDraftManifest(){
+      if(!activeCandidate||activeCandidate.pdf.sha256!==currentPdfSha256)
+        throw new Error("Verified source PDF is required");
+      const validated=pipeline.validateMapping(mappings,activeCandidate.pdf.pageCount);
+      if(!validated.ok)throw new Error(validated.errors.join("; "));
+      const draft=JSON.parse(JSON.stringify(activeCandidate));
+      draft.mapping={
+        status:"draft",approvedForPdfSha256:null,
+        profile:activeCandidate.mapping.profile||"manual-assisted",
+        fields:mappings.map(({id,name,type,page,x,y,width,height,placeholder,fontSize})=>({
+          id,name,type,page,x,y,width,height,
+          ...(placeholder?{placeholder}:{}),...(fontSize?{fontSize}:{})
+        })),
+        suggestions:activeCandidate.mapping.suggestions||[]
+      };
+      draft.review={status:"pending_review",sourceVerified:false,mappingApproved:false,
+        legalRoutingApproved:false,reviewedAt:null,reviewer:null};
+      draft.active=false;
+      downloadJsonFile("recordpathai-form-"+currentPdfSha256.slice(0,12)+"-review.json",draft);
+      refreshPipelineStatus("Review bundle downloaded. Source, mapping and legal routing are NOT approved.");
+    }
+    function syntheticData(){
+      if(syntheticDataInput.value.length>30000)
+        throw new Error("Synthetic JSON exceeds 30KB limit");
+      const parsed=JSON.parse(syntheticDataInput.value);
+      if(parsed?.meta?.synthetic!==true)
+        throw new Error("Only synthetic QA records can be used in the browser preview");
+      return parsed;
+    }
+    function planSynthetic(){
+      if(!activeCandidate)throw new Error("Import or create a manifest first");
+      const plan=pipeline.buildFillPlan({
+        manifest:activeCandidate,mappings,caseData:syntheticData(),
+        currentPdfSha256,mode:"draft"
+      });
+      lastSyntheticPlan=plan;
+      pipelineResults.replaceChildren();
+      const table=document.createElement("table");
+      const head=document.createElement("tr");
+      for(const label of ["Page","Canonical field","Synthetic value / state"]){
+        const th=document.createElement("th");th.textContent=label;head.append(th);
+      }
+      table.append(head);
+      for(const f of plan.fields){
+        const tr=document.createElement("tr");
+        for(const value of [String(f.page),f.name,
+          f.state==="prefilled"?String(f.value):f.state]){
+          const td=document.createElement("td");td.textContent=value;tr.append(td);
+        }
+        table.append(tr);
+      }
+      pipelineResults.append(table);
+      refreshPipelineStatus("Synthetic prefill prepared: "+
+        plan.fields.filter(x=>x.state==="prefilled").length+" values; "+
+        plan.missing.length+" missing; "+plan.signatures.length+
+        " signature placeholders reserved for manual completion.");
+      return plan;
+    }
+    async function createSyntheticPreviewPdf(){
+      // Always rebuild from the latest box placements and synthetic data.
+      planSynthetic();
+      if(!window.PDFLib)throw new Error("Local PDF renderer library unavailable");
+      const {PDFDocument,StandardFonts,rgb}=window.PDFLib;
+      const doc=await PDFDocument.load(currentPdfBytes);
+      const font=await doc.embedFont(StandardFonts.Helvetica);
+      const pages=doc.getPages();
+      for(const page of pages){
+        page.drawText("SYNTHETIC DRAFT - NOT FOR COURT FILING",{
+          x:30,y:Math.max(20,page.getHeight()-25),size:13,font,
+          color:rgb(.75,.16,.13),opacity:.75
+        });
+      }
+      for(const f of lastSyntheticPlan.fields){
+        if(f.state!=="prefilled"||f.type==="signature")continue;
+        const page=pages[Number(f.page)-1];if(!page)continue;
+        const x=f.x/BASE_SCALE;
+        const height=f.height/BASE_SCALE;
+        const y=page.getHeight()-(f.y/BASE_SCALE)-Math.max(8,height*.75);
+        if(y<0||y>page.getHeight()||x<0||x>page.getWidth())continue;
+        let value=typeof f.value==="boolean"?(f.value?"X":""):String(f.value||"");
+        const size=Math.max(6,Math.min(10,height*.65));
+        const available=Math.max(5,f.width/BASE_SCALE-4);
+        while(value&&font.widthOfTextAtSize(value,size)>available)value=value.slice(0,-1);
+        if(value)page.drawText(value,{x,y,size,font,color:rgb(.06,.20,.45)});
+      }
+      const output=await doc.save();
+      const blob=new Blob([output],{type:"application/pdf"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;a.download="RecordPathAI-SYNTHETIC-DO-NOT-FILE.pdf";
+      document.body.append(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1500);
+      refreshPipelineStatus("Synthetic sample PDF created with a DRAFT watermark; not validated for filing.");
+    }
+    candidateManifestUpload.addEventListener("change",async(e)=>{
+      try{await importCandidateFile(e.target.files?.[0]);}
+      catch(error){refreshPipelineStatus("Cannot import candidate: "+String(error.message));}
+    });
+    loadCandidatePdfBtn.addEventListener("click",async()=>{
+      try{
+        const rel=activeCandidate?.pdf?.localPath||"";
+        if(!/^assets\/forms\/[a-zA-Z0-9/_-]+\.pdf$/.test(rel))
+          throw new Error("Candidate has no safe local PDF path; upload the form manually");
+        const response=await fetch("./"+rel,{cache:"no-store"});
+        if(!response.ok)throw new Error("PDF asset unavailable; upload the source PDF manually");
+        const blob=await response.blob();
+        if(blob.size>12*1024*1024)throw new Error("Oversized PDF");
+        await loadPdfFromFile(new File([blob],rel.split("/").at(-1),{type:"application/pdf"}));
+        if(activeCandidate.pdf.sha256!==currentPdfSha256)
+          throw new Error("Source has changed: mapping locked pending new review");
+      }catch(error){refreshPipelineStatus(String(error.message));}
+    });
+    createDraftCandidateBtn.addEventListener("click",()=>{
+      try{makeDraftCandidate();}catch(error){refreshPipelineStatus("Cannot create manifest: "+String(error.message));}
+    });
+    downloadCandidateBtn.addEventListener("click",()=>{
+      try{downloadDraftManifest();}catch(error){refreshPipelineStatus("Cannot export: "+String(error.message));}
+    });
+    showExampleBtn.addEventListener("click",()=>{
+      syntheticDataInput.value=JSON.stringify(syntheticExample,null,2);
+      lastSyntheticPlan=null;refreshPipelineStatus("Synthetic record loaded. No real court records used.");
+    });
+    previewFieldValuesBtn.addEventListener("click",()=>{
+      try{planSynthetic();}catch(error){refreshPipelineStatus("Prefill unavailable: "+String(error.message));}
+    });
+    downloadSyntheticPdfBtn.addEventListener("click",async()=>{
+      try{await createSyntheticPreviewPdf();}catch(error){refreshPipelineStatus("PDF draft failed: "+String(error.message));}
+    });
+
+    window.addEventListener("keydown", async (e) => {
+      if (e.key === "Delete") {
+        deleteSelectedField();
+      }
+
+      if (e.key === "Escape") {
+        clearSelectedField();
+      }
+
+      if (e.key === "ArrowLeft" && pdfDoc && currentPage > 1) {
+        currentPage -= 1;
+        clearSelectedField();
+        await renderPage(currentPage);
+      }
+
+      if (e.key === "ArrowRight" && pdfDoc && currentPage < pdfDoc.numPages) {
+        currentPage += 1;
+        clearSelectedField();
+        await renderPage(currentPage);
+      }
+    });
+  </script>
+  <!-- Mapper intentionally runs locally without login, private court data, or payment scripts. -->
+</body>
+</html>
