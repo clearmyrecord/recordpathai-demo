@@ -976,7 +976,7 @@
 
       const reviewNow = window.RecordPathFormRequirements?.assess?.(RecordPathDataBridge.loadPacketData());
       if (window.RecordPathWorkflow && (fullName || email) && caseState &&
-          (reviewNow?.screeningComplete === true)) {
+          (reviewNow && reviewNow.missing.length === 0)) {
         RecordPathWorkflow.markEligibilityComplete({ eligibilityCompletedAt: new Date().toISOString() });
         RecordPathWorkflow.renderProgress("eligibility");
         RecordPathWorkflow.decorateNavigation();
