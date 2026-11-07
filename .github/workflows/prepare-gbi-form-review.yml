@@ -1,0 +1,38 @@
+name: Prepare Georgia pre-2013 GBI form mapping review manifest
+on:
+  push:
+    branches:
+      - feature/wave1-ga-form-candidate-2026-11-07
+    paths:
+      - .github/workflows/prepare-gbi-form-review.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install locked PDF parsing dependencies
+        run: npm ci --ignore-scripts
+      - name: Validate source and prepare review-only manifest
+        run: |
+          set -euo pipefail
+          test -f assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf
+          node tools/prepare-form-candidates.mjs --state=GA --limit=25 --write
+          test "$(find admin/form-candidates -type f -name 'GA:*' | wc -l)" -ge 1 ||             test "$(find admin/form-candidates -type f -iname 'ga:*' | wc -l)" -ge 1
+      - name: Commit draft, not an active template
+        run: |
+          set -euo pipefail
+          git config user.name 'RecordPathAI Mapper'
+          git config user.email 'actions@users.noreply.github.com'
+          git add admin/form-candidates/
+          if ! git diff --cached --quiet; then
+            git commit -m 'Prepare official Georgia pre-2013 GBI form mapping review manifest'
+            git push origin HEAD:feature/wave1-ga-form-candidate-2026-11-07
+          fi
