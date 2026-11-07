@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {validateOhioRoster,selectOhioCounties,readOhioLedger,mergeOhioResearch,
-  cleanHttps,coverage,OFFICIAL_COURT_DIRECTORY} from "./ohio-docket-agent-core.mjs";
+  cleanHttps,coverage,OFFICIAL_COURT_DIRECTORY,RESEARCH_PHASES} from "./ohio-docket-agent-core.mjs";
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const args=Object.fromEntries(process.argv.slice(2).filter(x=>/^--[^=]+=/.test(x)).map(x=>{
   const k=x.indexOf("=");return [x.slice(2,k),x.slice(k+1)];
@@ -58,14 +58,20 @@ async function search(query){
   return Array.isArray(body.organic_results)?body.organic_results.slice(0,10):[];
 }
 for(const county of enabled?selected:[]){
-  const phrases=[
-    county.county+" County Ohio clerk of courts criminal public case docket official online search",
-    county.county+" County Ohio common pleas court public records case search clerk"
-  ];
-  const urls=new Map();let completed=0;
-  for(const phrase of phrases.slice(0,queries)){
+  const phraseByPhase={
+    common_pleas:county.county+" County Ohio Common Pleas General Division felony criminal clerk of courts official docket search",
+    municipal:county.county+" County Ohio municipal courts criminal public docket case search official",
+    county_courts:county.county+" County Ohio county courts criminal docket public case lookup official",
+    other_criminal_courts:county.county+" County Ohio list of courts hearing criminal cases including separate municipal and mayor's courts official"
+  };
+  const completedPhases=new Set(ledger.counties[county.slug]?.researchPhasesCompleted||[]);
+  const remainingPhases=RESEARCH_PHASES.filter(phase=>!completedPhases.has(phase));
+  const phases=(remainingPhases.length?remainingPhases:RESEARCH_PHASES).slice(0,queries);
+  const urls=new Map();let completed=0,successfulPhases=[];
+  for(const phase of phases){
+    const phrase=phraseByPhase[phase];
     try{
-      const searchResults=await search(phrase);completed++;output.searchRequests++;
+      const searchResults=await search(phrase);completed++;successfulPhases.push(phase);output.searchRequests++;
       for(const item of searchResults){
         const title=String(item.title||"").slice(0,180);
         let url;try{url=cleanHttps(item.link);}catch{continue;}
@@ -91,7 +97,8 @@ for(const county of enabled?selected:[]){
   output.candidates.push(...candidates);
   output.attempts.push({county:county.county,slug:county.slug,
     status:candidates.length?"candidate_found":"searched_no_candidate",
-    searchedAt:new Date().toISOString(),searches:completed});
+    searchedAt:new Date().toISOString(),searches:completed,
+    researchPhases:successfulPhases});
 }
 await fs.mkdir(path.dirname(out),{recursive:true});
 await fs.writeFile(out,JSON.stringify(output,null,2)+"\n");
