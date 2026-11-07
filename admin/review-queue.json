@@ -416,5 +416,26 @@
       "keyword:2953.32",
       "keyword:conviction"
     ]
+  },
+  {
+    "state": "GA",
+    "county": "Statewide",
+    "countySlug": "statewide",
+    "courtName": "GBI / arresting agency",
+    "courtType": "arrest-agency",
+    "formType": "record-restriction",
+    "formTitle": "Request to Restrict Arrest Record — arrests prior to July 1, 2013",
+    "sourceUrl": "https://gbi.georgia.gov/document/publication/request-restrict-arrest-record-instructions-and-request-form/download",
+    "sourcePageUrl": "https://gbi.georgia.gov/services/georgia-criminal-history-record-restrictions",
+    "localPath": "assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf",
+    "pdfAccess": "downloaded_from_current_official_gbi_source",
+    "status": "pending_review",
+    "mapped": false,
+    "active": false,
+    "requiresMapping": true,
+    "jurisdictionRestriction": "Arrests occurring before 2013-07-01 only",
+    "completionRouting": "Section One applicant; Section Two arresting agency; Section Three prosecutor",
+    "privacyNotice": "Contains SSN/race/sex fields; these must not be collected through public browser local-storage prompts",
+    "discoveredAt": "2026-11-07T00:00:00Z"
   }
 ]

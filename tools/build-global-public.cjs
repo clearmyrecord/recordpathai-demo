@@ -22,7 +22,8 @@ const files=[
   "js/form-pipeline-core.js",
   // Pure client-side, 15-minute session-only importer; no real records embedded.
   "js/wood-county-record-prefill.js",
-  "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf"
+  "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf",
+  "assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf"
 ];
 for(const file of files){
   if(!fs.existsSync(path.join(root,file)))throw new Error("Missing public asset: "+file);

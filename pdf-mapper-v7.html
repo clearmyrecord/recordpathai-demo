@@ -518,6 +518,7 @@
           <h3 id="autoMapTitle">Smart field suggestions</h3>
           <p class="muted" style="margin:0">Offline PDF text and layout detection. Suggestions are never submitted, charged, or exported until you review them.</p>
           <button type="button" id="loadWoodPdfBtn" class="btn btn-secondary">Load Wood County § 2953.33 PDF</button>
+          <button type="button" id="loadGeorgiaPdfBtn" class="btn btn-secondary">Load Georgia pre-2013 GBI form</button>
           <button type="button" id="scanPdfBtn" class="btn btn-primary" disabled>Scan PDF for fields</button>
           <div class="auto-map-summary" id="autoMapStatus" role="status" aria-live="polite">Load a PDF to scan it automatically.</div>
           <div class="btn-row">
@@ -585,6 +586,7 @@
               <option value="sealing-conviction">Sealing: conviction</option>
               <option value="sealing-nonconviction">Other nonconviction</option>
               <option value="expungement">Expungement</option>
+              <option value="record-restriction">Georgia record restriction (agency)</option>
               <option value="unknown">Unknown / needs classification</option>
             </select>
           </div>
@@ -768,6 +770,7 @@
     const downloadSyntheticPdfBtn = document.getElementById("downloadSyntheticPdfBtn");
     const pipelineResults = document.getElementById("pipelineResults");
     const loadWoodPdfBtn = document.getElementById("loadWoodPdfBtn");
+    const loadGeorgiaPdfBtn = document.getElementById("loadGeorgiaPdfBtn");
     const scanPdfBtn = document.getElementById("scanPdfBtn");
     const autoMapStatus = document.getElementById("autoMapStatus");
     const autoMapSuggestions = document.getElementById("autoMapSuggestions");
@@ -839,6 +842,7 @@
     let lastSyntheticPlan = null;
     const BASE_SCALE = window.RecordPathPdfAutoMap?.BASE_SCALE || 1.25;
     const WOOD_PDF_ASSET = "./assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf";
+    const GA_PRE2013_PDF_ASSET = "./assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf";
     let baseViewport = { width: 765, height: 990 };
     let suggestions = [];
     let pdfGeneration = 0;
@@ -1120,6 +1124,8 @@
       pdfDoc = nextDoc;
       currentPdfSha256=sha256;
       currentPdfBytes=safeBytes;
+      if(activeCandidate&&activeCandidate.pdf.sha256!==sha256)activeCandidate=null;
+      lastSyntheticPlan=null;
       currentPage = 1;
       // Never apply old form's suggestions to a newly loaded document.
       suggestions = [];
@@ -1746,6 +1752,24 @@
         autoMapStatus.textContent="Could not load Wood County asset: "+String(error?.message||error);
       } finally {loadWoodPdfBtn.disabled=false;}
     }
+    async function loadGeorgiaPdf(){
+      loadGeorgiaPdfBtn.disabled=true;
+      try{
+        const response=await fetch(GA_PRE2013_PDF_ASSET,{cache:"no-store"});
+        if(!response.ok)throw new Error("Official GA PDF not available ("+response.status+")");
+        const blob=await response.blob();
+        if(blob.size<10000||blob.size>2000000)throw new Error("Unexpected GA PDF size");
+        await loadPdfFromFile(new File([blob],"gbi-restrict-arrest-prior-2013.pdf",{type:"application/pdf"}));
+        candidateState.value="GA";
+        candidateCounty.value="Statewide";
+        candidateCourtType.value="arrest-agency";
+        candidateFormType.value="record-restriction";
+        candidateSourceUrl.value="https://gbi.georgia.gov/document/publication/request-restrict-arrest-record-instructions-and-request-form/download";
+        autoMapStatus.textContent+=" GBI applicant Section One only. This form is for arrests before 2013-07-01; agency and prosecutor sections are excluded. No automatic SSN or signature entry.";
+      }catch(error){autoMapStatus.textContent="GA form load failed: "+String(error?.message||error);}
+      finally{loadGeorgiaPdfBtn.disabled=false;}
+    }
+    loadGeorgiaPdfBtn.addEventListener("click",loadGeorgiaPdf);
     loadWoodPdfBtn.addEventListener("click",loadWoodPdf);
     scanPdfBtn.addEventListener("click",()=>scanPdfForSuggestions());
     applyHighBtn.addEventListener("click",()=>applySuggestions(true));
@@ -1754,9 +1778,9 @@
       suggestions=[];autoMapStatus.textContent="Suggestions cleared; any applied mappings are preserved.";
       renderSuggestionControls();renderOverlay();
     });
-    if(new URLSearchParams(window.location.search).get("form")==="wood-nonconviction"){
-      loadWoodPdf();
-    }
+    const requestedForm=new URLSearchParams(window.location.search).get("form");
+    if(requestedForm==="wood-nonconviction")loadWoodPdf();
+    else if(requestedForm==="ga-pre2013")loadGeorgiaPdf();
 
 
     const syntheticExample = {
@@ -1821,6 +1845,8 @@
       if(fileStatus.textContent==="wood-county-2953-33-nonconviction.pdf" ||
           fileStatus.textContent==="application-for-sealing-2953-33-dismissal.pdf")
         return "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf";
+      if(fileStatus.textContent==="gbi-restrict-arrest-prior-2013.pdf")
+        return "assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf";
       return "";
     }
     function makeDraftCandidate(){
@@ -1968,7 +1994,13 @@
       try{downloadDraftManifest();}catch(error){refreshPipelineStatus("Cannot export: "+String(error.message));}
     });
     showExampleBtn.addEventListener("click",()=>{
-      syntheticDataInput.value=JSON.stringify(syntheticExample,null,2);
+      const example=candidateState.value==="GA"
+        ? {meta:{synthetic:true,source:"RecordPathAI fabricated GA pre-2013 sample"},
+          petitioner:{full_name:"Alex Sample",dob:"1980-06-05",phone:"555-0100",
+            email:"alex.sample@example.test",address:{line1:"123 Example Street",city:"Sampletown",state:"GA",zip:"30000"}},
+          charges:[{arrest_date:"2012-05-10",arresting_agency:"Synthetic Agency",charge_name:"Synthetic dismissed charge"}]}
+        : syntheticExample;
+      syntheticDataInput.value=JSON.stringify(example,null,2);
       lastSyntheticPlan=null;refreshPipelineStatus("Synthetic record loaded. No real court records used.");
     });
     previewFieldValuesBtn.addEventListener("click",()=>{
