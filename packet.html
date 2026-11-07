@@ -1712,18 +1712,15 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (response.ok) base = await response.json();
         } catch {}
 
-        try {
-          const local = JSON.parse(localStorage.getItem(TEMPLATE_REGISTRY_STORAGE_KEY) || '[]');
-          if (Array.isArray(local) && local.length) return local;
-        } catch {}
-
-        return base;
+        // The checked-in server template registry is the only trusted source.
+        // Browser localStorage must never activate an unreviewed court form.
+        return Array.isArray(base) ? base.filter(entry=>entry&&entry.status==="active") : [];
       }
 
       function selectTemplateForPacket(data, registry) {
         const state = normalizeState(data?.court?.state);
         const county = safe(data?.court?.county).replace(/ county$/i, '').toLowerCase();
-        const courtType = deriveCourtType(data?.court?.name);
+        const courtType = safe(data?.court?.court_type);
         const screen = window.RecordPathFormRequirements;
         const scope = screen?.requirements(data)?.scope;
         const classification = screen?.classify(data);
@@ -2561,9 +2558,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       async function ensureWave1FormReady(data) {
         const helper = window.RecordPathFormRequirements;
-        if(!helper)return true;
+        if(!helper)return showPrerequisiteErrors(
+          ["The form eligibility verification module could not load. Refresh before payment."],"checkout");
         const base=helper.requirements(data);
-        if(!["wave1","pilot","preparatory"].includes(base.scope))return true;
+        if(!["wave1","pilot","preparatory"].includes(base.scope))
+          return showPrerequisiteErrors(
+            ["This jurisdiction has no verified form-preparation workflow yet. No payment will be collected."],"checkout");
         if(!base.classification.candidateFormType || base.classification.reviewReasons.length){
           return showPrerequisiteErrors(
             ["Verify all charge outcomes, dates, related proceedings, and charge count in Record Details."],
