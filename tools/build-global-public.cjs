@@ -13,13 +13,26 @@ const files=[
   "js/recordpath-home.js",
   "js/pilot-demo.js",
   "resources/entrepreneurship.html",
-  "resources/resources.js"
+  "resources/resources.js",
+  // Public-only, local-browser document mapping tool and blank official court form.
+  // No court record exports, private PDFs, API credentials or user uploads.
+  "pdf-mapper-v6.html",
+  "js/pdf-auto-map.js",
+  "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf"
 ];
 for(const file of files){
   if(!fs.existsSync(path.join(root,file)))throw new Error("Missing public asset: "+file);
   const destination=path.join(out,file);
   fs.mkdirSync(path.dirname(destination),{recursive:true});
+  // Keep the official blank PDF byte-for-byte intact (never UTF-8 decode it).
+  if(file.toLowerCase().endsWith(".pdf")){
+    fs.copyFileSync(path.join(root,file),destination);
+    continue;
+  }
   let content=fs.readFileSync(path.join(root,file),"utf8");
+  if(file==="pdf-mapper-v6.html"){
+    content=content.replace("</head>",'<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head>');
+  }
   if(file==="index.html"){
     // Public preview intentionally hands all personalized/legal/payment flows to the established app.
     content=content.replaceAll('href="eligibility.html"','href="https://recordpathai.com/eligibility.html"');
