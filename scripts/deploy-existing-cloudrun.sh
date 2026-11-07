@@ -22,7 +22,7 @@ echo "Checking existing service $SERVICE in $PROJECT/$REGION..."
 gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format=json >/tmp/recordpathai-cloudrun-before-$$.json || {
   echo "Target service does not exist or this identity is not authorized. Nothing deployed." >&2; exit 3;
 }
-BEFORE="/tmp/recordpathai-cloudrun-before-$.json"
+BEFORE="/tmp/recordpathai-cloudrun-before-$$.json"
 SMOKE_DIR="$(mktemp -d)"
 trap 'rm -f "$BEFORE"; rm -rf "$SMOKE_DIR"' EXIT
 
