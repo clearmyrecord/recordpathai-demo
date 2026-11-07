@@ -1,0 +1,20 @@
+# gcloud --source uploads should never include generated OIDC credentials.
+.git/
+.github/
+node_modules/
+**/node_modules/
+.env
+.env.*
+gha-creds-*.json
+**/gha-creds-*.json
+*.pem
+*.key
+*.p12
+*.pfx
+.gcloud/
+tests/
+coverage/
+.wave1-agent-input/
+.wave1-agent-output/
+npm-debug.log*
+.DS_Store
