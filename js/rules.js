@@ -134,225 +134,35 @@
   }
 
   function evaluateOhio(record) {
-    const reasons = [];
-    const outcome = normalizeOutcome(record.outcome);
-    const degree = normalizeDegree(record.degree);
-    const dischargeDate = record.dischargeDate || record.dispositionDate;
-    const dischargeElapsed = elapsedSince(dischargeDate);
-
-    if (record.pendingCharges) {
-      addReason(reasons, "Ohio blocks sealing or expungement while any criminal charge is still pending.");
+    // The legacy calculator previously treated disposition as final discharge
+    // and labeled Ohio cases 'likely eligible' without a docket or sentence check.
+    // Never use a single flat record to authorize a filing or $50 checkout.
+    const helper=window.RecordPathOhioReview;
+    if(!helper){
       return buildResult({
-        eligible: false,
-        status: "not_eligible_yet",
-        state: "OH",
-        reliefType: "unknown",
-        reasons
+        eligible:false,status:"needs_review",state:"OH",
+        reliefType:"court_review_required",manualReview:true,
+        reasons:["Ohio review rules unavailable. The judgment date is not verified final discharge."]
       });
     }
-
-    if (outcome === "no bill") {
-      const eligibleDate = addToDate(record.dispositionDate || record.dischargeDate, 2, 0);
-      const eligible = dischargeElapsed.years >= 2;
-
-      addReason(
-        reasons,
-        eligible
-          ? "Ohio no-bill waiting period appears satisfied."
-          : "Ohio no-bill cases generally require a 2-year wait before filing."
-      );
-
-      return buildResult({
-        eligible,
-        status: eligible ? "likely_eligible" : "not_eligible_yet",
-        state: "OH",
-        reliefType: "seal_or_expunge_non_conviction",
-        reasons,
-        waitingPeriod: "2 years from no-bill date",
-        earliestEligibleDate: eligibleDate
-      });
-    }
-
-    if (["dismissed", "dismissal", "not guilty", "acquitted", "pardon", "intervention in lieu"].includes(outcome)) {
-      addReason(reasons, "Ohio non-conviction path appears available now, subject to court-specific review and exclusions.");
-
-      return buildResult({
-        eligible: true,
-        status: "likely_eligible",
-        state: "OH",
-        reliefType: "seal_or_expunge_non_conviction",
-        reasons,
-        earliestEligibleDate: record.dispositionDate || record.dischargeDate || null
-      });
-    }
-
-    if (outcome !== "convicted" && outcome !== "guilty") {
-      addReason(reasons, "Outcome not recognized. Manual review needed.");
-      return buildResult({
-        eligible: false,
-        status: "needs_review",
-        state: "OH",
-        reliefType: "unknown",
-        reasons,
-        manualReview: true
-      });
-    }
-
-    if (record.isTraffic) {
-      addReason(reasons, "Ohio traffic convictions are excluded from standard sealing or expungement.");
-      return buildResult({
-        eligible: false,
-        status: "ineligible",
-        state: "OH",
-        reliefType: "conviction",
-        reasons
-      });
-    }
-
-    if (record.isTheftInOffice) {
-      addReason(reasons, "Ohio theft-in-office convictions are excluded from standard sealing or expungement.");
-      return buildResult({
-        eligible: false,
-        status: "ineligible",
-        state: "OH",
-        reliefType: "conviction",
-        reasons
-      });
-    }
-
-    if (record.isFirstOrSecondDegreeFelony) {
-      addReason(reasons, "Ohio 1st- and 2nd-degree felonies are excluded from standard sealing or expungement.");
-      return buildResult({
-        eligible: false,
-        status: "ineligible",
-        state: "OH",
-        reliefType: "conviction",
-        reasons
-      });
-    }
-
-    if (record.isSexOffenseRegistry) {
-      addReason(reasons, "Ohio registry-related sexually oriented offenses are excluded from standard sealing or expungement.");
-      return buildResult({
-        eligible: false,
-        status: "ineligible",
-        state: "OH",
-        reliefType: "conviction",
-        reasons
-      });
-    }
-
-    if (record.victimUnder13) {
-      addReason(reasons, "Ohio offenses with a victim under 13 are generally excluded.");
-      return buildResult({
-        eligible: false,
-        status: "ineligible",
-        state: "OH",
-        reliefType: "conviction",
-        reasons
-      });
-    }
-
-    if (record.isFelonyViolenceNonSex) {
-      addReason(reasons, "Ohio felony offenses of violence that are not sexually oriented offenses are generally excluded.");
-      return buildResult({
-        eligible: false,
-        status: "ineligible",
-        state: "OH",
-        reliefType: "conviction",
-        reasons
-      });
-    }
-
-    if (record.isDomesticViolenceConviction && !record.dvMisdemeanorSealable) {
-      addReason(reasons, "Ohio domestic violence convictions are generally excluded except limited lower-level sealing situations.");
-      return buildResult({
-        eligible: false,
-        status: "ineligible",
-        state: "OH",
-        reliefType: "conviction",
-        reasons
-      });
-    }
-
-    let waitYears = 0;
-    let waitMonths = 0;
-    let waitingPeriodLabel = "";
-    let reliefType = "conviction";
-
-    if (degree === "MM") {
-      waitMonths = 6;
-      waitingPeriodLabel = "6 months after discharge";
-    } else if (degree === "M") {
-      waitYears = 1;
-      waitingPeriodLabel = "1 year after discharge";
-    } else if (degree === "F4" || degree === "F5") {
-      if ((record.reliefType || "").toLowerCase() === "expungement") {
-        waitYears = 11;
-        waitingPeriodLabel = "11 years after discharge";
-        reliefType = "expungement";
-      } else {
-        waitYears = 1;
-        waitingPeriodLabel = "1 year after discharge";
-        reliefType = "sealing";
-      }
-    } else if (degree === "F3") {
-      if (Number(record.totalFelonies || 0) > 2) {
-        addReason(reasons, "Ohio third-degree felony count appears to exceed standard eligibility.");
-        return buildResult({
-          eligible: false,
-          status: "ineligible",
-          state: "OH",
-          reliefType: "conviction",
-          reasons
-        });
-      }
-
-      if ((record.reliefType || "").toLowerCase() === "expungement") {
-        waitYears = 13;
-        waitingPeriodLabel = "13 years after discharge";
-        reliefType = "expungement";
-      } else {
-        waitYears = 3;
-        waitingPeriodLabel = "3 years after discharge";
-        reliefType = "sealing";
-      }
-
-      if (Number(record.totalF3 || 0) >= 1) {
-        addReason(reasons, "Ohio third-degree felony cases may require clumping analysis or manual review.");
-      }
-    } else {
-      addReason(reasons, "Degree not mapped for Ohio conviction analysis.");
-      return buildResult({
-        eligible: false,
-        status: "needs_review",
-        state: "OH",
-        reliefType: "conviction",
-        reasons,
-        manualReview: true
-      });
-    }
-
-    const requiredMs = waitYears * YEAR_MS + waitMonths * MONTH_MS;
-    const eligible = dischargeElapsed.ms >= requiredMs;
-    const eligibleDate = addToDate(dischargeDate, waitYears, waitMonths);
-
-    addReason(
-      reasons,
-      eligible
-        ? `Ohio waiting period appears satisfied (${waitingPeriodLabel}).`
-        : `Ohio waiting period not yet satisfied (${waitingPeriodLabel}).`
-    );
-
+    const charge={
+      charge_name:record.chargeName||record.offenseName||"",
+      charge_code:record.chargeCode||record.statute||"",
+      level:record.degree||record.level||"",
+      final_disposition:record.outcome||"",
+      disposition_date:record.dispositionDate||"",
+      final_discharge_date:record.finalDischargeDate||"",
+      final_discharge_evidence_status:record.finalDischargeEvidenceStatus||"",
+      final_discharge_evidence_source:record.finalDischargeEvidenceSource||"",
+      no_bill_report_to_court_date:record.noBillReportToCourtDate||""
+    };
+    const remedy=(record.reliefType||"sealing").toLowerCase()==="expungement"?"expungement":"sealing";
+    const timing=helper.approximateTiming(charge,remedy,new Date().toISOString().slice(0,10));
     return buildResult({
-      eligible,
-      status: eligible ? "likely_eligible" : "not_eligible_yet",
-      state: "OH",
-      reliefType,
-      reasons,
-      waitingPeriod: waitingPeriodLabel,
-      earliestEligibleDate: eligibleDate,
-      manualReview: degree === "F3"
+      eligible:false,status:"needs_review",state:"OH",
+      reliefType:remedy,manualReview:true,
+      earliestEligibleDate:timing.date||null,
+      reasons:["Preliminary timing only: "+timing.status+". Official final charge, docket, sentence completion, whole-record exclusions and court review remain required. No payment or filing authorized."]
     });
   }
 
