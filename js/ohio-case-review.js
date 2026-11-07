@@ -27,10 +27,10 @@
     dismissal: new Set(["dismissed","dismissal","acquitted","not_guilty","not_guilty_finding"]),
     nobill: new Set(["no_bill","no_true_bill","not_indicted"])
   });
-  const normalize = value => String(value || "").trim().toLowerCase().replace(/[\\s-]+/g, "_");
+  const normalize = value => String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
   const has = value => typeof value === "string" && value.trim() !== "";
   function iso(value) {
-    if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return null;
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
     const date = new Date(value + "T00:00:00Z");
     if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0,10) !== value) return null;
     return value;
@@ -45,7 +45,7 @@
     return y + "-" + String(m + 1).padStart(2,"0") + "-" + String(Math.min(day,last)).padStart(2,"0");
   }
   function statute(charge) {
-    return String(charge?.charge_code || charge?.final_statute || "").match(/\\b\\d{4}\\.\\d{2,3}\\b/)?.[0] || "";
+    return String(charge?.charge_code || charge?.final_statute || "").match(/\b\d{4}\.\d{2,3}\b/)?.[0] || "";
   }
   function routeOutcome(charge) {
     const o = normalize(charge?.final_disposition || charge?.disposition);
@@ -118,7 +118,7 @@
           cissues.push("Independent proof of final sentence discharge, including supervision and fines, is missing.");
         if(["F1","F2"].includes(degree))cissues.push("F1/F2 conviction: statute exclusion under R.C. 2953.32(A)(1)(f).");
         if(code==="2921.41")cissues.push("Theft in office: excluded conviction.");
-        if(/^45(?:06|07|10|11|49)\\./.test(code))cissues.push("Traffic / motor vehicle conviction: excluded by statute.");
+        if(/^45(?:06|07|10|11|49)\./.test(code))cissues.push("Traffic / motor vehicle conviction: excluded by statute.");
         if(code==="2919.25"&&["M1","M2"].includes(degree))
           cissues.push("Domestic violence M1/M2: conviction excluded.");
         if(code==="2919.25"&&["M3","M4"].includes(degree))
