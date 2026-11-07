@@ -59,9 +59,10 @@ jobs:
           AGENT_STATE: ${{ matrix.state }}
           AGENT_LIMIT: ${{ inputs.limit || '5' }}
           AGENT_QUERIES: ${{ inputs.queries || '1' }}
+          AGENT_MODE: ${{ github.event_name == 'push' && 'preview' || 'search' }}
         run: |
           node tools/run-wave1-state-agent.mjs --state="$AGENT_STATE" \
-            --limit="$AGENT_LIMIT" --queries="$AGENT_QUERIES" --mode=search \
+            --limit="$AGENT_LIMIT" --queries="$AGENT_QUERIES" --mode="$AGENT_MODE" \
             --ledger=/tmp/wave1-progress.json --output=".wave1-agent-output/$AGENT_STATE.json"
       - uses: actions/upload-artifact@v4
         if: ${{ github.event_name == 'schedule' || github.event_name == 'push' || inputs.state == 'all' || inputs.state == matrix.state }}
