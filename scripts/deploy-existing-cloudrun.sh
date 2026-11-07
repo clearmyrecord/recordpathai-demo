@@ -22,8 +22,9 @@ echo "Checking existing service $SERVICE in $PROJECT/$REGION..."
 gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format=json >/tmp/recordpathai-cloudrun-before-$$.json || {
   echo "Target service does not exist or this identity is not authorized. Nothing deployed." >&2; exit 3;
 }
-BEFORE="/tmp/recordpathai-cloudrun-before-$$.json"
-trap 'rm -f "$BEFORE"' EXIT
+BEFORE="/tmp/recordpathai-cloudrun-before-$.json"
+SMOKE_DIR="$(mktemp -d)"
+trap 'rm -f "$BEFORE"; rm -rf "$SMOKE_DIR"' EXIT
 
 OLD_REV="$(python3 - "$BEFORE" <<'PY'
 import json,sys
@@ -39,26 +40,44 @@ echo "Deploying with existing service environment and identity settings preserve
 gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" --quiet
 
 URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format='value(status.url)')"
-if [ -z "$URL" ] || ! curl -fLsS --max-time 60 "$URL/self-search.html" | grep -qi 'Find your own court records'; then
-  echo "New guided search failed smoke check; reverting traffic to $OLD_REV" >&2
+
+# Verify the complete HTTP response before searching its contents. With
+# "set -o pipefail", piping curl into "grep -q" can make curl exit 23 (SIGPIPE)
+# as soon as grep finds the phrase, even though the website is perfectly healthy.
+# That previously caused an unnecessary production rollback of a healthy revision.
+smoke_check() {
+  local path="$1" expected="$2" label="$3"
+  local body="$SMOKE_DIR/${path//\//_}"
+  echo "Checking $label at $URL/$path..."
+  if ! curl --fail --location --silent --show-error --max-time 60 \
+    --output "$body" "$URL/$path"; then
+    echo "$label did not return a complete successful HTTP response" >&2
+    return 1
+  fi
+  if ! grep -qiF -- "$expected" "$body"; then
+    echo "$label response is missing the expected marker" >&2
+    return 1
+  fi
+}
+
+rollback_after_smoke_failure() {
+  local reason="$1"
+  echo "$reason; reverting traffic to $OLD_REV" >&2
   gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \
     --to-revisions "$OLD_REV=100" --quiet
   exit 5
+}
+
+if [ -z "$URL" ]; then
+  rollback_after_smoke_failure "Deployed service URL missing"
 fi
 
-if ! curl -fLsS --max-time 60 "$URL/pilot-demo.html" | grep -qi 'Illustrative demo'; then
-  echo "Fictional pilot page unavailable after deploy; reverting traffic to $OLD_REV" >&2
-  gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \
-    --to-revisions "$OLD_REV=100" --quiet
-  exit 5
-fi
-
-if ! curl -fLsS --max-time 60 "$URL/js/pilot-demo.js" | grep -q 'DEMO-2006-001'; then
-  echo "Fictional pilot search script unavailable after deploy; reverting traffic to $OLD_REV" >&2
-  gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \
-    --to-revisions "$OLD_REV=100" --quiet
-  exit 5
-fi
+smoke_check "self-search.html" "Find your own court records" "Guided case search" || \
+  rollback_after_smoke_failure "Guided case search failed smoke check"
+smoke_check "pilot-demo.html" "Illustrative demo" "Fictional pilot page" || \
+  rollback_after_smoke_failure "Fictional pilot page failed smoke check"
+smoke_check "js/pilot-demo.js" "DEMO-2006-001" "Fictional pilot script" || \
+  rollback_after_smoke_failure "Fictional pilot script failed smoke check"
 
 echo "Cloud Run deployment verified: $URL/self-search.html and $URL/pilot-demo.html"
 echo "Public court-record indexing remains OFF until court authorization and status review."
