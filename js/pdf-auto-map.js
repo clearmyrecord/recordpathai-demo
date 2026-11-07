@@ -115,6 +115,41 @@
     }
     return out;
   }
+  // GBI form is restricted to arrests before 2013-07-01. It is an agency
+  // record-restriction request, not a petition to a judge. Applicant Section
+  // One only may be prepared. Sections Two/Three belong to agencies and DAs.
+  function isGeorgiaPre2013(pages){
+    if(!Array.isArray(pages)||pages.length<3)return false;
+    const text=pages.map(p=>groupLines(p).map(x=>norm(x.text)).join(" ")).join(" ");
+    return text.includes("georgia bureau of investigation") &&
+      text.includes("request to restrict arrest record") &&
+      text.includes("prior to 07 01 2013");
+  }
+  const GA_PRE2013_APPLICANT_FIELDS=[
+    [2,"petitioner.full_name","text",134,287,540,22],
+    [2,"petitioner.dob","date",172,322,196,22],
+    [2,"petitioner.phone","text",211,389,144,22],
+    [2,"petitioner.email","text",399,389,279,22],
+    [2,"petitioner.address.line1","text",183,426,492,22],
+    [2,"petitioner.address.city","text",119,460,278,22],
+    [2,"petitioner.address.state","text",436,460,117,22],
+    [2,"petitioner.address.zip","text",615,460,70,22],
+    [2,"charges.0.arresting_agency","text",196,497,480,22],
+    [2,"charges.0.arrest_date","date",181,533,495,22],
+    [2,"charges.0.charge_name","text",240,564,436,23],
+    [2,"signatures.petitioner_signature_name","signature",146,798,353,22]
+  ];
+  function buildGeorgiaPre2013(pages){
+    const p=pages[1];
+    if(!p)return [];
+    const sx=(p.width||765)/765,sy=(p.height||990)/990;
+    return GA_PRE2013_APPLICANT_FIELDS.map(([page,name,type,x,y,width,height])=>
+      suggest({page,name,type,x:x*sx,y:y*sy,width:width*sx,height:height*sy,
+        confidence:type==="signature"?.64:.75,
+        reason:"GBI pre-July-2013 form applicant section only; verify this box manually.",
+        source:"ga-pre2013-layout"}));
+  }
+
   function buildAnnotations(pages) {
     const out=[];
     pages.forEach((p,idx)=>{
@@ -172,14 +207,21 @@
       return {profile:"none",suggestions:[],diagnostics:["Load a PDF first."]};
     const hasText=pages.some(p=>(p.items||[]).some(i=>String(i.str||"").trim()));
     const wood=isWoodNonconviction(pages);
-    const proposals=dedupe([...buildAnnotations(pages),...(wood?buildWood(pages):[]),...buildGeneric(pages,wood)]);
+    const georgia=isGeorgiaPre2013(pages);
+    const proposals=dedupe([
+      ...buildAnnotations(pages),
+      ...(wood?buildWood(pages):[]),
+      ...(georgia?buildGeorgiaPre2013(pages):[]),
+      ...buildGeneric(pages,wood||georgia)
+    ]);
     const diagnostics=[];
     if(!hasText && !pages.some(p=>(p.annotations||[]).length))
       diagnostics.push("No searchable text or form widgets. Scanned PDFs require OCR or manual mapping; no guesses were applied.");
     if(wood)diagnostics.push("Wood County R.C. 2953.33 layout detected. Review fields on pages 3 and 4, especially the charge table and signature.");
+    else if(georgia)diagnostics.push("Georgia pre-2013 arrest restriction detected. Only Section One applicant fields suggested; SSN and race/sex require separate secure manual completion. Sections Two/Three are for arresting agency and prosecutor. Never use for arrests on or after 2013-07-01.");
     else diagnostics.push("Generic label detection only; examine each field placement carefully.");
     diagnostics.push("All coordinates are draft suggestions in the mapper's 1.25x reference viewport.");
-    return {profile:wood?"wood-county-2953.33":"generic",suggestions:proposals,diagnostics};
+    return {profile:wood?"wood-county-2953.33":georgia?"ga-prior-2013-record-restriction":"generic",suggestions:proposals,diagnostics};
   }
-  return Object.freeze({BASE_SCALE,analyzePages,isWoodNonconviction,canonicalField,groupLines});
+  return Object.freeze({BASE_SCALE,analyzePages,isWoodNonconviction,isGeorgiaPre2013,canonicalField,groupLines});
 }));
