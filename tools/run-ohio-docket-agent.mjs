@@ -31,6 +31,14 @@ const output={
   agent:"agent-1-ohio",scope:"87 Ohio counties excluding Wood pilot",
   rosterCount:roster.length,assignedCount:assigned.length,
   queue:assigned.map(c=>({county:c.county,slug:c.slug,tier:c.tier})),
+  courtMappingTasks:selected.map(c=>({
+    county:c.county,countySlug:c.slug,
+    officialDirectory:OFFICIAL_COURT_DIRECTORY,
+    inventoryInstructions:"Identify every applicable criminal court (Common Pleas General, municipal and county courts); capture its exact official name, division, public docket URL, search inputs, results headers and case-detail fields. Keep each court and each court website separate.",
+    courtIdentitiesVerified:false,allObservedFieldsMapped:false,
+    courtSites:[],observedSearchFields:[],observedResultFields:[],observedCaseDetailFields:[],
+    outstanding:"Court-by-court official portal validation and field inspection required"
+  })),
   officialDirectory:OFFICIAL_COURT_DIRECTORY,searchEnabled:enabled,
   skippedReason:enabled?null:
     args.mode!=="search"?"preview_only":
@@ -67,7 +75,12 @@ for(const county of enabled?selected:[]){
         if(/(?:mugshot|peoplefind|backgroundcheck|beenverified|truthfinder|arrests\.org)/i.test(host))continue;
         if(!/court|clerk|case|docket|record/i.test(title+" "+url))continue;
         if(!urls.has(url))urls.set(url,{slug:county.slug,county:county.county,url,
-          title,discoveredAt:new Date().toISOString()});
+          title,discoveredAt:new Date().toISOString(),
+          courtIdentity:{officialCourtName:null,courtType:null,division:null,courtId:null,
+            reviewed:false,sourceDirectory:OFFICIAL_COURT_DIRECTORY},
+          fieldInventory:{searchInputs:[],resultColumns:[],caseDetailFields:[],docketFields:[],
+            inspected:false,allObservedFieldsMapped:false,approved:false},
+          verified:false,customerLinkApproved:false});
       }
     }catch(e){
       output.warnings=(output.warnings||[]).concat(county.slug+": "+String(e.message||e).slice(0,95));
