@@ -1,0 +1,47 @@
+name: Vendor official Wood County nonconviction PDF
+on:
+  push:
+    branches:
+      - feature/wood-county-nonconviction-packet-routing-2026-11-07
+    paths:
+      - .github/workflows/vendor-wood-nonconviction-form.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Download and inspect original official PDF
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest='assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf'
+          mkdir -p "$(dirname "$dest")"
+          curl --fail --location --retry 3 --max-time 90 --proto '=https' --tlsv1.2 \
+            'https://clerkofcourt.co.wood.oh.us/wp-content/uploads/2024/02/Application-for-Sealing-2953.33.pdf' \
+            --output "$dest"
+          test "$(wc -c < "$dest")" -ge 1500
+          test "$(wc -c < "$dest")" -le 15000000
+          head -c 4 "$dest" | grep -q '%PDF'
+          pdfinfo "$dest" | grep -q '^Pages:'
+          pdftotext -layout "$dest" - | grep -qi '2953.33'
+          pdftotext -layout "$dest" - | grep -qi 'NOT GUILTY'
+          printf 'source=https://clerkofcourt.co.wood.oh.us/wp-content/uploads/2024/02/Application-for-Sealing-2953.33.pdf\n' > /tmp/recordpath-source.txt
+          sha256sum "$dest" | tee -a /tmp/recordpath-source.txt
+          pdfinfo "$dest" | grep '^Pages:' | tee -a /tmp/recordpath-source.txt
+      - name: Commit verified PDF to source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest='assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf'
+          git config user.name 'RecordPathAI Form Import'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$dest"
+          if ! git diff --cached --quiet; then
+            git commit -m 'Vendor original official Wood County 2953.33 dismissal form PDF'
+            git push origin HEAD:feature/wood-county-nonconviction-packet-routing-2026-11-07
+          fi
