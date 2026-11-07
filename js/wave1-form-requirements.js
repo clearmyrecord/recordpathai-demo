@@ -239,43 +239,120 @@
   }
   function buildPreparationWorksheet(data,options={}){
     const report=assess(data,options),charges=canonicalCharge(data);
-    const clean=x=>String(x==null||x===""?"Not provided":x).replace(/[\r\n]+/g," ").slice(0,200);
-    const lines=["RECORDPATHAI — PRIVATE COURT-FORM PREPARATION WORKSHEET",
-      "DRAFT ONLY. NOT A COURT FORM, ELIGIBILITY DETERMINATION OR FILING AUTHORIZATION.",
-      "Date: "+new Date().toISOString().slice(0,10),"",
-      "State: "+clean(report.stateName),
-      "County: "+clean(data?.court?.county),"Court: "+clean(data?.court?.name),
-      "Court type: "+clean(data?.court?.court_type),"Case number: "+clean(data?.court?.case_number),
-      "Applicant: "+clean(data?.petitioner?.full_name),
-      "All charges confirmed: "+clean(data?.case?.all_charges_confirmed),
-      "Related proceedings: "+clean(data?.case?.proceedings_status),
-      "Potential form DISCOVERY key: "+clean(report.classification.candidateFormType),
-      "Verified court mapping: "+(report.sourceForm?.mappingStatus||"UNAVAILABLE / NOT APPROVED"),
-      "Baseline screening data complete: "+(report.screeningComplete?"Yes, subject to review":"No"),
-      "Legal eligibility: NOT DETERMINED",""];
+    const text=value=>String(value==null||value===""?"Not yet provided":value)
+      .replace(/[\r\n\t]+/g," ").slice(0,200);
+    const plain=value=>has(value)?text(value):"Not yet provided";
+    const yesNo=value=>value==="yes"?"Yes":value==="no"?"No":value==="none"?"None known":
+      value==="open"?"Yes, some are still open":"Not sure / not provided";
+    function friendlyLabel(item){
+      const key=String(item?.key||""),label=String(item?.label||"");
+      const known={
+        "petitioner.full_name":"Your full legal name",
+        "petitioner.address.line1":"Your street address",
+        "petitioner.address.line2":"Apartment or unit number",
+        "petitioner.address.city":"Your city",
+        "petitioner.address.state":"State where you live now",
+        "petitioner.address.zip":"Your ZIP code",
+        "court.state":"State where your case was filed",
+        "court.county":"County where your case was filed",
+        "court.name":"Name of the court",
+        "court.court_type":"Type of court",
+        "court.case_number":"Case number",
+        "court.judge_name":"Judge's name",
+        "petitioner.email":"Your email address",
+        "petitioner.phone":"Your phone number",
+        "case.all_charges_confirmed":"Confirmation that all charges from this case are listed",
+        "case.proceedings_status":"Whether you have any other open criminal cases"
+      };
+      if(known[key])return known[key];
+      const match=key.match(/^charges\.(\d+)\.([a-z_]+)$/);
+      if(match){
+        const names={
+          charge_name:"final charge name",charge_code:"offense code",level:"offense level",
+          final_disposition:"final court outcome",disposition_date:"date of the court's decision",
+          discharge_date:"date the full sentence was completed",original_charge_name:"original charge"
+        };
+        return "Charge "+(Number(match[1])+1)+": "+(names[match[2]]||"additional case information");
+      }
+      if(/social.security|ssn|bank|account|password|signature/i.test(key))return "";
+      return label && !/[.[\]{}]/.test(label) && !/mapped|technical|pipeline/i.test(label)
+        ? label.replace(/\bstatute\b/gi,"offense code").replace(/\bdisposition\b/gi,"court outcome")
+        : "Additional information requested by the court";
+    }
+    const state=STATE_NAMES[normalizeState(data?.court?.state)]||plain(data?.court?.state);
+    const address=data?.petitioner?.address||{};
+    const lines=[
+      "RECORDPATHAI",
+      "YOUR COURT RECORD CHECKLIST",
+      "",
+      "This checklist helps you gather the information we need to prepare your paperwork.",
+      "It is not a court application. Nothing has been filed or submitted.",
+      "",
+      "YOUR INFORMATION",
+      "Name: "+plain(data?.petitioner?.full_name),
+      "State where you currently live: "+plain(address.state),
+      "Mailing address: "+[address.line1,address.line2,address.city,address.state,address.zip].filter(has).join(", ")
+        .replace(/^$/,"Not yet provided"),
+      "",
+      "WHERE YOUR CASE WAS FILED",
+      "State: "+state,
+      "County: "+plain(data?.court?.county),
+      "Court: "+plain(data?.court?.name),
+      "Case number: "+plain(data?.court?.case_number),
+      "",
+      "YOUR COURT RECORDS",
+      "Have you listed every charge from this case? "+yesNo(data?.case?.all_charges_confirmed),
+      "Other open criminal cases? "+yesNo(data?.case?.proceedings_status),
+      ""
+    ];
+    if(!charges.length){
+      lines.push("No charges have been entered yet.","");
+    }
     charges.forEach((c,i)=>{
       lines.push("CHARGE "+(i+1),
-        "Original allegation: "+clean(c.original_charge_name||c.original_charge),
-        "Original statute: "+clean(c.original_charge_code||c.original_statute),
-        "Final charge: "+clean(c.charge_name),"Final statute: "+clean(c.charge_code),
-        "Degree: "+clean(c.level||c.degree),
-        "Final disposition: "+clean(c.final_disposition||c.disposition),
-        "Disposition date: "+clean(c.disposition_date),
-        "Verified separate final-discharge date: "+clean(c.discharge_date),
-        "Reported UNVERIFIED termination date: "+clean(c.reported_termination_date_unverified),"");
+        "Original charge, if different: "+plain(c.original_charge_name||c.original_charge),
+        "Final charge: "+plain(c.charge_name),
+        "Offense code: "+plain(c.charge_code),
+        "Offense level: "+plain(c.level||c.degree),
+        "What the court decided: "+plain(c.final_disposition||c.disposition),
+        "Date the court decided: "+plain(c.disposition_date),
+        "Date you finished your full sentence, including probation if applicable: "+plain(c.discharge_date),
+        "");
     });
-    lines.push("MISSING INFORMATION");
-    if(!report.missing.length)lines.push("No baseline gaps; court/legal review still required.");
-    report.missing.forEach(x=>lines.push("- "+x.label+" ["+x.key+"]"));
-    lines.push("","REVIEW NEEDED");
-    report.review.forEach(x=>lines.push("- "+x));
-    lines.push("","NEXT ACTIONS",
-      "1. Confirm every charge, plea amendment, outcome and judgment date against the court docket.",
-      "2. Obtain separate discharge/sentence-completion evidence for convictions.",
-      "3. Verify current state-law exclusions, waiting periods, pending cases and the approved court form.",
-      "4. Confirm any fee, signature, notarization, service and filing instructions with the clerk.",
-      "5. This document is a private worksheet; it must not be mailed or filed as an application.");
-    return lines.join("\n")+"\n";
+    const missing=[...new Set(report.missing.map(friendlyLabel).filter(Boolean))];
+    lines.push("INFORMATION STILL NEEDED");
+    if(missing.length)missing.forEach(label=>lines.push("- "+label));
+    else lines.push("You have entered the basic information. Your records still need to be checked.");
+    lines.push("","HOW TO FIND YOUR COURT RECORDS");
+    const county=String(data?.court?.county||"").trim().toLowerCase().replace(/\s+county$/,"");
+    const courtName=String(data?.court?.name||"").trim().toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+    const matchesWoodCommonPleas=[
+      "wood county court of common pleas",
+      "wood county court of common pleas general division",
+      "wood county common pleas court"
+    ].includes(courtName);
+    if(normalizeState(data?.court?.state)==="OH"&&county==="wood"&&
+        data?.court?.court_type==="court-of-common-pleas"&&matchesWoodCommonPleas){
+      lines.push("Wood County Clerk of Courts — Official Dockets Online:",
+        "https://clerkofcourt.co.wood.oh.us/169/Dockets-Online");
+    }else if(normalizeState(data?.court?.state)==="OH"){
+      lines.push("Ohio Supreme Court — Find the correct county court:",
+        "https://www.supremecourt.ohio.gov/courts/judicial-system/ohio-trial-courts/",
+        "Choose your county and court, then look for public case records on the clerk's website.");
+    }else{
+      lines.push("Contact the clerk of the court where your case was filed and ask how to view your case records.");
+    }
+    lines.push("Search using your name or case number if the court allows it.",
+      "Write down the case number, each final charge, the court's decision, and the date.",
+      "For a conviction, ask how to confirm when your sentence and probation ended.",
+      "If a record is missing or unclear, you can leave that part blank. Please do not guess.",
+      "",
+      "WHAT HAPPENS NEXT?",
+      "RecordPathAI can review the details you provide to help prepare your documents.",
+      "The court will decide whether your record qualifies for sealing or expungement.",
+      "Keep this checklist for your own records; do not file it with the court.",
+      "");
+    return lines.join("\n");
   }
   return Object.freeze({WAVE1,PILOT,PREPARATORY,STATE_NAMES,COMMON_SCREEN,
     normalizeState,normalizeOutcome,get,dateStatus,classify,relevantEntry,mappedKeys,requirements,assess,buildPreparationWorksheet,STATE_PREP_FIELDS});

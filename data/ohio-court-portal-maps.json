@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "recordpathai.ohio-court-portal-mapping.v1",
+  "notes": "Only reviewed exact-court links are customer-facing. Search fields and case-detail fields remain unknown until the real court portal is independently inspected. Never invent or infer field support.",
+  "sourceDirectory": "https://www.supremecourt.ohio.gov/courts/judicial-system/ohio-trial-courts/",
+  "lastReviewedAt": "2026-11-07",
+  "courts": [
+    {
+      "courtId": "oh-wood-common-pleas-general",
+      "state": "OH",
+      "county": "Wood",
+      "courtType": "court-of-common-pleas",
+      "division": "General",
+      "courtName": "Wood County Court of Common Pleas",
+      "approvedAliases": [
+        "Wood County Court of Common Pleas, General Division",
+        "Wood County Common Pleas Court"
+      ],
+      "officialCourtDirectoryUrl": "https://www.supremecourt.ohio.gov/courts/judicial-system/ohio-trial-courts/",
+      "publicLookup": {
+        "url": "https://clerkofcourt.co.wood.oh.us/169/Dockets-Online",
+        "linkType": "official_clerk_docket_landing_page",
+        "verified": true,
+        "verifiedAt": "2026-11-07",
+        "verificationSource": "https://clerkofcourt.co.wood.oh.us/169/Dockets-Online",
+        "approvedForCustomerLink": true
+      },
+      "portal": {
+        "platform": "CourtView",
+        "vendorUnverified": false,
+        "entryUrl": "https://pub.clerkofcourt.co.wood.oh.us/eservices/home.page.2",
+        "access": "public",
+        "requiresJavascript": true,
+        "loginRequired": "unknown",
+        "captchaRequired": "unknown"
+      },
+      "fieldInventory": {
+        "status": "not_yet_inspected",
+        "verified": false,
+        "searchInputs": [],
+        "resultsColumns": [],
+        "caseDetailFields": [],
+        "docketFields": [],
+        "unsupportedOrUnavailable": [],
+        "captureMethod": "human_review_of_live_official_portal",
+        "lastInspectedAt": null,
+        "reviewer": null,
+        "onlineFilingFields": [],
+        "pdfFormFields": [],
+        "fieldAvailabilityNotes": []
+      },
+      "mappings": {
+        "status": "not_approved",
+        "fields": [],
+        "lastReviewedAt": null,
+        "reviewer": null
+      },
+      "courtIdentityReviewed": true,
+      "formMappingApproved": false,
+      "automaticRecordLookupEnabled": false,
+      "comments": "Official clerk page verified as this court's docket landing page. The JavaScript CourtView search form and fields have not been independently inspected, so no search or record-detail field is claimed available.",
+      "filingFormLinks": [],
+      "filingFormsReviewed": false
+    }
+  ]
+}

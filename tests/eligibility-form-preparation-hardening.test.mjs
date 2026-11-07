@@ -72,13 +72,17 @@ test("private review worksheet separates alleged/final charges, disposition and 
   const input=fixture();
   input.petitioner.ssn_full="123-45-6789";
   const text=core.buildPreparationWorksheet(input,{registry,mapping});
-  assert.match(text,/Original allegation: Initial allegation 0/);
+  assert.match(text,/YOUR COURT RECORD CHECKLIST/);
+  assert.match(text,/Original charge, if different: Initial allegation 0/);
   assert.match(text,/Final charge: Synthetic final charge 0/);
-  assert.match(text,/Disposition date: 2021-06-01/);
-  assert.match(text,/final-discharge date: 2022-07-01/);
-  assert.match(text,/Legal eligibility: NOT DETERMINED/);
+  assert.match(text,/Date the court decided: 2021-06-01/);
+  assert.match(text,/Date you finished your full sentence.*: 2022-07-01/);
+  assert.match(text,/The court will decide whether your record qualifies/);
+  assert.match(text,/https:\/\/clerkofcourt\.co\.wood\.oh\.us\/169\/Dockets-Online/);
   assert.ok(!text.includes("123-45-6789"));
-  assert.match(text,/NOT A COURT FORM/);
+  for(const term of ["[petitioner.","[court.","[charges.","DISCOVERY key","mapping","pipeline","internal key","UNAVAILABLE / NOT APPROVED"])
+    assert.ok(!text.includes(term),"Customer text exposed internal jargon: "+term);
+  assert.match(text,/not a court application/i);
 });
 test("both intake screens have the worksheet and court-type routing; packet remains gated",()=>{
   const details=fs.readFileSync(path.join(root,"record-details.html"),"utf8");

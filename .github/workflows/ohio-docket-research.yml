@@ -1,0 +1,122 @@
+name: Agent 1 - Ohio county docket lookup research
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ohio-docket-research.yml
+  schedule:
+    - cron: '17 16 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Preview queue or search public court website leads
+        type: choice
+        default: preview
+        options: [preview, search]
+      limit:
+        description: Maximum Ohio counties this run (Wood excluded)
+        type: choice
+        default: '10'
+        options: ['1', '5', '10', '15']
+      queries:
+        description: Search provider requests per county
+        type: choice
+        default: '1'
+        options: ['1', '2']
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: recordpathai-ohio-docket-agent-1
+  cancel-in-progress: false
+jobs:
+  research:
+    name: Review public docket search leads for 87 non-Wood Ohio counties
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore last separate Ohio research ledger
+        run: |
+          set -euo pipefail
+          if git fetch origin refs/heads/automation/ohio-docket-discovery:refs/remotes/origin/automation/ohio-docket-discovery 2>/dev/null; then
+            git show origin/automation/ohio-docket-discovery:data/ohio-docket-agent-progress.json > /tmp/ohio-agent-progress.json || true
+          fi
+          test -s /tmp/ohio-agent-progress.json || cp data/ohio-docket-agent-progress.json /tmp/ohio-agent-progress.json
+      - name: Search only public Ohio county court-site leads
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          OHIO_RESEARCH_ENABLED: ${{ vars.OHIO_RESEARCH_ENABLED }}
+          AGENT_LIMIT: ${{ inputs.limit || '10' }}
+          AGENT_QUERIES: ${{ inputs.queries || '1' }}
+          AGENT_MODE: ${{ github.event_name == 'schedule' && 'search' || (inputs.mode || 'preview') }}
+        run: |
+          node tools/run-ohio-docket-agent.mjs \
+            --mode="$AGENT_MODE" --limit="$AGENT_LIMIT" --queries="$AGENT_QUERIES" \
+            --ledger=/tmp/ohio-agent-progress.json --output=.ohio-agent-output/agent1.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ohio-docket-agent1-review
+          path: .ohio-agent-output/agent1.json
+          if-no-files-found: error
+          retention-days: 21
+      - name: Keep actual research findings in a separate review pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const result=JSON.parse(fs.readFileSync(".ohio-agent-output/agent1.json","utf8"));
+          if(!result.attempts.length)fs.writeFileSync("/tmp/ohio-no-attempts","1");
+          NODE
+          if test -f /tmp/ohio-no-attempts; then
+            echo "No successful search requests. Queue remains assigned; no county was marked searched."
+            exit 0
+          fi
+          cp /tmp/ohio-agent-progress.json /tmp/ohio-merged-ledger.json
+          git fetch origin main
+          if git show-ref --quiet refs/remotes/origin/automation/ohio-docket-discovery; then
+            git switch -C automation/ohio-docket-discovery origin/automation/ohio-docket-discovery
+            git merge --no-edit -X ours origin/main
+          else
+            git switch -c automation/ohio-docket-discovery origin/main
+          fi
+          cp /tmp/ohio-merged-ledger.json data/ohio-docket-agent-progress.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import {coverage} from "./tools/ohio-docket-agent-core.mjs";
+          const roster=JSON.parse(fs.readFileSync("data/ohio-counties.json","utf8"));
+          const ledger=JSON.parse(fs.readFileSync("data/ohio-docket-agent-progress.json","utf8"));
+          const r=coverage(roster,ledger);
+          const summary=[
+            "# Agent 1 - Ohio docket research (human review required)","",
+            "**County scope:** "+r.assignedResearch+" counties outside Wood. Wood is the existing pilot.","",
+            "| Category | Count |","|---|---:|",
+            "| Assigned | "+r.assignedResearch+" |",
+            "| Searched | "+r.attempted+" |",
+            "| Not yet searched | "+r.pending+" |",
+            "| Unverified public website leads | "+r.unverifiedLeads+" |",
+            "| Approved links added automatically | 0 |","",
+            "No discovered URL is customer facing until an independent official-clerk review.",
+            "No criminal records, eligibility data, payments or filings are collected by this agent.",""
+          ].join("\n");
+          fs.writeFileSync("docs/ohio-agent1-research-progress.md",summary);
+          NODE
+          git config user.name "RecordPathAI Agent 1 - Ohio"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/ohio-docket-agent-progress.json docs/ohio-agent1-research-progress.md
+          if git diff --cached --quiet; then echo "No change to review queue.";exit 0;fi
+          git commit -m "Agent 1 research: Ohio court docket URLs pending independent review"
+          git push origin automation/ohio-docket-discovery
+          if ! gh pr list --head automation/ohio-docket-discovery --base main --state open --json number --jq '.[0].number' | grep -q '[0-9]'; then
+            gh pr create --head automation/ohio-docket-discovery --base main \
+              --title "Review Ohio county docket discovery leads (Agent 1)" \
+              --body "Research-only leads for 87 non-Wood Ohio counties. Every URL remains unverified; no public lookup link, form, eligibility rule, record import, payment, mailing or filing is activated by this agent." \
+              || echo "::warning::Review branch saved. Open PR manually if repository settings block creation."
+          fi
