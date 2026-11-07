@@ -325,8 +325,14 @@
     else lines.push("You have entered the basic information. Your records still need to be checked.");
     lines.push("","HOW TO FIND YOUR COURT RECORDS");
     const county=String(data?.court?.county||"").trim().toLowerCase().replace(/\s+county$/,"");
+    const courtName=String(data?.court?.name||"").trim().toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+    const matchesWoodCommonPleas=[
+      "wood county court of common pleas",
+      "wood county court of common pleas general division",
+      "wood county common pleas court"
+    ].includes(courtName);
     if(normalizeState(data?.court?.state)==="OH"&&county==="wood"&&
-        data?.court?.court_type==="court-of-common-pleas"){
+        data?.court?.court_type==="court-of-common-pleas"&&matchesWoodCommonPleas){
       lines.push("Wood County Clerk of Courts — Official Dockets Online:",
         "https://clerkofcourt.co.wood.oh.us/169/Dockets-Online");
     }else if(normalizeState(data?.court?.state)==="OH"){
