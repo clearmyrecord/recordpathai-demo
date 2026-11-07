@@ -18,18 +18,16 @@ test -f package.json && test -f self-search.html && test -f pilot-demo.html && t
 node --check server.js || exit 2
 node -e 'if (require("./package.json").engines.node!=="22") process.exit(2)'
 
-echo "Checking existing service $SERVICE in $PROJECT/$REGION..."
-gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format=json >/tmp/recordpathai-cloudrun-before-$$.json || {
-  echo "Target service does not exist or this identity is not authorized. Nothing deployed." >&2; exit 3;
-}
-BEFORE="/tmp/recordpathai-cloudrun-before-$.json"
+BEFORE="$(mktemp)"
 SMOKE_DIR="$(mktemp -d)"
 AFTER="$SMOKE_DIR/after.json"
 PROMOTED="$SMOKE_DIR/promoted.json"
-# A stable tag lets us validate the new revision while existing traffic remains untouched.
 CANDIDATE_TAG="recordpathai-preview"
 trap 'rm -f "$BEFORE"; rm -rf "$SMOKE_DIR"' EXIT
-
+echo "Checking existing service $SERVICE in $PROJECT/$REGION..."
+gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format=json > "$BEFORE" || {
+  echo "Target service does not exist or this identity is not authorized. Nothing deployed." >&2; exit 3;
+}
 OLD_REV="$(python3 - "$BEFORE" <<'PY'
 import json,sys
 with open(sys.argv[1]) as f: record=json.load(f)
