@@ -31,6 +31,8 @@ jobs:
           assert(deploy.includes('gcloud run services update-traffic'));
           assert(!deploy.includes('PUBLIC_SEARCH_ENABLED=true'));
           NODE
+      - name: Offline production deployment rollback regression
+        run: bash tests/cloudrun-smoke-regression.sh
       - name: Security regression tests
         run: npm run test:security
       - name: Audit production dependencies
