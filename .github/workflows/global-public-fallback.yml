@@ -21,7 +21,7 @@ jobs:
           const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict"),vm=require("node:vm");
           const dir="global-public-build";
           const expected=[
-            "assets/styles.css","assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf","index.html","js/form-pipeline-core.js","js/pdf-auto-map.js","js/pilot-demo.js","js/recordpath-home.js","js/wood-county-record-prefill.js","launch.html","pdf-mapper-v6.html","pdf-mapper-v7.html","pilot-demo.html","resources/entrepreneurship.html","resources/resources.js","robots.txt","self-search.html","start.html"
+            "assets/styles.css","assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf","assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf","index.html","js/form-pipeline-core.js","js/pdf-auto-map.js","js/pilot-demo.js","js/recordpath-home.js","js/wood-county-record-prefill.js","launch.html","pdf-mapper-v6.html","pdf-mapper-v7.html","pilot-demo.html","resources/entrepreneurship.html","resources/resources.js","robots.txt","self-search.html","start.html"
           ].sort();
           function walk(root,pre=""){return fs.readdirSync(root,{withFileTypes:true}).flatMap(f=>f.isDirectory()?walk(path.join(root,f.name),pre+f.name+"/"):[pre+f.name]);}
           assert.deepEqual(walk(dir).sort(),expected);
@@ -70,9 +70,14 @@ jobs:
           const blankCourtPdf=fs.readFileSync(path.join(dir,"assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf"));
           assert(blankCourtPdf.subarray(0,4).toString("ascii")==="%PDF");
           assert(blankCourtPdf.length>100000);
+          const gaBlank=fs.readFileSync(path.join(dir,"assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf"));
+          assert(gaBlank.subarray(0,5).toString("ascii")==="%PDF-");
+          assert(gaBlank.length>10000 && gaBlank.length<2000000);
           const v7=fs.readFileSync(path.join(dir,"pdf-mapper-v7.html"),"utf8");
           assert(v7.includes("form-pipeline-core.js"));
           assert(v7.includes("candidateManifestUpload"));
+          assert(v7.includes("loadGeorgiaPdfBtn"));
+          assert(v7.includes("ga-pre2013"));
           assert(v7.includes("syntheticDataInput"));
           assert(v7.includes('name="robots" content="noindex'));
           assert(!v7.includes('src="js/auth.js"'));
