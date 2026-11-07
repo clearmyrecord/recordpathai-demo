@@ -1406,6 +1406,14 @@
         data.court.county = first.court_county || data.court.county || "";
         data.court.name = first.court_name || data.court.name || "";
         data.court.court_type = value("courtType") || "";
+        const lookup=window.RecordPathRecordCollection?.linkFor?.({
+          state:data.court.state,county:data.court.county,
+          courtType:data.court.court_type,courtName:data.court.name
+        });
+        // This is only the selected court's approved public lookup link.
+        // It does not mean the applicant's case was verified on that court's docket.
+        data.court.selected_court_catalog_id=lookup?.linkedToExactCourt?lookup.courtId:"";
+        data.court.selected_court_lookup_url=lookup?.linkedToExactCourt?lookup.url:"";
         data.court.case_number = first.case_number || data.court.case_number || "";
         data.court.judge_name = first.judge_name || data.court.judge_name || "";
         data.judge_name = first.judge_name || data.judge_name || "";
@@ -1478,11 +1486,11 @@
         const data = RecordPathDataBridge.loadPacketData();
         hydrateStaticFields(data);
         hydrateCharges(data);
-        window.RecordPathRecordCollection?.update?.();
-        ["caseState","county","courtType"].forEach(id=>{
+        window.RecordPathRecordCollection?.init?.();
+        ["caseState","county","courtType","courtName"].forEach(id=>{
           const field=document.getElementById(id);
           field?.addEventListener("change",()=>window.RecordPathRecordCollection?.update?.());
-          if(id==="county")field?.addEventListener("input",()=>window.RecordPathRecordCollection?.update?.());
+          if(id==="county"||id==="courtName")field?.addEventListener("input",()=>window.RecordPathRecordCollection?.update?.());
         });
         if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
           RecordWatchBridge.syncExistingRecordPathData();
