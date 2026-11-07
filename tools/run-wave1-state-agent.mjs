@@ -35,6 +35,7 @@ async function searchSerp(query,apiKey){
   const response=await fetch(url,{signal:AbortSignal.timeout(18000)});
   if(!response.ok)throw Error("Search provider HTTP "+response.status);
   const payload=await response.json();
+  if(payload.error)throw Error("Search provider returned an error; county status will remain unsearched");
   return Array.isArray(payload.organic_results)?payload.organic_results.slice(0,10):[];
 }
 const catalog=await optionalJson(path.join(root,"data/wave1-court-catalog.json"),null);
