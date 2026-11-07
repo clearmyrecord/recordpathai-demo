@@ -85,7 +85,13 @@ export function mergeOhioResearch(ledgerRaw,output,{asOf=new Date().toISOString(
       id,slug:c.slug,county:c.county,url,title:String(c.title||"").slice(0,180),
       discoveredAt:c.discoveredAt,source:"public_web_search",
       status:"unverified_candidate",verified:false,approved:false,
-      note:"Confirm official court identity, correct division and actual public docket before publishing."
+      courtIdentity:{courtId:null,officialCourtName:null,courtType:null,
+        division:null,reviewed:false,sourceDirectory:OFFICIAL_COURT_DIRECTORY},
+      fieldInventory:{status:"not_inspected",searchInputs:[],resultColumns:[],
+        caseDetailFields:[],docketFields:[],observedFields:0,reviewedFields:0,
+        allObservedFieldsMapped:false,approved:false},
+      websiteCourtMatch:false,customerLinkApproved:false,
+      note:"Identify the exact court where the case was heard. Inspect all observed form, result and docket fields in its official website, with source evidence. Every field requires human review before mapping or publishing."
     });
   }
   ledger.candidates=[...candidates.values()].sort((a,b)=>a.id.localeCompare(b.id));
