@@ -787,6 +787,7 @@
   <script src="js/rules.js"></script>
   <script src="js/app.js"></script>
   <script src="js/packet-data-bridge.js"></script>
+  <script src="js/wood-county-record-prefill.js"></script>
   <script src="js/wave1-form-requirements.js"></script>
   <script src="js/form-pipeline-core.js"></script>
   <script src="js/wave1-intake-ui.js"></script>
@@ -813,6 +814,36 @@
 
       if (window.RecordPathDataBridge && typeof RecordPathDataBridge.initPage === "function") {
         RecordPathDataBridge.initPage(document);
+      }
+      // Imported cases come only from the separately approved, verified
+      // court index, after applicant consent on the search results page.
+      const prefill = window.RecordPathWoodCountyPrefill;
+      if(prefill && window.RecordPathDataBridge){
+        const accepted=prefill.applyStaged(RecordPathDataBridge,{
+          confirmReplace:({oldNumber,newNumber})=>window.confirm(
+            "You already have a different saved case or applicant in this browser ("+
+              (oldNumber||"current draft")+"). Replace that draft with verified case "+
+              newNumber+"? Personal contact information from the old applicant will not be transferred."
+          )
+        });
+        if(accepted.status==="imported"){
+          const current=RecordPathDataBridge.loadPacketData();
+          for(const input of document.querySelectorAll("[data-path]")){
+            const path=input.dataset.path;
+            const value=RecordPathDataBridge.getValueByPath(current,path);
+            if(value!==undefined&&value!==null&&value!==""){
+              input.value=path==="case.state"?"Ohio":String(value);
+            }
+          }
+          localStorage.setItem("caseState","Ohio");
+          localStorage.setItem("state","OH");
+          const msg=document.createElement("div");
+          msg.className="info-banner";
+          msg.textContent="Verified court case "+accepted.caseNumber+" imported with "+
+            accepted.charges+" charge(s). Confirm every original and final outcome, missing dates and current case status before eligibility screening. Mailing and private identity fields were not guessed.";
+          document.getElementById("user-profile-form")?.before(msg);
+          document.dispatchEvent(new CustomEvent("recordpath:data-updated"));
+        }
       }
 
       if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
