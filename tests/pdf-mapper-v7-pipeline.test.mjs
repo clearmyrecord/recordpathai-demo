@@ -86,10 +86,8 @@ test("production mode stays blocked absent approval and consent",()=>{
   approved.active=true;
   approved.review={status:"approved",sourceVerified:true,mappingApproved:true,legalRoutingApproved:true};
   approved.mapping={status:"approved",approvedForPdfSha256:c.pdf.sha256,suggestions:[]};
-  const plan=core.buildFillPlan({manifest:approved,mappings,caseData:sample(),
-    currentPdfSha256:c.pdf.sha256,mode:"production",consent:true});
-  assert.equal(plan.safeToFile,false); // Even permitted auto-fill does not itself make it court-ready
-  assert.equal(plan.readyForMailing,false);
+  assert.throws(()=>core.buildFillPlan({manifest:approved,mappings,caseData:sample(),
+    currentPdfSha256:c.pdf.sha256,mode:"production",consent:true}),/trusted server approval registry/);
 });
 test("malformed or non-canonical mappings cannot be used",()=>{
   const c=candidate();
