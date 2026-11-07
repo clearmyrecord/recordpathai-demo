@@ -14,7 +14,9 @@
     "test:security": "node --test tests/*.mjs",
     "forms:candidates:dry": "node tools/prepare-form-candidates.mjs --state=OH --limit=25",
     "forms:candidates:wood": "node tools/prepare-form-candidates.mjs --state=OH --county=wood --wood --limit=25",
-    "forms:candidates:write": "node tools/prepare-form-candidates.mjs --state=OH --limit=25 --write"
+    "forms:candidates:write": "node tools/prepare-form-candidates.mjs --state=OH --limit=25 --write",
+    "crawl:forms:wave1": "node tools/form-crawler.js --wave1",
+    "crawl:forms:wave1:review-queue": "node tools/form-crawler.js --wave1 --apply"
   },
   "dependencies": {
     "cors": "^2.8.5",

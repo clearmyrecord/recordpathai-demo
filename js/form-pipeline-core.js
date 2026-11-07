@@ -12,7 +12,7 @@
   const STATES=new Set(["pending_review","mapping_draft","approved","superseded","rejected"]);
   const HASH=/^[a-f0-9]{64}$/;
   const SAFE_PATH=/^assets\/forms\/[a-zA-Z0-9/_-]+\.pdf$/;
-  const FORM_TYPES=new Set(["sealing-conviction","sealing-dismissal","sealing-nonconviction","expungement","unknown"]);
+  const FORM_TYPES=new Set(["sealing-conviction","sealing-dismissal","sealing-nonconviction","expungement","record-restriction","fdle-certificate","order-of-nondisclosure","unknown"]);
   function str(value,max=200){return typeof value==="string"?value.trim().slice(0,max):"";}
   function validUrl(value){
     try{

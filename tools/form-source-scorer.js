@@ -2,6 +2,9 @@ const OFFICIAL_SIGNALS = ['.gov', '.us', 'clerk', 'court', 'courts', 'commonplea
 const NEGATIVE_SIGNALS = ['blog', 'avvo', 'justia', 'findlaw', 'lawyer', 'attorney', 'lawfirm', 'directory', 'yelp'];
 
 const FORM_PATTERNS = {
+  'record-restriction': ['record restriction', 'restrict arrest record', 'request to restrict'],
+  'fdle-certificate': ['fdle certificate', 'certificate of eligibility to expunge', 'certificate of eligibility to seal'],
+  'order-of-nondisclosure': ['order of nondisclosure', 'nondisclosure petition'],
   'sealing-conviction': ['conviction', '2953.32', 'seal record of conviction'],
   'sealing-dismissal': ['dismissal', 'dismissed', 'no bill', 'not guilty'],
   'sealing-nonconviction': ['nonconviction', 'non-conviction', '2953.52', 'acquittal'],

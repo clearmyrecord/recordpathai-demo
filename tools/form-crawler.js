@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { detectFormType, scoreFormCandidate } from './form-source-scorer.js';
+import { discoveryQueries, isWave1, pdfStorageRelativePath } from "./form-query-builder.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,21 +10,16 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const CATALOG_PATH = path.join(repoRoot, 'data', 'court-catalog.json');
 const COUNTIES_PATH = path.join(repoRoot, 'data', 'ohio-counties.json');
+const WAVE1_CATALOG_PATH = path.join(repoRoot, 'data', 'wave1-court-catalog.json');
 const REVIEW_QUEUE_PATH = path.join(repoRoot, 'admin', 'review-queue.json');
 
 const args = process.argv.slice(2);
 const getArg = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
 const DRY_RUN = !args.includes('--apply');
-const filters = { state: getArg('state'), county: getArg('county'), tier: getArg('tier') };
+const filters = { state: getArg('state')?.toUpperCase(), county: getArg('county'), tier: getArg('tier'), wave1:args.includes('--wave1') };
 
 const SERPAPI_KEY = process.env.SERPAPI_KEY;
-const SEARCH_QUERIES = (court) => [
-  `${court.courtName} record sealing application PDF`,
-  `${court.courtName} expungement application PDF`,
-  `${court.county} County Ohio application for sealing 2953.32 PDF`,
-  `${court.county} County Clerk of Courts sealing records forms PDF`,
-  `${court.courtName} dismissal not guilty no bill sealing PDF`
-];
+const SEARCH_QUERIES = discoveryQueries;
 
 async function readJson(filePath, fallback) { try { return JSON.parse(await fs.readFile(filePath, 'utf8')); } catch { return fallback; } }
 const nowIso = () => new Date().toISOString();
@@ -71,15 +67,21 @@ function buildMetadata(court, candidate, scored, pdfAccess, localPath = '') {
 }
 
 (async function main() {
-  const [catalog, counties, existingQueue] = await Promise.all([
-    readJson(CATALOG_PATH, []), readJson(COUNTIES_PATH, []), readJson(REVIEW_QUEUE_PATH, [])
+  const [ohioCatalog, wave1Catalog, counties, existingQueue] = await Promise.all([
+    readJson(CATALOG_PATH, []), readJson(WAVE1_CATALOG_PATH, []),
+    readJson(COUNTIES_PATH, []), readJson(REVIEW_QUEUE_PATH, [])
   ]);
+  const catalog = filters.wave1
+    ? wave1Catalog
+    : (filters.state && isWave1(filters.state) ? wave1Catalog : ohioCatalog);
 
   const countyBySlug = new Map(counties.map((c) => [c.slug, c]));
   const courts = catalog.filter((court) => {
     if (filters.state && court.state !== filters.state) return false;
     if (filters.county && court.countySlug !== filters.county.toLowerCase()) return false;
-    if (filters.tier) return countyBySlug.get(court.countySlug)?.tier === filters.tier;
+    if (filters.wave1 && !isWave1(court.state)) return false;
+    if (filters.tier && !isWave1(court.state)) return countyBySlug.get(court.countySlug)?.tier === filters.tier;
+    if (filters.tier && isWave1(court.state)) return false;
     return true;
   });
 
@@ -106,12 +108,16 @@ function buildMetadata(court, candidate, scored, pdfAccess, localPath = '') {
     if (!best) { console.warn(`No viable candidates for ${court.courtName}`); continue; }
 
     const formType = best.scored.formType || 'unknown';
-    const localPathRel = `assets/forms/ohio/${court.countySlug}/${court.courtType}/${formType}.pdf`;
+    const localPathRel = pdfStorageRelativePath(court,formType);
     const localPathAbs = path.join(repoRoot, localPathRel);
     let pdfAccess = 'unknown';
     let localPath = '';
 
-    if ((best.candidate.link || '').toLowerCase().includes('.pdf')) {
+    if (isWave1(court.state)) {
+      // Search-engine ranking cannot authorize remote file retrieval or a
+      // county-specific form. Wave 1 is provenance/review queue ONLY.
+      pdfAccess = 'manual_source_verification_required';
+    } else if ((best.candidate.link || '').toLowerCase().includes('.pdf')) {
       if (!DRY_RUN) {
         try {
           await tryDownloadPdf(best.candidate.link, localPathAbs);
@@ -128,6 +134,15 @@ function buildMetadata(court, candidate, scored, pdfAccess, localPath = '') {
     }
 
     const metadata = buildMetadata(court, best.candidate, best.scored, pdfAccess, localPath);
+    if(isWave1(court.state)){
+      metadata.status='source_verification_required';
+      metadata.active=false;
+      metadata.mapped=false;
+      metadata.requiresMapping=true;
+      metadata.routeHint=court.routeHint||'manual_review';
+      metadata.officialPageLead=court.formsPage||'';
+      metadata.sourceNotes='Search result is a lead only; verify official authority, form type and current version before downloading or mapping.';
+    }
     const key = `${metadata.sourceUrl}|${metadata.localPath}`;
     if (!dedupe.has(key)) {
       discoveredInRun.push(metadata);
@@ -138,7 +153,7 @@ function buildMetadata(court, candidate, scored, pdfAccess, localPath = '') {
     }
 
     if (!DRY_RUN && pdfAccess === 'downloaded') {
-      const metaPath = path.join(repoRoot, `assets/forms/ohio/${court.countySlug}/${court.courtType}/metadata.json`);
+      const metaPath = path.join(repoRoot, `assets/forms/${String(court.state).toLowerCase()}/${court.countySlug}/${court.courtType}/metadata.json`);
       await fs.mkdir(path.dirname(metaPath), { recursive: true });
       await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2));
     }

@@ -1333,6 +1333,15 @@
         const profile = collectProfile();
         const shared = collectSharedCaseData();
         const charges = collectCharges();
+        // Preserve verified preliminary state-form fields that are not represented
+        // by a charge-card control, rather than replacing them with empty
+        // case-wide arrest data during each autosave.
+        const priorCharges = Array.isArray(data.charges) ? data.charges : [];
+        charges.forEach((charge,i)=>{
+          const previous=priorCharges[i]||{};
+          if(!shared.arrest_date && previous.arrest_date)charge.arrest_date=previous.arrest_date;
+          if(!shared.arresting_agency && previous.arresting_agency)charge.arresting_agency=previous.arresting_agency;
+        });
         shared.final_disposition = charges[0]?.final_disposition || "";
         shared.disposition_date = charges[0]?.disposition_date || "";
         shared.discharge_date = charges[0]?.discharge_date || "";

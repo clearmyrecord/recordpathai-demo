@@ -35,6 +35,11 @@
       mapping=Array.isArray(raw?.mappings)?raw.mappings:[];
     }catch(_err){mapping=[];}
   }
+  function hasResponse(assessment,key){
+    const value=engine.get(lastData,key);
+    return value!==null&&value!==undefined&&String(value).trim()!=="";
+  }
+
   function displayList(assessment){
     if(!listNode)return;
     listNode.replaceChildren();
@@ -43,7 +48,10 @@
     for(const r of entries){
       const li=document.createElement("li");
       const missing=missingSet.has(r.key);
-      li.textContent=(missing?"Missing: ":"Captured: ")+r.label+
+      const provisional=r.source==="state-screen-provisional";
+      const provided=hasResponse(assessment,r.key);
+      li.textContent=provisional?(provided?"Recorded (provisional): ":"Suggested for verification: ")+r.label
+        :(missing?"Missing: ":"Captured: ")+r.label+
         (r.source==="court-pdf-mapping"?" (from mapped court PDF)":"");
       if(missing)li.style.color="#9a3412";
       listNode.append(li);
@@ -69,7 +77,7 @@
       "petitioner.phone":"phone","petitioner.full_name":"fullName"
     };
     const needed=assessment.requirements.filter(x=>
-      x.source==="court-pdf-mapping"&&validator.validKey(x.key)&&
+      ["court-pdf-mapping","state-screen-provisional"].includes(x.source)&&validator.validKey(x.key)&&
       !/(ssn|social_security|bank|account_number)/i.test(x.key)&&
       !existingScreen.has(x.key)&&
       !(isDetails&&((x.key.startsWith("charges."))||document.getElementById(knownIds[x.key])))&&
@@ -87,7 +95,9 @@
       const id="mappedExtra_"+r.key.replace(/[^a-z0-9]/gi,"_");
       const label=document.createElement("label");
       label.htmlFor=id;
-      label.textContent=r.label+" — additional court-form field";
+      label.textContent=r.label+(r.source==="court-pdf-mapping"
+        ?" — mapped court-form field"
+        :" — suggested early field (not yet court-verified)");
       label.style.display="block";
       const input=document.createElement("input");
       input.id=id;
