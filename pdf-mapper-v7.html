@@ -1317,6 +1317,7 @@
     }
 
     function renderFieldList() {
+      refreshPipelineStatus();
       const pageFields = getCurrentPageFields();
       fieldList.innerHTML = "";
 
@@ -1436,7 +1437,7 @@
 
     function exportJson() {
       const payload = {
-        version: 6,
+        version: 7,
         exportedAt: new Date().toISOString(),
         document: fileStatus.textContent,
         pageCount: pdfDoc ? pdfDoc.numPages : 0,
@@ -1456,7 +1457,7 @@
       const url = URL.createObjectURL(blob);
       const link=document.createElement("a");
       link.href=url;
-      link.download="wood-county-sealing-dismissal-mapping-v6.json";
+      link.download="recordpathai-mapping-v7.json";
       document.body.append(link);link.click();link.remove();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
     }
@@ -1783,7 +1784,7 @@
       const matched=Boolean(activeCandidate && currentPdfSha256 &&
         activeCandidate.pdf.sha256===currentPdfSha256);
       previewFieldValuesBtn.disabled=!matched || !mappings.length;
-      downloadSyntheticPdfBtn.disabled=!matched || !lastSyntheticPlan;
+      downloadSyntheticPdfBtn.disabled=!matched || !mappings.length;
       if(!activeCandidate) {
         candidateStatus.textContent=note|| (currentPdfSha256
           ? "PDF fingerprint "+currentPdfSha256.slice(0,16)+"… — create a draft form manifest or import a crawler candidate."
@@ -1907,14 +1908,15 @@
       return plan;
     }
     async function createSyntheticPreviewPdf(){
-      if(!lastSyntheticPlan)planSynthetic();
+      // Always rebuild from the latest box placements and synthetic data.
+      planSynthetic();
       if(!window.PDFLib)throw new Error("Local PDF renderer library unavailable");
       const {PDFDocument,StandardFonts,rgb}=window.PDFLib;
       const doc=await PDFDocument.load(currentPdfBytes);
       const font=await doc.embedFont(StandardFonts.Helvetica);
       const pages=doc.getPages();
       for(const page of pages){
-        page.drawText("SYNTHETIC DRAFT — NOT FOR COURT FILING",{
+        page.drawText("SYNTHETIC DRAFT - NOT FOR COURT FILING",{
           x:30,y:Math.max(20,page.getHeight()-25),size:13,font,
           color:rgb(.75,.16,.13),opacity:.75
         });
