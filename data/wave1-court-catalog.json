@@ -1,0 +1,114 @@
+[
+  {
+    "state": "NV",
+    "stateName": "Nevada",
+    "county": "Clark",
+    "countySlug": "clark",
+    "courtName": "Eighth Judicial District Court",
+    "courtType": "district",
+    "formsPage": "https://www.clarkcountycourts.us/departments/clerk/filing/",
+    "routeHint": "court_record_sealing",
+    "status": "discovery_only"
+  },
+  {
+    "state": "NV",
+    "stateName": "Nevada",
+    "county": "Washoe",
+    "countySlug": "washoe",
+    "courtName": "Second Judicial District Court",
+    "courtType": "district",
+    "formsPage": "",
+    "routeHint": "court_record_sealing",
+    "status": "discovery_only"
+  },
+  {
+    "state": "TX",
+    "stateName": "Texas",
+    "county": "Harris",
+    "countySlug": "harris",
+    "courtName": "Harris County District Clerk",
+    "courtType": "district",
+    "formsPage": "https://www.hcdistrictclerk.com/Common/FAQ/faq.aspx?Level1=divmainCustomerService",
+    "routeHint": "expunction",
+    "status": "discovery_only",
+    "notes": "Clerk FAQ says blank petition obtained from District Attorney, not clerk. Do not invent a form."
+  },
+  {
+    "state": "TX",
+    "stateName": "Texas",
+    "county": "Dallas",
+    "countySlug": "dallas",
+    "courtName": "Dallas County District Clerk",
+    "courtType": "district",
+    "formsPage": "",
+    "routeHint": "expunction",
+    "status": "discovery_only"
+  },
+  {
+    "state": "FL",
+    "stateName": "Florida",
+    "county": "Miami-Dade",
+    "countySlug": "miami-dade",
+    "courtName": "Miami-Dade Clerk of Courts",
+    "courtType": "circuit",
+    "formsPage": "https://www.miamidadeclerk.gov/clerk/criminal-records.page",
+    "routeHint": "fdle_certificate_and_court_petition",
+    "status": "discovery_only"
+  },
+  {
+    "state": "FL",
+    "stateName": "Florida",
+    "county": "Orange",
+    "countySlug": "orange",
+    "courtName": "Orange County Clerk of Courts",
+    "courtType": "circuit",
+    "formsPage": "",
+    "routeHint": "fdle_certificate_and_court_petition",
+    "status": "discovery_only"
+  },
+  {
+    "state": "AZ",
+    "stateName": "Arizona",
+    "county": "Maricopa",
+    "countySlug": "maricopa",
+    "courtName": "Superior Court of Arizona in Maricopa County",
+    "courtType": "superior",
+    "formsPage": "https://superiorcourt.maricopa.gov/llrc/crsr1",
+    "routeHint": "arizona_rule_36_1_sealing",
+    "status": "discovery_only"
+  },
+  {
+    "state": "AZ",
+    "stateName": "Arizona",
+    "county": "Pima",
+    "countySlug": "pima",
+    "courtName": "Superior Court of Arizona in Pima County",
+    "courtType": "superior",
+    "formsPage": "https://www.azcourts.gov/selfservicecenter/Criminal-Law/Sealing-records",
+    "routeHint": "arizona_rule_36_1_sealing",
+    "status": "discovery_only"
+  },
+  {
+    "state": "GA",
+    "stateName": "Georgia",
+    "county": "Fulton",
+    "countySlug": "fulton",
+    "courtName": "Fulton County Superior Court",
+    "courtType": "superior",
+    "formsPage": "https://gbi.georgia.gov/services/georgia-criminal-history-record-restrictions",
+    "routeHint": "prosecutor_and_arresting_agency_restriction",
+    "status": "discovery_only",
+    "notes": "Some record-restriction routes run through arresting agencies/prosecutors, not court forms."
+  },
+  {
+    "state": "GA",
+    "stateName": "Georgia",
+    "county": "DeKalb",
+    "countySlug": "dekalb",
+    "courtName": "DeKalb County Superior Court",
+    "courtType": "superior",
+    "formsPage": "https://gbi.georgia.gov/services/georgia-criminal-history-record-restrictions",
+    "routeHint": "prosecutor_and_arresting_agency_restriction",
+    "status": "discovery_only"
+  }
+]
