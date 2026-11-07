@@ -56,6 +56,14 @@
   }
   function approximateTiming(charge, relief, asOf) {
     const outcome = routeOutcome(charge);
+    const degree = String(charge?.level || charge?.degree || "").trim().toUpperCase();
+    const code = statute(charge);
+    if(outcome==="conviction" && (["F1","F2"].includes(degree) || code==="2921.41" ||
+      code==="2919.25" && ["M1","M2"].includes(degree) || /^45(?:06|07|10|11|49)\./.test(code)))
+      return {date:null,status:"statutorily_excluded"};
+    if(outcome==="conviction" && relief==="expungement" &&
+      (code==="2919.27" || code==="2919.25" && ["M3","M4"].includes(degree)))
+      return {date:null,status:"sealing_only_no_expungement"};
     if (outcome === "unknown") return {date:null,status:"unresolved_outcome"};
     if (outcome === "dismissal") {
       if (!iso(charge?.disposition_date)) return {date:null,status:"missing_disposition"};
@@ -74,8 +82,6 @@
       charge?.final_discharge_evidence_source && has(charge.final_discharge_evidence_source);
     const discharge = verified ? iso(charge?.final_discharge_date) : null;
     if (!discharge) return {date:null,status:"unverified_final_discharge"};
-    const degree = String(charge?.level || charge?.degree || "").trim().toUpperCase();
-    const code = statute(charge);
     let waitMonths;
     if (degree === "MM") waitMonths = 6;
     else if (/^M[1-4]$/.test(degree)) waitMonths = 12;
@@ -87,7 +93,7 @@
     return {date,status:date <= asOf ? "time_elapsed" : "time_not_elapsed",
       from:"documented final discharge",months:waitMonths};
   }
-  function review(data,{today="2026-11-07"}={}) {
+  function review(data,{today=new Date().toISOString().slice(0,10)}={}) {
     const issues=[], chargeReviews=[], charges = Array.isArray(data?.charges) ? data.charges : [];
     const state=normalize(data?.court?.state || data?.meta?.source_state);
     const isOhio=state==="oh"||state==="ohio";
