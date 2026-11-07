@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RecordPathAI · Wave 1 County & Form Operations</title>
+<meta name="robots" content="noindex,nofollow">
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#192b4d;background:#f0f5fd}
+*{box-sizing:border-box}body{margin:0}.wrapper{max-width:1260px;margin:0 auto;padding:28px 20px 60px}
+header{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}h1{margin:5px 0;font-size:clamp(26px,4vw,36px)}h2{font-size:20px;margin:0 0 15px}
+.small,.muted{color:#52637d;font-size:14px}.subtitle{line-height:1.6}
+a{color:#1651a1}a:hover{text-decoration:none}.mainnav{display:flex;gap:15px;flex-wrap:wrap}
+.card{background:#fff;border:1px solid #d5e1f3;border-radius:16px;padding:20px;margin:18px 0;box-shadow:0 5px 18px #163a8112}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{border:1px solid #d5e1f3;border-radius:12px;padding:15px;background:#f9fbff}.kpi strong{display:block;font-size:27px;margin:5px 0}
+.filters{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}
+select,input{font:inherit;padding:10px 12px;border:1px solid #b8c9df;border-radius:8px;background:white;min-width:160px}
+input{flex:1}.table-scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:11px 9px;border-bottom:1px solid #e1e9f6;text-align:left}
+th{color:#35486b;background:#f4f8fe;white-space:nowrap}
+tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#eef5ff}
+button,.button{border:1px solid #285faa;padding:9px 12px;background:#14468f;color:#fff;border-radius:8px;cursor:pointer;text-decoration:none;display:inline-block;font:inherit;font-weight:600;font-size:14px}
+button:disabled{opacity:.5;cursor:not-allowed}
+.secondary{background:#e9f1ff;color:#244b87}
+.info{background:#fffbea;border:1px solid #e8cb72;padding:12px;border-radius:9px}
+code{overflow-wrap:anywhere}#countyDetails{line-height:1.55}
+#sourceList{padding:0;list-style:none}#sourceList li{border-bottom:1px solid #e6edf8;padding:12px 0}
+#pagination{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px}
+footer{margin-top:25px;color:#53627c;font-size:13px;line-height:1.6}
+@media(max-width:750px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.wrapper{padding:17px 12px}}
+</style>
+</head>
+<body>
+<main class="wrapper">
+<header>
+ <div><div class="small">RecordPathAI / Internal discovery dashboard</div><h1>Wave 1 · Court & Form Coverage</h1></div>
+ <nav class="mainnav"><a href="asset-manager.html">Asset manager</a><a href="../pdf-mapper-v7.html">PDF Mapper V7</a><a href="../eligibility.html">Eligibility screening</a></nav>
+</header>
+<p class="subtitle">Official 2026 Census county-level catalog for Nevada, Texas, Florida, Arizona and Georgia. This page shows public discovery metadata and locally approved form counts only. It does not expose, index or search a person's criminal history.</p>
+<div class="info"><strong>Discovery is not court integration.</strong> A discovered URL is not a verified form. A mapped draft cannot be used to calculate legal eligibility, charge fees, produce filing-ready packets or send Lob mail. Search workers remain disabled unless the repository's explicit provider credentials and opt-in are configured.</div>
+<section class="kpis" aria-label="Coverage totals">
+ <div class="kpi"><span class="small">Geographic targets</span><strong id="countyTotal">—</strong><span class="small">Census counties/equivalents</span></div>
+ <div class="kpi"><span class="small">Researched by agents</span><strong id="countySearched">—</strong><span class="small">Verified search attempts only</span></div>
+ <div class="kpi"><span class="small">Distinct source leads</span><strong id="sourceCount">—</strong><span class="small">Not approved</span></div>
+ <div class="kpi"><span class="small">Active approved mappings</span><strong id="activeCount">—</strong><span class="small">Across Wave 1</span></div>
+</section>
+<section class="card">
+<h2>Five-state overview</h2>
+<div class="table-scroll"><table><thead><tr><th>State</th><th>Indexed</th><th>Attempted</th><th>Remaining</th><th>Source leads</th><th>Active maps</th></tr></thead><tbody id="stateRows"></tbody></table></div>
+</section>
+<section class="card">
+<h2>County research queue</h2>
+<div class="filters">
+<select id="stateFilter" aria-label="Filter by state"><option value="">All five states</option><option value="NV">Nevada</option><option value="TX">Texas</option><option value="FL">Florida</option><option value="AZ">Arizona</option><option value="GA">Georgia</option></select>
+<select id="statusFilter" aria-label="Filter by research status"><option value="">All statuses</option><option value="county_unresearched">Not researched</option><option value="searched_no_candidate">Searched: no leads</option><option value="source_candidate_found">Source lead awaiting verification</option></select>
+<input id="countyQuery" type="search" placeholder="Filter by county name or FIPS" aria-label="County name or FIPS search">
+</div>
+<div class="table-scroll"><table><thead><tr><th>County / equivalent</th><th>State</th><th>FIPS</th><th>Research stage</th><th>Sources</th></tr></thead><tbody id="countyRows"></tbody></table></div>
+<div id="pagination"><span id="paginationLabel"></span><div><button class="secondary" id="previousPage" type="button">Previous</button> <button class="secondary" id="nextPage" type="button">Next</button></div></div>
+</section>
+<section class="card" id="countyDetails" aria-live="polite">
+<h2>County form intake</h2><p class="muted">Select a county above to view its source research and form-mapping readiness.</p>
+<div id="countyDetailText"></div>
+<ul id="sourceList"></ul>
+<p><a class="button secondary" href="../pdf-mapper-v7.html">Open PDF Mapper V7</a> <a class="button secondary" href="asset-manager.html">Open form review queue</a></p>
+</section>
+<footer>
+Source: <a href="https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html" rel="noopener noreferrer" target="_blank">U.S. Census Gazetteer</a>. Agent progress reflects the last reviewed snapshot committed to <code>main</code>; new findings on the separate <code>automation/wave1-discovery</code> branch are not automatically approved. This dashboard performs no search requests, downloads, or database writes. <a href="https://github.com/clearmyrecord/recordpathai-demo/actions/workflows/wave1-county-discovery.yml" rel="noopener noreferrer" target="_blank">Wave 1 agent workflow</a>.
+</footer>
+</main>
+<script type="module" src="../js/wave1-ops-dashboard.mjs"></script>
+</body></html>
