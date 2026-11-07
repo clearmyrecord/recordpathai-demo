@@ -1,0 +1,51 @@
+name: Vendor official Georgia pre-2013 record restriction blank form
+on:
+  push:
+    branches:
+      - feature/wave1-ga-form-candidate-2026-11-07
+    paths:
+      - .github/workflows/vendor-gbi-pre2013-form.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Install local PDF inspection
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+      - name: Download official blank record-restriction application
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest='assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf'
+          mkdir -p "$(dirname "$dest")"
+          curl --fail --location --retry 3 --max-time 90 --proto '=https' --tlsv1.2 \
+            'https://gbi.georgia.gov/document/publication/request-restrict-arrest-record-instructions-and-request-form/download' \
+            --output "$dest"
+          test "$(wc -c < "$dest")" -ge 10000
+          test "$(wc -c < "$dest")" -le 2000000
+          head -c 5 "$dest" | grep -q '%PDF-'
+          pdfinfo "$dest" | grep -q '^Pages:'
+          pdftotext -layout "$dest" /tmp/form-extracted.txt
+          grep -qi 'REQUEST TO RESTRICT ARREST RECORD' /tmp/form-extracted.txt
+          grep -qi 'Prior to 07/01/2013' /tmp/form-extracted.txt
+          grep -qi 'ARRESTING AGENCY' /tmp/form-extracted.txt
+          grep -qi 'SECTION ONE' /tmp/form-extracted.txt
+          sha256sum "$dest"
+          pdfinfo "$dest" | grep '^Pages:'
+      - name: Commit original official blank PDF
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest='assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf'
+          git config user.name 'RecordPathAI Form Import'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$dest"
+          if ! git diff --cached --quiet; then
+            git commit -m 'Vendor blank official Georgia pre-2013 arrest restriction PDF'
+            git push origin HEAD:feature/wave1-ga-form-candidate-2026-11-07
+          fi
