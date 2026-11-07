@@ -1,5 +1,6 @@
 <!doctype html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>RecordPathAI Admin Asset Manager</title><link rel='stylesheet' href='./css/admin.css'></head><body><div class='admin-wrap'>
 <h1>RecordPathAI Admin Asset Manager</h1>
+<p><a href="./wave1-operations.html">Open Wave 1 County Operations — 512 jurisdictions, source review and PDF Mapper V7</a></p>
 <div class='tabs card'><button class='tab-btn active' data-tab='review'>Review Queue</button><button class='tab-btn' data-tab='crawler'>Court Website Crawler</button><button class='tab-btn' data-tab='jurisdiction'>Jurisdiction Search</button></div>
 <section id='tab-review' class='card'><div class='msg warn'><strong>Warning:</strong> Forms must be reviewed and mapped before activation.</div><div class='grid'><select id='f-state'></select><select id='f-county'></select><select id='f-courtType'></select><select id='f-status'></select><select id='f-formType'></select></div><div class='table-wrap'><table><thead><tr><th>Court</th><th>County</th><th>Court Type</th><th>Form Type</th><th>Status</th><th>Score / Signals</th><th>Links</th><th>Actions</th></tr></thead><tbody id='queue'></tbody></table></div></section>
 <section id='tab-crawler' class='card hide'></section>
