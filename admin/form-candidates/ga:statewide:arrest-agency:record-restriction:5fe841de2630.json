@@ -171,83 +171,12 @@
         "confidence": 0.64,
         "reason": "GBI pre-July-2013 form applicant section only; verify this box manually.",
         "source": "ga-pre2013-layout"
-      },
-      {
-        "page": 3,
-        "name": "generated.current_date",
-        "type": "date",
-        "x": 605,
-        "y": 146,
-        "width": 145,
-        "height": 24,
-        "confidence": 0.58,
-        "reason": "Nearby text label: Date Request Received: _________________________________________________________________",
-        "source": "label-match"
-      },
-      {
-        "page": 3,
-        "name": "generated.current_date",
-        "type": "date",
-        "x": 605,
-        "y": 347,
-        "width": 145,
-        "height": 24,
-        "confidence": 0.58,
-        "reason": "Nearby text label: Date of Arrest: _________________________________________________________________________",
-        "source": "label-match"
-      },
-      {
-        "page": 3,
-        "name": "generated.current_date",
-        "type": "date",
-        "x": 605,
-        "y": 933,
-        "width": 145,
-        "height": 24,
-        "confidence": 0.58,
-        "reason": "Nearby text label: Record Restriction Form Page 2 of 3 Effective Date: 07/01/2013",
-        "source": "label-match"
-      },
-      {
-        "page": 4,
-        "name": "generated.current_date",
-        "type": "date",
-        "x": 605,
-        "y": 150,
-        "width": 145,
-        "height": 24,
-        "confidence": 0.58,
-        "reason": "Nearby text label: Date Request Received: ___________________________________________________________",
-        "source": "label-match"
-      },
-      {
-        "page": 4,
-        "name": "generated.current_date",
-        "type": "date",
-        "x": 605,
-        "y": 582,
-        "width": 145,
-        "height": 24,
-        "confidence": 0.58,
-        "reason": "Nearby text label: If additional Charges from same Arrest Date, other than those identified on Page 2, are",
-        "source": "label-match"
-      },
-      {
-        "page": 4,
-        "name": "generated.current_date",
-        "type": "date",
-        "x": 605,
-        "y": 933,
-        "width": 145,
-        "height": 24,
-        "confidence": 0.58,
-        "reason": "Nearby text label: Record Restriction Form Page 3 of 3 Effective Date: 07/01/2013",
-        "source": "label-match"
       }
     ],
     "diagnostics": [
       "Georgia pre-2013 arrest restriction detected. Only Section One applicant fields suggested; SSN and race/sex require separate secure manual completion. Sections Two/Three are for arresting agency and prosecutor. Never use for arrests on or after 2013-07-01.",
-      "All coordinates are draft suggestions in the mapper's 1.25x reference viewport."
+      "All coordinates are draft suggestions in the mapper's 1.25x reference viewport.",
+      "All Section Two/Three generic label guesses discarded: only applicant-facing page two may be prefilled, subject to review."
     ],
     "profile": "ga-prior-2013-record-restriction"
   },
