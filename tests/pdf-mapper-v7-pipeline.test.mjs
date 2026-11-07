@@ -80,7 +80,7 @@ test("production mode stays blocked absent approval and consent",()=>{
   const c=candidate();
   for(const consent of [true,false]){
     assert.throws(()=>core.buildFillPlan({manifest:c,mappings,caseData:sample(),
-      currentPdfSha256:c.pdf.sha256,mode:"production",consent}),/blocked/);
+      currentPdfSha256:c.pdf.sha256,mode:"production",consent}),/trusted server approval registry/);
   }
   const approved=structuredClone(c);
   approved.active=true;
