@@ -80,3 +80,11 @@ test("database migration is locked to service role, never public or authenticate
  assert.match(file,/verified_termination_requires_evidence/);
  assert.doesNotMatch(file,/grant select[^;]+to authenticated/i);
 });
+
+test("private exports cannot be packed into Git, Cloud Run source or the container",async()=>{
+ for(const file of [".gitignore",".gcloudignore",".dockerignore"]){
+  const rules=await fs.readFile(path.join(root,file),"utf8");
+  for(const pattern of ["private-exports/","private-records/","*.jsonl","*.dat","*.csv","*.xlsx"])
+   assert.ok(rules.includes(pattern),file+" must exclude "+pattern);
+ }
+});
