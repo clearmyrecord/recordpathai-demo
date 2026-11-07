@@ -13,12 +13,15 @@ const intake=globalThis.RecordPathFormRequirements;
 const pipeline=globalThis.RecordPathFormPipeline;
 test("Wave 1 discovery has grounded seed courts for all five states but no unreviewed active form",()=>{
  assert.deepEqual(WAVE1_CODES,["NV","TX","FL","AZ","GA"]);
- assert.equal(catalog.length,10);
+ assert.equal(catalog.length,512);
+ const expected={NV:17,TX:254,FL:67,AZ:15,GA:159};
  for(const code of WAVE1_CODES){
-   assert.equal(catalog.filter(x=>x.state===code).length,2);
-   assert.ok(catalog.filter(x=>x.state===code).every(x=>x.status==="discovery_only"));
+   assert.equal(catalog.filter(x=>x.state===code).length,expected[code]);
+   assert.equal(catalog.filter(x=>x.state===code&&x.priority==="seeded").length,2);
+   assert.ok(catalog.filter(x=>x.state===code&&x.priority==="seeded").every(x=>x.status==="discovery_only"));
  }
- assert.ok(catalog.every(c=>!c.pdfPath&&!c.mappingPath&&!c.active));
+ assert.equal(new Set(catalog.map(c=>c.countyFips)).size,512);
+ assert.ok(catalog.every(c=>!c.pdfPath&&!c.mappingPath&&!c.active&&!c.officialCourtVerified));
 });
 test("Wave 1 discovery queries use current selected state, not Ohio",()=>{
  for(const court of catalog){
