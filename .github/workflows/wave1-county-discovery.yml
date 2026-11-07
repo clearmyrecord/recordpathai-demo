@@ -1,5 +1,8 @@
 name: Wave 1 county form discovery agents
 on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/wave1-county-discovery.yml]
   schedule:
     # Weekdays. Search is disabled unless WAVE1_SEARCH_ENABLED=true and SERPAPI_KEY is present.
     - cron: '23 14 * * 1-5'
@@ -42,14 +45,14 @@ jobs:
         with:
           node-version: '22'
       - name: Restore previous county progress
-        if: ${{ github.event_name == 'schedule' || inputs.state == 'all' || inputs.state == matrix.state }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'push' || inputs.state == 'all' || inputs.state == matrix.state }}
         run: |
           if git fetch origin refs/heads/automation/wave1-discovery:refs/remotes/origin/automation/wave1-discovery 2>/dev/null; then
             git show origin/automation/wave1-discovery:data/wave1-agent-progress.json > /tmp/wave1-progress.json || true
           fi
           test -s /tmp/wave1-progress.json || echo '{"counties":{},"sources":[]}' > /tmp/wave1-progress.json
       - name: Run bounded state discovery agent
-        if: ${{ github.event_name == 'schedule' || inputs.state == 'all' || inputs.state == matrix.state }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'push' || inputs.state == 'all' || inputs.state == matrix.state }}
         env:
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           WAVE1_SEARCH_ENABLED: ${{ vars.WAVE1_SEARCH_ENABLED }}
@@ -61,7 +64,7 @@ jobs:
             --limit="$AGENT_LIMIT" --queries="$AGENT_QUERIES" --mode=search \
             --ledger=/tmp/wave1-progress.json --output=".wave1-agent-output/$AGENT_STATE.json"
       - uses: actions/upload-artifact@v4
-        if: ${{ github.event_name == 'schedule' || inputs.state == 'all' || inputs.state == matrix.state }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'push' || inputs.state == 'all' || inputs.state == matrix.state }}
         with:
           name: wave1-${{ matrix.state }}
           path: .wave1-agent-output/${{ matrix.state }}.json
