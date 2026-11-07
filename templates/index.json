@@ -6,6 +6,22 @@
     "formType": "sealing-conviction",
     "pdfPath": "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-32-conviction.pdf",
     "mappingPath": "templates/ohio/wood-county/sealing-conviction.json",
-    "status": "active"
+    "status": "active",
+    "courtFeeAmountCents": 10000,
+    "courtFeeCheckRequired": true,
+    "courtFeeVerifyWithClerk": true
+  },
+  {
+    "state": "OH",
+    "county": "Wood",
+    "courtType": "court-of-common-pleas",
+    "formType": "sealing-dismissal",
+    "officialFormUrl": "https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/143/Application-for-Sealing-295333-Dismissal-PDF",
+    "pdfPath": null,
+    "mappingPath": null,
+    "status": "manual_pending_verified_pdf_mapping",
+    "courtFeeAmountCents": 0,
+    "courtFeeCheckRequired": false,
+    "courtFeeVerifyWithClerk": true
   }
 ]
