@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>RecordPathAI · Ohio Court & Field Mapping</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:#f2f6fb;color:#152c50}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:1200px;margin:0 auto;padding:28px 18px}
+h1{font-size:clamp(23px,4vw,34px);margin:6px 0}h2{font-size:19px}
+.muted{color:#49617d}.nav{display:flex;gap:20px;flex-wrap:wrap;margin:16px 0}
+a{color:#1756a5}.card{border:1px solid #d1def0;border-radius:13px;background:#fff;padding:18px;margin:16px 0}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.stat{border:1px solid #d9e4f3;border-radius:8px;padding:15px;background:#fafcff}
+.stat strong{display:block;font-size:25px;margin-top:6px}.info{border-left:4px solid #b28122;padding:14px 18px;background:#fff8e9}
+input{font:inherit;padding:10px;width:100%;border-radius:7px;border:1px solid #a9bdd6}
+.table-scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:11px 9px;text-align:left;border-bottom:1px solid #d9e4f3}
+th{background:#f0f5ff}.subtle{font-size:13px;color:#576a83}
+@media(max-width:700px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<div class="subtle">RecordPathAI · Public court metadata only · Internal operations view</div>
+<h1>Ohio Court & Docket Field Mapping</h1>
+<nav class="nav"><a href="wave1-operations.html">Wave 1 operations</a>
+<a href="../record-details.html">Customer record collection</a>
+<a href="https://github.com/clearmyrecord/recordpathai-demo/actions/workflows/ohio-docket-research.yml" target="_blank" rel="noopener noreferrer">Agent 1 workflow</a>
+<a href="https://www.supremecourt.ohio.gov/courts/judicial-system/ohio-trial-courts/" target="_blank" rel="noopener noreferrer">Official Ohio court directory</a></nav>
+<p class="info"><strong>One county may have several courts and websites.</strong> Each actual criminal court must be matched by its official name, type and division, then its own search form, case summary, docket fields and availability reviewed. Candidate URLs and guessed fields are not customer links. This page shows no individual court records.</p>
+<section class="stats" aria-label="Ohio research progress">
+<div class="stat">Ohio counties<strong id="ohCounties">—</strong><span class="subtle">88 total</span></div>
+<div class="stat">Agent 1 assignments<strong id="ohAssigned">—</strong><span class="subtle">Wood pilot excluded</span></div>
+<div class="stat">Counties researched<strong id="ohResearched">—</strong><span class="subtle">Source leads, not approved</span></div>
+<div class="stat">Verified court field maps<strong id="ohFields">—</strong><span class="subtle">Each field requires review</span></div>
+</section>
+<section class="card">
+<h2>Reviewed court lookup links</h2>
+<p class="muted">These links refer to an identified court. Approved links do not imply its search/result fields have been mapped.</p>
+<ul id="reviewedCourts"></ul>
+</section>
+<section class="card">
+<h2>Agent 1 — remaining 87 Ohio counties</h2>
+<label for="countyFilter">Find county</label><input id="countyFilter" type="search" placeholder="Search county names">
+<div class="table-scroll"><table><thead><tr><th>County</th><th>Priority</th><th>Website research</th><th>Exact courts identified</th><th>All portal fields mapped</th></tr></thead><tbody id="countyRows"></tbody></table></div>
+</section>
+<p class="subtle">The agent does not visit defendant docket records or bypass protected websites. To perform provider searches, configure the GitHub repository's <code>SERPAPI_KEY</code> secret and <code>OHIO_RESEARCH_ENABLED=true</code> variable. Research findings are staged for approval, not published automatically.</p>
+</main>
+<script>
+(async function(){
+  const get=async file=>{
+    const r=await fetch("../data/"+file,{cache:"no-store"});
+    if(!r.ok)throw Error("Cannot load "+file);
+    return r.json();
+  };
+  try{
+    const [assigned,ledger,reviewed]=await Promise.all([
+      get("ohio-court-mapping-assignments.json"),
+      get("ohio-docket-agent-progress.json"),
+      get("ohio-court-portal-maps.json")]);
+    document.getElementById("ohCounties").textContent="88";
+    document.getElementById("ohAssigned").textContent=String(assigned.assignments.length);
+    document.getElementById("ohResearched").textContent=String(Object.values(ledger.counties||{}).filter(x=>x.searchedAt).length);
+    document.getElementById("ohFields").textContent=String(
+      (reviewed.courts||[]).filter(x=>x.fieldInventory?.verified&&x.mappings?.status==="approved").length);
+    const list=document.getElementById("reviewedCourts");
+    for(const item of reviewed.courts||[]){
+      if(!item.publicLookup?.approvedForCustomerLink||!item.publicLookup?.verified)continue;
+      const li=document.createElement("li"),a=document.createElement("a");
+      a.textContent=item.courtName+" ("+item.county+" County)";
+      a.href=item.publicLookup.url;a.target="_blank";a.rel="noopener noreferrer";
+      li.append(a);li.append(document.createTextNode(item.fieldInventory?.verified
+        ?" — court website fields reviewed":" — public lookup link verified; search/result fields still need mapping"));
+      list.append(li);
+    }
+    const input=document.getElementById("countyFilter"),tbody=document.getElementById("countyRows");
+    const draw=()=>{
+      tbody.replaceChildren();
+      const q=input.value.trim().toLowerCase();
+      for(const entry of assigned.assignments.filter(x=>x.county.toLowerCase().includes(q))){
+        const status=ledger.counties?.[entry.countySlug]?.status||"Not researched";
+        const values=[entry.county,entry.priority,status,
+          String(entry.exactCourts?.length||0),entry.allObservedFieldsMapped?"Yes":"No"];
+        const tr=document.createElement("tr");
+        for(const value of values){const td=document.createElement("td");td.textContent=value;tr.append(td);}
+        tbody.append(tr);
+      }
+    };
+    input.addEventListener("input",draw);draw();
+  }catch(e){
+    const notice=document.createElement("p");
+    notice.textContent="Ohio research metadata is unavailable. No county status can be confirmed.";
+    document.querySelector(".wrap")?.append(notice);
+  }
+})();
+</script>
+</body></html>
