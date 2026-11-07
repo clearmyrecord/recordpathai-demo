@@ -17,6 +17,12 @@ const args = process.argv.slice(2);
 const getArg = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
 const DRY_RUN = !args.includes('--apply');
 const filters = { state: getArg('state')?.toUpperCase(), county: getArg('county'), tier: getArg('tier'), wave1:args.includes('--wave1') };
+const limitedWave1=filters.wave1 || isWave1(filters.state);
+const countyLimit=Number(getArg('limit') || (limitedWave1 ? 5 : 1000));
+const queryLimit=Number(getArg('queries') || (limitedWave1 ? 1 : 5));
+if(!Number.isInteger(countyLimit)||countyLimit<1||(limitedWave1&&countyLimit>15)||
+   !Number.isInteger(queryLimit)||queryLimit<1||(limitedWave1&&queryLimit>2))
+  throw new Error('Wave 1 discovery hard-capped at 15 counties × 2 queries per run');
 
 const SERPAPI_KEY = process.env.SERPAPI_KEY;
 const SEARCH_QUERIES = discoveryQueries;
@@ -83,7 +89,7 @@ function buildMetadata(court, candidate, scored, pdfAccess, localPath = '') {
     if (filters.tier && !isWave1(court.state)) return countyBySlug.get(court.countySlug)?.tier === filters.tier;
     if (filters.tier && isWave1(court.state)) return false;
     return true;
-  });
+  }).slice(0,countyLimit);
 
   const dedupe = new Set(existingQueue.map((q) => `${q.sourceUrl}|${q.localPath}`));
   const queue = [...existingQueue];
@@ -92,7 +98,7 @@ function buildMetadata(court, candidate, scored, pdfAccess, localPath = '') {
   for (const court of courts) {
     console.log(`Scanning: ${court.courtName}`);
     let best = null;
-    for (const query of SEARCH_QUERIES(court)) {
+    for (const query of SEARCH_QUERIES(court).slice(0,queryLimit)) {
       try {
         const results = await searchSerp(query);
         for (const candidate of results) {
