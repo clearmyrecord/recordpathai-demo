@@ -2570,6 +2570,14 @@ document.addEventListener("DOMContentLoaded", async function () {
             "checkout"
           );
         }
+        // The existing eligibility calculator is not yet validated across
+        // every charge in a multi-count case. Do not approve just the first count.
+        if(Array.isArray(data?.charges) && data.charges.length>1){
+          return showPrerequisiteErrors(
+            ["Multiple-charge cases require a validated case-level legal screen before checkout. No packet payment will be collected."],
+            "checkout"
+          );
+        }
         const template=await loadActiveTemplateForPacket(data);
         if(!template){
           return showPrerequisiteErrors(
