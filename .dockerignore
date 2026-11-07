@@ -18,3 +18,17 @@ coverage
 .wave1-agent-output
 npm-debug.log*
 .DS_Store
+
+# Never commit or package real county court exports, applicant lists or private ingest manifests.
+private-exports/
+private-records/
+records-private/
+*.jsonl
+*.dat
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.parquet
+*.sqlite
+*.db
