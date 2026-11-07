@@ -2,7 +2,9 @@ name: Bootstrap official Wave 1 Census counties
 on:
   push:
     branches: [feature/wave1-512-county-agents-2026-11-07]
-    paths: [.github/workflows/bootstrap-wave1-counties.yml]
+    paths:
+      - .github/workflows/bootstrap-wave1-counties.yml
+      - tools/build-wave1-counties.py
   workflow_dispatch:
 permissions:
   contents: write
