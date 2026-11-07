@@ -17,6 +17,7 @@
   }
   function normalizeDisposition(value) {
     const v=clean(value).toLowerCase().replace(/[\s_-]+/g," ");
+    if (/dismiss/.test(v) && /without prejudice/.test(v)) return ""; // Requires separate statute-of-limitations verification.
     if (/not guilty|acquitted|acquittal/.test(v)) return "Not Guilty";
     if (/dismiss/.test(v)) return "Dismissed";
     if (/no bill|no true bill|not indicted/.test(v)) return "No Bill";
