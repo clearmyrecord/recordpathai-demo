@@ -20,6 +20,8 @@ const files=[
   "pdf-mapper-v7.html",
   "js/pdf-auto-map.js",
   "js/form-pipeline-core.js",
+  // Pure client-side, 15-minute session-only importer; no real records embedded.
+  "js/wood-county-record-prefill.js",
   "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf"
 ];
 for(const file of files){

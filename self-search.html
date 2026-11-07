@@ -102,6 +102,7 @@ footer{border-top:1px solid #d9e3ec;text-align:center;padding:27px 18px;color:va
 </section>
 </main>
 <footer>RecordPathAI.com · Independent record-relief guidance · <a href="privacy.html">Privacy policy</a> · <a href="terms.html">Terms</a> · <a href="mailto:matt@recordpathai.com">Support</a></footer>
+<script src="js/wood-county-record-prefill.js"></script>
 <script>
 (function(){
 "use strict";
@@ -187,6 +188,20 @@ async function woodSearch(card,query,isCase){
      addText(item,"p",String(ch.description||"Charge")+" — "+String(ch.disposition||"Disposition unavailable"));
    }
    addText(item,"p","Please confirm this is your case. This is not a legal eligibility determination.","small muted");
+   if(/^(?:www\.)?recordpathai\.com$/i.test(window.location.hostname) && window.RecordPathWoodCountyPrefill && Array.isArray(hit.defendants) && hit.defendants.length===1) {
+     item.append(button("Use my verified case to prefill RecordPathAI","btn-quiet",()=>{
+       const confirmed=window.confirm(
+         "I confirm this is my own court case, or I have explicit permission from the named person to prepare their application. RecordPathAI will import only the displayed case and charges, not determine eligibility or infer supervision completion."
+       );
+       if(!confirmed)return;
+       try{
+         const result=window.RecordPathWoodCountyPrefill.stage(hit,{confirmOwnRecord:true});
+         if(result.charges>0)window.location.assign("eligibility.html");
+       }catch(error){
+         state.textContent="Cannot safely import this court result: "+String(error.message||"Review the official docket.");
+       }
+     }));
+   }
    card.append(item);
   }
  }catch(err){
