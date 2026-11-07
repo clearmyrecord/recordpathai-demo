@@ -2,6 +2,7 @@
 // individual names, payment, eligibility decisions, or authorized source promotion.
 export const COUNTY_TOTAL=88;
 export const RESEARCH_TARGET_TOTAL=87;
+export const RESEARCH_PHASES=Object.freeze(["common_pleas","municipal","county_courts","other_criminal_courts"]);
 export const OFFICIAL_COURT_DIRECTORY=
   "https://www.supremecourt.ohio.gov/courts/judicial-system/ohio-trial-courts/";
 export function validateOhioRoster(roster){
@@ -37,13 +38,19 @@ export function selectOhioCounties(roster,ledgerRaw,{limit=10,asOf=new Date().to
   if(!Number.isFinite(now))throw Error("Invalid planning date");
   const priority={tier1:0,tier2:1,tier3:2};
   return targets.filter(c=>{
-    const latest=ledger.counties[c.slug]?.searchedAt;
+    const prior=ledger.counties[c.slug]||{};
+    const latest=prior.searchedAt;
     const at=latest?Date.parse(latest):NaN;
-    return !Number.isFinite(at)||now-at>=cooldownDays*86400000;
+    const phaseCount=(prior.researchPhasesCompleted||[]).length;
+    if(phaseCount<RESEARCH_PHASES.length)
+      return !Number.isFinite(at)||(now-at)>=86400000;
+    return !Number.isFinite(at)||(now-at)>=cooldownDays*86400000;
   }).sort((a,b)=>{
-    const seenA=Boolean(ledger.counties[a.slug]?.searchedAt);
-    const seenB=Boolean(ledger.counties[b.slug]?.searchedAt);
-    return Number(seenA)-Number(seenB)||
+    const x=ledger.counties[a.slug]||{},y=ledger.counties[b.slug]||{};
+    const xCount=(x.researchPhasesCompleted||[]).length;
+    const yCount=(y.researchPhasesCompleted||[]).length;
+    return xCount-yCount||
+      Number(Boolean(x.searchedAt))-Number(Boolean(y.searchedAt))||
       (priority[a.tier]??9)-(priority[b.tier]??9)||
       a.county.localeCompare(b.county);
   }).slice(0,limit);
@@ -73,6 +80,11 @@ export function mergeOhioResearch(ledgerRaw,output,{asOf=new Date().toISOString(
       county:a.county,status:a.status,searchedAt:a.searchedAt,
       searches:(old.searches||0)+Math.min(2,Math.max(0,a.searches||0)),
       attempts:(old.attempts||0)+1,
+      researchPhasesCompleted:[...new Set([
+        ...(old.researchPhasesCompleted||[]),
+        ...(Array.isArray(a.researchPhases)?a.researchPhases:[])
+      ].filter(p=>RESEARCH_PHASES.includes(p)))],
+      courtInventoryComplete:false,allPortalFieldsMapped:false,
       approved:false
     };
   }
