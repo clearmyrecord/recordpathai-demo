@@ -102,6 +102,7 @@ footer{border-top:1px solid #d9e3ec;text-align:center;padding:27px 18px;color:va
 </section>
 </main>
 <footer>RecordPathAI.com · Independent record-relief guidance · <a href="privacy.html">Privacy policy</a> · <a href="terms.html">Terms</a> · <a href="mailto:matt@recordpathai.com">Support</a></footer>
+<script src="js/wood-county-record-prefill.js"></script>
 <script>
 (function(){
 "use strict";
@@ -187,6 +188,18 @@ async function woodSearch(card,query,isCase){
      addText(item,"p",String(ch.description||"Charge")+" — "+String(ch.disposition||"Disposition unavailable"));
    }
    addText(item,"p","Please confirm this is your case. This is not a legal eligibility determination.","small muted");
+   if (window.RecordPathWoodCountyPrefill && (hit.defendants||[]).length === 1) {
+     item.append(button("Use this verified case to prefill my record details","btn-quiet",()=>{
+       const confirmed = window.confirm("I confirm this is my case or I have explicit permission from the named person. I understand that missing dates and charges must still be verified with the court.");
+       if (!confirmed) return;
+       try {
+         window.RecordPathWoodCountyPrefill.stage(hit,{confirmOwnRecord:true});
+         window.location.href="eligibility.html";
+       } catch (error) {
+         state.textContent="This result cannot safely prefill a packet: "+String(error.message||"Review the official docket.");
+       }
+     }));
+   }
    card.append(item);
   }
  }catch(err){
