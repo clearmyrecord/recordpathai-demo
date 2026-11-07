@@ -212,7 +212,9 @@
       ...buildAnnotations(pages),
       ...(wood?buildWood(pages):[]),
       ...(georgia?buildGeorgiaPre2013(pages):[]),
-      ...buildGeneric(pages,wood||georgia)
+      // An agency form's later pages belong to government staff, not the
+      // applicant. Do not even suggest editable boxes on those pages.
+      ...(georgia?[]:buildGeneric(pages,wood))
     ]);
     const diagnostics=[];
     if(!hasText && !pages.some(p=>(p.annotations||[]).length))
