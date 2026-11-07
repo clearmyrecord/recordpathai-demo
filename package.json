@@ -11,7 +11,10 @@
     "crawl:forms:ohio:tier1:apply": "node tools/form-crawler.js --state=OH --tier=tier1 --apply",
     "validate:auth": "node tools/validate-auth-flow.js",
     "validate:i18n": "node tools/validate-i18n.js",
-    "test:security": "node --test tests/*.mjs"
+    "test:security": "node --test tests/*.mjs",
+    "forms:candidates:dry": "node tools/prepare-form-candidates.mjs --state=OH --limit=25",
+    "forms:candidates:wood": "node tools/prepare-form-candidates.mjs --state=OH --county=wood --wood --limit=25",
+    "forms:candidates:write": "node tools/prepare-form-candidates.mjs --state=OH --limit=25 --write"
   },
   "dependencies": {
     "cors": "^2.8.5",
