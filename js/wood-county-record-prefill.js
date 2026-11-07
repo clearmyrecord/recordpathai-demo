@@ -25,8 +25,16 @@
     return ""; // No assumptions from charge titles or vague termination codes.
   }
   function splitName(value) {
-    const parts=clean(value).split(/\s+/).filter(Boolean);
-    return { first_name:parts[0]||"", last_name:parts.length>1?parts[parts.length-1]:"", full_name:parts.join(" ") };
+    const full=clean(value);
+    if(full.includes(",")) {
+      const [last,rest]=full.split(",",2);
+      const parts=rest.trim().split(/\s+/).filter(Boolean);
+      return {first_name:parts[0]||"",middle_name:parts.slice(1).join(" "),
+        last_name:last.trim(),full_name:parts.concat(last.trim()).join(" ")};
+    }
+    const parts=full.split(/\s+/).filter(Boolean);
+    return {first_name:parts[0]||"",middle_name:parts.slice(1,-1).join(" "),
+      last_name:parts.length>1?parts[parts.length-1]:"",full_name:parts.join(" ")};
   }
   function buildDraft(match, { confirmOwnRecord=false, defendantIndex=0, nowMs=Date.now() }={}) {
     if(confirmOwnRecord !== true) throw new Error("Explicit applicant record confirmation required");
@@ -94,5 +102,40 @@
     } catch (_err) { sessionStorage.removeItem(KEY);return null; }
   }
   function clear() { if(typeof sessionStorage!=="undefined") sessionStorage.removeItem(KEY); }
-  return Object.freeze({buildDraft,stage,peek,clear,normalizeDisposition});
+  // An approved and user-confirmed result may populate only what its
+  // independently verified docket response actually supplied. No private
+  // bulk database query, person lookup by URL, or new public records.
+  function applyStaged(bridge, {confirmReplace=()=>false, nowMs=Date.now()}={}) {
+    if(!bridge||!bridge.createEmptyPacketData||!bridge.savePacketData||!bridge.loadPacketData)
+      throw new Error("RecordPathAI intake bridge is unavailable");
+    const draft=peek(nowMs);
+    if(!draft)return {status:"empty"};
+    const current=bridge.loadPacketData();
+    const oldNumber=clean(current?.court?.case_number);
+    const oldName=clean(current?.petitioner?.full_name).toLowerCase();
+    const newName=clean(draft?.petitioner?.full_name).toLowerCase();
+    const conflict=(oldNumber&&oldNumber!==draft.court.case_number)||
+      (oldName&&oldName!==newName);
+    if(conflict && confirmReplace({oldNumber,oldName,newNumber:draft.court.case_number,newName})!==true)
+      return {status:"conflict"};
+    // Unrelated user's contact details must not transfer into this applicant.
+    const base=(oldName&&oldName===newName && (!oldNumber||oldNumber===draft.court.case_number))
+      ? current : bridge.createEmptyPacketData();
+    base.petitioner=Object.assign({},base.petitioner||{},draft.petitioner);
+    base.court=Object.assign({},base.court||{},draft.court);
+    base.meta=Object.assign({},base.meta||{},draft.meta);
+    base.charges=draft.charges.map(ch=>({...ch}));
+    base.case=Object.assign({},base.case||{},{
+      all_charges_confirmed:"",proceedings_status:"",
+      state:"Ohio"
+    });
+    base.eligibility=Object.assign({},base.eligibility||{},draft.eligibility,{
+      has_pending_cases:true,waiting_period_complete:false
+    });
+    bridge.savePacketData(base);
+    clear();
+    return {status:"imported",data:base,caseNumber:draft.court.case_number,
+      charges:base.charges.length};
+  }
+  return Object.freeze({buildDraft,stage,peek,clear,applyStaged,normalizeDisposition});
 }));
