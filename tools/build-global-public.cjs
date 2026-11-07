@@ -17,7 +17,9 @@ const files=[
   // Public-only, local-browser document mapping tool and blank official court form.
   // No court record exports, private PDFs, API credentials or user uploads.
   "pdf-mapper-v6.html",
+  "pdf-mapper-v7.html",
   "js/pdf-auto-map.js",
+  "js/form-pipeline-core.js",
   "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf"
 ];
 for(const file of files){
@@ -30,7 +32,7 @@ for(const file of files){
     continue;
   }
   let content=fs.readFileSync(path.join(root,file),"utf8");
-  if(file==="pdf-mapper-v6.html"){
+  if(file==="pdf-mapper-v6.html"||file==="pdf-mapper-v7.html"){
     content=content.replace("</head>",'<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head>');
   }
   if(file==="index.html"){
