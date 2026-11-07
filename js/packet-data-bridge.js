@@ -468,6 +468,19 @@
       return;
     }
 
+    // Support older drafts that stored the full name (e.g. "New York")
+    // while keeping residence completely separate from the filing jurisdiction.
+    if (input.id === "residenceState" && input.tagName === "SELECT" &&
+        value !== undefined && value !== null && String(value).trim() !== "") {
+      const text = String(value).trim().toLowerCase();
+      const match = Array.from(input.options).find(option =>
+        option.value.toLowerCase() === text ||
+        option.textContent.trim().toLowerCase() === text);
+      if (match) {
+        input.value = match.value;
+        return;
+      }
+    }
     input.value = value == null ? "" : value;
   }
 
