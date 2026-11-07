@@ -35,9 +35,12 @@ def build_catalog(archive, seeds):
         files=[n for n in z.namelist() if n.endswith(".txt") and "/" not in n]
         if len(files)!=1: raise ValueError("Unexpected Census Gazetteer files")
         text=z.read(files[0]).decode("utf-8-sig")
-    reader=csv.DictReader(io.StringIO(text),delimiter="\t")
+    first_line=text.splitlines()[0]
+    separator="|" if "|" in first_line else "\t"
+    reader=csv.DictReader(io.StringIO(text),delimiter=separator)
+    reader.fieldnames=[n.strip().lstrip("\ufeff") for n in (reader.fieldnames or [])]
     if not {"USPS","GEOID","NAME"}.issubset(set(reader.fieldnames or [])):
-        raise ValueError("Census county layout unexpectedly changed")
+        raise ValueError("Census county layout unexpectedly changed; header="+repr(reader.fieldnames[:15]))
     seed_index={(s["state"],s["countySlug"]):s for s in seeds}
     if len(seed_index)!=len(seeds):
         raise ValueError("Duplicate curated seed")
