@@ -21,7 +21,7 @@ jobs:
           const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict"),vm=require("node:vm");
           const dir="global-public-build";
           const expected=[
-            "assets/styles.css","index.html","js/pilot-demo.js","js/recordpath-home.js","launch.html","pilot-demo.html","resources/entrepreneurship.html","resources/resources.js","robots.txt","self-search.html","start.html"
+            "assets/styles.css","assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf","index.html","js/pdf-auto-map.js","js/pilot-demo.js","js/recordpath-home.js","launch.html","pdf-mapper-v6.html","pilot-demo.html","resources/entrepreneurship.html","resources/resources.js","robots.txt","self-search.html","start.html"
           ].sort();
           function walk(root,pre=""){return fs.readdirSync(root,{withFileTypes:true}).flatMap(f=>f.isDirectory()?walk(path.join(root,f.name),pre+f.name+"/"):[pre+f.name]);}
           assert.deepEqual(walk(dir).sort(),expected);
@@ -55,5 +55,17 @@ jobs:
           assert(search.includes('name="robots" content="noindex'));
           for(const js of ["js/recordpath-home.js","js/pilot-demo.js","resources/resources.js"])new vm.Script(fs.readFileSync(path.join(dir,js),"utf8"));
           const inline=search.split("<script>")[1]?.split("</script>")[0];assert(inline);new vm.Script(inline);
+          const mapper=fs.readFileSync(path.join(dir,"pdf-mapper-v6.html"),"utf8");
+          assert(mapper.includes("pdf-auto-map.js"));
+          assert(mapper.includes("WOOD_PDF_ASSET"));
+          assert(mapper.includes('name="robots" content="noindex'));
+          assert(!mapper.includes('src="js/auth.js"'));
+          const mapperInline=mapper.split("<script>")[1]?.split("</script>")[0];
+          assert(mapperInline);
+          new vm.Script(mapperInline);
+          new vm.Script(fs.readFileSync(path.join(dir,"js/pdf-auto-map.js"),"utf8"));
+          const blankCourtPdf=fs.readFileSync(path.join(dir,"assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf"));
+          assert(blankCourtPdf.subarray(0,4).toString("ascii")==="%PDF");
+          assert(blankCourtPdf.length>100000);
           console.log("Public fallback contains only approved assets and valid client-side scripts.");
           NODE
