@@ -1201,7 +1201,10 @@ document.addEventListener("DOMContentLoaded", async function () {
           CALIFORNIA: "CA",
           ARIZONA: "AZ",
           TEXAS: "TX",
-          FLORIDA: "FL"
+          FLORIDA: "FL",
+          GEORGIA: "GA",
+          ILLINOIS: "IL",
+          UTAH: "UT"
         };
         return map[v] || v;
       }
@@ -1916,8 +1919,8 @@ document.addEventListener("DOMContentLoaded", async function () {
             .replace(/\s+/g, " ")
             .trim();
 
-        const state = normalizeState(primary.case_state || raw.court?.state || raw.meta?.source_state || "OH");
-        const county = primary.court_county || raw.court?.county || raw.meta?.source_county || "Wood County";
+        const state = normalizeState(primary.case_state || raw.court?.state || raw.meta?.source_state || "");
+        const county = primary.court_county || raw.court?.county || raw.meta?.source_county || "";
 
         const normalizedCharges = charges.length ? charges.map((charge) => ({
           charge_name: charge.charge_name || "",
@@ -1992,7 +1995,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             first_name: petitioner.first_name || "",
             middle_name: petitioner.middle_name || "",
             last_name: petitioner.last_name || "",
-            full_name: fullName || "Name Not Entered",
+            full_name: fullName || "",
             dob: petitioner.dob || "",
             ssn_full: petitioner.ssn_full || "",
             ssn_last4: petitioner.ssn_last4 || "",
@@ -2026,7 +2029,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           court: {
             state,
             county,
-            name: first.court_name || raw.court?.name || "Wood County Court of Common Pleas",
+            name: first.court_name || raw.court?.name || "",
+            court_type: raw.court?.court_type || "",
             department: raw.court?.department || "",
             docket_number: raw.court?.docket_number || first.case_number || "",
             case_number: raw.court?.case_number || first.case_number || "",
@@ -2044,11 +2048,11 @@ document.addEventListener("DOMContentLoaded", async function () {
           eligibility: {
             state_ruleset: state,
             filing_type: "Application for Sealing of Record of Conviction",
-            is_eligible: true,
-            eligibility_status: "Likely Eligible",
+            is_eligible: false,
+            eligibility_status: "Needs Review",
             eligibility_reason: t("packet.waitingPeriodSatisfiedSavedData"),
             estimated_eligible_on: "",
-            waiting_period_complete: true,
+            waiting_period_complete: false,
             has_pending_cases: false,
             has_outstanding_fines: false,
             has_open_warrants: false,
@@ -2622,7 +2626,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
           const raw = readPacketData();
           const data = buildNormalizedPacketData(raw);
-          if (!await ensureWave1FormReady(data)) return;
+          if (!await ensureWave1FormReady(raw)) return;
           const packetEligibility = calculatePacketEligibility(data);
           if (!packetEligibility.isEligibleNow) {
             throw new Error(packetEligibility.isNotYetEligible
@@ -3269,7 +3273,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (!ensureCheckoutPrerequisites()) return;
           const raw = readPacketData();
           const normalizedData = buildNormalizedPacketData(raw);
-          if(!await ensureWave1FormReady(normalizedData))return;
+          if(!await ensureWave1FormReady(raw))return;
           let packetEligibility = resolveCurrentPacketEligibility(normalizedData);
           let checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
           const packetGenerationState = getPacketGenerationState(packetEligibility);
