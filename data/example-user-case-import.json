@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "recordpathai.case-import.v1",
+  "source": {
+    "type": "applicant_supplied_court_copy",
+    "url": "https://www.woodcountyohio.gov/",
+    "record_date": "2026-11-07",
+    "source_id": "FICTIONAL-EXAMPLE-NOT-A-REAL-DOCKET"
+  },
+  "person": {
+    "full_name": "Example Applicant"
+  },
+  "case": {
+    "state": "OH",
+    "county": "Wood",
+    "court_name": "Example Court for Preview Only",
+    "court_type": "court-of-common-pleas",
+    "case_number": "EXAMPLE-2020-001"
+  },
+  "charges": [
+    {
+      "source_charge_id": "COUNT-1",
+      "original_charge": "Example original charge",
+      "original_statute": "SAMPLE-001",
+      "description": "Example final charge",
+      "statute": "SAMPLE-002",
+      "level": "M1",
+      "final_disposition": "dismissed",
+      "disposition_date": "2020-05-10",
+      "termination_date": "",
+      "termination_evidence": ""
+    },
+    {
+      "source_charge_id": "COUNT-2",
+      "original_charge": "Example second charge",
+      "original_statute": "SAMPLE-003",
+      "description": "Example second charge",
+      "statute": "SAMPLE-003",
+      "level": "M4",
+      "final_disposition": "acquitted",
+      "disposition_date": "2020-05-10",
+      "termination_date": "",
+      "termination_evidence": ""
+    }
+  ]
+}
