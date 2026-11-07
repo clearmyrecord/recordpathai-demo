@@ -1378,7 +1378,7 @@
           }
         }
         const assessment = window.RecordPathFormRequirements?.assess?.(data);
-        if (hasRecordDetailsCompletion(charges) && assessment?.screeningComplete &&
+        if (hasRecordDetailsCompletion(charges) && assessment && assessment.missing.length === 0 &&
             window.RecordPathWorkflow) {
           RecordPathWorkflow.markRecordDetailsComplete({ recordDetailsCompletedAt: new Date().toISOString() });
           RecordPathWorkflow.renderProgress("record-details");
