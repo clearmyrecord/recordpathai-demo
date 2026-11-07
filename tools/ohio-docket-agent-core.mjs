@@ -40,7 +40,7 @@ export function selectOhioCounties(roster,ledgerRaw,{limit=10,asOf=new Date().to
   return targets.filter(c=>{
     const prior=ledger.counties[c.slug]||{};
     const latest=prior.searchedAt;
-    const at=latest?Date.parse(latest):NaN;
+    const at=latest?Date.parse(String(latest).slice(0,10)+"T00:00:00Z"):NaN;
     const phaseCount=(prior.researchPhasesCompleted||[]).length;
     if(phaseCount<RESEARCH_PHASES.length)
       return !Number.isFinite(at)||(now-at)>=86400000;
