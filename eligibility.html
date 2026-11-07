@@ -674,6 +674,47 @@
   <script src="js/rules.js"></script>
   <script src="js/app.js"></script>
   <script src="js/packet-data-bridge.js"></script>
+  <script src="js/wood-county-record-prefill.js"></script>
+  <script>
+    (function importVerifiedWoodCountyCase() {
+      const staged = window.RecordPathWoodCountyPrefill?.peek?.();
+      const bridge = window.RecordPathDataBridge;
+      if (!staged || !bridge) return;
+      const current = bridge.loadPacketData();
+      const existingCase = String(current?.court?.case_number || "").trim();
+      if (existingCase && existingCase !== staged.court.case_number) {
+        if (!window.confirm("A different case is already in your RecordPathAI draft. Replace its case and charge details with the court record you selected? Contact information will be kept.")) {
+          window.RecordPathWoodCountyPrefill.clear();
+          return;
+        }
+      }
+      current.meta = Object.assign({}, current.meta || {}, staged.meta);
+      current.court = Object.assign({}, current.court || {}, staged.court);
+      current.petitioner = Object.assign({}, current.petitioner || {}, staged.petitioner, {
+        address: current.petitioner?.address || {}
+      });
+      current.charges = staged.charges; // Only the verified selected case, never a bulk case list.
+      current.eligibility = Object.assign({}, current.eligibility || {}, staged.eligibility);
+      if (typeof bridge.derivePacketData === "function") bridge.derivePacketData(current);
+      bridge.savePacketData(current);
+      localStorage.setItem("firstName", staged.petitioner.first_name);
+      localStorage.setItem("lastName", staged.petitioner.last_name);
+      localStorage.setItem("fullName", staged.petitioner.full_name);
+      localStorage.setItem("caseState", "OH");
+      localStorage.setItem("state", "OH");
+      localStorage.setItem("county", "Wood County");
+      localStorage.setItem("caseNumber", staged.court.case_number);
+      localStorage.setItem("recordPathEligibilityIntake", JSON.stringify({
+        petitioner: {
+          first_name: staged.petitioner.first_name,
+          last_name: staged.petitioner.last_name,
+          full_name: staged.petitioner.full_name
+        },
+        case: { state: "OH", county: "Wood County" }
+      }));
+      window.RecordPathWoodCountyPrefill.clear();
+    })();
+  </script>
   <script src="js/recordwatch-rules.js"></script>
   <script src="js/recordwatch-notifications.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
