@@ -107,13 +107,13 @@
       throw new Error("Court PDF fingerprint changed; re-map and reapprove the new version");
     const mapped=validateMapping(mappings,manifest.pdf.pageCount);
     if(!mapped.ok)throw new Error(mapped.errors.join("; "));
-    if(mode==="production"){
-      const r=manifest.review,m=manifest.mapping;
-      if(!consent||r.status!=="approved"||!r.sourceVerified||!r.mappingApproved||
-        !r.legalRoutingApproved||m.status!=="approved"||m.approvedForPdfSha256!==currentPdfSha256||
-        manifest.active!==true)
-        throw new Error("Unapproved form, source, mapping, routing or applicant consent: production auto-fill blocked");
-    }else if(mode!=="draft")throw new Error("Unsupported fill mode");
+    // An imported JSON file can forge "approved" flags. The browser/shared
+    // helper must never convert self-attested metadata into filing authority.
+    // Production requires a separate authenticated server registry, verified
+    // reviewer action, source-version pin and applicant authorization.
+    if(mode==="production")
+      throw new Error("Production auto-fill requires a trusted server approval registry; disabled in this helper");
+    if(mode!=="draft")throw new Error("Unsupported fill mode");
     if(!caseData||typeof caseData!=="object"||Array.isArray(caseData))throw new Error("Normalized case data required");
     if(mode==="draft"&&caseData.meta?.synthetic!==true)
       throw new Error("Draft previews require explicitly synthetic data");
