@@ -24,6 +24,7 @@
     ["court.state","State where case was filed"],
     ["court.county","County where case was filed"],
     ["court.name","Court handling this case"],
+    ["court.court_type","Official court type"],
     ["court.case_number","Case number"],
     ["charges.0.charge_name","First charge description"],
     ["charges.0.charge_code","First charge statute"],
@@ -84,6 +85,15 @@
     if(Array.isArray(value))return value.length>0;
     return typeof value==="boolean"||typeof value==="number";
   }
+  function dateStatus(value){
+    if(value==null||String(value).trim()==="")return "missing";
+    const v=String(value).trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return "invalid";
+    const parsed=new Date(v+"T00:00:00Z");
+    if(!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==v||
+       v>new Date().toISOString().slice(0,10))return "invalid";
+    return "valid";
+  }
   function canonicalCharge(data){
     return Array.isArray(data?.charges)?data.charges.filter(c=>c&&typeof c==="object"):[];
   }
@@ -99,8 +109,8 @@
       result.reviewReasons.push("Every charge needs its own verified final disposition.");
     if(data?.case?.proceedings_status!=="none")
       result.reviewReasons.push("Verify whether related criminal proceedings remain open.");
-    if(charges.some(c=>!has(c.disposition_date)))
-      result.reviewReasons.push("Each charge requires its actual final disposition date.");
+    if(charges.some(c=>dateStatus(c.disposition_date)!=="valid"))
+      result.reviewReasons.push("Each charge needs a real, historical, separately verified disposition date.");
     if(result.reviewReasons.length)return result;
     const convicted=outcomes.some(x=>x==="convicted");
     const other=outcomes.some(x=>x!=="convicted");
@@ -119,12 +129,12 @@
     const county=String(data?.court?.county||"").trim().toLowerCase().replace(/\s+county$/,"");
     const type=String(data?.court?.court_type||"").trim();
     const form=classify(data).candidateFormType;
-    if(!state||!county||!form||!Array.isArray(entries))return null;
+    if(!state||!county||!type||!form||!Array.isArray(entries))return null;
     const matching=entries.filter(e=>e&&normalizeState(e.state)===state &&
       String(e.county||"").trim().toLowerCase().replace(/\s+county$/,"")===county &&
       e.formType===form&&e.status==="active");
     if(!matching.length)return null;
-    return matching.find(e=>!type||e.courtType===type)||null;
+    return matching.find(e=>e.courtType===type)||null;
   }
   function mappedKeys(mappings,chargeCount){
     if(!Array.isArray(mappings))return [];
@@ -185,12 +195,88 @@
     const missingOther=missingCharges.filter(r=>!missing.some(m=>m.key===r.key));
     const allMissing=[...missing,...missingOther];
     const review=[...info.classification.reviewReasons];
+    let needsEvidenceReview=false;
+    function missingField(key,label){
+      if(!allMissing.some(x=>x.key===key))allMissing.push({key,label});
+      needsEvidenceReview=true;
+    }
+    allCharges.forEach((c,i)=>{
+      const disposition=dateStatus(c.disposition_date), discharge=dateStatus(c.discharge_date);
+      const outcome=normalizeOutcome(c.final_disposition||c.disposition);
+      if(disposition==="invalid"){
+        missingField("charges."+i+".disposition_date","Charge "+(i+1)+": invalid/future disposition date");
+        review.push("Charge "+(i+1)+": reconcile invalid or future disposition date.");
+      }
+      if(outcome==="convicted"){
+        if(discharge!=="valid"){
+          missingField("charges."+i+".discharge_date","Charge "+(i+1)+": verified final discharge date");
+          review.push("Charge "+(i+1)+": final discharge must be documented separately from disposition.");
+        }else if(disposition==="valid"&&c.discharge_date<c.disposition_date){
+          missingField("charges."+i+".discharge_date","Charge "+(i+1)+": discharge date predates disposition");
+          review.push("Charge "+(i+1)+": review conflicting completion and disposition dates.");
+        }
+      }else if(discharge==="invalid"){
+        missingField("charges."+i+".discharge_date","Charge "+(i+1)+": invalid completion date");
+      }
+      if(c.reported_termination_date_unverified&&!has(c.discharge_date)){
+        review.push("Charge "+(i+1)+": imported termination date is reported, not verified final discharge.");
+        needsEvidenceReview=true;
+      }
+    });
+    if(allCharges.length>1){
+      review.push("Multiple counts require case-wide legal verification before payment or filing.");
+      needsEvidenceReview=true;
+    }
+    if(data?.meta?.verification_status==="unverified_user_supplied"){
+      review.push("User-supplied record needs confirmation against the current official docket.");
+      needsEvidenceReview=true;
+    }
     if(info.needsSpecificFormReview)review.push("Court-specific form mapping has not been verified for this case.");
     if(allMissing.length)review.push("Complete or verify missing screening / mapped court-form fields.");
     return {...info,missing:allMissing,review:[...new Set(review)],
-      screeningComplete:allMissing.length===0&&info.classification.reviewReasons.length===0,
+      screeningComplete:allMissing.length===0&&info.classification.reviewReasons.length===0&&!needsEvidenceReview,
       courtReady:false,eligible:false};
   }
+  function buildPreparationWorksheet(data,options={}){
+    const report=assess(data,options),charges=canonicalCharge(data);
+    const clean=x=>String(x==null||x===""?"Not provided":x).replace(/[\r\n]+/g," ").slice(0,200);
+    const lines=["RECORDPATHAI — PRIVATE COURT-FORM PREPARATION WORKSHEET",
+      "DRAFT ONLY. NOT A COURT FORM, ELIGIBILITY DETERMINATION OR FILING AUTHORIZATION.",
+      "Date: "+new Date().toISOString().slice(0,10),"",
+      "State: "+clean(report.stateName),
+      "County: "+clean(data?.court?.county),"Court: "+clean(data?.court?.name),
+      "Court type: "+clean(data?.court?.court_type),"Case number: "+clean(data?.court?.case_number),
+      "Applicant: "+clean(data?.petitioner?.full_name),
+      "All charges confirmed: "+clean(data?.case?.all_charges_confirmed),
+      "Related proceedings: "+clean(data?.case?.proceedings_status),
+      "Potential form DISCOVERY key: "+clean(report.classification.candidateFormType),
+      "Verified court mapping: "+(report.sourceForm?.mappingStatus||"UNAVAILABLE / NOT APPROVED"),
+      "Baseline screening data complete: "+(report.screeningComplete?"Yes, subject to review":"No"),
+      "Legal eligibility: NOT DETERMINED",""];
+    charges.forEach((c,i)=>{
+      lines.push("CHARGE "+(i+1),
+        "Original allegation: "+clean(c.original_charge_name||c.original_charge),
+        "Original statute: "+clean(c.original_charge_code||c.original_statute),
+        "Final charge: "+clean(c.charge_name),"Final statute: "+clean(c.charge_code),
+        "Degree: "+clean(c.level||c.degree),
+        "Final disposition: "+clean(c.final_disposition||c.disposition),
+        "Disposition date: "+clean(c.disposition_date),
+        "Verified separate final-discharge date: "+clean(c.discharge_date),
+        "Reported UNVERIFIED termination date: "+clean(c.reported_termination_date_unverified),"");
+    });
+    lines.push("MISSING INFORMATION");
+    if(!report.missing.length)lines.push("No baseline gaps; court/legal review still required.");
+    report.missing.forEach(x=>lines.push("- "+x.label+" ["+x.key+"]"));
+    lines.push("","REVIEW NEEDED");
+    report.review.forEach(x=>lines.push("- "+x));
+    lines.push("","NEXT ACTIONS",
+      "1. Confirm every charge, plea amendment, outcome and judgment date against the court docket.",
+      "2. Obtain separate discharge/sentence-completion evidence for convictions.",
+      "3. Verify current state-law exclusions, waiting periods, pending cases and the approved court form.",
+      "4. Confirm any fee, signature, notarization, service and filing instructions with the clerk.",
+      "5. This document is a private worksheet; it must not be mailed or filed as an application.");
+    return lines.join("\n")+"\n";
+  }
   return Object.freeze({WAVE1,PILOT,PREPARATORY,STATE_NAMES,COMMON_SCREEN,
-    normalizeState,normalizeOutcome,get,classify,relevantEntry,mappedKeys,requirements,assess,STATE_PREP_FIELDS});
+    normalizeState,normalizeOutcome,get,dateStatus,classify,relevantEntry,mappedKeys,requirements,assess,buildPreparationWorksheet,STATE_PREP_FIELDS});
 }));

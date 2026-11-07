@@ -870,11 +870,12 @@
           const assessment = await window.RecordPathWave1Intake?.refresh?.();
           if (assessment && ["wave1","pilot","preparatory"].includes(assessment.scope)
               && assessment.missing.length) {
-            const first = assessment.missing[0];
-            alert("Before continuing, please enter the essential form/screening fields. First missing: " +
-              first.label + ". If the court record is unavailable, request verification rather than guessing.");
-            document.getElementById("formRequirementsPanel")?.scrollIntoView({behavior:"smooth",block:"center"});
-            return;
+            // Moving to Record Details is allowed so users can add and verify all counts.
+            // Missing form/evidence fields remain blocked from packet checkout.
+            const notice = document.getElementById("formRequirementsReview");
+            if (notice) notice.textContent =
+              "Record Details will collect the remaining "+assessment.missing.length+
+              " fields. This intake is saved as an incomplete draft; no filing is authorized.";
           }
           renderRecordWatchPanel();
           window.location.href = "record-details.html";
@@ -958,7 +959,7 @@
       const email = getValue("email");
       const phone = getValue("phone");
       const residenceState = getValue("residenceState");
-      const caseState = getValue("caseState") || "Ohio";
+      const caseState = getValue("caseState") || "";
 
       if (fullName) localStorage.setItem("fullName", fullName);
       if (firstName) localStorage.setItem("firstName", firstName);

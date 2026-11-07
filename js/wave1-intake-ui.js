@@ -64,6 +64,65 @@
       listNode.append(li);
     }
   }
+  // Browser-only preparation worksheet: no upload, API call or court filing.
+  let worksheetButton=null, chargeAudit=null;
+  function renderChargeAudit(data){
+    if(!chargeAudit){
+      const container=document.createElement("div");
+      container.id="formRequirementsChargeAudit";
+      const h=document.createElement("h4");
+      h.textContent="Charge-by-charge record verification";
+      const detail=document.createElement("p");
+      detail.textContent="Disposition is the judgment/outcome date; final discharge is when the sentence and supervision actually ended. Never assume they match.";
+      detail.style.fontSize="0.9rem";
+      chargeAudit=document.createElement("ul");
+      container.append(h,detail,chargeAudit);
+      panel.append(container);
+    }
+    chargeAudit.replaceChildren();
+    const charges=Array.isArray(data?.charges)?data.charges:[];
+    if(!charges.length){
+      const li=document.createElement("li");
+      li.textContent="No charges recorded yet. Continue to Record Details to identify each count.";
+      chargeAudit.append(li);
+    }
+    charges.forEach((c,index)=>{
+      const li=document.createElement("li");
+      const normalized=engine.normalizeOutcome(c.final_disposition||c.disposition);
+      const disposition=engine.dateStatus(c.disposition_date);
+      const discharge=engine.dateStatus(c.discharge_date);
+      let summary="Charge "+(index+1)+": "+(c.charge_name||"final charge unknown")+
+        " | Final outcome: "+(normalized==="unknown"?"verify":normalized)+
+        " | Judgment: "+(disposition==="valid"?c.disposition_date:"verify");
+      if(normalized==="convicted")
+        summary+=" | Final discharge: "+(discharge==="valid"?c.discharge_date:"verify separately");
+      if(c.reported_termination_date_unverified&&!c.discharge_date)
+        summary+=" | Imported termination is unverified";
+      li.textContent=summary;
+      chargeAudit.append(li);
+    });
+    if(!worksheetButton){
+      worksheetButton=document.createElement("button");
+      worksheetButton.type="button";
+      worksheetButton.id="downloadPreparationWorksheet";
+      worksheetButton.textContent="Download case preparation worksheet (private TXT)";
+      worksheetButton.style.margin="10px 0";
+      worksheetButton.addEventListener("click",()=>{
+        const current=bridge.loadPacketData();
+        const text=engine.buildPreparationWorksheet(current,{registry,mapping});
+        const blob=new Blob([text],{type:"text/plain;charset=utf-8"});
+        const url=URL.createObjectURL(blob);
+        const link=document.createElement("a");
+        link.href=url;
+        link.download="recordpathai-private-preparation-worksheet.txt";
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),2000);
+      });
+      panel.append(worksheetButton);
+    }
+  }
   function renderMappedInputs(assessment,data){
     const extra=document.getElementById("formRequirementsExtraFields");
     const validator=window.RecordPathFormPipeline;
@@ -137,6 +196,7 @@
       ". Its fields are included in the requirements below."
       :"No court-verified mapped PDF is active for this exact jurisdiction and outcome. Baseline data is captured now; court-specific fields may still need review before a packet can be prepared.");
     displayList(assessment);
+    renderChargeAudit(lastData);
     renderMappedInputs(assessment,lastData);
     const review=document.getElementById("formRequirementsReview");
     if(review)safeText(review,assessment.review.length

@@ -87,8 +87,8 @@ test("Wave 1 HTML starts collecting court-form fields during eligibility, and re
  }
  assert.match(packet,/async function ensureWave1FormReady/);
  assert.match(packet,/Multiple-charge cases require a validated case-level legal screen/);
- assert.match(packet,/if\(!await ensureWave1FormReady\(normalizedData\)\)return/);
- assert.match(packet,/if \(!await ensureWave1FormReady\(data\)\) return/);
+ assert.match(packet,/if\(!await ensureWave1FormReady\(raw\)\)return/);
+ assert.match(packet,/if \(!await ensureWave1FormReady\(raw\)\) return/);
  for(const [name,html] of [["eligibility.html",eligibility],["record-details.html",details],["packet.html",packet]]){
    for(const inline of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)){
      if(inline[1].trim())assert.doesNotThrow(()=>new vm.Script(inline[1]),name);
