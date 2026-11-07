@@ -15,11 +15,11 @@ case "$1 $2 $3" in
   "run services describe")
     [[ " $* " == *" --format=json "* ]] || { echo "Unexpected describe format" >&2;exit 80; }
     if [[ "$state" == initial ]]; then
-      printf '%s\n' '{"status":{"url":"https://recordpathai.invalid","traffic":[{"revisionName":"recordpathai-old","percent":100}]}}'
+      printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","traffic":[{"revisionName":"recordpathai-old","percent":100}]}}'
     elif [[ "$state" == deployed ]]; then
-      printf '%s\n' '{"status":{"url":"https://recordpathai.invalid","latestCreatedRevisionName":"recordpathai-new","latestReadyRevisionName":"recordpathai-new","traffic":[{"revisionName":"recordpathai-old","percent":100},{"revisionName":"recordpathai-new","percent":0,"tag":"recordpathai-preview","url":"https://recordpathai-preview---recordpathai.invalid"}]}}'
+      printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","latestCreatedRevisionName":"recordpathai-new","latestReadyRevisionName":"recordpathai-new","traffic":[{"revisionName":"recordpathai-old","percent":100},{"revisionName":"recordpathai-new","percent":0,"tag":"recordpathai-preview","url":"https://recordpathai-preview---recordpathai-abc-uw.a.run.app"}]}}'
     elif [[ "$state" == promoted ]]; then
-      printf '%s\n' '{"status":{"url":"https://recordpathai.invalid","latestCreatedRevisionName":"recordpathai-new","latestReadyRevisionName":"recordpathai-new","traffic":[{"revisionName":"recordpathai-new","percent":100},{"revisionName":"recordpathai-new","percent":0,"tag":"recordpathai-preview","url":"https://recordpathai-preview---recordpathai.invalid"}]}}'
+      printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","latestCreatedRevisionName":"recordpathai-new","latestReadyRevisionName":"recordpathai-new","traffic":[{"revisionName":"recordpathai-new","percent":100},{"revisionName":"recordpathai-new","percent":0,"tag":"recordpathai-preview","url":"https://recordpathai-preview---recordpathai-abc-uw.a.run.app"}]}}'
     else
       echo "Unexpected describe after rollback" >&2
       exit 81
@@ -65,10 +65,10 @@ case "$url" in
   *)echo "Unknown requested path $url" >&2;exit 81;;
 esac
 case "$url" in
-  https://recordpathai-preview---recordpathai.invalid/*)
+  https://recordpathai-preview---recordpathai-abc-uw.a.run.app/*)
     if [[ "${MOCK_FAIL_STAGE:-}" == "$page" ]];then marker="page missing verification marker";fi
     ;;
-  https://recordpathai.invalid/*)
+  https://recordpathai-abc-uw.a.run.app/*)
     if [[ "${MOCK_FAIL_PRODUCTION:-}" == "$page" ]];then marker="page missing verification marker";fi
     ;;
   *)echo "Not a permitted local mock host" >&2;exit 82;;
