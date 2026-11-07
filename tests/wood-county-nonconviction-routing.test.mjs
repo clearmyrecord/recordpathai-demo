@@ -56,7 +56,7 @@ test("convictions and mixed or unresolved outcomes never silently use dismissal 
   assert.equal(route.analyze(caseData(["Convicted"])).formType,"sealing-conviction");
   assert.equal(route.analyze(caseData(["Dismissed","Convicted"])).ready,false);
   assert.equal(route.analyze(caseData(["Pending"])).ready,false);
-  assert.equal(route.analyze(caseData(["Not Guilty","No Bill"])).ready,false); // No-bill requires dated report and period check.
+  assert.equal(route.analyze(caseData(["Not Guilty","No Bill"])).formType,"sealing-dismissal"); // Two-year no-bill period elapsed.
 });
 test("official imported PDF is present; mapper is present; template stays manual until field map reviewed",()=>{
   const assets="assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf";
