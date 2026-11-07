@@ -793,14 +793,14 @@
                 <div class="field"><label for="dateOfBirth">Date of Birth</label><input id="dateOfBirth" data-path="petitioner.dob" type="date" /></div>
                 <div class="field"><label for="email">Email</label><input id="email" data-path="petitioner.email" type="email" placeholder="Email address" /></div>
                 <div class="field"><label for="phone">Phone</label><input id="phone" data-path="petitioner.phone" type="text" placeholder="Phone number" /></div>
-                <div class="field"><label for="residenceState">Residence State</label><select id="residenceState" data-path="petitioner.address.state"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option></select></div>
+                <div class="field"><label for="residenceState">Residence State</label><select id="residenceState" data-path="petitioner.address.state"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option><option value="GA">Georgia</option><option value="IL">Illinois</option><option value="UT">Utah</option></select></div>
               </div>
             </section>
 
             <section class="intake-section" aria-labelledby="courtSectionTitle">
               <div class="section-head"><div><h2 id="courtSectionTitle">2. Court / Case Information</h2><p>These fields drive court routing, packet generation, RecordWatch duplicate matching, and dashboard status.</p></div></div>
               <div class="record-grid">
-                <div class="field"><label for="caseState">Case State</label><select id="caseState"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option></select><div class="helper">The case state is where the case was filed.</div></div>
+                <div class="field"><label for="caseState">Case State</label><select id="caseState"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option><option value="GA">Georgia</option><option value="IL">Illinois</option><option value="UT">Utah</option></select><div class="helper">The case state is where the case was filed.</div></div>
                 <div class="field"><label for="county">County</label><input id="county" list="countySuggestions" placeholder="County" /></div>
                 <div class="field"><label for="courtName">Court Name</label><input id="courtName" list="courtSuggestions" placeholder="Court name" /></div>
                 <div class="field"><label for="caseNumber">Case Number</label><input id="caseNumber" placeholder="Case number" /></div>
@@ -820,6 +820,20 @@
               </div>
               <div class="record-status" id="recordStatus">1 charge added</div>
               <div class="record-list" id="offenseList"></div>
+              <div class="record-grid" style="margin-top:14px">
+                <div class="field"><label for="allChargesConfirmed">All charges from this case included?</label>
+                  <select id="allChargesConfirmed"><option value="">Select</option>
+                    <option value="yes">Yes, matched against the docket</option>
+                    <option value="no">No, additional charges missing</option>
+                    <option value="unsure">Unsure, verification needed</option>
+                  </select></div>
+                <div class="field"><label for="proceedingsStatus">Other related criminal proceedings?</label>
+                  <select id="proceedingsStatus"><option value="">Select</option>
+                    <option value="none">None known</option>
+                    <option value="open">Yes, open proceedings</option>
+                    <option value="unsure">Unsure</option>
+                  </select></div>
+              </div>
             </section>
 
             <section class="intake-section" aria-labelledby="outcomeSectionTitle">
@@ -858,11 +872,19 @@
                   <div class="field"><label for="detentionFacility" data-i18n="record.detentionFacility">Jail / Detention Facility</label><input id="detentionFacility" placeholder="Jail or detention facility" data-i18n-placeholder="record.detentionFacilityPlaceholder" /></div>
                   <div class="field"><label for="bookingNumber" data-i18n="record.bookingNumber">Booking Number</label><input id="bookingNumber" placeholder="Booking number" data-i18n-placeholder="record.bookingNumberPlaceholder" /></div>
                   <div class="field"><label for="arrestCounty" data-i18n="record.arrestCounty">Arrest County</label><input id="arrestCounty" list="countySuggestions" /></div>
-                  <div class="field"><label for="arrestState" data-i18n="record.arrestState">Arrest State</label><select id="arrestState"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option></select></div>
+                  <div class="field"><label for="arrestState" data-i18n="record.arrestState">Arrest State</label><select id="arrestState"><option value="">Select</option><option value="OH">Ohio</option><option value="NV">Nevada</option><option value="CA">California</option><option value="AZ">Arizona</option><option value="TX">Texas</option><option value="FL">Florida</option><option value="GA">Georgia</option><option value="IL">Illinois</option><option value="UT">Utah</option></select></div>
                 </div>
               </details>
             </section>
 
+            <section class="intake-section" id="formRequirementsPanel" aria-label="Court form field readiness">
+              <h2 id="formRequirementsState">Form field readiness</h2>
+              <p id="formRequirementsSummary"></p>
+              <p id="formRequirementsMapping" class="helper"></p>
+              <details><summary>Collected and missing screening/form fields</summary>
+                <ul id="formRequirementsList"></ul></details>
+              <p id="formRequirementsReview" role="status"></p>
+            </section>
             <div class="actions">
               <a href="eligibility.html" class="btn btn-secondary">Back</a>
               <button type="button" id="saveProgressBtn" class="btn btn-secondary">Save Progress</button>
@@ -915,6 +937,8 @@
 </footer>
 
   <script src="js/packet-data-bridge.js"></script>
+  <script src="js/wave1-form-requirements.js"></script>
+  <script src="js/wave1-intake-ui.js"></script>
   <script src="js/recordwatch-rules.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/translate.js"></script>
@@ -1048,6 +1072,20 @@
             <div class="field"><label data-i18n="packet.offenseCode">Statute / Offense Code</label><input data-field="charge_code" list="offenseCodeSuggestions" placeholder="Statute code" /></div>
             <div class="field"><label data-i18n="packet.level">Degree / Level</label><select data-field="degree"><option value="">Select</option><option value="MM">Minor Misdemeanor / MM</option><option value="M1">Misdemeanor 1 / M1</option><option value="M2">Misdemeanor 2 / M2</option><option value="M3">Misdemeanor 3 / M3</option><option value="M4">Misdemeanor 4 / M4</option><option value="F1">Felony 1 / F1</option><option value="F2">Felony 2 / F2</option><option value="F3">Felony 3 / F3</option><option value="F4">Felony 4 / F4</option><option value="F5">Felony 5 / F5</option></select><div class="helper">Saved as both degree and level aliases for packet compatibility.</div></div>
             <div class="field"><label>Offense / Incident Date</label><input type="date" data-field="offense_date" /><div class="helper">When the incident or offense occurred.</div></div>
+            <div class="field"><label>Final disposition of THIS charge</label>
+              <select data-field="final_disposition"><option value="">Verify final outcome</option>
+                <option value="Convicted">Convicted</option>
+                <option value="Dismissed">Dismissed</option>
+                <option value="Not Guilty">Not Guilty</option>
+                <option value="Acquitted">Acquitted</option>
+                <option value="No Bill">No Bill</option>
+                <option value="Pending">Pending / unknown</option>
+              </select></div>
+            <div class="field"><label>Disposition date of THIS charge</label>
+              <input type="date" data-field="disposition_date" /></div>
+            <div class="field"><label>Probation / parole / sentence termination date (if applicable)</label>
+              <input type="date" data-field="discharge_date" />
+              <div class="helper">Separate from disposition. Leave blank if the docket has not verified termination.</div></div>
             <div class="field field-full"><label>Charge Notes</label><textarea data-field="notes" placeholder="Optional notes about this charge"></textarea></div>
             <div class="flag-box"><h3 class="flag-title">Charge Flags</h3><div class="check-grid">
               <label class="check"><input type="checkbox" data-field="pending_charges" /> Pending charges / open case</label>
@@ -1110,13 +1148,14 @@
         const shared = collectSharedCaseData();
         const charges = [];
         offenseList.querySelectorAll(".record-card").forEach((card) => {
-          const charge = Object.assign({}, card._existingCharge || {}, shared);
+          // Preserve each charge's actual outcome, never apply one summary to all.
+          const charge = Object.assign({}, shared, card._existingCharge || {});
           card.querySelectorAll("[data-field]").forEach((input) => {
             const key = input.dataset.field;
             if (input.type === "checkbox") charge[key] = input.checked;
             else charge[key] = String(input.value || "").trim();
           });
-          if (!charge.charge_name && !charge.case_number && !charge.charge_code) return;
+          if (!charge.charge_name && !charge.charge_code && !charge.final_disposition) return;
           const outcome = String(charge.final_disposition || "").toLowerCase();
           charge.is_dismissed = outcome === "dismissed" || outcome === "not guilty" || outcome === "acquitted" || outcome === "no bill";
           charge.level = firstNonEmpty(charge.level, charge.degree, charge.chargeLevel);
@@ -1163,6 +1202,8 @@
         setValue("finalDisposition", first.final_disposition || first.disposition || localStorage.getItem("outcome"));
         setValue("dispositionDate", first.disposition_date || localStorage.getItem("dispositionDate"));
         setValue("dischargeDate", first.discharge_date || first.probation_end_date || localStorage.getItem("dischargeDate"));
+        setValue("allChargesConfirmed", data.case?.all_charges_confirmed);
+        setValue("proceedingsStatus", data.case?.proceedings_status);
         setValue("courtCostsPaid", first.courtCostsPaid || "Unknown");
         setValue("finesPaid", first.finesPaid || "Unknown");
         setValue("restitutionPaid", first.restitutionPaid || "Unknown");
@@ -1290,6 +1331,9 @@
         const profile = collectProfile();
         const shared = collectSharedCaseData();
         const charges = collectCharges();
+        shared.final_disposition = charges[0]?.final_disposition || "";
+        shared.disposition_date = charges[0]?.disposition_date || "";
+        shared.discharge_date = charges[0]?.discharge_date || "";
 
         if (!data.petitioner) data.petitioner = {};
         if (!data.petitioner.address) data.petitioner.address = {};
@@ -1304,6 +1348,8 @@
         if (!data.court) data.court = {};
         if (!data.meta) data.meta = {};
         if (!data.case) data.case = {};
+        data.case.all_charges_confirmed = value("allChargesConfirmed");
+        data.case.proceedings_status = value("proceedingsStatus");
         const first = charges[0] || shared;
         data.court.state = first.case_state || data.court.state || "OH";
         data.court.county = first.court_county || data.court.county || "";
@@ -1315,9 +1361,12 @@
         data.meta.source_county = first.court_county || data.meta.source_county || "";
         normalizeDateAliases(data, charges);
         data.charges = charges;
-
+        data.eligibility = data.eligibility || {};
+        data.eligibility.has_pending_cases = data.case.proceedings_status !== "none" ||
+          charges.some(c=>c.pending_charges||c.pendingCharges);
         RecordPathDataBridge.derivePacketData(data);
         RecordPathDataBridge.savePacketData(data);
+        document.dispatchEvent(new CustomEvent("recordpath:data-updated"));
         saveLegacyKeys(profile, shared, charges);
 
         if (window.RecordWatchBridge && typeof RecordWatchBridge.saveProfileFromEligibility === "function") {
@@ -1326,7 +1375,9 @@
             RecordWatchBridge.saveCaseFromRecordDetails({ charges: charges });
           }
         }
-        if (hasRecordDetailsCompletion(charges) && window.RecordPathWorkflow) {
+        const assessment = window.RecordPathFormRequirements?.assess?.(data);
+        if (hasRecordDetailsCompletion(charges) && assessment?.screeningComplete &&
+            window.RecordPathWorkflow) {
           RecordPathWorkflow.markRecordDetailsComplete({ recordDetailsCompletedAt: new Date().toISOString() });
           RecordPathWorkflow.renderProgress("record-details");
           RecordPathWorkflow.decorateNavigation();
@@ -1402,6 +1453,13 @@
           const result = saveDraft(true);
           if (!hasRecordDetailsCompletion(result.charges)) {
             alert("Add at least one charge or case number before continuing.");
+            return;
+          }
+          const check = await window.RecordPathWave1Intake?.refresh?.();
+          if(check && ["wave1","pilot","preparatory"].includes(check.scope) && check.missing.length) {
+            alert("Form-aware screening is missing: "+check.missing.slice(0,5).map(x=>x.label).join(", ")+
+              ". Complete the charge-specific details and dates before packet review.");
+            document.getElementById("formRequirementsPanel")?.scrollIntoView({behavior:"smooth"});
             return;
           }
           await persistCurrentCaseDraft(result.casePayload, true);
