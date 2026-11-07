@@ -23,6 +23,7 @@ The follow-on Record Details page now provides **a final disposition, dispositio
 
 - If any charge is pending, unknown, or missing a final disposition date: **review required**.
 - If convictions and dismissals appear in the same case: **mixed case, manual review**; no automatic form selection.
+- Until a validated multi-count rules engine is wired to the packet step, **all multi-charge cases are blocked from payment and generation**, including those with the same outcome, to avoid approving a person based solely on the first charge.
 - If all verified final outcomes are convictions: potential `sealing-conviction` form candidate.
 - If all verified final outcomes are nonconvictions: potential `sealing-dismissal` form candidate.
 - This is only a *form-discovery key*, not a legal eligibility ruling or proof that the form is valid in that state.
