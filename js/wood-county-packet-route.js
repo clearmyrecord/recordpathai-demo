@@ -48,6 +48,7 @@
       const final = String(charge.final_disposition || charge.finalDisposition || charge.disposition || "").trim();
       const kind = status(final);
       if (kind === "unknown") return review("Unverified, missing or pending charge disposition. Check official docket.");
+      if (NONCONVICTION.has(kind) && !isoDate(charge.disposition_date || charge.dispositionDate)) return review("Court entry date for the nonconviction disposition is required.");
       if (/without[ _-]?prejudice/i.test(final) && !charge.statuteOfLimitationsVerified && !charge.statute_of_limitations_verified)
         return review("Dismissal without prejudice: verify applicable statute of limitations before routing.");
       if (kind === "no_bill") {
