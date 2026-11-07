@@ -14,8 +14,13 @@ export function discoveryQueries(court){
   const stateName=String(court.stateName||({OH:"Ohio",NV:"Nevada",TX:"Texas",FL:"Florida",AZ:"Arizona",GA:"Georgia"}[state])||state);
   const courtName=String(court.courtName||"").trim();
   const county=String(court.county||"").trim();
-  if(!/^[A-Z]{2}$/.test(state)||!courtName||!county)throw Error("State, court, county required");
-  const base=`${courtName} ${county} County ${stateName}`;
+  if(!/^[A-Z]{2}$/.test(state)||!county)throw Error("State and county required");
+  // Most Census county rows do not yet have a verified court name.
+  // Never make one up just to submit a search query.
+  const countyLabel=court.countyEquivalentType==="independent_city"
+    ? county : `${county} County`;
+  const base=[courtName&&court.courtType!=="unverified"?courtName:"",countyLabel,stateName]
+    .filter(Boolean).join(" ");
   const out=[
     `${base} criminal record sealing expungement official forms PDF`,
     `${base} clerk criminal records relief instructions petition`

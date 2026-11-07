@@ -1,0 +1,47 @@
+name: Bootstrap official Wave 1 Census counties
+on:
+  push:
+    branches: [feature/wave1-512-county-agents-2026-11-07]
+    paths:
+      - .github/workflows/bootstrap-wave1-counties.yml
+      - tools/build-wave1-counties.py
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  census-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Build all county equivalents from official 2026 Census FIPS roster
+        run: python3 tools/build-wave1-counties.py
+      - name: Validate counts, distinct FIPS and original seed preservation
+        run: |
+          python3 - <<'PY'
+          import json
+          a=json.load(open('data/wave1-court-catalog.json'))
+          seeds=json.load(open('data/wave1-court-seeds.json'))
+          expected={'NV':17,'TX':254,'FL':67,'AZ':15,'GA':159}
+          assert len(a)==512
+          assert len(set(x['countyFips'] for x in a))==512
+          assert {s:sum(x['state']==s for x in a) for s in expected}==expected
+          for seed in seeds:
+              x=next(v for v in a if v['state']==seed['state'] and v['countySlug']==seed['countySlug'])
+              assert x['courtName']==seed['courtName']
+              assert x['status']=='discovery_only'
+          assert next(x for x in a if x['state']=='NV' and x['county']=='Carson City')['countyEquivalentType']=='independent_city'
+          assert not any(x.get('officialCourtVerified') for x in a)
+          print('512 unique county equivalents validated. No new courthouse was invented.')
+          PY
+      - name: Commit public coverage catalog to feature branch
+        run: |
+          set -euo pipefail
+          git config user.name "RecordPathAI Census Catalog"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/wave1-court-catalog.json data/wave1-county-provenance.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Expand Wave 1 to 512 verified Census counties and equivalents"
+            git push origin HEAD:feature/wave1-512-county-agents-2026-11-07
+          fi
