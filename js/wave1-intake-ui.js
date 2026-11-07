@@ -123,6 +123,61 @@
       panel.append(worksheetButton);
     }
   }
+  function renderOhioPilotReview(data){
+    let node=document.getElementById("ohioPilotLegalReview");
+    if(engine.normalizeState(data?.court?.state)!=="OH"){
+      if(node)node.remove();
+      return;
+    }
+    const reviewer=window.RecordPathOhioReview;
+    if(!node){
+      node=document.createElement("section");
+      node.id="ohioPilotLegalReview";
+      node.setAttribute("aria-label","Ohio statutory and form review");
+      node.style.marginTop="12px";
+      node.style.borderTop="1px solid #d1d5db";
+      node.style.paddingTop="12px";
+      panel.append(node);
+    }
+    node.replaceChildren();
+    const title=document.createElement("h4");
+    title.textContent="Ohio law + Wood County form preflight — review only";
+    node.append(title);
+    if(!reviewer){
+      const missing=document.createElement("p");
+      missing.textContent="Ohio legal review module did not load. No eligibility determination or payment can proceed.";
+      node.append(missing);
+      return;
+    }
+    const result=reviewer.review(data);
+    const note=document.createElement("p");
+    note.textContent="Updated Ohio law effective September 30, 2025. Court-verified final discharge, original/final counts and current docket are required. The court alone decides eligibility.";
+    node.append(note);
+    const fee=document.createElement("p");
+    fee.textContent="Wood County publishes a $100 conviction-sealing deposit: $50 statutory fee plus up to $50 local fee. Indigency waiver may apply. No court fee or RecordPathAI fee is charged here.";
+    node.append(fee);
+    const list=document.createElement("ul");
+    for(const review of result.chargeReviews){
+      const li=document.createElement("li");
+      const a=review.sealing,b=review.expungement;
+      li.textContent="Charge "+review.index+": sealing window "+
+        (a.date||"cannot establish without records")+" ("+a.status+"); expungement window "+
+        (b.date||"cannot establish without records")+" ("+b.status+").";
+      list.append(li);
+    }
+    for(const issue of result.issues.slice(0,12)){
+      const li=document.createElement("li");
+      li.textContent="Needs verification: "+issue;
+      list.append(li);
+    }
+    node.append(list);
+    const source=document.createElement("a");
+    source.textContent="Read current Ohio Revised Code §2953.32";
+    source.href=result.sources.conviction;
+    source.target="_blank";source.rel="noopener noreferrer";
+    node.append(source);
+    node.dataset.reviewOnly="true";
+  }
   function renderMappedInputs(assessment,data){
     const extra=document.getElementById("formRequirementsExtraFields");
     const validator=window.RecordPathFormPipeline;
@@ -197,6 +252,7 @@
       :"No court-verified mapped PDF is active for this exact jurisdiction and outcome. Baseline data is captured now; court-specific fields may still need review before a packet can be prepared.");
     displayList(assessment);
     renderChargeAudit(lastData);
+    renderOhioPilotReview(lastData);
     renderMappedInputs(assessment,lastData);
     const review=document.getElementById("formRequirementsReview");
     if(review)safeText(review,assessment.review.length
