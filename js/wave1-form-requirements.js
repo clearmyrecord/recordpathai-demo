@@ -144,10 +144,10 @@
     const entry=relevantEntry(data,registry);
     if(entry&&Array.isArray(mapping)&&mapping.length){
       for(const key of mappedKeys(mapping,canonicalCharge(data).length)){
-        if(!base.some(r=>r.key===key)){
-          base.push({key,label:SCREEN_LABELS[key]||key.replace(/\./g," / ").replace(/_/g," "),
+        const existing=base.find(r=>r.key===key);
+        if(existing){existing.required=true;existing.source="court-pdf-mapping";}
+        else base.push({key,label:SCREEN_LABELS[key]||key.replace(/\./g," / ").replace(/_/g," "),
             required:true,source:"court-pdf-mapping"});
-        }
       }
     }
     return {
