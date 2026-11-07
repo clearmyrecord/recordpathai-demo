@@ -44,6 +44,16 @@
     "court.prosecutor_agency":"Prosecutor / agency",
     "attorney.name":"Attorney name"
   });
+  // These are EARLY DATA COLLECTION prompts from state-level workflows, not
+  // verified county-form requirements or a statement of legal eligibility.
+  const STATE_PREP_FIELDS=Object.freeze({
+    NV:[["charges.0.arresting_agency","Arresting agency"],["case.agencies_to_notify","Other agencies holding records"]],
+    TX:[["charges.0.arrest_date","Arrest date"],["charges.0.arresting_agency","Arresting agency"],["case.agencies_to_notify","Agencies potentially needing service"]],
+    FL:[["case.fdle_certificate_status","FDLE eligibility certificate status"],["case.fdle_certificate_id","FDLE certificate reference (if issued)"],["charges.0.arresting_agency","Arresting agency"]],
+    AZ:[["petitioner.other_names","Other legal names used in this case"],["charges.0.arrest_date","Arrest date"],["charges.0.arresting_agency","Arresting agency"],["case.prior_sealing_denial_date","Date of prior petition denial (if any)"]],
+    GA:[["charges.0.arrest_date","Arrest date (important for agency pathway)"],["charges.0.arresting_agency","Arresting agency"],["court.prosecutor_agency","Prosecuting agency"]],
+    OH:[["court.prosecutor_agency","Prosecuting agency (if known)"]]
+  });
   const KNOWN_OUTCOMES=new Set(["convicted","dismissed","acquitted","no_bill"]);
   function normalizeState(value){
     const x=String(value||"").trim().toLowerCase();
@@ -141,6 +151,10 @@
     if(classification.outcome==="conviction"||canonicalCharge(data).some(c=>normalizeOutcome(c.final_disposition)==="convicted")){
       base.push({key:"charges.0.discharge_date",label:SCREEN_LABELS["charges.0.discharge_date"],required:false,source:"completion-review"});
     }
+    for(const [key,label] of STATE_PREP_FIELDS[state]||[]){
+      if(!base.some(r=>r.key===key))base.push({key,label,
+        required:false,source:"state-screen-provisional"});
+    }
     const entry=relevantEntry(data,registry);
     if(entry&&Array.isArray(mapping)&&mapping.length){
       for(const key of mappedKeys(mapping,canonicalCharge(data).length)){
@@ -178,5 +192,5 @@
       courtReady:false,eligible:false};
   }
   return Object.freeze({WAVE1,PILOT,PREPARATORY,STATE_NAMES,COMMON_SCREEN,
-    normalizeState,normalizeOutcome,get,classify,relevantEntry,mappedKeys,requirements,assess});
+    normalizeState,normalizeOutcome,get,classify,relevantEntry,mappedKeys,requirements,assess,STATE_PREP_FIELDS});
 }));
