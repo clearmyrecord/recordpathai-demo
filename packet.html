@@ -1509,6 +1509,25 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       function resolveCurrentPacketEligibility(normalizedData, options = {}) {
         const data = normalizedData || buildNormalizedPacketData(readPacketData());
+        const courtRoute = woodPacketRoute(data);
+        if (courtRoute.applicable && (courtRoute.kind === "nonconviction" || !courtRoute.ready)) {
+          const waiting = courtRoute.kind === "waiting";
+          const result = normalizePacketEligibilityResult({
+            status: waiting ? "Not Yet Eligible" : "Needs Review",
+            statusLabel: waiting ? "Not Yet Eligible" : "Needs Review",
+            mode: waiting ? "not_eligible" : "unclear",
+            isEligibleNow: false,
+            isNotYetEligible: waiting,
+            needsReview: true,
+            estimatedEligibleDate: courtRoute.eligibleOn || "",
+            waitingPeriodText: waiting ? "2 years from no-bill report" : "Court review required",
+            reliefType: "Ohio R.C. 2953.33 nonconviction review",
+            ruleCitation: "Ohio R.C. 2953.33 / 2953.61",
+            flags: [courtRoute.reason || courtRoute.feeNote || "Court verification required"],
+            reason: courtRoute.reason || courtRoute.feeNote || "Review official docket before filing."
+          }, "wood_county_final_outcome_route");
+          return syncResolvedPacketEligibility(data, result) || result;
+        }
         const candidates = [];
         try { candidates.push(normalizePacketEligibilityResult(calculatePacketEligibility(data), "rules_engine")); } catch (error) { console.warn("Rules-engine eligibility resolution failed:", error); }
         candidates.push(normalizePacketEligibilityResult(currentPacketEligibilityResult, "displayed_packet"));
@@ -2596,6 +2615,10 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       async function generateSealingPdf() {
         try {
+          const courtRoute = woodPacketRoute(buildNormalizedPacketData(readPacketData()));
+          if (courtRoute.applicable && (!courtRoute.ready || courtRoute.kind === "nonconviction")) {
+            throw new Error("Official nonconviction PDF mapping is not active. Use the original form and finish the mapped field review first.");
+          }
           if (!ensurePacketGenerationPrerequisites()) return;
           setStatus("Generating PDF packet...");
 
