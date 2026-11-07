@@ -125,7 +125,9 @@ jobs:
           git commit -m "Research Wave 1 court form leads: human review required"
           git push origin automation/wave1-discovery
           if ! gh pr list --head automation/wave1-discovery --base main --state open --json number --jq '.[0].number' | grep -q '[0-9]'; then
-            gh pr create --head automation/wave1-discovery --base main \
+            if ! gh pr create --head automation/wave1-discovery --base main \
               --title "Review Wave 1 form discovery leads (NOT approved)" \
-              --body "County research only. Discovered URLs remain unverified; no form mapping, legal routing, eligibility, payment, mail or court filing is activated."
+              --body "County research only. Discovered URLs remain unverified; no form mapping, legal routing, eligibility, payment, mail or court filing is activated."; then
+              echo "::warning::Review branch saved; enable GitHub Actions pull-request creation or open the PR manually."
+            fi
           fi
