@@ -21,13 +21,16 @@ jobs:
           const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict"),vm=require("node:vm");
           const dir="global-public-build";
           const expected=[
-            "assets/styles.css","assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf","index.html","js/form-pipeline-core.js","js/pdf-auto-map.js","js/pilot-demo.js","js/recordpath-home.js","launch.html","pdf-mapper-v6.html","pdf-mapper-v7.html","pilot-demo.html","resources/entrepreneurship.html","resources/resources.js","robots.txt","self-search.html","start.html"
+            "assets/styles.css","assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf","index.html","js/form-pipeline-core.js","js/pdf-auto-map.js","js/pilot-demo.js","js/recordpath-home.js","js/wood-county-record-prefill.js","launch.html","pdf-mapper-v6.html","pdf-mapper-v7.html","pilot-demo.html","resources/entrepreneurship.html","resources/resources.js","robots.txt","self-search.html","start.html"
           ].sort();
           function walk(root,pre=""){return fs.readdirSync(root,{withFileTypes:true}).flatMap(f=>f.isDirectory()?walk(path.join(root,f.name),pre+f.name+"/"):[pre+f.name]);}
           assert.deepEqual(walk(dir).sort(),expected);
           const home=fs.readFileSync(path.join(dir,"index.html"),"utf8");
           const search=fs.readFileSync(path.join(dir,"self-search.html"),"utf8");
           assert(home.includes('href="self-search.html"'));
+          assert(search.includes('wood-county-record-prefill.js'));
+          assert(search.includes('location.hostname'));
+          new vm.Script(fs.readFileSync(path.join(dir,"js/wood-county-record-prefill.js"),"utf8"));
           const planner=fs.readFileSync(path.join(dir,"start.html"),"utf8");
           assert(planner.includes('id="planner"'));
           assert(planner.includes('No names or case numbers collected'));
