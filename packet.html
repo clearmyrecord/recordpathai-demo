@@ -1100,6 +1100,7 @@
 </footer>
 
   <script src="js/packet-data-bridge.js"></script>
+  <script src="js/wood-county-packet-route.js"></script>
   <script src="js/rules.js"></script>
   <script src="js/rules/date-utils.js"></script>
   <script src="js/rules/state-rules/ohio.js"></script>
@@ -1159,6 +1160,10 @@ document.addEventListener("DOMContentLoaded", async function () {
   // 🔗 Template + PDF sources (cache-busted)
   const TEMPLATE_REGISTRY_URL = "./templates/index.json";
   const TEMPLATE_REGISTRY_STORAGE_KEY = "recordpathai-active-template-registry";
+  const WOOD_DISMISSAL_ASSET = "./assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf";
+  function woodPacketRoute(data) {
+    return window.RecordPathWoodCountyPacketRoute?.analyze?.(data) || { applicable:false };
+  }
 
   // 💳 Payment completion tracking
   const PAYMENT_STORAGE_KEY = "recordPathPaymentComplete";
@@ -1269,6 +1274,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       function getPacketGenerationState(packetEligibility) {
+        const woodRoute = woodPacketRoute(buildNormalizedPacketData(readPacketData()));
+        if (woodRoute.applicable) {
+          if (!woodRoute.ready) return "needsCourtReview";
+          // Pending proceedings anywhere in the applicant's record require human review.
+          if (woodRoute.kind === "nonconviction") return "nonconvictionManual";
+        }
         const checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
         if (!checkoutEligibility.canCheckout) return "notEligible";
         if (isPacketPaymentBypassEnabled()) return "devBypass";
@@ -1700,8 +1711,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       function dispositionToFormType(value) {
-        const v = String(value || '').toLowerCase();
-        return v.includes('dismiss') ? 'sealing-dismissal' : 'sealing-conviction';
+        const outcome = window.RecordPathWoodCountyPacketRoute?.normalizeStatus?.(value) || "";
+        if (["dismissed","acquitted","no_bill"].includes(outcome)) return "sealing-dismissal";
+        if (outcome === "convicted") return "sealing-conviction";
+        return "";
       }
 
       async function loadTemplateRegistry() {
@@ -1723,8 +1736,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         const state = normalizeState(data?.court?.state);
         const county = safe(data?.court?.county).replace(/ county$/i, '').toLowerCase();
         const courtType = deriveCourtType(data?.court?.name);
+        const woodRoute = woodPacketRoute(data);
+        if (woodRoute.applicable && !woodRoute.ready) return null;
         const disposition = data?.charges?.[0]?.final_disposition || data?.charges?.[0]?.disposition || '';
-        const formType = dispositionToFormType(disposition);
+        const formType = woodRoute.applicable ? woodRoute.formType : dispositionToFormType(disposition);
+        if (!formType) return null;
 
         return registry.find((template) =>
           String(template.status).toLowerCase() === 'active' &&
@@ -2462,6 +2478,21 @@ document.addEventListener("DOMContentLoaded", async function () {
         const el = document.getElementById("templateCallout");
         const raw = readPacketData();
         const data = buildNormalizedPacketData(raw);
+        const woodRoute = woodPacketRoute(data);
+        if (woodRoute.applicable && !woodRoute.ready) {
+          el.className = "callout warning";
+          el.textContent = "Manual review needed: " + woodRoute.reason + " No court check will be prepared.";
+          return;
+        }
+        if (woodRoute.applicable && woodRoute.kind === "nonconviction") {
+          el.className = "callout success";
+          el.innerHTML = '<strong>Wood County nonconviction petition (R.C. 2953.33)</strong>. '
+            + 'No $100 court check will be generated. '
+            + 'The official PDF is available to map; automated field filling is pending your mapping. '
+            + '<a href="' + WOOD_DISMISSAL_ASSET + '" target="_blank" rel="noopener">Open source PDF from assets</a>. '
+            + 'Confirm local clerk fee and filing instructions before submission.';
+          return;
+        }
 
         try {
           const selected = await loadActiveTemplateForPacket(data);
@@ -2810,6 +2841,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       async function openSourcePdf() {
         const raw = readPacketData();
         const data = buildNormalizedPacketData(raw);
+        const woodRoute = woodPacketRoute(data);
+        if (woodRoute.applicable && woodRoute.kind === "nonconviction" && woodRoute.ready) {
+          window.open(WOOD_DISMISSAL_ASSET, "_blank", "noopener,noreferrer");
+          return;
+        }
         const selected = selectTemplateForPacket(data, await loadTemplateRegistry());
         if (!selected) {
           alert("Manual Filing Required: no template source PDF available.");
@@ -2828,11 +2864,15 @@ document.addEventListener("DOMContentLoaded", async function () {
         const generateBtn = document.getElementById("generateSealingBtn");
 
         if (generateBtn) {
-          generateBtn.disabled = state === "notEligible";
-          generateBtn.classList.toggle("packet-btn-muted", state === "notEligible");
-          generateBtn.classList.toggle("packet-btn-primary", state !== "notEligible");
+          generateBtn.disabled = state === "notEligible" || state === "needsCourtReview";
+          generateBtn.classList.toggle("packet-btn-muted", state === "notEligible" || state === "needsCourtReview");
+          generateBtn.classList.toggle("packet-btn-primary", state !== "notEligible" && state !== "needsCourtReview");
 
-          if (state === "eligibleUnpaid") {
+          if (state === "nonconvictionManual") {
+            generateBtn.textContent = "Open Nonconviction Petition (No Court Check)";
+          } else if (state === "needsCourtReview") {
+            generateBtn.textContent = "Review Required Before Filing";
+          } else if (state === "eligibleUnpaid") {
             generateBtn.textContent = "Pay $50 & Generate Packet";
           } else if (state === "eligiblePaid") {
             generateBtn.textContent = "Generate PDF Packet";
@@ -2845,7 +2885,13 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         if (!paymentCallout) return;
 
-        if (state === "eligiblePaid") {
+        if (state === "nonconvictionManual") {
+          paymentCallout.className = "callout success";
+          paymentCallout.textContent = "R.C. 2953.33 nonconviction packet: no $100 court check is prepared. Source PDF is available now for mapping; paid automated generation is not enabled for this form yet.";
+        } else if (state === "needsCourtReview") {
+          paymentCallout.className = "callout warning";
+          paymentCallout.textContent = "Review the final docket outcomes and dates before selecting a form or charging any court filing fee.";
+        } else if (state === "eligiblePaid") {
           paymentCallout.className = "callout success";
           paymentCallout.textContent = "Payment complete. Your packet is unlocked and ready to generate.";
         } else if (state === "devBypass") {
@@ -3211,6 +3257,17 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       async function startCheckout(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
+        // Never charge $50 for an unmapped court PDF or create a $100 check for this route.
+        const woodRoute = woodPacketRoute(buildNormalizedPacketData(readPacketData()));
+        if (woodRoute.applicable && !woodRoute.ready) {
+          setCheckoutError(woodRoute.reason);
+          return;
+        }
+        if (woodRoute.applicable && woodRoute.kind === "nonconviction") {
+          window.open(WOOD_DISMISSAL_ASSET, "_blank", "noopener,noreferrer");
+          setStatus("Official nonconviction form opened. Auto-fill becomes available after mapping is uploaded.");
+          return;
+        }
         console.log("[packet checkout] Pay button clicked");
         setCheckoutError("");
         setStatus("Preparing secure checkout...");
