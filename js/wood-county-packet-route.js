@@ -41,6 +41,7 @@
     const charges = Array.isArray(data?.charges) ? data.charges.filter(Boolean) : [];
     function review(reason) { return {applicable:true,ready:false,kind:"review",reason,courtFeeCheckRequired:false,officialFormUrl:""}; }
     if (!caseNo || !charges.length) return review("Case number and every charge's final disposition are required.");
+    if (data?.eligibility?.has_pending_cases || charges.some(c=>c.pending_charges || c.pendingCharges)) return review("Pending criminal proceedings require case-level review before filing.");
     const outcomes = [];
     for (const charge of charges) {
       const chargeNo = String(charge.case_number || charge.caseNumber || "").trim();
