@@ -106,6 +106,7 @@
           <label class="toggle-row"><input id="recordwatchNotifySms" type="checkbox" /> <span>SMS Notifications</span></label>
           <p id="recordwatchSmsNotice" class="meta-note" hidden>SMS alerts are part of Premium RecordWatch.</p>
           <button class="btn" type="submit">Activate RecordWatch</button>
+          <p class="meta-note">A free account is required to save reminders. <a href="signup.html?returnUrl=recordwatch.html">Create an account</a> or <a href="login.html?returnUrl=recordwatch.html">sign in</a>. Both email/password and Google are available.</p>
           <p id="recordwatchEnrollmentStatus" class="muted"></p>
         </form>
       </div>
@@ -210,7 +211,9 @@
       var date = active && (active.eligibility && (active.eligibility.estimatedEligibleDate || active.eligibility.eligibilityDate) || (window.RecordWatchRules ? RecordWatchRules.calculateEligibilityDate(active) : ""));
       var days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(date) : null;
       var profile = Object.assign({}, active && active.personal || {}, window.RecordWatchMonitor ? RecordWatchMonitor.loadProfile() : {});
-      var prefs = currentDraft && currentDraft.recordwatch || {};
+      var pendingEnrollment = {};
+      try { pendingEnrollment = JSON.parse(localStorage.getItem("recordpathai_pending_recordwatch_enrollment") || "{}") || {}; } catch (_) {}
+      var prefs = currentDraft && currentDraft.recordwatch || pendingEnrollment;
       document.getElementById("recordwatchEmail").value = prefs.email || profile.email || localStorage.getItem("email") || "";
       document.getElementById("recordwatchPhone").value = prefs.phone || profile.phone || localStorage.getItem("phone") || "";
       document.getElementById("recordwatchNotifyEmail").checked = prefs.emailNotifications !== false;
@@ -231,7 +234,7 @@
       var smsToggle = document.getElementById("recordwatchNotifySms");
       var smsNotice = document.getElementById("recordwatchSmsNotice");
       smsToggle.addEventListener("change", function () { smsNotice.hidden = !smsToggle.checked; });
-      document.getElementById("recordwatchEnrollmentForm").addEventListener("submit", function (event) {
+      document.getElementById("recordwatchEnrollmentForm").addEventListener("submit", async function (event) {
         event.preventDefault();
         var wantsSms = document.getElementById("recordwatchNotifySms").checked;
         var recordwatchPrefs = {
@@ -246,6 +249,13 @@
         };
         localStorage.setItem("recordpathai_recordwatch_draft", JSON.stringify(recordwatchPrefs));
         localStorage.setItem("recordpathai_pending_recordwatch_enrollment", JSON.stringify(Object.assign({ caseId: active && active.id }, recordwatchPrefs)));
+        // An unauthenticated browser must never be told reminders are active.
+        // Persist only the pending draft and resume after genuine Supabase login.
+        if (!window.RecordPathAuth || !(await RecordPathAuth.requireAuthAsync("activate RecordWatch reminders", "recordwatch.html"))) {
+          document.getElementById("recordwatchEnrollmentStatus").textContent =
+            "Create an account or sign in to activate your saved reminders.";
+          return;
+        }
         if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) {
           RecordPathUserStore.saveCurrentCaseDraft({ recordwatch: recordwatchPrefs, recordWatchStatus: "active", eligibilityDate: date, estimatedEligibleDate: date }, { network: true }).catch(function (error) { console.warn("RecordWatch draft sync skipped:", error); });
         }
@@ -265,6 +275,7 @@
         if (window.RecordPathUserStore && active && active.id) {
           RecordPathUserStore.updateCase(active.id, { recordWatchStatus: "active", eligibilityDate: date, estimatedEligibleDate: date }).catch(function (error) { console.warn("RecordWatch status sync skipped:", error); });
         }
+        localStorage.removeItem("recordpathai_pending_recordwatch_enrollment");
         document.getElementById("recordwatchEnrollmentStatus").textContent = wantsSms ? "Free RecordWatch is active with email reminders. SMS alerts require Premium RecordWatch." : "Free RecordWatch is active with email reminders and dashboard countdown.";
       });
     });
