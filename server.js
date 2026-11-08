@@ -94,7 +94,8 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
       const verified=await verifiedRecordwatchLifetimeSession(session.id,
         session.metadata.user_id,session.metadata.saved_case_id);
       const entitlement=await upsertRecordwatchLifetimeCase(verified);
-      await createRecordwatchLedgerEntryFromSession(verified.metadata.user_id,verified,"lifetime_case");
+      if(entitlement.stripe_checkout_session_id===verified.id && lifetimeCaseEntitled(entitlement,entitlement.saved_case_id))
+        await createRecordwatchLedgerEntryFromSession(verified.metadata.user_id,verified,"lifetime_case");
       return res.json({received:true,product:"premium_recordwatch_lifetime",case_id:entitlement.saved_case_id});
     }
     if(session?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
@@ -1293,7 +1294,7 @@ async function getAdminLedgerSummary() {
   return {
     total_revenue_cents: sumDebit(posted) - sumCredit(posted),
     packet_purchase_revenue_cents: sumDebit(posted.filter((entry) => entry.entry_type === "packet_purchase")),
-    recordwatch_premium_revenue_cents: sumDebit(posted.filter((entry) => entry.entry_type === "recordwatch_subscription")),
+    recordwatch_premium_revenue_cents: sumDebit(posted.filter((entry) => ["recordwatch_subscription","recordwatch_addon"].includes(entry.entry_type))),
     refunds_credits_cents: sumCredit(entries.filter((entry) => ["posted", "refunded", "reversed"].includes(entry.status))),
     failed_payments_cents: sumDebit(entries.filter((entry) => entry.status === "failed")),
     recent_entries: entries.slice(0, 25)
@@ -1859,14 +1860,15 @@ async function createRecordwatchLedgerEntryFromSession(userId, session, plan) {
   }, { userId });
 }
 
-async function getRecordwatchPreferences(userId) {
+async function getRecordwatchPreferences(userId,caseId="") {
   try {
-    const rows = await supabaseRest("recordwatch_notification_preferences", { query: `?user_id=eq.${encodeURIComponent(userId)}&order=updated_at.desc&limit=1` });
+    const caseFilter=isUuid(caseId)?"&saved_case_id=eq."+encodeURIComponent(caseId):"&saved_case_id=is.null&case_id=is.null";
+    const rows = await supabaseRest("recordwatch_notification_preferences", { query: `?user_id=eq.${encodeURIComponent(userId)}${caseFilter}&order=updated_at.desc&limit=1` });
     if (Array.isArray(rows) && rows[0]) return rows[0];
   } catch (error) {
     console.warn("RecordWatch premium preference lookup fallback:", error.message);
   }
-  return recordwatchMemory.preferences.find((item) => item.user_id === userId) || null;
+  return recordwatchMemory.preferences.find((item) => item.user_id === userId && (isUuid(caseId)?item.saved_case_id===caseId:!item.saved_case_id)) || null;
 }
 
 async function saveRecordwatchPreferences(userId, payload = {}) {
@@ -2012,7 +2014,9 @@ app.post("/api/recordwatch/verify-checkout", async (req, res) => {
     const sessionId=safe(req.body?.session_id||req.body?.sessionId);
     const session=await verifiedRecordwatchLifetimeSession(sessionId,user.id,caseId);
     const result=await upsertRecordwatchLifetimeCase(session);
-    const ledgerEntry=await createRecordwatchLedgerEntryFromSession(user.id,session,"lifetime_case");
+    const matchingPayment=result.stripe_checkout_session_id===session.id && lifetimeCaseEntitled(result,caseId);
+    const ledgerEntry=matchingPayment
+      ? await createRecordwatchLedgerEntryFromSession(user.id,session,"lifetime_case") : null;
     return res.json({ok:true,subscription:lifetimeAsSubscription(result),
       premium:lifetimeCaseEntitled(result,caseId),ledgerEntry,duplicate:ledgerEntry?.duplicate===true});
   }catch(error){
@@ -2080,7 +2084,7 @@ app.get("/api/recordwatch/premium-preferences", async (req, res) => {
   try {
     const user = await recordwatchAuthToken(req, res);
     if (!user) return;
-    const preferences = await getRecordwatchPreferences(user.id);
+    const preferences = await getRecordwatchPreferences(user.id,safe(req.query?.saved_case_id));
     res.json({ ok: true, preferences });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
@@ -2091,6 +2095,8 @@ app.post("/api/recordwatch/premium-preferences", async (req, res) => {
   try {
     const user = await recordwatchAuthToken(req, res);
     if (!user) return;
+    const caseId=safe(req.body?.saved_case_id||req.body?.savedCaseId);
+    if(caseId && !isUuid(caseId))return res.status(400).json({ok:false,error:"Valid saved case is required."});
     const preferences = await saveRecordwatchPreferences(user.id, req.body || {});
     res.json({ ok: true, preferences });
   } catch (error) {
