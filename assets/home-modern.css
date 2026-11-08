@@ -124,3 +124,32 @@
 .rp-home .home-faq details:last-child {border-bottom:0}
 .rp-home .home-faq summary {font-size:16px;font-weight:800;color:var(--text);cursor:pointer}
 .rp-home .home-faq p {margin:12px 0 0;max-width:820px;font-size:14px;color:var(--muted);line-height:1.6}
+
+/* Conversion-first right rail: three steps and one primary action. */
+.rp-home .home-conversion-card {
+  display:flex; flex-direction:column; gap:14px;
+  padding:34px 30px; background:rgba(255,255,255,.95);
+  border:1px solid var(--line); border-radius:30px; box-shadow:var(--shadow);
+}
+.rp-home .home-conversion-card h2 {
+  margin:0; color:var(--text);font-size:clamp(24px,2.5vw,32px);
+  letter-spacing:-.025em;line-height:1.2;
+}
+.rp-home .home-conversion-list {
+  list-style:none;display:grid;gap:12px;padding:0;margin:8px 0 14px;
+}
+.rp-home .home-conversion-list li {
+  display:flex;gap:13px;align-items:flex-start;padding:14px;
+  border:1px solid var(--line);border-radius:16px;background:#f8fbff;
+}
+.rp-home .home-conversion-number {
+  flex:0 0 34px;display:grid;place-items:center;height:34px;
+  border-radius:50%;background:#dfe9fb;color:#3774d7;font-weight:800;
+}
+.rp-home .home-conversion-list strong {display:block;color:var(--text);font-size:16px}
+.rp-home .home-conversion-list small {display:block;color:var(--muted);line-height:1.5;font-size:13px;margin-top:5px}
+.rp-home .home-conversion-card > .home-btn {width:100%;margin-top:auto}
+.rp-home .home-conversion-price {font-size:13px!important;text-align:center;margin:0!important;line-height:1.5!important}
+.rp-home .home-process-action {display:flex;justify-content:center;margin-top:22px}
+.rp-home .home-step-caption {display:inline-block;font-size:13px;color:var(--blue-dark);font-weight:800;margin-top:6px}
+@media(max-width:760px){.rp-home .home-conversion-card{padding:26px 22px}}
