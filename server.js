@@ -5,6 +5,7 @@ import path from "path";
 import dns from "node:dns/promises";
 import { RECORDWATCH_BILLING, recordwatchPlan, assertRecordwatchStripePrice, billingPeriod, verifyRecordwatchSubscription, paidRecordwatchCheckout, recordwatchEntitled } from "./src/recordwatch-billing.js";
 import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect, assertFixedPacketAmount, PACKET_PRICE_CENTS } from "./src/payment-security.js";
+import { RECORDWATCH_LIFETIME_CENTS, RECORDWATCH_LIFETIME_PRICE_ENV, assertRecordwatchLifetimePrice, paidRecordwatchLifetimeCheckout, lifetimeCaseEntitled } from "./src/recordwatch-lifetime.js";
 import { quotePacketPricing } from "./src/packet-pricing.js";
 import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
 import { timingSafeEqual, createHash } from "node:crypto";
@@ -50,6 +51,25 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
     return res.status(400).json({ok:false,error:"Invalid RecordWatch Stripe signature."});
   }
   try {
+    // Refunds and disputes revoke only the affected Stripe-verified case purchase.
+    if(["charge.refunded","charge.dispute.created"].includes(event.type)){
+      const charge=event.type==="charge.refunded" ? event.data?.object : null;
+      const dispute=event.type==="charge.dispute.created" ? event.data?.object : null;
+      const piId=typeof (charge?.payment_intent||dispute?.payment_intent)==="string"
+        ? (charge?.payment_intent||dispute?.payment_intent)
+        : (charge?.payment_intent||dispute?.payment_intent)?.id;
+      if(!piId?.startsWith("pi_"))return res.json({received:true});
+      const rows=await supabaseRest("recordwatch_lifetime_cases",{
+        query:"?stripe_payment_intent_id=eq."+encodeURIComponent(piId)+"&limit=1"
+      });
+      if(!Array.isArray(rows)||!rows[0])return res.json({received:true});
+      await supabaseRest("recordwatch_lifetime_cases",{
+        method:"PATCH",query:"?id=eq."+encodeURIComponent(rows[0].id),
+        body:{status:dispute?"disputed":"refunded",revoked_at:new Date().toISOString(),updated_at:new Date().toISOString()},
+        prefer:"return=representation"
+      });
+      return res.json({received:true,product:"premium_recordwatch_lifetime",revoked:true});
+    }
     if(["customer.subscription.created","customer.subscription.updated","customer.subscription.deleted"].includes(event.type)){
       const raw=event.data?.object;
       if(raw?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
@@ -70,6 +90,13 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
     if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
       return res.json({received:true});
     const session=event.data?.object;
+    if(session?.metadata?.product==="premium_recordwatch_lifetime"){
+      const verified=await verifiedRecordwatchLifetimeSession(session.id,
+        session.metadata.user_id,session.metadata.saved_case_id);
+      const entitlement=await upsertRecordwatchLifetimeCase(verified);
+      await createRecordwatchLedgerEntryFromSession(verified.metadata.user_id,verified,"lifetime_case");
+      return res.json({received:true,product:"premium_recordwatch_lifetime",case_id:entitlement.saved_case_id});
+    }
     if(session?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
     if(!paidRecordwatchCheckout(session,session.metadata.user_id))
       return res.status(400).json({ok:false,error:"RecordWatch payment is not verified."});
@@ -1644,7 +1671,7 @@ const RECORDWATCH_PRICE_ENV = {
   annual: "STRIPE_RECORDWATCH_ANNUAL_PRICE_ID",
   addon_12_month: "STRIPE_RECORDWATCH_ADDON_PRICE_ID"
 };
-const RECORDWATCH_PLAN_AMOUNTS = { monthly: 499, annual: 3900, addon_12_month: 1900 };
+const RECORDWATCH_PLAN_AMOUNTS = { monthly: 499, annual: 3900, addon_12_month: 1900, lifetime_case: RECORDWATCH_LIFETIME_CENTS };
 
 function normalizePremiumRecordwatchPlan(plan) {
   const value = safe(plan).toLowerCase();
@@ -1675,6 +1702,75 @@ async function getRecordwatchBillingRow(userId) {
 async function getActiveRecordwatchSubscription(userId) {
   const row=await getRecordwatchBillingRow(userId);
   return isActiveRecordwatchSubscription(row) ? row : null;
+}
+// Lifetime records are separate from legacy Stripe subscriptions. Ownership is
+// scoped by saved_case_id. Never infer paid access from browser/local flags.
+async function getRecordwatchLifetimeCase(userId,caseId){
+  if(!isUuid(userId)||!isUuid(caseId))return null;
+  const rows=await supabaseRest("recordwatch_lifetime_cases",{
+    query:"?user_id=eq."+encodeURIComponent(userId)+"&saved_case_id=eq."+encodeURIComponent(caseId)+"&limit=1"
+  });
+  return Array.isArray(rows)?rows[0]||null:null;
+}
+function lifetimeAsSubscription(row){
+  if(!row)return null;
+  return {
+    ...row,case_id:row.saved_case_id,plan:"lifetime_case",
+    stripe_session_id:row.stripe_checkout_session_id,
+    premium_active:lifetimeCaseEntitled(row,row.saved_case_id),
+    current_period_end:null,cancel_at_period_end:false
+  };
+}
+async function verifiedRecordwatchLifetimeSession(sessionId,userId,caseId){
+  if(!recordwatchStripe || !isUuid(userId) || !isUuid(caseId) ||
+     !/^cs_(test|live)_[A-Za-z0-9]+$/.test(String(sessionId||"")))
+    throw Object.assign(new Error("Invalid RecordWatch checkout identification."),{status:400});
+  const priceId=process.env[RECORDWATCH_LIFETIME_PRICE_ENV];
+  if(!priceId)throw Object.assign(new Error("Lifetime RecordWatch price not configured."),{status:503});
+  const session=await recordwatchStripe.checkout.sessions.retrieve(sessionId);
+  if(!paidRecordwatchLifetimeCheckout(session,userId,caseId,priceId))
+    throw Object.assign(new Error("RecordWatch case payment was not verified."),{status:403});
+  const lines=await recordwatchStripe.checkout.sessions.listLineItems(session.id,{limit:10});
+  if(lines?.data?.length!==1 || lines.data[0]?.price?.id!==priceId ||
+     lines.data[0]?.quantity!==1 || lines.data[0]?.amount_total!==RECORDWATCH_LIFETIME_CENTS)
+    throw Object.assign(new Error("RecordWatch checkout price or quantity mismatch."),{status:403});
+  await getSavedCaseReviewFacts(userId,caseId); // Check real saved-case owner and deletion state.
+  return session;
+}
+async function upsertRecordwatchLifetimeCase(session){
+  const userId=session.metadata.user_id,caseId=session.metadata.saved_case_id;
+  if(!isUuid(userId)||!isUuid(caseId))throw new Error("Valid lifetime case owner required.");
+  const existing=await getRecordwatchLifetimeCase(userId,caseId);
+  const paymentIntent=typeof session.payment_intent==="string"?session.payment_intent:session.payment_intent?.id;
+  const customer=typeof session.customer==="string"?session.customer:session.customer?.id||null;
+  if(existing && lifetimeCaseEntitled(existing,caseId) &&
+     existing.stripe_checkout_session_id!==session.id){
+    // Rare parallel checkouts: return the second payment rather than double-selling a case.
+    await recordwatchStripe.refunds.create({payment_intent:paymentIntent},{
+      idempotencyKey:"recordwatch-duplicate:"+session.id
+    });
+    return existing;
+  }
+  // Ignore delayed old webhook events after a case is purchased again.
+  if(existing?.stripe_checkout_session_id!==session.id &&
+     existing?.status==="active")return existing;
+  const row={
+    user_id:userId,saved_case_id:caseId,plan:"lifetime_case",status:"active",
+    amount_cents:RECORDWATCH_LIFETIME_CENTS,currency:"usd",
+    stripe_checkout_session_id:session.id,stripe_payment_intent_id:paymentIntent,
+    stripe_customer_id:customer,purchased_at:new Date((session.created||Math.floor(Date.now()/1000))*1000).toISOString(),
+    revoked_at:null,updated_at:new Date().toISOString()
+  };
+  // Never resurrect a refunded/disputed session from a replayed event.
+  if(existing?.stripe_checkout_session_id===session.id && existing.status!=="active")
+    return existing;
+  const saved=await supabaseRest("recordwatch_lifetime_cases",{
+    method:existing?"PATCH":"POST",
+    query:existing?"?id=eq."+encodeURIComponent(existing.id):"",
+    body:row,prefer:"return=representation"
+  });
+  if(!Array.isArray(saved)||!saved[0])throw new Error("Lifetime entitlement persistence failed.");
+  return saved[0];
 }
 
 // One verified Stripe subscription => one server-controlled database row.
@@ -1745,12 +1841,13 @@ async function syncVerifiedRecordwatchStripeSubscription(subscription, sessionId
 async function createRecordwatchLedgerEntryFromSession(userId, session, plan) {
   const amount = RECORDWATCH_PLAN_AMOUNTS[plan] || 0;
   if (!amount) return null;
-  const entryType = plan === "addon_12_month" ? "recordwatch_addon" : "recordwatch_subscription";
+  const entryType = plan === "addon_12_month" ? "recordwatch_addon" : "recordwatch_subscription"; // Lifetime is recorded as a one-time purchase (no renewal).
   return createLedgerEntry({
     user_id: userId,
     case_id: session.metadata && (session.metadata.saved_case_id || session.metadata.case_id),
     entry_type: entryType,
-    description: plan === "addon_12_month" ? "Premium RecordWatch 12-month packet add-on" : "Premium RecordWatch subscription",
+    description: plan === "lifetime_case" ? "RecordWatch Premium lifetime case purchase" :
+      plan === "addon_12_month" ? "Premium RecordWatch 12-month packet add-on" : "Premium RecordWatch subscription",
     amount_cents: amount,
     debit_cents: amount,
     credit_cents: 0,
@@ -1773,7 +1870,10 @@ async function getRecordwatchPreferences(userId) {
 }
 
 async function saveRecordwatchPreferences(userId, payload = {}) {
-  const activeSubscription = await getActiveRecordwatchSubscription(userId);
+  const targetCaseId=safe(payload.saved_case_id||payload.savedCaseId);
+  const lifetime=await getRecordwatchLifetimeCase(userId,targetCaseId);
+  const activeSubscription=lifetimeCaseEntitled(lifetime,targetCaseId)
+    ? lifetimeAsSubscription(lifetime) : await getActiveRecordwatchSubscription(userId);
   const phone = safe(payload.phone_number || payload.phoneNumber);
   const consentAt = payload.sms_consent_at || payload.smsConsentAt || (payload.sms_consent || payload.smsConsent ? new Date().toISOString() : null);
   const optedOutAt = payload.sms_opted_out_at || payload.smsOptedOutAt || null;
@@ -1824,8 +1924,7 @@ async function recordwatchAuthToken(req, res) {
 function recordwatchBillingReadiness() {
   const key=process.env.STRIPE_RECORDWATCH_SECRET_KEY||"";
   const mode=/^(sk|rk)_test_/.test(key)?"sandbox":/^(sk|rk)_live_/.test(key)?"live":"unconfigured";
-  const prices=Boolean(process.env.STRIPE_RECORDWATCH_MONTHLY_PRICE_ID &&
-    process.env.STRIPE_RECORDWATCH_ANNUAL_PRICE_ID);
+  const prices=Boolean(process.env[RECORDWATCH_LIFETIME_PRICE_ENV]);
   const webhook=Boolean((process.env.STRIPE_RECORDWATCH_WEBHOOK_SECRET||"").startsWith("whsec_"));
   const persistence=packetDatabaseReady();
   const liveAllowed=mode!=="live"||process.env.RECORDWATCH_LIVE_BILLING_ENABLED==="true";
@@ -1839,9 +1938,9 @@ async function recordwatchBillingMigrationVerified() {
   if (!packetDatabaseReady()) return false;
   try {
     const rows=await supabaseRest("recordwatch_billing_migration_receipts",{
-      query:"?id=eq.20261108010000_recordwatch_stripe_entitlements&select=id&limit=1"
+      query:"?id=in.(20261108010000_recordwatch_stripe_entitlements,20261108020000_recordwatch_lifetime_cases)&select=id"
     });
-    return Array.isArray(rows) && rows.length===1;
+    return Array.isArray(rows) && rows.length===2;
   } catch {
     return false;
   }
@@ -1865,42 +1964,41 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
   try {
     const user=await recordwatchAuthToken(req,res);
     if(!user)return;
-    if(!recordwatchBillingReadiness().ready)return res.status(503).json({ok:false,error:"Secure RecordWatch billing is not fully configured. No charge was created."});
-    if(!packetDatabaseReady())return res.status(503).json({ok:false,error:"Secure RecordWatch billing storage is not configured. No charge was created."});
-    if(!await recordwatchBillingMigrationVerified())return res.status(503).json({ok:false,error:"RecordWatch subscription security setup is incomplete. No charge was created."});
-    const plan=recordwatchPlan(req.body?.plan);
-    if(!plan)return res.status(400).json({ok:false,error:"Choose monthly or annual RecordWatch billing."});
-    const priceId=process.env[RECORDWATCH_BILLING[plan].env];
-    if(!priceId)return res.status(503).json({ok:false,error:"The selected RecordWatch price is not configured."});
-    const current=await getRecordwatchBillingRow(user.id);
-    if(current && ["active","trialing","past_due","unpaid","incomplete"].includes(current.status))
-      return res.status(409).json({ok:false,error:"A RecordWatch subscription already exists. Use Manage Billing instead of purchasing twice.",manageBilling:true});
-    const price=await recordwatchStripe.prices.retrieve(priceId);
-    assertRecordwatchStripePrice(price,plan);
+    if(!recordwatchBillingReadiness().ready || !await recordwatchBillingMigrationVerified())
+      return res.status(503).json({ok:false,error:"RecordWatch lifetime checkout is not configured. No charge was created."});
+    if(req.body?.plan && req.body.plan!=="lifetime_case")
+      return res.status(400).json({ok:false,error:"RecordWatch Premium is $39 once per saved case; subscriptions are no longer sold."});
+    const savedCaseId=safe(req.body?.saved_case_id||req.body?.savedCaseId);
+    if(!isUuid(savedCaseId))return res.status(400).json({ok:false,error:"Save and select a case before purchasing lifetime RecordWatch."});
+    await getSavedCaseReviewFacts(user.id,savedCaseId);
+    const current=await getRecordwatchLifetimeCase(user.id,savedCaseId);
+    if(lifetimeCaseEntitled(current,savedCaseId))
+      return res.status(409).json({ok:false,error:"Lifetime RecordWatch is already paid for this case. No additional purchase needed.",alreadyPurchased:true});
+    const legacy=await getActiveRecordwatchSubscription(user.id);
+    if(legacy)return res.status(409).json({ok:false,error:"Your existing RecordWatch subscription is still active. Manage that subscription before buying lifetime monitoring.",manageBilling:true});
+    const priceId=process.env[RECORDWATCH_LIFETIME_PRICE_ENV];
+    assertRecordwatchLifetimePrice(await recordwatchStripe.prices.retrieve(priceId));
     const base=getBaseUrl(req);
-    const metadata={product:"premium_recordwatch",user_id:user.id,plan};
-    const savedCaseId=safe(req.body?.saved_case_id || req.body?.savedCaseId);
-    if(isUuid(savedCaseId))metadata.saved_case_id=savedCaseId;
+    const metadata={product:"premium_recordwatch_lifetime",plan:"lifetime_case",
+      user_id:user.id,saved_case_id:savedCaseId,price_id:priceId};
     const checkout={
-      mode:"subscription",ui_mode:"hosted",
-      payment_method_types:["card"],
+      mode:"payment",ui_mode:"hosted",
       client_reference_id:user.id,
-      success_url:base+"/recordwatch-dashboard.html?recordwatch=success&session_id={CHECKOUT_SESSION_ID}",
-      cancel_url:base+"/recordwatch-dashboard.html?recordwatch=cancelled",
-      line_items:[{price:priceId,quantity:1}],
-      metadata,
-      subscription_data:{metadata}
+      success_url:base+"/recordwatch-dashboard.html?caseId="+encodeURIComponent(savedCaseId)+"&recordwatch=success&session_id={CHECKOUT_SESSION_ID}",
+      cancel_url:base+"/recordwatch-dashboard.html?caseId="+encodeURIComponent(savedCaseId)+"&recordwatch=cancelled",
+      line_items:[{price:priceId,quantity:1}],metadata,
+      payment_intent_data:{metadata}
     };
     if(current?.stripe_customer_id)checkout.customer=current.stripe_customer_id;
     else checkout.customer_email=user.email||undefined;
     const bucket=Math.floor(Date.now()/300000);
-    const idempotencyKey=createHash("sha256").update("recordwatch:"+user.id+":"+plan+":"+bucket).digest("hex");
+    const idempotencyKey=createHash("sha256").update("recordwatch-lifetime:"+user.id+":"+savedCaseId+":"+bucket).digest("hex");
     const session=await recordwatchStripe.checkout.sessions.create(checkout,{idempotencyKey});
     if(!session.url||!session.id)return res.status(502).json({ok:false,error:"Stripe did not create a checkout link."});
     return res.json({ok:true,url:session.url,sessionId:session.id});
   }catch(error){
-    console.warn("RecordWatch checkout unavailable",error?.type||error?.name||"unknown");
-    return res.status(error.status||503).json({ok:false,error:error.status===503?error.message:"Unable to start secure RecordWatch checkout. Please try again."});
+    console.warn("RecordWatch lifetime checkout unavailable",error?.type||error?.name||"unknown");
+    return res.status(error.status||503).json({ok:false,error:error.status===503?error.message:"Unable to start secure lifetime checkout. Please confirm your saved case."});
   }
 });
 
@@ -1908,24 +2006,18 @@ app.post("/api/recordwatch/verify-checkout", async (req, res) => {
   try {
     const user=await recordwatchAuthToken(req,res);
     if(!user)return;
-    if(!recordwatchStripe)return res.status(503).json({ok:false,error:"Stripe verification is unavailable."});
+    if(!await recordwatchBillingMigrationVerified())
+      return res.status(503).json({ok:false,error:"Lifetime database migration is not applied."});
+    const caseId=safe(req.body?.saved_case_id||req.body?.case_id);
     const sessionId=safe(req.body?.session_id||req.body?.sessionId);
-    if(!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
-      return res.status(400).json({ok:false,error:"Valid checkout reference required."});
-    const session=await recordwatchStripe.checkout.sessions.retrieve(sessionId);
-    if(!paidRecordwatchCheckout(session,user.id))
-      return res.status(403).json({ok:false,error:"Payment is not confirmed for this account."});
-    const subId=typeof session.subscription==="string"?session.subscription:session.subscription?.id;
-    const subscription=await recordwatchStripe.subscriptions.retrieve(subId);
-    const plan=verifyRecordwatchSubscription(subscription,process.env,user.id);
-    if(plan!==session.metadata.plan)
-      return res.status(403).json({ok:false,error:"Checkout and billing plan do not match."});
-    const result=await syncVerifiedRecordwatchStripeSubscription(subscription,session.id);
-    const ledgerEntry=await createRecordwatchLedgerEntryFromSession(user.id,session,plan);
-    return res.json({ok:true,subscription:result,premium:isActiveRecordwatchSubscription(result),ledgerEntry,duplicate:ledgerEntry?.duplicate===true});
+    const session=await verifiedRecordwatchLifetimeSession(sessionId,user.id,caseId);
+    const result=await upsertRecordwatchLifetimeCase(session);
+    const ledgerEntry=await createRecordwatchLedgerEntryFromSession(user.id,session,"lifetime_case");
+    return res.json({ok:true,subscription:lifetimeAsSubscription(result),
+      premium:lifetimeCaseEntitled(result,caseId),ledgerEntry,duplicate:ledgerEntry?.duplicate===true});
   }catch(error){
-    console.warn("RecordWatch verification unavailable",error?.type||error?.name||"unknown");
-    return res.status(503).json({ok:false,error:"Payment verification is unavailable. No new purchase is needed; please retry verification."});
+    console.warn("RecordWatch lifetime verification unavailable",error?.type||error?.name||"unknown");
+    return res.status(error.status||503).json({ok:false,error:"Payment verification is unavailable. Do not repurchase; please retry verification."});
   }
 });
 
@@ -1933,12 +2025,17 @@ app.get("/api/recordwatch/subscription", async (req, res) => {
   try {
     const user=await recordwatchAuthToken(req,res);
     if(!user)return;
-    const subscription=await getRecordwatchBillingRow(user.id);
+    const caseId=safe(req.query?.saved_case_id||req.query?.case_id);
+    if(caseId && !isUuid(caseId))return res.status(400).json({ok:false,error:"Valid saved case required."});
+    const lifetime=caseId ? await getRecordwatchLifetimeCase(user.id,caseId) : null;
+    const legacy=await getRecordwatchBillingRow(user.id);
+    const subscription=lifetimeCaseEntitled(lifetime,caseId)
+      ? lifetimeAsSubscription(lifetime) : (isActiveRecordwatchSubscription(legacy)?legacy:null);
     res.setHeader("Cache-Control","no-store, private");
-    return res.json({ok:true,premium:isActiveRecordwatchSubscription(subscription),
-      subscription:subscription||null,plan:subscription?.plan||"free",
-      status:subscription?.status||"free",current_period_end:subscription?.current_period_end||null});
-  }catch(error){
+    return res.json({ok:true,premium:Boolean(subscription),subscription:subscription||null,
+      plan:subscription?.plan||"free",status:subscription?.status||"free",
+      saved_case_id:caseId||null,current_period_end:subscription?.current_period_end||null});
+  }catch{
     return res.status(503).json({ok:false,error:"RecordWatch billing status is temporarily unavailable."});
   }
 });
