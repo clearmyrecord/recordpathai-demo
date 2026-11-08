@@ -464,21 +464,60 @@
     }, overrides || {}));
   }
 
+  // Preserve full customer-entered per-count details in the already protected
+  // case_charges.flags JSONB column. No schema migration or personal identifiers.
+  const INTAKE_CHARGE_FIELDS = [
+    "original_charge_name", "original_charge_code", "final_disposition",
+    "disposition_date", "discharge_date", "final_discharge_date",
+    "probation_end_date", "degree", "level", "charge_code", "notes",
+    "case_state", "court_county", "court_name", "case_number",
+    "judge_name", "prosecutor_agency", "defense_attorney",
+    "arrest_date", "arrest_state", "arrest_county", "arresting_agency",
+    "booking_number", "detention_facility", "jail",
+    "courtCostsPaid", "finesPaid", "restitutionPaid",
+    "fine_amount_due", "restitution_due",
+    "isTraffic", "isSexOffense", "isDomesticViolenceConviction",
+    "isViolentOffense", "pendingCharges", "pending_charges",
+    "reported_termination_date_unverified",
+    "final_discharge_evidence_status", "final_discharge_evidence_source"
+  ];
+
   function normalizeCharges(source) {
-    const charges = Array.isArray(source && source.charges) ? source.charges : [];
+    const raw = Array.isArray(source && source.charges) ? source.charges : [];
+    const charges = raw.some(charge => charge && typeof charge === "object")
+      ? raw
+      : (Array.isArray(source && source.chargeDetails) ? source.chargeDetails : raw);
     if (!charges.length && (source.primaryCharge || source.charge)) return [{ charge_name: source.primaryCharge || source.charge, offense_code: source.offenseCode || source.offense_code, offense_level: source.level || source.offenseLevel || source.offense_level, offense_date: source.offenseDate || source.offense_date }];
     return charges.map(function (charge) {
       if (typeof charge === "string") return { charge_name: charge };
-      return {
+      if (!charge || typeof charge !== "object") return null;
+      const flags = charge.flags && typeof charge.flags === "object" ? charge.flags : {};
+      const previous = flags.recordPathIntake && typeof flags.recordPathIntake === "object" ? flags.recordPathIntake : {};
+      const intake = Object.assign({}, previous);
+      INTAKE_CHARGE_FIELDS.forEach(function (key) {
+        if (Object.prototype.hasOwnProperty.call(charge, key)) intake[key] = charge[key];
+      });
+      const notes = firstNonEmpty(charge.charge_notes, charge.notes, intake.notes);
+      const offenseCode = firstNonEmpty(charge.offense_code, charge.offenseCode, charge.charge_code, intake.charge_code, charge.statute_citation);
+      const level = firstNonEmpty(charge.offense_level, charge.offenseLevel, charge.level, intake.level, charge.chargeLevel, charge.degree, intake.degree);
+      return Object.assign({}, intake, {
         id: charge.id,
-        charge_name: flattenCharge(charge),
-        offense_code: firstNonEmpty(charge.offense_code, charge.offenseCode, charge.statute_citation),
-        offense_level: firstNonEmpty(charge.offense_level, charge.offenseLevel, charge.level, charge.chargeLevel, charge.degree),
-        offense_date: normalizeDate(firstNonEmpty(charge.offense_date, charge.offenseDate)),
-        charge_notes: firstNonEmpty(charge.charge_notes, charge.notes),
-        flags: charge.flags && typeof charge.flags === "object" ? charge.flags : {}
-      };
-    }).filter(function (charge) { return firstNonEmpty(charge.charge_name, charge.offense_code, charge.offense_level); });
+        charge_name: firstNonEmpty(flattenCharge(charge), intake.charge_name),
+        offense_code: offenseCode,
+        charge_code: firstNonEmpty(charge.charge_code, intake.charge_code, offenseCode),
+        offense_level: level,
+        level: firstNonEmpty(charge.level, intake.level, level),
+        degree: firstNonEmpty(charge.degree, intake.degree, level),
+        offense_date: normalizeDate(firstNonEmpty(charge.offense_date, charge.offenseDate, intake.offense_date)),
+        charge_notes: notes,
+        notes,
+        flags: Object.assign({}, flags, { recordPathIntake: intake })
+      });
+    }).filter(function (charge) {
+      return charge && firstNonEmpty(charge.charge_name, charge.offense_code, charge.offense_level,
+        charge.original_charge_name, charge.original_charge_code, charge.final_disposition,
+        charge.disposition_date, charge.discharge_date, charge.notes);
+    });
   }
 
   function normalizeCase(input) {
@@ -781,9 +820,12 @@
         rule_set_id: item.ruleSetId
       },
       charges: item.chargeDetails.length ? item.chargeDetails.map(function (charge) {
-        return {
+        const extra = charge.flags && typeof charge.flags.recordPathIntake === "object"
+          ? charge.flags.recordPathIntake : {};
+        return Object.assign({}, extra, {
           charge_name: charge.charge_name,
           offense_name: charge.charge_name,
+          charge_code: charge.charge_code || charge.offense_code || item.offenseCode,
           case_number: item.caseNumber,
           court_name: item.courtName,
           court_county: item.county,
@@ -791,10 +833,17 @@
           statute_citation: charge.offense_code || item.offenseCode,
           offense_code: charge.offense_code || item.offenseCode,
           level: charge.offense_level || item.level,
+          degree: charge.degree || charge.offense_level || item.level,
           charge_level: charge.offense_level || item.level,
-          disposition: item.outcome,
+          final_disposition: firstNonEmpty(charge.final_disposition, extra.final_disposition,
+            item.chargeDetails.length === 1 ? item.outcome : ""),
+          disposition_date: firstNonEmpty(charge.disposition_date, extra.disposition_date,
+            item.chargeDetails.length === 1 ? item.dispositionDate : ""),
+          discharge_date: firstNonEmpty(charge.discharge_date, extra.discharge_date,
+            item.chargeDetails.length === 1 ? item.dischargeDate : ""),
+          notes: charge.notes || charge.charge_notes || extra.notes || "",
           offense_date: charge.offense_date || item.offenseDate
-        };
+        });
       }) : []
     };
   }

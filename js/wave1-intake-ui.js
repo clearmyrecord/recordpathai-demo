@@ -77,7 +77,7 @@
       detail.style.fontSize="0.9rem";
       chargeAudit=document.createElement("ul");
       container.append(h,detail,chargeAudit);
-      panel.append(container);
+      (document.getElementById("formRequirementsReviewDetails") || panel).append(container);
     }
     chargeAudit.replaceChildren();
     const charges=Array.isArray(data?.charges)?data.charges:[];
@@ -120,64 +120,11 @@
         link.remove();
         setTimeout(()=>URL.revokeObjectURL(url),2000);
       });
-      panel.append(worksheetButton);
+      (document.getElementById("formRequirementsReviewDetails") || panel).append(worksheetButton);
     }
   }
-  function renderOhioPilotReview(data){
-    let node=document.getElementById("ohioPilotLegalReview");
-    if(engine.normalizeState(data?.court?.state)!=="OH"){
-      if(node)node.remove();
-      return;
-    }
-    const reviewer=window.RecordPathOhioReview;
-    if(!node){
-      node=document.createElement("section");
-      node.id="ohioPilotLegalReview";
-      node.setAttribute("aria-label","Ohio statutory and form review");
-      node.style.marginTop="12px";
-      node.style.borderTop="1px solid #d1d5db";
-      node.style.paddingTop="12px";
-      panel.append(node);
-    }
-    node.replaceChildren();
-    const title=document.createElement("h4");
-    title.textContent="Ohio law + Wood County form preflight — review only";
-    node.append(title);
-    if(!reviewer){
-      const missing=document.createElement("p");
-      missing.textContent="Ohio legal review module did not load. No eligibility determination or payment can proceed.";
-      node.append(missing);
-      return;
-    }
-    const result=reviewer.review(data);
-    const note=document.createElement("p");
-    note.textContent="Updated Ohio law effective September 30, 2025. Court-verified final discharge, original/final counts and current docket are required. The court alone decides eligibility.";
-    node.append(note);
-    const fee=document.createElement("p");
-    fee.textContent="Wood County publishes a $100 conviction-sealing deposit: $50 statutory fee plus up to $50 local fee. Indigency waiver may apply. No court fee or RecordPathAI fee is charged here.";
-    node.append(fee);
-    const list=document.createElement("ul");
-    for(const review of result.chargeReviews){
-      const li=document.createElement("li");
-      const a=review.sealing,b=review.expungement;
-      li.textContent="Charge "+review.index+": sealing window "+
-        (a.date||"cannot establish without records")+" ("+a.status+"); expungement window "+
-        (b.date||"cannot establish without records")+" ("+b.status+").";
-      list.append(li);
-    }
-    for(const issue of result.issues.slice(0,12)){
-      const li=document.createElement("li");
-      li.textContent="Needs verification: "+issue;
-      list.append(li);
-    }
-    node.append(list);
-    const source=document.createElement("a");
-    source.textContent="Read current Ohio Revised Code §2953.32";
-    source.href=result.sources.conviction;
-    source.target="_blank";source.rel="noopener noreferrer";
-    node.append(source);
-    node.dataset.reviewOnly="true";
-  }
+  // Legal eligibility review remains available in the rule engine, but the
+  // repetitive Ohio pilot/legal preflight panel is not customer-facing.
   function renderMappedInputs(assessment,data){
     const extra=document.getElementById("formRequirementsExtraFields");
     const validator=window.RecordPathFormPipeline;
@@ -226,44 +173,37 @@
       input.type=/(^|_)(date|dob)$/.test(r.key)?"date":"text";
       input.style.width="100%";input.style.padding="9px";
       input.value=String(engine.get(data,r.key)||"");
-      input.addEventListener("change",()=>{
+      const saveMappedField=()=>{
         if(!validator.validKey(r.key))return;
         const current=bridge.loadPacketData();
         bridge.setValueByPath(current,r.key,input.value.trim());
         bridge.derivePacketData(current);
         bridge.savePacketData(current);
         document.dispatchEvent(new CustomEvent("recordpath:data-updated"));
-      });
+      };
+      input.addEventListener("input",saveMappedField);
+      input.addEventListener("change",saveMappedField);
       wrapper.append(label,input);extra.append(wrapper);
     }
   }
 
   function display(assessment){
     currentAssessment=assessment;
-    if(stateNode)safeText(stateNode,
-      assessment.stateName+" — "+(
-        assessment.scope==="wave1"?"Wave 1 intake":
-        assessment.scope==="pilot"?"Ohio pilot intake":
-        assessment.scope==="preparatory"?"Initial-pilot preparation":"General screening"));
+    if(stateNode)safeText(stateNode,"Case readiness");
     if(summaryNode)safeText(summaryNode,
-      assessment.classification.outcome==="mixed"
-        ?"Mixed case outcomes detected. No form selected automatically; judicial-rule review is required."
-        :assessment.classification.candidateFormType
-         ?"Potential form route: "+assessment.classification.candidateFormType+
-          ". This does not establish legal eligibility."
-         :"Form selection pending verification of every charge's final outcome.");
+      assessment.missing.length
+        ? "Your details are saved. Some outcomes or court-form fields still need verification before a final packet is prepared."
+        : "Your details are saved. Confirm the court's current filing requirements before preparing your packet.");
     if(mappingNode)safeText(mappingNode,assessment.sourceForm&&mapping.length
-      ?"Official mapping located for "+assessment.sourceForm.county+" County, "+assessment.sourceForm.type+
-      ". Its fields are included in the requirements below."
-      :"No court-verified mapped PDF is active for this exact jurisdiction and outcome. Baseline data is captured now; court-specific fields may still need review before a packet can be prepared.");
+      ? "An approved court form mapping was found. Review any additional fields below."
+      : "The exact court form is not yet verified. You can still save your case and review packet preparation options.");
     displayList(assessment);
     renderChargeAudit(lastData);
-    renderOhioPilotReview(lastData);
     renderMappedInputs(assessment,lastData);
     const review=document.getElementById("formRequirementsReview");
     if(review)safeText(review,assessment.review.length
-      ? "Review needed: "+assessment.review.join(" ")
-      : "Baseline case details captured. Court eligibility and form approval are separate checks.");
+      ? assessment.review.join(" ")
+      : "Form and eligibility requirements must be verified before filing.");
     panel.dataset.screeningComplete=assessment.screeningComplete?"true":"false";
     panel.dataset.formStatus=assessment.sourceForm&&mapping.length?"mapped":"unmapped";
   }

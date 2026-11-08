@@ -95,17 +95,19 @@ test("source form mapping is four-page / 33 fields with four rows and separate d
  assert.ok(j.mappings.some(x=>x.name==="charges.0.discharge_date"));
  assert.ok(j.mappings.some(x=>x.name==="petitioner.address.line2"));
 });
-test("review-only code is wired into both intake pages and payment is stopped on Ohio pilot",()=>{
+test("Ohio legal review remains in the packet but not the redundant intake pilot",()=>{
  const eligibility=fs.readFileSync(path.join(root,"eligibility.html"),"utf8");
  const details=fs.readFileSync(path.join(root,"record-details.html"),"utf8");
  const packet=fs.readFileSync(path.join(root,"packet.html"),"utf8");
  const ui=fs.readFileSync(path.join(root,"js/wave1-intake-ui.js"),"utf8");
- for(const html of [eligibility,details,packet])assert.match(html,/js\/ohio-case-review\.js/);
+ for(const html of [eligibility,packet])assert.match(html,/js\/ohio-case-review\.js/);
+ assert.doesNotMatch(details,/js\/ohio-case-review\.js/);
  assert.match(details,/data-field="original_charge_name"/);
  assert.match(details,/data-field="original_charge_code"/);
  assert.match(packet,/if\(base\.state==="OH"\)/);
  assert.match(packet,/No payment will be collected/i);
- assert.match(ui,/renderOhioPilotReview\(lastData\)/);
+ assert.doesNotMatch(ui,/renderOhioPilotReview\(|ohioPilotLegalReview/);
+ assert.match(details,/id="formRequirementsReviewDetails"/);
  for(const html of [eligibility,details,packet])for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))
    if(match[1].trim())assert.doesNotThrow(()=>new vm.Script(match[1]));
  assert.doesNotThrow(()=>new vm.Script(ui));
