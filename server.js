@@ -1819,11 +1819,31 @@ async function recordwatchAuthToken(req, res) {
 }
 
 
+// Public readiness check returns only booleans. It never exposes API keys,
+// webhook signing secrets, or customer information.
+function recordwatchBillingReadiness() {
+  const key=process.env.STRIPE_RECORDWATCH_SECRET_KEY||"";
+  const mode=/^(sk|rk)_test_/.test(key)?"sandbox":/^(sk|rk)_live_/.test(key)?"live":"unconfigured";
+  const prices=Boolean(process.env.STRIPE_RECORDWATCH_MONTHLY_PRICE_ID &&
+    process.env.STRIPE_RECORDWATCH_ANNUAL_PRICE_ID);
+  const webhook=Boolean((process.env.STRIPE_RECORDWATCH_WEBHOOK_SECRET||"").startsWith("whsec_"));
+  const persistence=packetDatabaseReady();
+  const liveAllowed=mode!=="live"||process.env.RECORDWATCH_LIVE_BILLING_ENABLED==="true";
+  return {mode,prices_configured:prices,webhook_configured:webhook,
+    secure_database_configured:persistence,live_enabled:mode==="live"&&liveAllowed,
+    ready:Boolean(recordwatchStripe&&prices&&webhook&&persistence&&liveAllowed)};
+}
+app.get("/api/recordwatch/billing-readiness",(req,res)=>{
+  const status=recordwatchBillingReadiness();
+  res.setHeader("Cache-Control","no-store");
+  return res.status(status.ready?200:503).json(status);
+});
+
 app.post("/api/recordwatch/checkout", async (req, res) => {
   try {
     const user=await recordwatchAuthToken(req,res);
     if(!user)return;
-    if(!recordwatchStripe)return res.status(503).json({ok:false,error:"RecordWatch Stripe is not configured."});
+    if(!recordwatchBillingReadiness().ready)return res.status(503).json({ok:false,error:"Secure RecordWatch billing is not fully configured. No charge was created."});
     if(!packetDatabaseReady())return res.status(503).json({ok:false,error:"Secure RecordWatch billing storage is not configured. No charge was created."});
     const plan=recordwatchPlan(req.body?.plan);
     if(!plan)return res.status(400).json({ok:false,error:"Choose monthly or annual RecordWatch billing."});
