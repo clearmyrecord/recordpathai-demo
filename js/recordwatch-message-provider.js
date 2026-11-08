@@ -6,14 +6,13 @@
   function clean(value) { return String(value == null ? "" : value).trim(); }
   function digits(value) { return clean(value).replace(/\D+/g, ""); }
   function isPremium(subscription) {
-    if (!subscription) return false;
-    var status = clean(subscription.status || (subscription.subscription && subscription.subscription.status)).toLowerCase();
-    var plan = clean(subscription.plan || (subscription.subscription && subscription.subscription.plan)).toLowerCase();
-    var premiumFlag = subscription.premium === true || subscription.premium_active === true || plan === "monthly" || plan === "annual" || plan === "addon_12_month" || plan === "premium";
-    if (!premiumFlag) return false;
-    if (status && ["active", "trialing", "paid"].indexOf(status) === -1) return false;
-    var end = subscription.current_period_end || subscription.premium_expires_at || (subscription.subscription && subscription.subscription.current_period_end);
-    return !end || new Date(end).getTime() > Date.now();
+    // Display state and SMS entitlement must come from the server-verified
+    // Stripe subscription, never localStorage or a customer-submitted plan.
+    if (!subscription || !/^sub_/.test(String(subscription.stripe_subscription_id || ""))) return false;
+    var status = clean(subscription.status).toLowerCase();
+    if (status !== "active" && status !== "trialing") return false;
+    var end = new Date(subscription.current_period_end || "").getTime();
+    return Number.isFinite(end) && end > Date.now();
   }
   function hasSmsOptedOut(preferences) { return Boolean(preferences && (preferences.sms_opted_out_at || preferences.smsOptedOutAt)); }
   function formatPhoneNumber(value) {
