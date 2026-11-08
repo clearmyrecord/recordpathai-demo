@@ -3135,11 +3135,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           generateBtn.classList.toggle("packet-btn-primary", state !== "notEligible");
 
           if (state === "eligibleUnpaid") {
-            const rawForReadiness = readPacketData();
-            const readinessState = normalizeState(rawForReadiness?.court?.state || "");
-            generateBtn.textContent = readinessState === "OH"
-              ? "Review Packet Readiness"
-              : "Pay $50 & Generate Packet";
+            // Do not offer a paid CTA until server review and exact fee quote
+            // have independently succeeded for this specific court.
+            generateBtn.textContent = "Review Packet Readiness";
           } else if (state === "eligiblePaid") {
             generateBtn.textContent = "Download Approved Signed PDF";
           } else if (state === "devBypass") {
