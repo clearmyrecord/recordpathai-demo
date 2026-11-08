@@ -126,7 +126,7 @@ test("Customer-facing checkout and account management are wired with no local pa
   const recordwatch=read("recordwatch.html");
   const account=read("account.html");
   const provider=read("js/recordwatch-message-provider.js");
-  assert.ok(recordwatch.includes('checkoutPremium(plan'));
+  assert.ok(recordwatch.includes('checkoutPremium("lifetime_case"'));
   assert.ok(recordwatch.includes('data-recordwatch-checkout="lifetime_case"'));
   assert.ok(!recordwatch.includes('data-recordwatch-checkout="monthly"'));
   assert.ok(!recordwatch.includes('data-recordwatch-checkout="annual"'));
