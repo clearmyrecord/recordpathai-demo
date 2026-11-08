@@ -1,66 +1,60 @@
-# Premium RecordWatch — Stripe sandbox activation
+# RecordWatch Premium — $39 lifetime per case (Stripe sandbox)
 
-**Scope:** RecordWatch premium monitoring only. This Stripe sandbox is separate from court packet checkout and from the Memory Studio Stripe accounts. Never use sandbox credentials to collect live money.
+**Current product model:** RecordWatch Premium is a **single USD $39 charge per saved case/filing**. The right to monitor that case continues for the lifetime of the RecordWatch service, with no automatic renewal. Buying one case does not unlock other cases. A separate $50 packet preparation/mailing service and applicable court fees are not included. Never claim automated court feeds or SMS delivery unless the respective provider is configured and operational.
 
-## Confirmed Stripe sandbox objects (Nov 8, 2026)
+## Stripe test account and prices (Nov 8, 2026)
 
-- Account: RecordPathAI sandbox (`acct_1TNJcME2dI5377iP`)
-- Product: Premium RecordWatch (`prod_VakCcspPZjVsUq`)
-- Monthly USD $4.99: `price_1UZYidE2dI5377iPeLRCbJzO`, recurring monthly
-- Annual USD $39.00: `price_1UZYifE2dI5377iPPdb0NZTO`, recurring yearly
-- Webhook endpoint: `we_1UZYm8E2dI5377iPnUuEBUqr` at `https://recordpathai.com/api/recordwatch/stripe-webhook`, sandbox only
-- Sandbox Customer Portal: `bpc_1UZYnIE2dI5377iPwgN7ouxF` (default), payment method update, invoice history, cancellation at period end, no plan switching
-- Stripe Tax collection is **not enabled**. Product and price tax codes are left unset while obligations are reviewed.
+- Stripe account: RecordPathAI sandbox `acct_1TNJcME2dI5377iP`, **test mode only**.
+- Product: Premium RecordWatch `prod_VakCcspPZjVsUq`.
+- **ACTIVE one-time $39 USD case price:** `price_1UZdMcE2dI5377iP266NvB6I`, type `one_time`, `recurring=null`, lookup key `recordwatch_premium_lifetime_case`.
+- The former $4.99/month price `price_1UZYidE2dI5377iPeLRCbJzO` and $39/year price `price_1UZYifE2dI5377iPPdb0NZTO` are **inactive for new sales**. Existing subscriptions were **not canceled or migrated**.
+- Dedicated sandbox webhook: `we_1UZYm8E2dI5377iPnUuEBUqr` at `https://recordpathai.com/api/recordwatch/stripe-webhook`.
+- Tax is not configured in this sandbox price; review obligations and configure Stripe Tax before enabling live payments.
 
-## Required Cloud Run configuration
+## Apply to the existing RecordPathAI Cloud Run service
 
-In Google Cloud Console, open **Cloud Run > recordpathai > Edit & Deploy New Revision > Variables & Secrets**. Preserve the existing packet Stripe settings.
+**Keep the $50 packet Stripe environment and webhook unchanged.** Set this **new, non-secret environment variable** on the RecordPathAI Cloud Run service:
 
-Set these **non-secret environment variables**:
-
-```
-STRIPE_RECORDWATCH_MONTHLY_PRICE_ID=price_1UZYidE2dI5377iPeLRCbJzO
-STRIPE_RECORDWATCH_ANNUAL_PRICE_ID=price_1UZYifE2dI5377iPPdb0NZTO
+```text
+STRIPE_RECORDWATCH_LIFETIME_PRICE_ID=price_1UZdMcE2dI5377iP266NvB6I
 RECORDWATCH_LIVE_BILLING_ENABLED=false
 ```
 
-Add these **secrets using Google Secret Manager** and reference them as Secret Manager-backed environment variables. Do not commit or paste values into a public issue, chat, or source file:
+Preserve the existing RecordWatch **sandbox** `STRIPE_RECORDWATCH_SECRET_KEY` and `STRIPE_RECORDWATCH_WEBHOOK_SECRET` (from Google Secret Manager). Do not paste secrets into GitHub. The older monthly/annual ID environment variables may be left intact for Stripe reconciliation of historical subscriptions; they are not used for new checkout. Use the separate RecordPathAI live account, live price and webhook secret only after an approved production launch.
 
-- `STRIPE_RECORDWATCH_SECRET_KEY`: the **RecordPathAI sandbox** API secret key (`sk_test_...`); never use another merchant's key
-- `STRIPE_RECORDWATCH_WEBHOOK_SECRET`: the signing secret (`whsec_...`) for webhook endpoint `we_1UZYm8E2dI5377iPnUuEBUqr`; available under the Stripe sandbox event destination's signing secret
-- `SUPABASE_SERVICE_ROLE_KEY`: existing RecordPathAI private Supabase service-role key (if absent); service-role key must remain private
+**Database:** Apply `supabase/migrations/20261108020000_recordwatch_lifetime_cases.sql` to the existing Supabase project, **after** the previously verified `20261108010000_recordwatch_stripe_entitlements.sql`. Do not run a fresh bootstrap. The migration creates `recordwatch_lifetime_cases` with one entitlement per user and saved case, a Stripe Checkout Session/PaymentIntent identifier, revocation status, read-only owner RLS, and a private server migration receipt. The service role is the only writer.
 
-The existing `SUPABASE_URL` or `PUBLIC_SUPABASE_URL` must point to the RecordPathAI project. **Do not change** `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET`: those belong to the separately verified court packet payment flow.
+```sql
+select id, applied_at from public.recordwatch_billing_migration_receipts
+where id in ('20261108010000_recordwatch_stripe_entitlements',
+             '20261108020000_recordwatch_lifetime_cases');
+```
 
-## Required Supabase migration
+Both receipts must be present. Once deployed, verify `/api/recordwatch/database-readiness` returns `{"migration_verified":true,"ready":true}`. The separate `/api/recordwatch/billing-readiness` requires the **new one-time price environment variable** and working Stripe configuration; `ready:true` only signals configuration, not a confirmed payment.
 
-Review and apply `supabase/migrations/20261108010000_recordwatch_stripe_entitlements.sql` to the existing RecordPathAI Supabase project. It revokes direct client writes to the paid-subscription table and restricts Premium status to verified server-side Stripe events. Verify the full earlier Premium RecordWatch migration is present. Verify the service-role key can read and write `recordwatch_subscriptions` and ledger entries.
+## Server-authoritative checkout, fulfillment and refunds
 
-## Webhook
+- POST `/api/recordwatch/checkout` requires an authenticated Supabase user and a saved-case UUID owned by them. The server refuses already-active lifetime purchases and directs still-active legacy subscribers to manage their old subscription.
+- The server retrieves the configured Stripe price, verifies `one_time`, USD 3900 cents, and creates `mode:"payment"` Checkout, with metadata containing product, user ID, case ID, plan and price ID only (no sensitive case narrative).
+- A signed `checkout.session.completed` or `checkout.session.async_payment_succeeded` event, or authenticated `/api/recordwatch/verify-checkout`, checks payment status, session amount, one Stripe line item, user/case ownership, and persists a case-scoped entitlement in Supabase.
+- Replayed events cannot duplicate the case payment. If rare parallel checkouts pay for the same case, the second charge is refunded automatically.
+- A signed `charge.refunded` or `charge.dispute.created` event revokes only the matching case's Premium status. The existing webhook now listens for these events as well as the old subscription/invoice lifecycle events.
+- Payment ledger entries are case-scoped and idempotent. Historical subscriptions remain visible until they expire/cancel, but **new recurring subscriptions are no longer offered**.
+- Customer messaging preferences must include the specific saved case; SMS consent and provider readiness are still required.
 
-The sandbox event destination is already created in Stripe with these events:
-- `checkout.session.completed`
-- `checkout.session.async_payment_succeeded`
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-- `invoice.paid`
-- `invoice.payment_failed`
+## End-to-end test checklist
 
-**Do not** register sandbox events to the packet endpoint `/api/stripe/webhook`. The correct dedicated endpoint is `/api/recordwatch/stripe-webhook`.
+1. Verify the new migration receipts and Cloud Run environment variable, then confirm both readiness endpoints.
+2. Sign into RecordPathAI with a sandbox account that owns an actual saved case UUID.
+3. From RecordWatch, select the case and click **Unlock This Case — $39 Once**. Confirm Stripe shows a one-time **$39** payment, not a subscription.
+4. Complete a **test card** payment. Confirm the return page and webhook yield one active entitlement for exactly that saved case, and one $39 ledger entry.
+5. Reload/refresh and check that the same case says **Lifetime Premium** with no renewal date; try another saved case and verify it is not unlocked.
+6. Attempt a second purchase of the same case and confirm an HTTP 409 with **no new Checkout Session**.
+7. Refund the test payment in Stripe. Confirm webhook delivery and that Premium for the original case is revoked (all unrelated cases unchanged).
+8. Verify existing Stripe subscription cancellation and historical billing are still available for older sandbox subscribers.
+9. Verify SMS only if an opted-in phone and real delivery provider exist; otherwise show status accurately and do not claim delivery.
+10. Run application regression tests, confirm Cloud Run deployment, and review applicable taxes and terms **before enabling live billing**.
 
-## Readiness and testing
+## Production limitation
 
-Visit `https://recordpathai.com/api/recordwatch/billing-readiness`. It should return HTTP 200 with `ready:true`, `mode:"sandbox"`, `prices_configured:true`, `webhook_configured:true`, and `secure_database_configured:true` after configuration. This checks configuration presence, **not** that checkout or webhook fulfillment was successful.
-
-Then test, with a **sandbox** card/test data only:
-1. Sign into RecordPathAI using a testing account.
-2. From RecordWatch, purchase the $4.99/month sandbox plan, confirm the checkout amount and success return.
-3. Verify Stripe `checkout.session.completed` and subscription/invoice events show delivered in Stripe; check RecordWatch status, actual billing period, and ledger receipt.
-4. Open Account > Manage subscription to confirm Customer Portal and payment-method update work.
-5. Cancel renewal from the portal, confirm `cancel_at_period_end` and Premium access continuing only through the paid period.
-6. Simulate renewal/payment failure and verify `invoice.paid`/`invoice.payment_failed` update status correctly; check webhook retries/idempotency.
-7. Repeat with $39/year and confirm there is no duplicate subscription or charge.
-8. Verify no notification is claimed as sent unless configured SMS/email providers actually delivered it.
-
-**Never enable live checkout** based only on deployment tests. Add RecordPathAI's live Stripe environment, separate live price IDs and signing secret, after sandbox end-to-end verification and applicable legal/tax checks.
+This account currently has a **RecordPathAI sandbox** Stripe connection but no RecordPathAI live Stripe account. Creating a test price, webhook and GitHub code does **not** automatically configure Cloud Run, apply Supabase migrations or enable real customer payments.
