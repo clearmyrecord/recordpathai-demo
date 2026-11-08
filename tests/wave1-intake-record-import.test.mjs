@@ -110,7 +110,11 @@ test("intake and mapper UI are linked, while source metadata stays review-only",
   const s=fs.readFileSync(path.join(root,page),"utf8");
   assert.match(s,/court-record-import-core\.js/);
   assert.match(s,/court-record-import-ui\.js/);
-  assert.match(s,/id="formRequirementsPanel"/);
+  if(page==="record-details.html") assert.match(s,/id="formRequirementsPanel"/);
+  else {
+    assert.doesNotMatch(s,/id="formRequirementsPanel"/);
+    assert.match(s,/id="user-profile-form"/);
+  }
  }
  const dashboard=fs.readFileSync(path.join(root,"admin/wave1-operations.html"),"utf8");
  assert.match(dashboard,/pdf-mapper-v7\.html/);

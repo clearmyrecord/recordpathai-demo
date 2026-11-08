@@ -27,46 +27,42 @@ function optionsFor(markup,id){
   return [...match[1].matchAll(/<option\s+value="([^"]*)">([^<]*)<\/option>/g)]
    .map(m=>({value:m[1],name:m[2]}));
 }
-test("both residence dropdowns include each of the 50 states exactly once",()=>{
+test("Step 1 residence dropdown includes each of the 50 states exactly once",()=>{
   assert.equal(expected.size,50);
-  for(const file of ["eligibility.html","record-details.html"]){
-    const choices=optionsFor(html(file),"residenceState");
-    assert.equal(choices[0].value,"");
-    assert.equal(choices.length,51);
-    const actual=new Map(choices.slice(1).map(x=>[x.value,x.name]));
-    assert.equal(actual.size,50,file);
-    assert.deepEqual(actual,expected,file);
-    assert.match(html(file),/data-path="petitioner\.address\.state"/);
-  }
+  const first=html("eligibility.html");
+  const choices=optionsFor(first,"residenceState");
+  assert.equal(choices[0].value,"");
+  assert.equal(choices.length,51);
+  assert.deepEqual(new Map(choices.slice(1).map(x=>[x.value,x.name])),expected);
+  assert.match(first,/data-path="petitioner\.address\.state"/);
+  assert.doesNotMatch(html("record-details.html"),/id="residenceState"/);
 });
-test("court case state is a separate select and is not replaced by the residence list",()=>{
-  const eligibility=html("eligibility.html"),details=html("record-details.html");
-  for(const page of [eligibility,details]){
-    const caseOptions=optionsFor(page,"caseState");
-    assert.ok(caseOptions.length>1);
-    assert.ok(caseOptions.length<51,"Case state routing must not assume unintegrated states have legal filing rules");
-    assert.ok(optionsFor(page,"residenceState").length>caseOptions.length);
-  }
-  assert.match(eligibility,/state: residenceState/);
-  assert.match(eligibility,/state: caseState/);
+test("Step 2 filing state is distinct from residence and offers all states without promising court integration",()=>{
+  const first=html("eligibility.html"), details=html("record-details.html");
+  assert.doesNotMatch(first,/id="caseState"/);
+  const choices=optionsFor(details,"caseState");
+  assert.equal(choices[0].value,"");
+  assert.deepEqual(new Map(choices.slice(1).map(x=>[x.value,x.name])),expected);
+  assert.match(first,/state: residenceState/);
+  assert.match(first,/state: caseState/); // Preserved context, not a second question.
   assert.match(details,/data\.petitioner\.address\.state = profile\.residenceState/);
   assert.match(details,/data\.court\.state = first\.case_state/);
   const packet=html("packet.html");
   assert.match(packet,/data\.petitioner\.address\.state/);
   assert.match(packet,/data\.court\.state/);
 });
-test("historic full residence-state names are restored as abbreviations without affecting case state",()=>{
-  const eligibility=html("eligibility.html"),details=html("record-details.html");
+test("historic residence-state names are normalized; case state remains independent",()=>{
+  const first=html("eligibility.html"), details=html("record-details.html");
   const bridge=fs.readFileSync(path.join(root,"js/packet-data-bridge.js"),"utf8");
-  assert.match(eligibility,/id === "residenceState"/);
-  assert.match(details,/id === "residenceState"/);
+  assert.match(first,/id === "residenceState"/);
+  assert.match(details,/id === "residenceState" \|\| id === "caseState"/);
   assert.match(bridge,/input\.id === "residenceState"/);
   assert.match(bridge,/option\.textContent\.trim\(\)\.toLowerCase\(\)/);
-  for(const page of [eligibility,details]){
-    const choices=optionsFor(page,"residenceState");
+  for(const page of [first,details]){
+    const id=page===first?"residenceState":"caseState";
+    const choices=optionsFor(page,id);
     for(const [name,value] of [["New York","NY"],["Hawaii","HI"],["Wyoming","WY"],["Nevada","NV"]]){
-      const matched=choices.find(x=>x.name.toLowerCase()===name.toLowerCase());
-      assert.equal(matched.value,value);
+      assert.equal(choices.find(x=>x.name.toLowerCase()===name.toLowerCase())?.value,value);
     }
     for(const match of page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))
       if(match[1].trim())assert.doesNotThrow(()=>new vm.Script(match[1]));

@@ -72,15 +72,19 @@ test("all charge-specific outcomes must have their own dates and titles",()=>{
  assert.equal(result.eligible,false);
  assert.equal(result.courtReady,false);
 });
-test("Wave 1 HTML starts collecting court-form fields during eligibility, and record editor is charge-specific",()=>{
+test("Wave 1 personal fields are collected in Step 1, and all court-form and charge fields in Step 2",()=>{
  const eligibility=fs.readFileSync(path.join(root,"eligibility.html"),"utf8");
  const details=fs.readFileSync(path.join(root,"record-details.html"),"utf8");
  const packet=fs.readFileSync(path.join(root,"packet.html"),"utf8");
- for(const name of ["screenCounty","screenCourtName","screenCaseNumber","screenChargeName",
-   "screenChargeCode","screenChargeLevel","screenOutcome","screenDispositionDate",
-   "screenTerminationDate","screenAllCharges","screenProceedings"]){
-   assert.match(eligibility,new RegExp('id="'+name+'"'));
- }
+ assert.match(eligibility,/id="fullName"/);
+ assert.match(eligibility,/id="dateOfBirth"/);
+ assert.match(eligibility,/id="residenceState"/);
+ assert.doesNotMatch(eligibility,/id="screenCounty"|id="screenChargeName"|id="caseState"|id="formRequirementsPanel"/);
+ assert.match(details,/id="county"/);
+ assert.match(details,/id="courtName"/);
+ assert.match(details,/id="caseNumber"/);
+ assert.match(details,/id="formRequirementsPanel"/);
+ assert.doesNotMatch(details,/id="fullName"|id="dateOfBirth"/);
  for(const marker of ['data-field="final_disposition"','data-field="disposition_date"',
    'data-field="discharge_date"','id="allChargesConfirmed"','id="proceedingsStatus"']){
    assert.ok(details.includes(marker));

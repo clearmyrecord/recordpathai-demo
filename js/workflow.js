@@ -3,8 +3,8 @@
 
   const STORAGE_KEY = "recordPathWorkflowState";
   const STEPS = [
-    { id: "eligibility", label: "Check Eligibility", href: "eligibility.html" },
-    { id: "record-details", label: "Record Details", href: "record-details.html" },
+    { id: "eligibility", label: "Personal Information", href: "eligibility.html" },
+    { id: "record-details", label: "Case Information", href: "record-details.html" },
     { id: "packet", label: "Packet Generation", href: "packet.html" }
   ];
 
@@ -50,9 +50,8 @@
     const intake = getEligibilityIntake();
     const petitioner = intake.petitioner || {};
     const fullName = petitioner.full_name || localStorage.getItem("fullName") || [localStorage.getItem("firstName"), localStorage.getItem("lastName")].filter(Boolean).join(" ");
-    const caseState = normalizeStateValue(intake.case?.state || localStorage.getItem("caseState") || localStorage.getItem("state"));
-    const hasContact = hasText(fullName) || hasText(petitioner.email) || hasText(localStorage.getItem("email"));
-    return Boolean(hasContact && caseState);
+    // Personal identity is completed before the customer is asked for a case state.
+    return Boolean(hasText(fullName));
   }
 
   function hasUsableCharge(charge) {
@@ -208,8 +207,8 @@
     const state = getState();
     const action = actionLabel || "packet generation";
     const missing = [];
-    if (!state.eligibilityCompleted) missing.push(`Complete Check Eligibility before ${action}.`);
-    if (!state.recordDetailsCompleted) missing.push(`Complete Record Details before ${action}.`);
+    if (!state.eligibilityCompleted) missing.push(`Complete Personal Information before ${action}.`);
+    if (!state.recordDetailsCompleted) missing.push(`Complete Case Information before ${action}.`);
     return missing;
   }
 

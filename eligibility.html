@@ -507,10 +507,10 @@
     <section class="page-hero">
       <div class="container">
         <div class="hero-card">
-          <span class="eyebrow" data-i18n="eligibility.eyebrow">Step 1 of the workflow</span>
-          <h1 class="page-title" data-i18n="eligibility.pageTitle">Start Your Eligibility Intake</h1>
+          <span class="eyebrow">Step 1 · Personal Information</span>
+          <h1 class="page-title">Your Personal Information</h1>
           <p class="page-subtitle" data-i18n="eligibility.pageSubtitle">
-            Enter your personal and mailing information. RecordPathAI will carry this information into your record details and packet generation workflow.
+            Enter your information once. Your details will be saved and carried into your case record and court forms.
           </p>
         </div>
       </div>
@@ -523,31 +523,29 @@
     <section class="page-section">
       <div class="container">
         <section class="page-card">
-          <div class="info-banner" data-i18n="eligibility.notice">
-            <strong>Form-aware screening:</strong> We identify the information likely needed by your court's filing form before screening.
-            We collect the initial case and charge information here, then verify <em>every</em> charge and the full form in Record Details. We will not claim eligibility until the official outcome, dates and court requirements are checked.
+          <div class="info-banner">
+            <strong>One-time entry:</strong> This step collects your identity and contact information only.
+            Step 2 gathers all court, case, charge, and disposition information. You will not need to re-enter your personal information there.
           </div>
 
-          <h2 class="section-title" data-i18n="eligibility.contact.title">Your Contact Information</h2>
-          <p class="section-copy" data-i18n="eligibility.sectionCopy">
-            This information helps RecordPathAI prepare your packet profile and avoid duplicate entry later.
+          <h2 class="section-title">Personal & Contact Information</h2>
+          <p class="section-copy">
+            Your current residence can be in any of the 50 states, even if your case was filed elsewhere.
           </p>
 
           <form id="user-profile-form" class="form-grid" onsubmit="return false;">
-            <div class="field">
-              <label for="firstName" data-i18n="eligibility.firstName">First Name</label>
-              <input id="firstName" data-path="petitioner.first_name" type="text" placeholder="First name" />
-            </div>
-
-            <div class="field">
-              <label for="lastName" data-i18n="eligibility.lastName">Last Name</label>
-              <input id="lastName" data-path="petitioner.last_name" type="text" placeholder="Last name" />
-            </div>
-
             <div class="field field-full">
               <label for="fullName" data-i18n="eligibility.fullName">Full Legal Name</label>
               <input id="fullName" data-path="petitioner.full_name" type="text" placeholder="Full legal name" />
-              <div class="field-helper" data-i18n="eligibility.helper.fullName">This can be auto-filled from the Ohio landing page.</div>
+              <div class="field-helper">Enter your name exactly as it appears on your legal records.</div>
+            </div>
+            <div class="field">
+              <label for="dateOfBirth">Date of Birth</label>
+              <input id="dateOfBirth" data-path="petitioner.dob" type="date" autocomplete="bday" />
+            </div>
+            <div class="field">
+              <label for="otherNames">Other Names Used (optional)</label>
+              <input id="otherNames" data-path="petitioner.other_names" type="text" placeholder="Maiden name, former name, or alias" />
             </div>
 
             <div class="field">
@@ -638,134 +636,7 @@
               <input id="zip" data-path="petitioner.address.zip" type="text" placeholder="ZIP code" />
             </div>
 
-            <div class="field">
-              <label for="caseState" data-i18n="index.caseState">Case State</label>
-              <select id="caseState" data-path="case.state">
-                <option value="">Select case state</option>
-                <option value="Ohio">Ohio</option>
-                <option value="Nevada">Nevada</option>
-                <option value="California">California</option>
-                <option value="Arizona">Arizona</option>
-                <option value="Texas">Texas</option>
-                <option value="Florida">Florida</option>
-                <option value="Georgia">Georgia</option>
-                <option value="Illinois">Illinois</option>
-                <option value="Utah">Utah</option>
-              </select>
-              <div class="field-helper" data-i18n="eligibility.helper.caseState">This controls which state rules and packet flow should be used.</div>
-            </div>
 
-            <div class="field field-full" style="margin-top:1rem">
-              <h3>Early court-form field collection</h3>
-              <p class="field-helper">These values carry forward automatically. Enter the original filing court—not your current residence. If a case has multiple charges, enter the first here and add every charge on the next step.</p>
-            </div>
-            <div class="field">
-              <label for="screenDOB">Date of birth (for identity matching)</label>
-              <input id="screenDOB" data-path="petitioner.dob" type="date" />
-            </div>
-            <div class="field">
-              <label for="screenCounty">Case county</label>
-              <input id="screenCounty" data-path="court.county" placeholder="e.g., Wood" />
-            </div>
-            <div class="field">
-              <label for="screenCourtType">Court type</label>
-              <select id="screenCourtType" data-path="court.court_type">
-                <option value="">Choose if known</option>
-                <option value="court-of-common-pleas">Common Pleas / Superior / District trial court</option>
-                <option value="municipal">Municipal / City court</option>
-                <option value="county">County court</option>
-                <option value="other">Other / verify</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="screenCourtName">Court name</label>
-              <input id="screenCourtName" data-path="court.name" placeholder="Court where case was filed" />
-            </div>
-            <div class="field">
-              <label for="screenCaseNumber">Case / docket number</label>
-              <input id="screenCaseNumber" data-path="court.case_number" placeholder="Exact case number" />
-            </div>
-            <div class="field">
-              <label for="screenJudgeName">Assigned judge (if available)</label>
-              <input id="screenJudgeName" data-path="court.judge_name" placeholder="From the docket or form" />
-            </div>
-            <div class="field">
-              <label for="screenChargeName">First charge — description</label>
-              <input id="screenChargeName" data-path="charges.0.charge_name" placeholder="Final/amended charge description" />
-            </div>
-            <div class="field">
-              <label for="screenChargeCode">First charge — statute number</label>
-              <input id="screenChargeCode" data-path="charges.0.charge_code" placeholder="Statute / code" />
-            </div>
-            <div class="field">
-              <label for="screenChargeLevel">First charge — degree</label>
-              <select id="screenChargeLevel" data-path="charges.0.level">
-                <option value="">Select degree</option>
-                <option value="MM">Minor misdemeanor / infraction</option>
-                <option value="M1">M1</option><option value="M2">M2</option>
-                <option value="M3">M3</option><option value="M4">M4</option>
-                <option value="F1">F1</option><option value="F2">F2</option>
-                <option value="F3">F3</option><option value="F4">F4</option>
-                <option value="F5">F5</option>
-                <option value="other">Other / verify</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="screenOutcome">First charge — final outcome</label>
-              <select id="screenOutcome" data-path="charges.0.final_disposition">
-                <option value="">Verify outcome</option>
-                <option value="Convicted">Convicted</option>
-                <option value="Dismissed">Dismissed</option>
-                <option value="Not Guilty">Not guilty / acquitted</option>
-                <option value="No Bill">Grand jury no bill</option>
-                <option value="Pending">Still pending / unknown</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="screenDispositionDate">Final disposition / judgment date</label>
-              <input id="screenDispositionDate" type="date" data-path="charges.0.disposition_date" />
-              <div class="field-helper">When the court decided the charge; not the date supervision ended.</div>
-            </div>
-            <div class="field">
-              <label for="screenTerminationDate">Probation / parole / sentence termination date</label>
-              <input id="screenTerminationDate" type="date" data-path="charges.0.discharge_date" />
-              <div class="field-helper">Enter only if independently known. Never assume it equals disposition.</div>
-            </div>
-            <div class="field">
-              <label for="screenAllCharges">Have you identified all charges in this case?</label>
-              <select id="screenAllCharges" data-path="case.all_charges_confirmed">
-                <option value="">Select</option>
-                <option value="yes">Yes — one charge or all will be entered</option>
-                <option value="no">No — more charges to enter next</option>
-                <option value="unsure">Unsure — verify official docket</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="screenProceedings">Related pending criminal proceedings?</label>
-              <select id="screenProceedings" data-path="case.proceedings_status">
-                <option value="">Select</option>
-                <option value="none">None known</option>
-                <option value="open">Yes — pending proceedings</option>
-                <option value="unsure">Unsure — court review needed</option>
-              </select>
-            </div>
-            <div class="field field-full">
-              <section id="formRequirementsPanel" aria-label="Form field readiness" style="border:1px solid #cbd5e1;border-radius:12px;padding:14px">
-                <h3 id="formRequirementsState">Court form requirements</h3>
-                <p id="formRequirementsSummary"></p>
-                <p id="formRequirementsMapping" class="field-helper"></p>
-                <details>
-                  <summary>Review form fields already collected and still missing</summary>
-                  <ul id="formRequirementsList"></ul>
-                </details>
-                <div id="formRequirementsExtraFields" aria-label="Additional required mapped court-form fields"></div>
-                <p id="formRequirementsReview" role="status" aria-live="polite"></p>
-              </section>
-            </div>
-            <div class="field field-full">
-              <label for="intakeNotes" data-i18n="eligibility.notes">Optional Notes</label>
-              <textarea id="intakeNotes" data-path="petitioner.notes" placeholder="Anything important you want to remember before entering record details."></textarea>
-            </div>
           </form>
 
           <div class="autosave-note" data-i18n="eligibility.autosave">
@@ -773,27 +644,16 @@
           </div>
 
           <div class="button-row">
-            <button type="button" id="save-profile" class="btn btn-secondary" data-i18n="eligibility.save">Save Intake</button>
-            <button type="button" id="eligibility-continue" class="btn btn-primary" data-i18n="eligibility.continue">Save and Continue</button>
+            <button type="button" id="save-profile" class="btn btn-secondary">Save Personal Information</button>
+            <button type="button" id="eligibility-continue" class="btn btn-primary">Continue to Case Information</button>
           </div>
 
 
 
-          <aside class="recordwatch-panel" aria-live="polite">
-            <h3>RecordWatch background tracking</h3>
-            <p class="section-copy">RecordWatch tracking is enabled automatically as you complete this RecordPathAI flow.</p>
-            <div class="recordwatch-panel-grid">
-              <div class="recordwatch-panel-item"><strong>Tracking</strong><span id="rwTrackingStatus">Enabled</span></div>
-              <div class="recordwatch-panel-item"><strong>Estimated eligibility</strong><span id="rwEligibilityStatus">More information needed</span></div>
-              <div class="recordwatch-panel-item"><strong>Missing requirements</strong><span id="rwMissingRequirements">Case details</span></div>
-              <div class="recordwatch-panel-item"><strong>Next action</strong><span id="rwNextAction">Save intake, then add record details.</span></div>
-            </div>
-            <a href="recordwatch-dashboard.html">Open full RecordWatch dashboard</a>
-          </aside>
           <div class="summary-box">
-            <h3 class="summary-title" data-i18n="eligibility.next.title">What happens next</h3>
-            <p class="summary-copy" data-i18n="eligibility.summaryCopy">
-              Next, you will enter your case number, court, county, charge, offense level, disposition date, and other record details. The packet page will use all saved information to determine eligibility timing and generate your filing packet.
+            <h3 class="summary-title">What happens next</h3>
+            <p class="summary-copy">
+              Next you will enter the filing court, case number, each original and final charge, and the verified judgment and supervision-completion dates. We reuse this information for screening and form preparation; filing remains subject to court verification.
             </p>
           </div>
         </section>
@@ -853,12 +713,13 @@
         }
       }
       if (window.RecordPathWorkflow) RecordPathWorkflow.renderProgress("eligibility");
-      hydrateFromLandingPage();
-      hydrateFromLocalStorage();
-
       if (window.RecordPathDataBridge && typeof RecordPathDataBridge.initPage === "function") {
         RecordPathDataBridge.initPage(document);
       }
+      // Apply an incoming profile after binding the packet data so a blank draft
+      // cannot overwrite a name or address prefilled from the landing page.
+      hydrateFromLandingPage();
+      hydrateFromLocalStorage();
       // Imported cases come only from the separately approved, verified
       // court index, after applicant consent on the search results page.
       const prefill = window.RecordPathWoodCountyPrefill;
@@ -909,16 +770,6 @@
       if (continueBtn) {
         continueBtn.addEventListener("click", async function () {
           saveEligibilityIntake();
-          const assessment = await window.RecordPathWave1Intake?.refresh?.();
-          if (assessment && ["wave1","pilot","preparatory"].includes(assessment.scope)
-              && assessment.missing.length) {
-            // Moving to Record Details is allowed so users can add and verify all counts.
-            // Missing form/evidence fields remain blocked from packet checkout.
-            const notice = document.getElementById("formRequirementsReview");
-            if (notice) notice.textContent =
-              "Record Details will collect the remaining "+assessment.missing.length+
-              " fields. This intake is saved as an incomplete draft; no filing is authorized.";
-          }
           renderRecordWatchPanel();
           window.location.href = "record-details.html";
         });
@@ -933,33 +784,18 @@
     function hydrateFromLandingPage() {
       const savedLandingData = localStorage.getItem("recordPathLandingData");
       if (!savedLandingData) return;
-
       try {
         const data = JSON.parse(savedLandingData);
-
-        if (data.fullName) {
-          setValue("fullName", data.fullName);
-
-          const parts = data.fullName.trim().split(" ");
-          if (parts.length > 0 && !getValue("firstName")) {
-            setValue("firstName", parts[0]);
-          }
-
-          if (parts.length > 1 && !getValue("lastName")) {
-            setValue("lastName", parts.slice(1).join(" "));
-          }
-        }
-
-        if (data.email) setValue("email", data.email);
-
-        if (data.caseState) {
-          setValue("caseState", data.caseState);
-          localStorage.setItem("caseState", data.caseState);
-          localStorage.setItem("state", data.caseState);
-        }
-
-        if (data.residenceState) {
+        // A saved profile or an active case always takes precedence over a
+        // potentially older landing-page search.
+        if (data.fullName && !getValue("fullName")) setValue("fullName", data.fullName);
+        if (data.email && !getValue("email")) setValue("email", data.email);
+        if (data.residenceState && !getValue("residenceState")) {
           setValue("residenceState", data.residenceState);
+        }
+        if (data.caseState && !localStorage.getItem("caseState")) {
+          // Keep landing-page context for Step 2; do not ask case questions here.
+          localStorage.setItem("caseState", data.caseState);
         }
       } catch (error) {
         console.warn("Could not load RecordPathAI landing data:", error);
@@ -989,101 +825,84 @@
     }
 
     function saveEligibilityIntake() {
-      const fields = document.querySelectorAll("input, select, textarea");
-
-      fields.forEach(function (field) {
-        if (!field.id) return;
-        localStorage.setItem(field.id, field.value);
+      // The identity form is the only place where personal questions are asked.
+      const form = document.getElementById("user-profile-form");
+      form.querySelectorAll("input, select, textarea").forEach(function (field) {
+        if (field.id) localStorage.setItem(field.id, field.value);
       });
 
-      const fullName = getValue("fullName") || buildFullName();
-      const firstName = getValue("firstName");
-      const lastName = getValue("lastName");
+      const fullName = getValue("fullName");
+      const parts = fullName.split(/\s+/).filter(Boolean);
+      const firstName = parts[0] || "";
+      const lastName = parts.slice(1).join(" ");
       const email = getValue("email");
       const phone = getValue("phone");
+      const dob = getValue("dateOfBirth");
       const residenceState = getValue("residenceState");
-      const caseState = getValue("caseState") || "";
 
-      if (fullName) localStorage.setItem("fullName", fullName);
-      if (firstName) localStorage.setItem("firstName", firstName);
-      if (lastName) localStorage.setItem("lastName", lastName);
-      if (email) localStorage.setItem("email", email);
-      if (phone) localStorage.setItem("phone", phone);
+      const data = window.RecordPathDataBridge?.loadPacketData?.();
+      if (data) {
+        data.petitioner = data.petitioner || {};
+        data.petitioner.address = data.petitioner.address || {};
+        Object.assign(data.petitioner, {
+          first_name: firstName, last_name: lastName, full_name: fullName,
+          dob: dob, other_names: getValue("otherNames"), email: email, phone: phone
+        });
+        Object.assign(data.petitioner.address, {
+          line1: getValue("address1"), line2: getValue("address2"),
+          city: getValue("city"), state: residenceState, zip: getValue("zip")
+        });
+        RecordPathDataBridge.derivePacketData(data);
+        RecordPathDataBridge.savePacketData(data);
+      }
+      // A case already selected or imported must survive edits to this profile.
+      const caseState = data?.court?.state || localStorage.getItem("caseState") ||
+        localStorage.getItem("state") || "";
 
-      localStorage.setItem("caseState", caseState);
-      localStorage.setItem("state", caseState);
+      localStorage.setItem("fullName", fullName);
+      localStorage.setItem("firstName", firstName);
+      localStorage.setItem("lastName", lastName);
+      localStorage.setItem("email", email);
+      localStorage.setItem("phone", phone);
+      localStorage.setItem("dateOfBirth", dob);
       localStorage.setItem("residenceState", residenceState);
 
       const packetProfile = {
         petitioner: {
-          first_name: firstName,
-          last_name: lastName,
-          full_name: fullName,
-          email: email,
-          phone: phone,
-          address: {
-            line1: getValue("address1"),
-            line2: getValue("address2"),
-            city: getValue("city"),
-            state: residenceState,
-            zip: getValue("zip")
-          },
-          notes: getValue("intakeNotes")
+          first_name: firstName, last_name: lastName, full_name: fullName,
+          dob: dob, other_names: getValue("otherNames"),
+          email: email, phone: phone,
+          address: { line1: getValue("address1"), line2: getValue("address2"),
+            city: getValue("city"), state: residenceState, zip: getValue("zip") }
         },
-        case: {
-          state: caseState
-        },
-        workflow: {
-          current_step: "eligibility",
-          updated_at: new Date().toISOString()
-        }
+        case: { state: caseState },
+        workflow: { current_step: "eligibility", updated_at: new Date().toISOString() }
       };
 
-      // Separate case disposition and supervision termination dates are retained.
-      // Form requirements are read again on Record Details before packet creation.
       localStorage.setItem("recordPathEligibilityIntake", JSON.stringify(packetProfile));
-      if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) {
+      if (window.RecordPathUserStore?.saveCurrentCaseDraft) {
         RecordPathUserStore.saveCurrentCaseDraft({
-          person: { firstName: firstName, lastName: lastName, fullName: fullName, email: email, phone: phone, residenceState: residenceState },
-          caseState: caseState,
-          eligibility: { status: "Intake started", eligibilityStatus: "Intake started" },
-          packet: packetProfile
-        }, { localOnly: true, network: false }).catch(function (error) { console.warn("Eligibility draft save skipped:", error); });
+          person: { firstName, lastName, fullName, dateOfBirth: dob,
+            email, phone, residenceState },
+          caseState,
+          eligibility: { status: "Personal information collected", eligibilityStatus: "Intake started" },
+          packet: data || packetProfile
+        }, { localOnly: true, network: false }).catch(function (error) {
+          console.warn("Profile draft save skipped:", error);
+        });
       }
-
-      const reviewNow = window.RecordPathFormRequirements?.assess?.(RecordPathDataBridge.loadPacketData());
-      if (window.RecordPathWorkflow && (fullName || email) && caseState &&
-          (reviewNow && reviewNow.missing.length === 0)) {
+      if (window.RecordPathWorkflow && fullName) {
         RecordPathWorkflow.markEligibilityComplete({ eligibilityCompletedAt: new Date().toISOString() });
         RecordPathWorkflow.renderProgress("eligibility");
         RecordPathWorkflow.decorateNavigation();
       }
-
-      if (window.RecordWatchBridge && typeof RecordWatchBridge.saveProfileFromEligibility === "function") {
+      if (window.RecordWatchBridge?.saveProfileFromEligibility) {
         RecordWatchBridge.saveProfileFromEligibility({
-          firstName: firstName,
-          lastName: lastName,
-          fullName: fullName,
-          email: email,
-          phone: phone,
-          residenceState: residenceState,
-          caseState: caseState
+          firstName, lastName, fullName, dateOfBirth: dob,
+          email, phone, residenceState, caseState
         });
       }
-
-      if (window.RecordPathDataBridge && typeof RecordPathDataBridge.loadPacketData === "function") {
-        try {
-          const data = RecordPathDataBridge.loadPacketData();
-          if (typeof RecordPathDataBridge.derivePacketData === "function") {
-            RecordPathDataBridge.derivePacketData(data);
-          }
-          if (typeof RecordPathDataBridge.savePacketData === "function") {
-            RecordPathDataBridge.savePacketData(data);
-          }
-        } catch (error) {
-          console.warn("RecordPathDataBridge save skipped:", error);
-        }
-      }
+      document.dispatchEvent(new CustomEvent("recordpath:data-updated"));
     }
 
     function renderRecordWatchPanel() {
@@ -1102,10 +921,7 @@
     }
 
     function buildFullName() {
-      return [getValue("firstName"), getValue("lastName")]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
+      return getValue("fullName");
     }
 
     function getValue(id) {
