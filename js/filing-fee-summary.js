@@ -6,7 +6,7 @@
   const OHIO_DISMISSAL_LAW = "https://codes.ohio.gov/ohio-revised-code/section-2953.33";
   const dismissed = new Set(["dismissed", "not guilty", "acquitted", "no bill"]);
   function normalize(value) {
-    return String(value || "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\\s+/g, " ");
+    return String(value || "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
   }
   function describe(state, charges) {
     const s = String(state || "").trim().toUpperCase();
