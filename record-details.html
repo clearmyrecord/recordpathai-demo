@@ -1163,6 +1163,22 @@
       const recordStatus = document.getElementById("recordStatus");
       let offenseCounter = 0;
       let autosaveTimer = null;
+      const RECORDWATCH_OPT_IN_KEY = "recordPathRecordWatchOptIn";
+      function isRecordWatchEnabled() {
+        return localStorage.getItem(RECORDWATCH_OPT_IN_KEY) === "true";
+      }
+
+      function syncRecordWatchFromDraft() {
+        if (!isRecordWatchEnabled() || !window.RecordWatchBridge) return;
+        const profile = collectProfile();
+        const charges = collectCharges();
+        RecordWatchBridge.saveProfileFromEligibility?.(profile);
+        if (charges.length) RecordWatchBridge.saveCaseFromRecordDetails?.({ charges });
+      }
+
+      function showFeeGuidance() {
+        window.RecordPathFilingFees?.render?.(value("caseState"), collectCharges());
+      }
 
       function value(id) {
         const field = document.getElementById(id);
@@ -1366,7 +1382,11 @@
             if (input.type === "checkbox") charge[key] = input.checked;
             else charge[key] = String(input.value || "").trim();
           });
-          if (!charge.charge_name && !charge.charge_code && !charge.final_disposition) return;
+          // A partially filled card is still the user's work. Preserve the original
+          // allegation, dates, degree, notes and flags even before final outcomes.
+          const hasTypedValue = Array.from(card.querySelectorAll("[data-field]")).some(input =>
+            input.type === "checkbox" ? input.checked : String(input.value || "").trim() !== "");
+          if (!hasTypedValue) return;
           const outcome = String(charge.final_disposition || "").toLowerCase();
           charge.is_dismissed = outcome === "dismissed" || outcome === "not guilty" || outcome === "acquitted" || outcome === "no bill";
           charge.level = firstNonEmpty(charge.level, charge.degree, charge.chargeLevel);
@@ -1521,14 +1541,20 @@
       }
 
       function scheduleAutosave() {
+        // Persist synchronously on every input; a quick refresh must not erase
+        // the last keystrokes. Delay only the expensive readiness UI refresh.
+        const result = saveDraft(false, { quiet: true });
+        if (result.error) return;
         clearTimeout(autosaveTimer);
         autosaveTimer = setTimeout(function () {
-          const result = saveDraft(false);
-          persistCurrentCaseDraft(result.casePayload, false);
-        }, 800);
+          document.dispatchEvent(new CustomEvent("recordpath:data-updated"));
+          syncRecordWatchFromDraft();
+          renderRecordWatchPanel();
+        }, 450);
       }
 
-      function saveDraft(syncRecordWatchCase) {
+      function saveDraft(syncRecordWatchCase, options) {
+        options = options || {};
         const data = RecordPathDataBridge.loadPacketData();
         const profile = collectProfile();
         const shared = collectSharedCaseData();
@@ -1585,16 +1611,19 @@
         data.eligibility.has_pending_cases = data.case.proceedings_status !== "none" ||
           charges.some(c=>c.pending_charges||c.pendingCharges);
         RecordPathDataBridge.derivePacketData(data);
-        RecordPathDataBridge.savePacketData(data);
-        document.dispatchEvent(new CustomEvent("recordpath:data-updated"));
-        saveLegacyKeys(profile, shared, charges);
-
-        if (window.RecordWatchBridge && typeof RecordWatchBridge.saveProfileFromEligibility === "function") {
-          RecordWatchBridge.saveProfileFromEligibility(profile);
-          if (syncRecordWatchCase && charges.length && typeof RecordWatchBridge.saveCaseFromRecordDetails === "function") {
-            RecordWatchBridge.saveCaseFromRecordDetails({ charges: charges });
-          }
+        try {
+          // The canonical browser draft is the source of truth for reloading Step 2.
+          RecordPathDataBridge.savePacketData(data);
+          saveLegacyKeys(profile, shared, charges);
+        } catch (error) {
+          console.warn("Browser draft save failed:", error);
+          setSaveStatus("Unable to save in this browser. Check private browsing or storage settings.");
+          return { data, charges, casePayload: buildCurrentCasePayload(profile, shared, charges), error };
         }
+        setSaveStatus("Saved in this browser");
+        if (!options.quiet) document.dispatchEvent(new CustomEvent("recordpath:data-updated"));
+        if (syncRecordWatchCase && isRecordWatchEnabled()) syncRecordWatchFromDraft();
+        showFeeGuidance();
         const assessment = window.RecordPathFormRequirements?.assess?.(data);
         if (hasRecordDetailsCompletion(charges) && assessment && assessment.missing.length === 0 &&
             window.RecordPathWorkflow) {
@@ -1603,25 +1632,33 @@
           RecordPathWorkflow.decorateNavigation();
         }
         const casePayload = buildCurrentCasePayload(profile, shared, charges);
-        if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) {
-          persistCurrentCaseDraft(casePayload, Boolean(syncRecordWatchCase));
-        }
-        renderRecordWatchPanel();
+        if (!options.quiet) renderRecordWatchPanel();
         return { data, charges, casePayload };
       }
 
       function hasRecordDetailsCompletion(charges) {
-        return Boolean((charges && charges.length) || value("caseNumber"));
+        return Boolean(value("caseNumber") || (charges || []).some(c =>
+          c.charge_name || c.charge_code || c.original_charge_name ||
+          c.original_charge_code || c.final_disposition));
       }
 
       function renderRecordWatchPanel() {
-        if (!window.RecordWatchBridge) return;
+        const enabled = isRecordWatchEnabled();
+        const summaryNode = document.getElementById("recordWatchSummary");
+        const saveButton = document.getElementById("saveRecordWatchBtn");
+        if (summaryNode) summaryNode.hidden = !enabled;
+        if (saveButton) saveButton.textContent = enabled ? "Update RecordWatch" : "Save to RecordWatch";
+        if (!enabled || !window.RecordWatchBridge) {
+          setText("rwTrackingStatus", "Not enabled");
+          return;
+        }
         const summary = RecordWatchBridge.getRecordWatchSummary();
         const missing = summary.missingRequirements && summary.missingRequirements.length ? summary.missingRequirements.join(", ") : "None recorded";
-        setText("rwTrackingStatus", summary.trackingEnabled ? "Enabled" : "Not enabled");
+        setText("rwTrackingStatus", "Enabled");
         setText("rwEligibilityStatus", summary.estimatedEligibilityStatus || "More information needed");
         setText("rwMissingRequirements", missing);
-        setText("rwNextAction", summary.nextRecommendedAction || "Continue to packet generation.");
+        setText("rwNextAction", summary.nextRecommendedAction || "Review your saved case details.");
+        setText("recordWatchSaveMessage", "RecordWatch is enabled for this case on this device.");
       }
 
       function setText(id, text) {
@@ -1652,9 +1689,10 @@
           field?.addEventListener("change",()=>window.RecordPathRecordCollection?.update?.());
           if(id==="county"||id==="courtName")field?.addEventListener("input",()=>window.RecordPathRecordCollection?.update?.());
         });
-        if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
+        if (isRecordWatchEnabled() && window.RecordWatchBridge?.syncExistingRecordPathData) {
           RecordWatchBridge.syncExistingRecordPathData();
         }
+        showFeeGuidance();
         renderRecordWatchPanel();
 
         addOffenseBtn.addEventListener("click", function () {
@@ -1665,36 +1703,63 @@
         if (saveProgressBtn) {
           saveProgressBtn.addEventListener("click", async function () {
             const result = saveDraft(false);
-            if (window.RecordPathAuth && !RecordPathAuth.requireAuth("save progress", "record-details.html")) return;
-            if (!result.charges.length && !value("caseNumber")) {
-              alert("Add at least one charge or case number before saving progress.");
-              return;
-            }
-            await persistCurrentCaseDraft(result.casePayload, true);
-            alert((window.RecordPathUserStore && RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn()) ? "Progress saved to your account." : "Progress saved locally.");
+            if (result.error) return;
+            await persistCurrentCaseDraft(result.casePayload, false);
+            setSaveStatus("Progress saved on this device. You can refresh or return later.");
           });
         }
 
+        document.getElementById("saveRecordWatchBtn")?.addEventListener("click", async function () {
+          const result = saveDraft(false);
+          if (result.error) return;
+          if (!hasRecordDetailsCompletion(result.charges)) {
+            setText("recordWatchSaveMessage", "Add at least one charge or case number before adding this case to RecordWatch.");
+            return;
+          }
+          try {
+            localStorage.setItem(RECORDWATCH_OPT_IN_KEY, "true");
+            syncRecordWatchFromDraft();
+            const saved = await persistCurrentCaseDraft(result.casePayload, true);
+            const loggedIn = !!window.RecordPathUserStore?.isLoggedIn?.();
+            setText("recordWatchSaveMessage", loggedIn && saved
+              ? "Saved in RecordWatch on this device. Open your dashboard to confirm account synchronization."
+              : "Saved in RecordWatch on this device. Sign in for account-backed storage.");
+            renderRecordWatchPanel();
+          } catch (error) {
+            console.warn("RecordWatch save failed:", error);
+            setText("recordWatchSaveMessage", "Unable to save to RecordWatch. Your browser draft is still available.");
+          }
+        });
+
         continueBtn.addEventListener("click", async function () {
-          const result = saveDraft(true);
+          const result = saveDraft(false);
+          if (result.error) return;
           if (!hasRecordDetailsCompletion(result.charges)) {
             alert("Add at least one charge or case number before continuing.");
             return;
           }
-          const check = await window.RecordPathWave1Intake?.refresh?.();
-          if(check && ["wave1","pilot","preparatory"].includes(check.scope) && check.missing.length) {
-            alert("Form-aware screening is missing: "+check.missing.slice(0,5).map(x=>x.label).join(", ")+
-              ". Complete the charge-specific details and dates before packet review.");
-            document.getElementById("formRequirementsPanel")?.scrollIntoView({behavior:"smooth"});
-            return;
-          }
-          await persistCurrentCaseDraft(result.casePayload, true);
+          // Missing court evidence can be reviewed on the packet page.
+          // Never erase the saved draft or demand duplicate questions here.
+          if (isRecordWatchEnabled()) syncRecordWatchFromDraft();
+          await persistCurrentCaseDraft(result.casePayload, false);
           window.location.href = "packet.html";
         });
 
         document.getElementById("recordDetailsForm").addEventListener("input", scheduleAutosave);
         document.getElementById("recordDetailsForm").addEventListener("change", scheduleAutosave);
         document.getElementById("recordDetailsForm").addEventListener("blur", scheduleAutosave, true);
+        window.addEventListener("pagehide", function () {
+          clearTimeout(autosaveTimer);
+          saveDraft(false, { quiet: true });
+          syncRecordWatchFromDraft();
+        });
+        document.addEventListener("visibilitychange", function () {
+          if (document.visibilityState === "hidden") {
+            clearTimeout(autosaveTimer);
+            saveDraft(false, { quiet: true });
+            syncRecordWatchFromDraft();
+          }
+        });
       }
 
       init();
