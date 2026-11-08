@@ -1735,6 +1735,19 @@ async function verifiedRecordwatchLifetimeSession(sessionId,userId,caseId){
   if(lines?.data?.length!==1 || lines.data[0]?.price?.id!==priceId ||
      lines.data[0]?.quantity!==1 || lines.data[0]?.amount_total!==RECORDWATCH_LIFETIME_CENTS)
     throw Object.assign(new Error("RecordWatch checkout price or quantity mismatch."),{status:403});
+  // Catch refunded/disputed charges even when a Stripe refund event races the
+  // completed-checkout event or a webhook delivery has not arrived yet.
+  const intentId=typeof session.payment_intent==="string"?session.payment_intent:session.payment_intent?.id;
+  const intent=await recordwatchStripe.paymentIntents.retrieve(intentId,{expand:["latest_charge"]});
+  const charge=typeof intent.latest_charge==="string"
+    ? await recordwatchStripe.charges.retrieve(intent.latest_charge) : intent.latest_charge;
+  if(intent.status!=="succeeded" || intent.currency!=="usd" ||
+     intent.amount_received!==RECORDWATCH_LIFETIME_CENTS ||
+     intent.metadata?.product!=="premium_recordwatch_lifetime" ||
+     intent.metadata?.user_id!==userId || intent.metadata?.saved_case_id!==caseId ||
+     !charge || charge.refunded===true || Number(charge.amount_refunded||0)>0 ||
+     charge.disputed===true)
+    throw Object.assign(new Error("The RecordWatch charge is not an active, unreversed $39 payment."),{status:403});
   await getSavedCaseReviewFacts(userId,caseId); // Check real saved-case owner and deletion state.
   return session;
 }
