@@ -84,6 +84,7 @@ create table if not exists public.packet_drafts (
   case_snapshot_sha256 text not null check(case_snapshot_sha256 ~ '^[a-f0-9]{64}$'),
   signed_pdf_sha256 text not null check(signed_pdf_sha256 ~ '^[a-f0-9]{64}$'),
   signed_pdf_private_path text not null unique,
+  pdf_pages integer not null check(pdf_pages between 1 and 6),
   created_at timestamptz not null default now()
 );
 alter table public.packet_drafts enable row level security;
