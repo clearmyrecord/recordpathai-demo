@@ -1045,10 +1045,18 @@
 
             <div class="button-stack">
               <div id="checkoutError" class="callout danger" style="display:none; margin-bottom:12px;" role="alert" aria-live="polite"></div>
+              <div class="packet-fee-quote" id="packetFeeQuote" aria-live="polite" style="padding:18px 20px; border:1px solid #cfddf3; border-radius:16px; background:#f5f9ff; margin-bottom:8px;">
+                <h3 style="margin:0 0 10px; font-size:18px; color:#233d70;">Price breakdown</h3>
+                <div style="display:flex; justify-content:space-between; gap:16px; margin:5px 0;"><span>RecordPathAI packet preparation</span><strong id="packetServiceFee">$50.00</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:16px; margin:5px 0;"><span>Court filing fee / deposit</span><strong id="packetCourtFee">Checking court...</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:16px; padding-top:12px; margin-top:10px; border-top:1px solid #cfddf3; font-size:18px;"><strong>Estimated total</strong><strong id="packetEstimatedTotal">Pending verification</strong></div>
+                <p id="packetFeeExplanation" style="font-size:13px; line-height:1.5; color:#526780; margin:12px 0 0;">Court fees, any waiver, and the accepted filing/payment method must be verified before an actual charge.</p>
+                <p style="font-size:13px; line-height:1.5; color:#526780; margin:8px 0 0;">Filing fee funds are separate from RecordPathAI revenue. A check and attached documents may be mailed through Lob after authorization, or the court fee may be paid online where the court permits. Neither payment method is activated here.</p>
+              </div>
               <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
               <div class="sample-pdf-tools" style="margin-top:12px; padding:16px; border:1px solid #d2def3; border-radius:14px; background:#f7faff;">
-                <button type="button" class="sig-small-btn" id="downloadSamplePdfBtn">Test PDF — Download Sample (No Payment)</button>
-                <p style="margin:9px 0 0; color:#526780; font-size:13px; line-height:1.5;">Uses a reviewed form template, sample-only information and a permanent TEST / NOT FOR FILING watermark. No personal or case information, signature, charge, or payment is used.</p>
+                <button type="button" class="sig-small-btn" id="downloadSamplePdfBtn">Test Signed PDF — Download Sample (No Payment)</button>
+                <p style="margin:9px 0 0; color:#526780; font-size:13px; line-height:1.5;">Tests the court PDF mapping with sample fields and the signature you draw above. Clearly watermarked NOT FOR FILING. No real case details, checkout or mailing; your signature stays in this browser download.</p>
               </div>
               <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
                 <button type="button" class="debug-pdf-link" id="testPdfBtn">Test PDF Access</button>
@@ -2513,8 +2521,52 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
 
-      // Operator/customer PDF rendering smoke test. Never uses saved user or court data.
-      // This is entirely independent of eligibility, Stripe, signatures and filing.
+      function packetQuoteFormType(raw) {
+        const charges = Array.isArray(raw?.charges) ? raw.charges : [];
+        const outcomes = charges.map(function (charge) {
+          return safe(charge?.final_disposition || charge?.disposition).toLowerCase().replace(/[\s_-]+/g, " ").trim();
+        }).filter(Boolean);
+        if (!outcomes.length || outcomes.length !== charges.length) return "";
+        if (outcomes.every(function (outcome) { return ["convicted", "conviction", "guilty"].includes(outcome); }))
+          return "sealing-conviction";
+        if (outcomes.every(function (outcome) { return ["dismissed", "dismissal", "not guilty", "acquittal", "acquitted", "no bill"].includes(outcome); }))
+          return "sealing-dismissal";
+        return "";
+      }
+
+      async function renderPacketFeeQuote(raw) {
+        const court = raw?.court || {};
+        const set = function (id, value) {
+          const el = document.getElementById(id);
+          if (el) el.textContent = value;
+        };
+        const formType = packetQuoteFormType(raw);
+        const query = new URLSearchParams({
+          state: normalizeState(court.state || raw?.meta?.source_state),
+          county: safe(court.county || raw?.meta?.source_county),
+          courtType: safe(court.court_type),
+          formType
+        });
+        try {
+          const endpoint = getCheckoutEndpoint().replace(/\/api\/create-checkout-session$/, "/api/packet/quote");
+          const response = await fetch(endpoint + "?" + query, { cache:"no-store" });
+          if (!response.ok) throw new Error("Fee lookup is temporarily unavailable.");
+          const result = await response.json();
+          const quote = result?.quote;
+          if (!quote || quote.serviceFeeCents !== 5000) throw new Error("No approved price schedule is available.");
+          set("packetServiceFee", "$50.00");
+          set("packetCourtFee", quote.courtFeeCents === null ? "To be verified" : "$" + (quote.courtFeeCents/100).toFixed(2));
+          set("packetEstimatedTotal", quote.totalCents === null ? "To be confirmed" : "$" + (quote.totalCents/100).toFixed(2));
+          set("packetFeeExplanation", quote.message + " Any approved poverty-affidavit waiver changes the amount collected.");
+        } catch (error) {
+          set("packetCourtFee", "To be verified");
+          set("packetEstimatedTotal", "To be confirmed");
+          set("packetFeeExplanation", "Court-fee quote unavailable. The preparation charge is $50, but no payment will start until we confirm the court's fee and payment method.");
+        }
+      }
+
+      // Watermarked rendering smoke test: synthetic case fields, with the user's
+      // currently drawn signature only. Never reads real case data or creates a payment.
       async function downloadSamplePdf() {
         const button = document.getElementById("downloadSamplePdfBtn");
         if (button) button.disabled = true;
@@ -2536,11 +2588,15 @@ document.addEventListener("DOMContentLoaded", async function () {
           const pdfDoc = await PDFDocument.load(sourceBytes);
           const pages = pdfDoc.getPages();
           if (!pages.length) throw new Error("The sample PDF template has no pages.");
+          if (!hasUsableDrawnSignature() || !signatureImageBytes)
+            throw new Error("Draw your signature above, then select Use Drawn Signature before testing the signed PDF.");
+          const signature = await pdfDoc.embedPng(signatureImageBytes);
+          let signatureMappings = 0;
           const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
           const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-          // The same coordinates, page indexes and mapped field types as packet production.
-          // Only synthetic values are ever written. Signature fields stay blank.
+          // Uses the same PDF coordinates as production. User signature is drawn
+          // into the actual signature field; all other fields use synthetic data.
           const sampleValues = {
             "petitioner.full_name": "SAMPLE APPLICANT",
             "petitioner.address.line1": "123 Example Street",
@@ -2562,7 +2618,19 @@ document.addEventListener("DOMContentLoaded", async function () {
           let mapped = 0;
           fields.forEach(function (field) {
             const page = pages[Number(field.page || 1) - 1];
-            if (!page || field.type === "signature") return;
+            if (!page) return;
+            if (field.type === "signature") {
+              const srcW = Number(mapping.pageWidth || 768);
+              const srcH = Number(mapping.pageHeight || 994);
+              const sx = page.getWidth() / srcW, sy = page.getHeight() / srcH;
+              const x = Number(field.x || 0) * sx;
+              const width = Math.max(20, Number(field.width || 180) * sx);
+              const height = Math.max(12, Number(field.height || 18) * sy);
+              const y = page.getHeight() - Number(field.y || 0) * sy - height;
+              page.drawImage(signature, { x, y, width, height });
+              signatureMappings++;
+              return;
+            }
             const path = fieldPath(field);
             if (!Object.prototype.hasOwnProperty.call(sampleValues, path)) return;
             const srcW = Number(mapping.pageWidth || 768);
@@ -2579,6 +2647,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             mapped++;
           });
           if (!mapped) throw new Error("The active PDF mapping did not match the synthetic test fields.");
+          if (!signatureMappings) throw new Error("The court PDF template is missing a mapped signature field.");
 
           pages.forEach(function (page) {
             const w = page.getWidth(), h = page.getHeight();
@@ -2589,7 +2658,7 @@ document.addEventListener("DOMContentLoaded", async function () {
               size, font: boldFont, rotate: degrees(32),
               color: rgb(.70,.11,.14), opacity:.28
             });
-            page.drawText("TEST FILE - NOT FOR FILING - NO REAL CUSTOMER DATA", {
+            page.drawText("TEST - NOT FOR FILING - SAMPLE FIELDS / USER-DRAWN SIGNATURE", {
               x: 22, y: 14, size: Math.min(9, w / 70),
               font: boldFont, color: rgb(.70,.11,.14)
             });
@@ -2604,7 +2673,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           anchor.click();
           anchor.remove();
           setTimeout(function () { URL.revokeObjectURL(url); }, 2500);
-          setStatus("Sample PDF created: " + pages.length + " pages and " + mapped + " mapped sample fields. Open the download to inspect it. No payment was made.");
+          setStatus("Signed PDF test passed: " + pages.length + " pages, " + mapped + " sample fields and " + signatureMappings + " signature field(s). Check the downloaded PDF. No payment or mail was sent.");
         } catch (error) {
           const message = "Sample PDF test failed: " + (error?.message || "Unable to render the reviewed PDF template.");
           setCheckoutError(message);
@@ -2678,7 +2747,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             ["Ohio court-law validation is unavailable; no payment will be collected."],"checkout");
           const review=pilot.review(data);
           return showPrerequisiteErrors(
-            ["Wood County court packet is review-only pending official docket, final-discharge, statutory exclusions, verified fee and approved filing instructions. "+
+            ["Stripe checkout has not opened because Ohio cases are review-only. No payment was taken. The Wood County conviction quote is $150 ($50 preparation + $100 court deposit), subject to verification. Required before payment: official docket, final discharge, exclusions and approved filing instructions. "+
              review.issues.slice(0,3).join(" ")],"checkout");
         }
         if(!["wave1","pilot","preparatory"].includes(base.scope))
@@ -3610,6 +3679,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 
       const checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
+      renderPacketFeeQuote(raw);
       const eligibilityMode = normalizedData?.eligibility?.eligibility_status || packetEligibility.mode;
       const packetGenerationState = getPacketGenerationState(packetEligibility);
       const packetUnlocked = packetGenerationState === "eligiblePaid" || packetGenerationState === "devBypass";
@@ -3618,7 +3688,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       renderPacketGenerationState(packetGenerationState, packetEligibility);
       renderDebugPdfTools();
 
-      if (checkoutEligibility.canCheckout) {
+      if (normalizeState(normalizedData?.court?.state) === "OH") {
+        setStatus("Ohio checkout is on hold for case and fee review. No payment can be made yet. Use Test Signed PDF to verify the document and your drawn signature.");
+        loadAndRenderCourtInstructions(normalizedData, false);
+      } else if (checkoutEligibility.canCheckout) {
         setStatus(checkoutEligibility.warning || (packetUnlocked
           ? "Eligible now — packet ready to generate."
           : "Eligible now — payment required to generate the PDF packet."));
