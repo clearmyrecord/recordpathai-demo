@@ -2332,7 +2332,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     quote={...release.quote,canCollect:true};
     const checkoutCaseNumber = safe((req.body || {}).case_number || (req.body || {}).caseNumber || caseInfo.case_number || caseInfo.caseNumber);
     const wantsRecordwatchAddon = recordwatchAddon === true || recordwatchAddon === "true" || (req.body || {}).recordwatch_addon === true || (req.body || {}).recordwatchAddon === true;
-    const recordwatchAddonPriceId = process.env.STRIPE_RECORDWATCH_ADDON_PRICE_ID;
+    if(wantsRecordwatchAddon)return res.status(400).json({error:"The 12-month RecordWatch add-on has been retired. Purchase $39 lifetime monitoring separately for your saved case."});
     const lineItems = [
       {
         quantity: 1,
@@ -2362,9 +2362,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
         }
       });
     }
-    if (wantsRecordwatchAddon && recordwatchAddonPriceId) lineItems.push({ price: recordwatchAddonPriceId, quantity: 1 });
-    else if (wantsRecordwatchAddon) lineItems.push({ quantity: 1, price_data: { currency: safe(currency, "usd").toLowerCase(), unit_amount: RECORDWATCH_PLAN_AMOUNTS.addon_12_month, product_data: { name: "Premium RecordWatch 12-month add-on", description: "SMS reminders and premium monitoring for 12 months" } } });
-
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -2381,8 +2378,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
         courtFeeCents: String(quote.canCollect && quote.courtFeeCents > 0 ? quote.courtFeeCents : 0),
         courtProfileId:String(release.profileId||""),
         fulfillmentMode:String(release.fulfillmentMode||"") ,
-        recordwatchAddon: String(Boolean(wantsRecordwatchAddon)),
-        recordwatchPlan: wantsRecordwatchAddon ? "addon_12_month" : "",
         userId: checkoutUser.id,
         saved_case_id: isUuid(savedCaseId) ? savedCaseId : "",
         case_id: isUuid(checkoutCaseId) ? checkoutCaseId : ""
