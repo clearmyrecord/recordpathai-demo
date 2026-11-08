@@ -3,7 +3,7 @@
 
   const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
   const CONFIG_ENDPOINT = "/api/config/supabase";
-  const MISSING_CONFIG_MESSAGE = "Supabase public configuration is missing. Add RECORDPATH_SUPABASE_URL and RECORDPATH_SUPABASE_ANON_KEY or SUPABASE_URL and SUPABASE_ANON_KEY.";
+  const MISSING_CONFIG_MESSAGE = "Account sign-in is temporarily unavailable because the authentication service is not configured. Please contact RecordPathAI support; your saved information has not been deleted.";
 
   let configPromise;
   let libraryPromise;
@@ -32,28 +32,51 @@
 
   async function fetchServerConfig() {
     try {
-      const response = await fetch(CONFIG_ENDPOINT, { credentials: "same-origin" });
-      if (!response.ok) return {};
-      return await response.json();
+      const response = await fetch(CONFIG_ENDPOINT, {
+        credentials: "same-origin",
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        lastConfigError = new Error("Authentication configuration service returned HTTP " + response.status);
+        return {};
+      }
+      const config = await response.json();
+      if (!config || !config.url || !(config.anonKey || config.supabaseAnonKey)) {
+        lastConfigError = new Error("Authentication configuration endpoint did not supply complete public settings.");
+        return {};
+      }
+      lastConfigError = null;
+      return config;
     } catch (error) {
       lastConfigError = error;
-      console.warn("Supabase config endpoint unavailable:", error);
+      console.warn("Supabase config endpoint unavailable:", error.message);
       return {};
     }
   }
 
   async function getConfig() {
+    if (cachedConfig && cachedConfig.url && cachedConfig.anonKey) return cachedConfig;
     if (!configPromise) {
       configPromise = (async function () {
+        const serverConfig = await fetchServerConfig();
         const windowConfig = fromWindowConfig();
         const metaConfig = fromMetaConfig();
-        const serverConfig = await fetchServerConfig();
-        cachedConfig = {
-          url: windowConfig.url || metaConfig.url || serverConfig.url || serverConfig.supabaseUrl || "",
-          anonKey: windowConfig.anonKey || metaConfig.anonKey || serverConfig.anonKey || serverConfig.supabaseAnonKey || ""
-        };
+        // URL and public key must come from the same source. Mixing them can
+        // silently authenticate against an unrelated Supabase project.
+        const sources = [
+          { url: serverConfig.url || serverConfig.supabaseUrl, anonKey: serverConfig.anonKey || serverConfig.supabaseAnonKey },
+          windowConfig, metaConfig
+        ];
+        const config = sources.find(function (item) { return item.url && item.anonKey; }) || { url: "", anonKey: "" };
+        cachedConfig = { url: String(config.url || "").trim(), anonKey: String(config.anonKey || "").trim() };
+        if (!cachedConfig.url || !cachedConfig.anonKey) {
+          configPromise = null; // Do not cache a transient outage indefinitely.
+        }
         return cachedConfig;
-      }());
+      }()).catch(function (error) {
+        configPromise = null;
+        throw error;
+      });
     }
     return configPromise;
   }
@@ -76,11 +99,32 @@
         script.async = true;
         script.defer = true;
         script.dataset.recordpathSupabaseJs = "true";
-        script.onload = function () { libraryLoaded = Boolean(window.supabase && window.supabase.createClient); resolve(window.supabase); };
-        script.onerror = function () { reject(new Error("Could not load Supabase client library.")); };
+        let settled = false;
+        const timeout = setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          script.remove();
+          reject(new Error("The authentication library timed out. Check your connection and try again."));
+        }, 12000);
+        script.onload = function () {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          libraryLoaded = Boolean(window.supabase && window.supabase.createClient);
+          if (libraryLoaded) resolve(window.supabase);
+          else reject(new Error("The authentication library did not initialize."));
+        };
+        script.onerror = function () {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          script.remove();
+          reject(new Error("Could not load the authentication library. Check your connection and try again."));
+        };
         document.head.appendChild(script);
       }).catch(function (error) {
         lastClientError = error;
+        libraryPromise = null; // retry after a temporary CDN/network failure
         throw error;
       });
     }
