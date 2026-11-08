@@ -184,8 +184,8 @@ test("Late OAuth and recovery events synchronize the shared user session", async
 });
 
 test("Login reacts to recovery callbacks and live account-state events", () => {
-  assert.match(login, /recordpath:auth-change/);
-  assert.match(login, /detail\\.event === "PASSWORD_RECOVERY"/);
-  assert.match(login, /showPasswordRecovery\\(\\)/);
-  assert.match(login, /store\\.passwordRecoveryActive/);
+  assert.ok(login.includes("recordpath:auth-change"));
+  assert.ok(login.includes('detail.event === "PASSWORD_RECOVERY"'));
+  assert.ok(login.includes("showPasswordRecovery()"));
+  assert.ok(login.includes("store.passwordRecoveryActive"));
 });
