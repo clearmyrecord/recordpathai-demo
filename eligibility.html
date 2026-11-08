@@ -529,7 +529,7 @@
           </div>
 
           <h2 class="section-title">Personal & Contact Information</h2>
-          <p class="section-copy" data-i18n="eligibility.sectionCopy">
+          <p class="section-copy">
             Your current residence can be in any of the 50 states, even if your case was filed elsewhere.
           </p>
 
@@ -650,21 +650,10 @@
 
 
 
-          <aside class="recordwatch-panel" aria-live="polite">
-            <h3>RecordWatch background tracking</h3>
-            <p class="section-copy">RecordWatch tracking is enabled automatically as you complete this RecordPathAI flow.</p>
-            <div class="recordwatch-panel-grid">
-              <div class="recordwatch-panel-item"><strong>Tracking</strong><span id="rwTrackingStatus">Enabled</span></div>
-              <div class="recordwatch-panel-item"><strong>Estimated eligibility</strong><span id="rwEligibilityStatus">More information needed</span></div>
-              <div class="recordwatch-panel-item"><strong>Missing requirements</strong><span id="rwMissingRequirements">Case details</span></div>
-              <div class="recordwatch-panel-item"><strong>Next action</strong><span id="rwNextAction">Save intake, then add record details.</span></div>
-            </div>
-            <a href="recordwatch-dashboard.html">Open full RecordWatch dashboard</a>
-          </aside>
           <div class="summary-box">
-            <h3 class="summary-title" data-i18n="eligibility.next.title">What happens next</h3>
-            <p class="summary-copy" data-i18n="eligibility.summaryCopy">
-              Next, you will enter your case number, court, county, charge, offense level, disposition date, and other record details. The packet page will use all saved information to determine eligibility timing and generate your filing packet.
+            <h3 class="summary-title">What happens next</h3>
+            <p class="summary-copy">
+              Next you will enter the filing court, case number, each original and final charge, and the verified judgment and supervision-completion dates. We reuse this information for screening and form preparation; filing remains subject to court verification.
             </p>
           </div>
         </section>
@@ -724,12 +713,13 @@
         }
       }
       if (window.RecordPathWorkflow) RecordPathWorkflow.renderProgress("eligibility");
-      hydrateFromLandingPage();
-      hydrateFromLocalStorage();
-
       if (window.RecordPathDataBridge && typeof RecordPathDataBridge.initPage === "function") {
         RecordPathDataBridge.initPage(document);
       }
+      // Apply an incoming profile after binding the packet data so a blank draft
+      // cannot overwrite a name or address prefilled from the landing page.
+      hydrateFromLandingPage();
+      hydrateFromLocalStorage();
       // Imported cases come only from the separately approved, verified
       // court index, after applicant consent on the search results page.
       const prefill = window.RecordPathWoodCountyPrefill;
