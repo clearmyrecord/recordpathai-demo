@@ -42,7 +42,7 @@ test("sample PDF check downloads watermarked synthetic fields and user-drawn sig
 });
 
 test("actual packet payment still requires checkout verification", () => {
-  assert.match(html, /if\(!await ensureWave1FormReady\(raw\)\)return/);
+  assert.match(html, /checkServerPacketReadiness\(verifiedCaseId\)/);
   assert.match(html, /Stripe checkout has not opened because Ohio cases are review-only/);
   assert.match(html, /const token = login\?\.data\?\.session\?\.access_token/);
   assert.match(html, /if \(!response\.ok\)/);
@@ -51,7 +51,7 @@ test("actual packet payment still requires checkout verification", () => {
   assert.match(server, /const checkoutUser = await requireApiUser\(req, res\)/);
   assert.match(server, /client_reference_id: internalOrderId/);
   assert.match(server, /quotePacketPricing\(/);
-  assert.match(server, /if \(isOhio\)/);
+  assert.match(server, /packetReleaseStatus\(checkoutUser\.id,savedCaseId\)/);
   assert.match(server, /Court filing deposit/);
 });
 
