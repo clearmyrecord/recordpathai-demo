@@ -1279,6 +1279,54 @@ app.get("/api/ledger/summary", async (req, res) => {
   }
 });
 
+// Serve ONLY the exact approved private PDF after server-verified Stripe
+// payment for this authenticated account and saved case. Never regenerate from
+// browser-controlled fields after a sale.
+app.post("/api/packet/download-approved",async(req,res)=>{
+  const user=await requireApiUser(req,res);
+  if(!user)return;
+  if(!stripe||!packetDatabaseReady())
+    return res.status(503).json({ok:false,error:"Paid packet download is temporarily unavailable."});
+  const caseId=safe(req.body?.case_id),sessionId=safe(req.body?.session_id);
+  if(!validCaseId(caseId)||!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
+    return res.status(400).json({ok:false,error:"Saved case and verified payment session required."});
+  try {
+    const session=await stripe.checkout.sessions.retrieve(sessionId);
+    if(!verifiedPacketSession(session,user.id,caseId))
+      return res.status(403).json({ok:false,error:"Payment was not verified for this saved case."});
+    const [reviews,drafts]=await Promise.all([
+      supabaseRest("packet_releases",{query:"?case_id=eq."+encodeURIComponent(caseId)+
+        "&user_id=eq."+encodeURIComponent(user.id)+"&limit=1"}),
+      supabaseRest("packet_drafts",{query:"?case_id=eq."+encodeURIComponent(caseId)+
+        "&user_id=eq."+encodeURIComponent(user.id)+"&limit=1"})
+    ]);
+    const review=Array.isArray(reviews)?reviews[0]:null;
+    const draft=Array.isArray(drafts)?drafts[0]:null;
+    if(!review||review.status!=="approved"||!draft||
+       review.signed_pdf_sha256!==draft.signed_pdf_sha256||
+       review.signed_pdf_private_path!==draft.signed_pdf_private_path)
+      return res.status(409).json({ok:false,error:"The approved signed PDF is not available. Contact support; no additional payment is required."});
+    const config=supabaseRestConfig();
+    const response=await fetch(config.url+"/storage/v1/object/packet-documents/"+draft.signed_pdf_private_path,{
+      headers:{apikey:config.key,Authorization:"Bearer "+config.key},
+      signal:AbortSignal.timeout(20000)
+    });
+    if(!response.ok)throw new Error("Private signed packet unavailable");
+    const bytes=Buffer.from(await response.arrayBuffer());
+    if(bytes.length<500||bytes.length>8388608 ||
+       createHash("sha256").update(bytes).digest("hex")!==review.signed_pdf_sha256)
+      throw new Error("Private signed packet digest mismatch");
+    res.setHeader("Cache-Control","no-store, private");
+    res.setHeader("Content-Type","application/pdf");
+    res.setHeader("Content-Disposition",'attachment; filename="recordpathai-approved-signed-packet.pdf"');
+    res.setHeader("X-Content-Type-Options","nosniff");
+    return res.status(200).send(bytes);
+  }catch(error){
+    console.warn("Approved packet download unavailable",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Unable to retrieve the signed paid packet. Do not pay again; contact support."});
+  }
+});
+
 app.post("/api/packet/verify-payment", async (req, res) => {
   try {
     const user = await requireApiUser(req, res);
