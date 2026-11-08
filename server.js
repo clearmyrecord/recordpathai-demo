@@ -1632,50 +1632,86 @@ function recordwatchPlanPeriod(plan) {
 }
 
 function isActiveRecordwatchSubscription(row) {
-  if (!row) return false;
-  const status = String(row.status || "").toLowerCase();
-  if (!["active", "trialing", "paid"].includes(status)) return false;
-  if (!row.current_period_end) return true;
-  return new Date(row.current_period_end).getTime() > Date.now();
+  return recordwatchEntitled(row);
+}
+
+async function getRecordwatchBillingRow(userId) {
+  if(!supabaseRestConfig()) throw new Error("RecordWatch billing persistence is not configured.");
+  const rows=await supabaseRest("recordwatch_subscriptions",{
+    query:"?user_id=eq."+encodeURIComponent(userId)+
+      "&stripe_subscription_id=not.is.null&order=updated_at.desc&limit=1"
+  });
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
 
 async function getActiveRecordwatchSubscription(userId) {
-  const memoryMatch = recordwatchMemory.subscriptions.find((item) => item.user_id === userId && isActiveRecordwatchSubscription(item));
-  try {
-    const rows = await supabaseRest("recordwatch_subscriptions", { query: `?user_id=eq.${encodeURIComponent(userId)}&status=in.(active,trialing,paid)&order=current_period_end.desc.nullslast&limit=1` });
-    if (Array.isArray(rows) && rows[0]) return rows[0];
-  } catch (error) {
-    console.warn("RecordWatch subscription lookup fallback:", error.message);
-  }
-  return memoryMatch || null;
+  const row=await getRecordwatchBillingRow(userId);
+  return isActiveRecordwatchSubscription(row) ? row : null;
 }
 
+// One verified Stripe subscription => one server-controlled database row.
+// Never fall back to process memory when recording paid entitlements.
 async function upsertPremiumRecordwatchSubscription(payload = {}) {
-  const period = recordwatchPlanPeriod(payload.plan);
-  const row = {
-    id: isUuid(payload.id) ? payload.id : undefined,
-    user_id: payload.user_id,
-    plan: normalizePremiumRecordwatchPlan(payload.plan) || "monthly",
-    status: payload.status || "active",
-    stripe_subscription_id: payload.stripe_subscription_id || null,
-    stripe_customer_id: payload.stripe_customer_id || null,
-    stripe_session_id: payload.stripe_session_id || null,
-    current_period_start: payload.current_period_start || period.start,
-    current_period_end: payload.current_period_end || period.end,
-    cancel_at_period_end: Boolean(payload.cancel_at_period_end),
-    updated_at: new Date().toISOString()
+  if(!isUuid(payload.user_id) || !payload.stripe_subscription_id?.startsWith("sub_"))
+    throw new Error("Verified Stripe subscription owner and ID required.");
+  const row={
+    user_id:payload.user_id,
+    plan:recordwatchPlan(payload.plan),
+    status:String(payload.status||"incomplete"),
+    stripe_subscription_id:payload.stripe_subscription_id,
+    stripe_customer_id:payload.stripe_customer_id||null,
+    stripe_session_id:payload.stripe_session_id||null,
+    current_period_start:payload.current_period_start||null,
+    current_period_end:payload.current_period_end||null,
+    cancel_at_period_end:Boolean(payload.cancel_at_period_end),
+    updated_at:new Date().toISOString()
   };
-  const existing = recordwatchMemory.subscriptions.find((item) => item.user_id === row.user_id && ((row.stripe_session_id && item.stripe_session_id === row.stripe_session_id) || (row.stripe_subscription_id && item.stripe_subscription_id === row.stripe_subscription_id)));
-  const memoryRow = Object.assign(existing || { id: recordwatchId("rws"), created_at: new Date().toISOString() }, row, { premium_active: isActiveRecordwatchSubscription(row), plan_type: "premium" });
-  if (!existing) recordwatchMemory.subscriptions.push(memoryRow);
-  try {
-    const conflict = row.stripe_session_id ? "user_id,stripe_session_id" : (row.stripe_subscription_id ? "user_id,stripe_subscription_id" : "id");
-    const persisted = await supabaseRest("recordwatch_subscriptions", { method: "POST", query: `?on_conflict=${encodeURIComponent(conflict)}`, body: row, prefer: "resolution=merge-duplicates,return=representation" });
-    return Array.isArray(persisted) && persisted[0] ? persisted[0] : memoryRow;
-  } catch (error) {
-    console.warn("RecordWatch premium subscription persistence fallback:", error.message);
-    return memoryRow;
+  if(!row.plan)throw new Error("Verified RecordWatch plan required.");
+  row.premium_active=recordwatchEntitled(row);
+  row.plan_type="premium";
+  row.premium_started_at=row.current_period_start;
+  row.premium_expires_at=row.current_period_end;
+  const matches=await supabaseRest("recordwatch_subscriptions",{
+    query:"?stripe_subscription_id=eq."+encodeURIComponent(row.stripe_subscription_id)+"&limit=1"
+  });
+  const existing=Array.isArray(matches)?matches[0]:null;
+  if(existing && existing.user_id!==row.user_id)throw new Error("Stripe subscription is already linked to another account.");
+  if(existing){
+    // Keep original Checkout reference during renewal and cancellation events.
+    row.stripe_session_id=row.stripe_session_id||existing.stripe_session_id||null;
+    const updated=await supabaseRest("recordwatch_subscriptions",{
+      method:"PATCH",query:"?id=eq."+encodeURIComponent(existing.id),
+      body:row,prefer:"return=representation"
+    });
+    if(!Array.isArray(updated)||!updated[0])throw new Error("RecordWatch billing update failed.");
+    return updated[0];
   }
+  const inserted=await supabaseRest("recordwatch_subscriptions",{
+    method:"POST",body:row,prefer:"return=representation"
+  });
+  if(!Array.isArray(inserted)||!inserted[0])throw new Error("RecordWatch billing insert failed.");
+  return inserted[0];
+}
+
+async function syncVerifiedRecordwatchStripeSubscription(subscription, sessionId = "") {
+  const userId=subscription?.metadata?.user_id;
+  if(!isUuid(userId))throw new Error("Stripe subscription has no valid RecordWatch owner.");
+  const plan=verifyRecordwatchSubscription(subscription,process.env,userId);
+  if(!plan)throw new Error("Stripe subscription is not a configured RecordWatch plan.");
+  assertRecordwatchStripePrice(subscription.items.data[0].price,plan);
+  const period=billingPeriod(subscription);
+  if(["active","trialing"].includes(subscription.status) && !period.end)
+    throw new Error("Stripe did not provide a verified subscription billing period.");
+  const customer=typeof subscription.customer==="string" ? subscription.customer : subscription.customer?.id;
+  return upsertPremiumRecordwatchSubscription({
+    user_id:userId,plan,status:subscription.status,
+    stripe_subscription_id:subscription.id,
+    stripe_customer_id:customer,
+    stripe_session_id:sessionId||null,
+    current_period_start:period.start,
+    current_period_end:period.end,
+    cancel_at_period_end:subscription.cancel_at_period_end
+  });
 }
 
 async function createRecordwatchLedgerEntryFromSession(userId, session, plan) {
