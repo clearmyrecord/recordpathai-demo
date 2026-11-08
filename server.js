@@ -213,6 +213,149 @@ app.post("/api/operator/packet/release",async(req,res)=>{
   }
 });
 
+
+// Stripe sandbox exercise for authorized operators only. It is intentionally
+// isolated from customer cases, releases and Lob. It never sends real mail.
+app.post("/api/operator/stripe-test-checkout",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  const key=process.env.STRIPE_TEST_SECRET_KEY||"";
+  if(!key.startsWith("sk_test_"))
+    return res.status(503).json({ok:false,error:"RecordPathAI Stripe test key not configured."});
+  try {
+    const testStripe=new Stripe(key);
+    const base=getBaseUrl(req);
+    const session=await testStripe.checkout.sessions.create({
+      mode:"payment",
+      payment_method_types:["card"],
+      ui_mode:"hosted",
+      success_url:base+"/stripe-test-success.html?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url:base+"/stripe-test-success.html?cancelled=1",
+      line_items:[
+        {quantity:1,price_data:{currency:"usd",unit_amount:5000,
+          product_data:{name:"TEST ONLY - RecordPathAI preparation"}}},
+        {quantity:1,price_data:{currency:"usd",unit_amount:10000,
+          product_data:{name:"TEST ONLY - simulated court deposit"}}}
+      ],
+      metadata:{productType:"packet-sandbox-simulation",sandboxOnly:"true"}
+    });
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,livemode:false,totalCents:15000,
+      note:"Stripe sandbox only. No real customer, court filing, check or mailing.",
+      checkoutUrl:session.url});
+  }catch(error){
+    console.warn("Stripe sandbox setup error",error?.name||"unknown");
+    return res.status(502).json({ok:false,error:"Unable to create Stripe test checkout session."});
+  }
+});
+
+// Operators may inspect fulfillment status. No applicant or docket data returns.
+app.get("/api/operator/packet/fulfillment-status",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  const sessionId=safe(req.query.session_id);
+  if(!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
+    return res.status(400).json({ok:false,error:"Valid Stripe session ID required."});
+  try{
+    const rows=await supabaseRest("packet_fulfillment_jobs",{
+      query:"?stripe_session_id=eq."+encodeURIComponent(sessionId)+"&limit=1"
+    });
+    const job=Array.isArray(rows)?rows[0]:null;
+    if(!job)return res.status(404).json({ok:false,error:"No payment fulfillment record found."});
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,status:job.status,courtFeeCents:job.court_fee_cents,
+      method:job.payment_method,lobCheckId:job.lob_check_id||null});
+  }catch{return res.status(503).json({ok:false,error:"Private fulfillment queue unavailable."});}
+});
+
+// Explicit operator action only. Webhooks NEVER send mail. Stripe paid session,
+// unchanged case, approved private PDF and verified Lob bank are required.
+app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  if(!requireLobLiveDispatch(process.env))
+    return res.status(503).json({ok:false,error:"Live Lob check dispatch not enabled or bank not configured."});
+  const sessionId=safe(req.body?.stripe_session_id);
+  if(!/^cs_live_[A-Za-z0-9]+$/.test(sessionId))
+    return res.status(400).json({ok:false,error:"Verified live Stripe payment ID required."});
+  if(!await lobBankVerified())
+    return res.status(503).json({ok:false,error:"Lob bank is not verified or check API entitlement is unavailable."});
+  try {
+    const rows=await supabaseRest("packet_fulfillment_jobs",{
+      query:"?stripe_session_id=eq."+encodeURIComponent(sessionId)+"&limit=1"
+    });
+    const job=Array.isArray(rows)?rows[0]:null;
+    if(!job)return res.status(404).json({ok:false,error:"Paid order not in private fulfillment queue."});
+    if(job.status==="submitted_to_lob"||job.lob_check_id)
+      return res.json({ok:true,status:job.status,lobCheckId:job.lob_check_id,duplicate:true});
+    if(job.status!=="paid_hold"||job.payment_method!=="lob_check"||
+       !Number.isSafeInteger(job.court_fee_cents)||job.court_fee_cents<=0)
+      return res.status(409).json({ok:false,error:"This order is not approved for a physical check."});
+    const release=await packetReleaseStatus(job.user_id,job.case_id);
+    if(!release.ready)return res.status(409).json({ok:false,missing:release.missing,
+      error:"The saved case or live fulfillment requirements are no longer approved."});
+    if(release.quote?.courtFeeCents!==job.court_fee_cents)
+      return res.status(409).json({ok:false,error:"Paid court amount does not match the approved review."});
+    const reviews=await supabaseRest("packet_releases",{
+      query:"?case_id=eq."+encodeURIComponent(job.case_id)+"&user_id=eq."+encodeURIComponent(job.user_id)+"&limit=1"
+    });
+    const drafts=await supabaseRest("packet_drafts",{
+      query:"?case_id=eq."+encodeURIComponent(job.case_id)+"&user_id=eq."+encodeURIComponent(job.user_id)+"&limit=1"
+    });
+    const review=Array.isArray(reviews)?reviews[0]:null;
+    const draft=Array.isArray(drafts)?drafts[0]:null;
+    if(!review||!draft || review.signed_pdf_sha256!==draft.signed_pdf_sha256 ||
+       review.signed_pdf_private_path!==draft.signed_pdf_private_path)
+      return res.status(409).json({ok:false,error:"Approved signed PDF differs from the private stored version."});
+    const facts=await getSavedCaseReviewFacts(job.user_id,job.case_id);
+    const config=supabaseRestConfig();
+    const signed=await fetch(config.url+"/storage/v1/object/sign/packet-documents/"+draft.signed_pdf_private_path,{
+      method:"POST",headers:{
+        apikey:config.key,Authorization:"Bearer "+config.key,
+        "Content-Type":"application/json"
+      },body:JSON.stringify({expiresIn:259200}),signal:AbortSignal.timeout(15000)
+    });
+    if(!signed.ok)throw new Error("Private signed attachment URL unavailable");
+    const signedResponse=await signed.json();
+    const filePath=signedResponse.signedURL||signedResponse.signedUrl||"";
+    const signedUrl=filePath.startsWith("https://")?filePath:config.url+
+      (filePath.startsWith("/storage/v1")?filePath:"/storage/v1"+filePath);
+    if(new URL(signedUrl).origin!==new URL(config.url).origin)
+      throw new Error("Invalid private PDF origin");
+    const from=JSON.parse(process.env.LOB_FROM_ADDRESS_JSON||"null");
+    const checked=buildCourtCheckRequest({
+      profileInput:{state:facts.savedCase.case_state,county:facts.savedCase.county,
+        courtType:facts.savedCase.court_type},
+      review,from,bankAccount:process.env.LOB_VERIFIED_BANK_ID,
+      attachmentUrl:signedUrl,attachmentPages:draft.pdf_pages,
+      caseReference:facts.savedCase.case_number,
+      approvedCourtFeeCents:job.court_fee_cents
+    });
+    const lob=await fetch("https://api.lob.com/v1/checks",{
+      method:"POST",
+      headers:{
+        Authorization:"Basic "+Buffer.from(process.env.LOB_LIVE_API_KEY+":").toString("base64"),
+        "Content-Type":"application/json",
+        "Idempotency-Key":"recordpathai-"+sessionId
+      },body:JSON.stringify(checked),signal:AbortSignal.timeout(30000)
+    });
+    if(!lob.ok) {
+      console.warn("Lob check creation rejected",lob.status);
+      return res.status(502).json({ok:false,error:"Lob rejected this check. No retry until account authorization and existing Lob orders are reviewed."});
+    }
+    const result=await lob.json();
+    if(!/^chk_[A-Za-z0-9]+$/.test(result.id||""))
+      throw new Error("Lob did not confirm a check ID");
+    await supabaseRest("packet_fulfillment_jobs",{
+      method:"PATCH",query:"?stripe_session_id=eq."+encodeURIComponent(sessionId),
+      body:{status:"submitted_to_lob",lob_check_id:result.id,attempted_at:new Date().toISOString()}
+    });
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,status:"submitted_to_lob",lobCheckId:result.id,
+      note:"Accepted by Lob for processing; this does not prove USPS mailing or court filing."});
+  } catch(error) {
+    console.warn("Lob dispatch prevented",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Lob dispatch could not be verified. Do not resubmit until the Lob dashboard is checked for duplicates."});
+  }
+});
+
 app.get("/api/config/supabase", (req, res) => {
   const config = publicSupabaseConfig();
   res.json({
