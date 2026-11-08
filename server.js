@@ -2,6 +2,7 @@ import express from "express";
 import Stripe from "stripe";
 import cors from "cors";
 import path from "path";
+import dns from "node:dns/promises";
 import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect, assertFixedPacketAmount, PACKET_PRICE_CENTS } from "./src/payment-security.js";
 import { quotePacketPricing } from "./src/packet-pricing.js";
 import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
@@ -459,19 +460,48 @@ app.get("/api/config/supabase", (req, res) => {
   });
 });
 
-// Never expose actual credentials or user records in readiness checks.
-// A 200-only smoke test is not evidence that account sign-in is configured.
-app.get("/api/auth/health", (req, res) => {
+// Check project hostname reachability, not just the presence of a URL and key.
+// A paused/deleted/misconfigured Supabase project can return NXDOMAIN while
+// both public environment variables are still populated.
+let authDnsCache = { hostname: "", expires: 0, resolves: false };
+async function authHostnameResolves(rawUrl) {
+  let hostname;
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== "https:") return false;
+    hostname = url.hostname;
+  } catch {
+    return false;
+  }
+  const now = Date.now();
+  if (authDnsCache.hostname === hostname && authDnsCache.expires > now) return authDnsCache.resolves;
+  let timer;
+  const resolves = await Promise.race([
+    dns.lookup(hostname).then(() => true, () => false),
+    new Promise(resolve => { timer = setTimeout(() => resolve(false), 3000); })
+  ]);
+  clearTimeout(timer);
+  authDnsCache = { hostname, expires: now + 30000, resolves };
+  return resolves;
+}
+
+// Do not return keys, DNS addresses, or applicant data in readiness checks.
+app.get("/api/auth/health", async (req, res) => {
   const config = publicSupabaseConfig();
-  const ready = /^https:\/\//.test(config.url) && Boolean(config.anonKey);
+  const configured = /^https:\/\//.test(config.url) && Boolean(config.anonKey);
+  const reachable = configured && await authHostnameResolves(config.url);
+  const ready = Boolean(configured && reachable);
   res.setHeader("Cache-Control", "no-store");
   return res.status(ready ? 200 : 503).json({
     ready,
+    reason: ready ? "configured" : configured ? "project_hostname_unreachable" : "config_missing",
     emailPassword: ready ? "configured_in_app" : "unavailable",
     googleOAuth: ready ? "provider_must_be_verified_in_supabase" : "unavailable",
     message: ready
-      ? "RecordPathAI auth configuration is present. Provider authentication must be tested separately."
-      : "RecordWatch sign-in is unavailable because the public authentication configuration is missing."
+      ? "RecordPathAI authentication hostname resolves. Provider authentication must be tested separately."
+      : configured
+        ? "The RecordPathAI authentication project is unreachable. The Supabase project may be paused or its hostname may no longer exist. Please contact RecordPathAI support; your saved browser intake has not been deleted."
+        : "RecordPathAI sign-in is temporarily unavailable because the public authentication configuration is missing."
   });
 });
 
