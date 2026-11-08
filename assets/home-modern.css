@@ -153,3 +153,11 @@
 .rp-home .home-process-action {display:flex;justify-content:center;margin-top:22px}
 .rp-home .home-step-caption {display:inline-block;font-size:13px;color:var(--blue-dark);font-weight:800;margin-top:6px}
 @media(max-width:760px){.rp-home .home-conversion-card{padding:26px 22px}}
+
+/* Court Finder, RecordWatch, and corrections remain supportive paths. */
+@media(min-width:981px){
+  .rp-home .home-two-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(min-width:761px) and (max-width:980px){
+  .rp-home .home-two-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
