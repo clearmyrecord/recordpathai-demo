@@ -73,7 +73,7 @@ test("Canonical legal name cannot be overwritten by legacy first/last aliases", 
 
 test("The reviewed court docket link is a prominent, accessible button-style link", () => {
   assert.match(step2, /<a id="recordCollectionDocketLink" class="btn btn-primary record-docket-button" href="#" target="_blank" rel="noopener noreferrer" hidden>/);
-  assert.match(step2, /#recordCollectionDocketLink\\.record-docket-button\\[hidden\\]\\s*\\{\\s*display: none;/);
-  assert.match(step2, /#recordCollectionDocketLink\\.record-docket-button:focus-visible/);
-  assert.match(step2, /#recordCollectionDocketLink\\.record-docket-button\\s*\\{[\\s\\S]*?background: #1455b3;/);
+  assert.match(step2, /#recordCollectionDocketLink\.record-docket-button\[hidden\]\s*\{\s*display: none;/);
+  assert.match(step2, /#recordCollectionDocketLink\.record-docket-button:focus-visible/);
+  assert.match(step2, /#recordCollectionDocketLink\.record-docket-button\s*\{[\s\S]*?background: #1455b3;/);
 });
