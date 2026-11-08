@@ -50,6 +50,7 @@ jobs:
           # Probe only anonymous status codes; never print API response bodies or account data.
           for url,method in [
               ("/api/config/supabase","GET"),
+              ("/api/auth/health","GET"),
               ("/api/create-checkout-session","POST"),
               ("/api/packet/verify-payment","POST")
           ]:
@@ -66,6 +67,8 @@ jobs:
                   print("PRODUCTION_API_UNAVAILABLE",url,type(e).__name__)
                   continue
               print("PRODUCTION_API",url,"HTTP",code)
+              if url=="/api/auth/health":
+                  print("PRODUCTION_AUTH_HEALTH=" + ("configured" if code==200 else "not_ready"))
               if url=="/api/create-checkout-session":
                   print("PRODUCTION_CHECKOUT_AUTH_GUARD=" + ("present" if code==401 else "not_verified"))
           PY
