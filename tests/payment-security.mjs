@@ -28,6 +28,13 @@ test("RecordWatch payment must be paid, linked to authenticated owner and correc
  assert.equal(verifiedRecordwatchSession({...watch,metadata:{...watch.metadata,product:"packet_generation"}},userId),false);
  assert.equal(verifiedRecordwatchSession({...watch,metadata:{...watch.metadata,plan:"anything"}},userId),false);
 });
+test("Stripe packet verification includes any court fee earmark",()=> {
+  const withCourtFee = {...packet, metadata:{...packet.metadata, serviceFeeCents:"5000", courtFeeCents:"10000"}};
+  assert.equal(verifiedPacketSession(withCourtFee,userId),false,"$50 must not unlock a $150 packet");
+  assert.equal(verifiedPacketSession({...withCourtFee,amount_total:15000},userId),true);
+  assert.equal(verifiedPacketSession({...withCourtFee,amount_total:14999},userId),false);
+  assert.equal(verifiedPacketSession({...withCourtFee,metadata:{...withCourtFee.metadata,courtFeeCents:"-1"},amount_total:15000},userId),false);
+});
 test("Fixed packet price cannot be set by browser",()=>{
  assert.doesNotThrow(()=>assertFixedPacketAmount(5000,"usd"));
  assert.throws(()=>assertFixedPacketAmount(1,"usd"));
