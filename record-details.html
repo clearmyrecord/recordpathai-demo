@@ -1538,11 +1538,16 @@
         if (!window.RecordPathUserStore || !RecordPathUserStore.saveCurrentCaseDraft) return Promise.resolve(null);
         const authenticated = RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn();
         return RecordPathUserStore.saveCurrentCaseDraft(payload, { localOnly: !syncAccount, network: Boolean(syncAccount) }).then(function (saved) {
-          setSaveStatus(syncAccount && authenticated ? "Saved to your account" : (authenticated ? "Saved locally; account sync on continue" : "Saved locally"));
+          // The account's normalized case summary may not contain original
+          // allegations, individual judgment dates or unverified notes. Re-save
+          // the live form's full fields after it updates the active case.
+          saveDraft(false, { quiet: true });
+          setSaveStatus(syncAccount && authenticated ? "RecordWatch save requested" : "Saved in this browser");
           return saved;
         }).catch(function (error) {
           console.warn("Current case draft save skipped:", error);
-          setSaveStatus("Saved locally");
+          saveDraft(false, { quiet: true });
+          setSaveStatus("Saved in this browser; account sync unavailable");
           return null;
         });
       }
