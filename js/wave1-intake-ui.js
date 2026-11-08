@@ -185,16 +185,22 @@
     const isDetails=Boolean(document.getElementById("recordDetailsForm"));
     const existingScreen=new Set(Array.from(document.querySelectorAll("[data-path]")).map(n=>n.dataset.path));
     const knownIds={
+      "court.state":"caseState","court.court_type":"courtType",
       "court.case_number":"caseNumber","court.name":"courtName",
       "court.county":"county","court.judge_name":"judgeName",
-      "petitioner.dob":"dateOfBirth","petitioner.email":"email",
-      "petitioner.phone":"phone","petitioner.full_name":"fullName"
+      "court.prosecutor_agency":"prosecutorAgency",
+      "case.all_charges_confirmed":"allChargesConfirmed",
+      "case.proceedings_status":"proceedingsStatus"
     };
     const needed=assessment.requirements.filter(x=>
       ["court-pdf-mapping","state-screen-provisional"].includes(x.source)&&validator.validKey(x.key)&&
       !/(ssn|social_security|bank|account_number)/i.test(x.key)&&
       !existingScreen.has(x.key)&&
-      !(isDetails&&((x.key.startsWith("charges."))||document.getElementById(knownIds[x.key])))&&
+      !(isDetails&&(
+        x.key.startsWith("charges.") ||
+        x.key.startsWith("petitioner.") || // Already collected in Step 1
+        (knownIds[x.key] && document.getElementById(knownIds[x.key]))
+      ))&&
       !/^signatures\.|^generated\./.test(x.key)&&
       !/^charges\.[1-9]/.test(x.key)
     ).slice(0,50);
