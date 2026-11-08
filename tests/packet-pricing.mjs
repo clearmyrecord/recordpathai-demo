@@ -11,7 +11,7 @@ test("Wood County Common Pleas conviction quotes $50 service plus $100 court dep
   assert.equal(quote.totalCents,15000);
   assert.equal(quote.currency,"usd");
   assert.equal(quote.canCollect,false);
-  assert.equal(quote.filingMethod,"not_verified");
+  assert.equal(quote.filingMethod,"physical-only-pending-clerk-confirmation");
 });
 test("Nonconviction does not get a $100 conviction fee", () => {
   const quote = quotePacketPricing({state:"OH", county:"Wood", courtType:"court-of-common-pleas", formType:"sealing-dismissal"});
@@ -38,6 +38,6 @@ test("Quote endpoint is read-only and does not collect identity or return paymen
   const source = await fs.readFile(new URL("../server.js", import.meta.url),"utf8");
   assert.match(source,/app\.get\("\/api\/packet\/quote"/);
   assert.match(source,/courtType: req\.query\.courtType/);
-  assert.match(source,/if \(isOhio\)/);
+  assert.match(source,/packetReleaseStatus\(checkoutUser\.id,savedCaseId\)/);
   assert.match(source,/return res\.status\(409\)/);
 });
