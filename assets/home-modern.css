@@ -118,3 +118,9 @@
   .rp-home .home-actions .home-btn {width:100%}
 }
 @media(max-width:420px){.rp-home .home-hero-copy {padding:30px 22px}}
+
+.rp-home .home-faq {border:1px solid var(--line);background:#fff;border-radius:24px;padding:0 24px;box-shadow:var(--shadow)}
+.rp-home .home-faq details {padding:20px 2px;border-bottom:1px solid var(--line)}
+.rp-home .home-faq details:last-child {border-bottom:0}
+.rp-home .home-faq summary {font-size:16px;font-weight:800;color:var(--text);cursor:pointer}
+.rp-home .home-faq p {margin:12px 0 0;max-width:820px;font-size:14px;color:var(--muted);line-height:1.6}
