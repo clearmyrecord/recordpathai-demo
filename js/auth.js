@@ -214,6 +214,7 @@
     renderHeaderLinks();
     wireAuthActionGuards(document);
     window.addEventListener("recordpathai:languagechange", renderHeaderLinks);
+    document.addEventListener("recordpath:auth-change", renderHeaderLinks);
     ensureReady().then(function () {
       renderHeaderLinks();
       showLegacyImportPrompt();
