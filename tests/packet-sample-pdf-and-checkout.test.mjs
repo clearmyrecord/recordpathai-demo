@@ -43,7 +43,7 @@ test("sample PDF check downloads watermarked synthetic fields and user-drawn sig
 
 test("actual packet payment still requires checkout verification", () => {
   assert.match(html, /if\(!await ensureWave1FormReady\(raw\)\)return/);
-  assert.match(html, /Wood County court packet is review-only/);
+  assert.match(html, /Stripe checkout has not opened because Ohio cases are review-only/);
   assert.match(html, /const token = login\?\.data\?\.session\?\.access_token/);
   assert.match(html, /if \(!response\.ok\)/);
   assert.match(html, /Stripe checkout is not configured or temporarily unavailable/);
