@@ -91,7 +91,7 @@ test("Wave 1 personal fields are collected in Step 1, and all court-form and cha
  }
  assert.match(packet,/async function ensureWave1FormReady/);
  assert.match(packet,/Multiple-charge cases require a validated case-level legal screen/);
- assert.match(packet,/if\(!await ensureWave1FormReady\(raw\)\)return/);
+ assert.match(packet,/checkServerPacketReadiness\(verifiedCaseId\)/);
  assert.match(packet,/if \(!await ensureWave1FormReady\(raw\)\) return/);
  for(const [name,html] of [["eligibility.html",eligibility],["record-details.html",details],["packet.html",packet]]){
    for(const inline of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)){
