@@ -57,6 +57,11 @@ export function quotePacketPricing(input = {}) {
         message: "A dismissal, acquittal or no-bill generally has no sealing/expungement filing fee. Verify the exact disposition and court requirements before purchasing document preparation."
       };
     }
+    return {
+      ...core, scope: "wood-common-pleas-outcome-unverified",
+      courtName: "Wood County Court of Common Pleas",
+      message: "If this is a conviction-sealing application with no approved poverty affidavit, the expected total is $150 ($50 preparation + $100 court deposit). A dismissal or acquittal generally has no conviction filing fee. Confirm the final outcome and fee before a total can be charged."
+    };
   }
   return { ...core, scope: "unknown", message: "The RecordPathAI preparation service is $50. Court fees vary by case, court, relief type and fee-waiver status. Total cannot be quoted yet." };
 }
