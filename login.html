@@ -52,7 +52,7 @@
       const returnUrl = store.getReturnUrl("dashboard.html");
       const query = new URLSearchParams(window.location.search);
       const hash = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
-      const isPasswordRecovery = query.get("type") === "recovery" || hash.get("type") === "recovery";
+      let isPasswordRecovery = query.get("type") === "recovery" || hash.get("type") === "recovery";
       const loginForm = document.getElementById("loginForm");
       const newPasswordForm = document.getElementById("newPasswordForm");
       const status = document.getElementById("authStatus");
@@ -65,6 +65,12 @@
       function feedback(message, error) {
         status.textContent = message || "";
         status.style.color = error ? "#b42318" : "";
+      }
+      function showPasswordRecovery() {
+        isPasswordRecovery = true;
+        loginForm.hidden = true;
+        newPasswordForm.hidden = false;
+        feedback("Create a new password for your account, then sign in with it.");
       }
       async function perform(task) {
         if (busy) return;
@@ -82,16 +88,26 @@
       document.getElementById("backToLogin").href = RecordPathAuth.loginUrl(returnUrl);
       const localEmail = localStorage.getItem("email") || "";
       if (localEmail) emailInput.value = localEmail;
-      if (isPasswordRecovery) {
-        loginForm.hidden = true;
-        newPasswordForm.hidden = false;
-        feedback("Create a new password, then sign in with it.");
-      }
+      if (isPasswordRecovery || store.passwordRecoveryActive) showPasswordRecovery();
       // Avoid silently losing Google OAuth errors during the callback.
       const oauthError = query.get("error_description") || hash.get("error_description");
       if (oauthError) feedback("Google sign-in did not complete: " + oauthError.replace(/\+/g, " ").slice(0, 240), true);
       else if (query.get("error") || hash.get("error"))
         feedback("Google sign-in was cancelled or unavailable. You can sign in using email and password.", true);
+      // An OAuth or password-recovery event may arrive after DOMContentLoaded.
+      // Supabase callback URLs with ?code=... are not guaranteed to include type=recovery.
+      document.addEventListener("recordpath:auth-change", function (event) {
+        const detail = event.detail || {};
+        if (detail.event === "PASSWORD_RECOVERY" || detail.passwordRecovery) {
+          showPasswordRecovery();
+          return;
+        }
+        if (!isPasswordRecovery && detail.event === "SIGNED_IN" &&
+            detail.user && (query.has("code") || hash.has("access_token") || store.getCurrentSession())) {
+          store.clearReturnUrl();
+          window.location.replace(returnUrl);
+        }
+      });
       // All event handlers attach BEFORE awaiting Supabase's network/SDK setup.
       loginForm.addEventListener("submit", function (event) {
         event.preventDefault();
@@ -127,6 +143,10 @@
       // Supabase handles OAuth callback session extraction during initialization.
       // If it fails, preserve user input and keep both sign-in methods clickable.
       Promise.resolve(store.readyForAuth).then(async function () {
+        if (store.passwordRecoveryActive) {
+          showPasswordRecovery();
+          return;
+        }
         if (!isPasswordRecovery && store.isLoggedIn()) {
           store.clearReturnUrl();
           window.location.replace(returnUrl);
