@@ -751,7 +751,8 @@
         }
       }
 
-      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
+      if (localStorage.getItem("recordPathRecordWatchOptIn") === "true" &&
+          window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
         RecordWatchBridge.syncExistingRecordPathData();
       }
       renderRecordWatchPanel();
@@ -775,10 +776,12 @@
         });
       }
 
-      document.querySelectorAll("input, select, textarea").forEach(function (field) {
-        field.addEventListener("change", function () { saveEligibilityIntake(); renderRecordWatchPanel(); });
-        field.addEventListener("blur", function () { saveEligibilityIntake(); renderRecordWatchPanel(); });
+      document.querySelectorAll("#user-profile-form input, #user-profile-form select, #user-profile-form textarea").forEach(function (field) {
+        // Preserve each identity field as it is typed, even before blur/navigation.
+        field.addEventListener("input", saveEligibilityIntake);
+        field.addEventListener("change", saveEligibilityIntake);
       });
+      window.addEventListener("pagehide", saveEligibilityIntake);
     });
 
     function hydrateFromLandingPage() {
@@ -896,7 +899,8 @@
         RecordPathWorkflow.renderProgress("eligibility");
         RecordPathWorkflow.decorateNavigation();
       }
-      if (window.RecordWatchBridge?.saveProfileFromEligibility) {
+      if (localStorage.getItem("recordPathRecordWatchOptIn") === "true" &&
+          window.RecordWatchBridge?.saveProfileFromEligibility) {
         RecordWatchBridge.saveProfileFromEligibility({
           firstName, lastName, fullName, dateOfBirth: dob,
           email, phone, residenceState, caseState
