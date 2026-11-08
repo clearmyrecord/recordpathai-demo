@@ -22,10 +22,23 @@ a{color:#0968a3}a:focus-visible{outline:3px solid #ffc447;outline-offset:4px}.sk
 @media(max-width:760px){.hero{padding:52px 20px}.section{padding:48px 20px}.grid,.grid.three,.metrics{grid-template-columns:1fr}.card{padding:21px}.nav nav{gap:12px}.hero-actions{flex-direction:column;align-items:stretch}.button{text-align:center}th,td{padding:11px;font-size:13px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
+<link rel="stylesheet" href="assets/legacy-header.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to main content</a>
-<header class="nav"><a class="brand" href="index.html" aria-label="RecordPathAI homepage">RecordPath<span>AI</span></a><nav aria-label="Main navigation"><a href="index.html">Home</a><a href="start.html">Start Here</a><a href="self-search.html">Court Finder</a><a href="eligibility.html">Eligibility</a><a href="court-access.html" aria-current="page">For Courts</a></nav></header>
+<header class="rp-legacy-header">
+  <div class="rp-legacy-inner">
+    <a class="rp-legacy-brand" href="index.html" aria-label="RecordPathAI homepage"><img class="rp-legacy-logo" src="assets/images/logo/RecordPathAI_Logo_Transparent.png" alt="RecordPathAI"></a>
+    <button class="rp-legacy-toggle" type="button" aria-controls="rpLegacyNav" aria-expanded="false" aria-label="Toggle navigation">☰</button>
+    <nav class="rp-legacy-nav" id="rpLegacyNav" aria-label="Primary navigation">
+      <a href="index.html">Home</a>
+      <a href="how-it-works.html">How It Works</a>
+      <a href="self-search.html">Court Finder</a>
+      <a href="recordwatch-dashboard.html">RecordWatch</a>
+      <a class="rp-legacy-cta" href="eligibility.html">Start Free Eligibility Check</a>
+    </nav>
+  </div>
+</header>
 <main id="main">
 <section class="hero">
 <div class="wrap">
@@ -114,4 +127,5 @@ a{color:#0968a3}a:focus-visible{outline:3px solid #ffc447;outline-offset:4px}.sk
 </div></section>
 </main>
 <footer class="footer"><div class="wrap"><strong>RecordPathAI</strong><p class="fine">Independent customer-facing record-relief guidance and application-preparation service. No court affiliation or endorsement.</p><p><a href="index.html">Home</a> · <a href="start.html">Start Here</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="mailto:Matt@RecordPathAI.com">Contact</a></p></div></footer>
+<script src="js/legacy-header.js"></script>
 </body></html>
