@@ -963,20 +963,21 @@ function upsertRecordwatchSubscription(payload) {
   const userId = safe(payload.user_id || payload.userId, "demo-user");
   const caseId = safe(payload.case_id || payload.caseId, "demo-case");
   const existing = recordwatchMemory.subscriptions.find((item) => item.user_id === userId && item.case_id === caseId);
-  const planType = normalizeRecordwatchPlan(payload);
-  const expiresAt = payload.premium_expires_at || payload.premiumExpiresAt || null;
-  const notExpired = !expiresAt || new Date(expiresAt).getTime() > Date.now();
-  const premiumActive = Boolean(payload.premium_active || payload.premiumActive || planType === "premium") && notExpired;
+  // Public enrollment only creates the FREE reminder plan.
+  // Stripe webhooks are the only path that grants paid entitlements.
+  const planType = "free";
+  const expiresAt = null;
+  const premiumActive = false;
   const row = Object.assign(existing || { id: recordwatchId("rws"), user_id: userId, case_id: caseId, created_at: new Date().toISOString() }, {
     notification_email: safe(payload.notification_email || payload.notificationEmail || payload.email),
     notification_phone: safe(payload.notification_phone || payload.notificationPhone || payload.phone),
     notify_email: payload.notify_email !== false && payload.notifyEmail !== false,
-    notify_sms: premiumActive && Boolean(payload.notify_sms || payload.notifySms),
-    plan_type: premiumActive ? "premium" : planType,
-    premium_active: premiumActive,
-    premium_started_at: payload.premium_started_at || payload.premiumStartedAt || (premiumActive ? existing?.premium_started_at || new Date().toISOString() : null),
-    premium_expires_at: expiresAt,
-    status: safe(payload.status, "active")
+    notify_sms: false,
+    plan_type: "free",
+    premium_active: false,
+    premium_started_at: null,
+    premium_expires_at: null,
+    status: "active"
   });
   if (!existing) recordwatchMemory.subscriptions.push(row);
   persistRecordwatchRow("recordwatch_subscriptions", row, "user_id,case_id");
