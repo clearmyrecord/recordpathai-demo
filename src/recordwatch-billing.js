@@ -53,7 +53,7 @@ export function paidRecordwatchCheckout(session, userId) {
 
 export function recordwatchEntitled(row, now = Date.now()) {
   if (!row?.stripe_subscription_id?.startsWith("sub_") ||
-      !["active", "trialing"].includes(String(row.status || "").toLowerCase())) return false;
+      String(row.status || "").toLowerCase() !== "active") return false;
   const end = Date.parse(row.current_period_end || "");
   return Number.isFinite(end) && end > now;
 }
