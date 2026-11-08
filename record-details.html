@@ -623,6 +623,39 @@
       color: var(--blue-dark);
       font-weight: 800;
     }
+
+    .fee-breakdown {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .fee-item {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px;
+      line-height: 1.55;
+    }
+    .fee-item h3 {
+      margin: 9px 0;
+      font-size: 18px;
+      line-height: 1.35;
+      color: #163c7c;
+    }
+    .fee-item p { margin: 0; color: #485f84; }
+    .fee-eyebrow {
+      font-size: 12px;
+      color: #42618e;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+    .fee-service { border-color: #95bbea; }
+    #courtFeeSource { display: inline-block; margin-top: 12px; color: #1653ae; text-decoration: underline; font-weight: 700; }
+    #courtFeeSource[hidden], #recordWatchSummary[hidden] { display: none; }
+    #saveRecordWatchBtn { margin: 18px 0 8px; max-width: 100%; }
+    #formRequirementsReviewDetails { margin-top: 12px; }
+    #formRequirementsReviewDetails summary { cursor: pointer; font-weight: 700; color: #234b87; }
+    @media (max-width: 760px) { .fee-breakdown { grid-template-columns: 1fr; } }
     @media (max-width: 760px) {
       .site-header {
         padding-top: 14px;
@@ -815,8 +848,7 @@
             <strong>Enter each detail once.</strong> This page collects all case information for eligibility review, court-form preparation, and case tracking. Your Step 1 profile is already saved.
           </div>
           <div class="account-cta">
-            <strong>Create account to save progress.</strong> You can continue entering record details without logging in, but saving this case to your dashboard requires a local demo account.
-            <a href="signup.html?returnUrl=record-details.html">Create account</a>
+            <strong>Your progress saves in this browser as you type.</strong> You can leave and return without re-entering case information on this device. For an account-backed saved case, <a href="signup.html?returnUrl=record-details.html">create an account</a>.
           </div>
 
           <form id="recordDetailsForm" class="intake-form" onsubmit="return false;">
@@ -1017,14 +1049,38 @@
               </details>
             </section>
 
-            <section class="intake-section" id="formRequirementsPanel" aria-label="Court form field readiness">
-              <h2 id="formRequirementsState">Form field readiness</h2>
-              <p id="formRequirementsSummary"></p>
-              <p id="formRequirementsMapping" class="helper"></p>
-              <details><summary>Collected and missing screening/form fields</summary>
-                <ul id="formRequirementsList"></ul></details>
-              <div id="formRequirementsExtraFields" aria-label="Additional required mapped court-form fields"></div>
-              <p id="formRequirementsReview" role="status"></p>
+            <section class="intake-section" id="formRequirementsPanel" aria-label="Case readiness checklist">
+              <h2 id="formRequirementsState">Case readiness</h2>
+              <p id="formRequirementsSummary">Your progress is saved as you type. Final court documents require verified charge outcomes.</p>
+              <details id="formRequirementsReviewDetails">
+                <summary>Review optional preparation details and missing information</summary>
+                <p id="formRequirementsMapping" class="helper"></p>
+                <ul id="formRequirementsList"></ul>
+                <div id="formRequirementsExtraFields" aria-label="Additional required court-form details"></div>
+                <p id="formRequirementsReview" role="status"></p>
+              </details>
+            </section>
+
+            <section class="intake-section" id="filingFeesPanel" aria-labelledby="filingFeesTitle">
+              <div class="section-head">
+                <div>
+                  <h2 id="filingFeesTitle">Filing fees and RecordPathAI pricing</h2>
+                  <p>Court fees depend on the state, the final outcome of each charge, and the filing court. These are separate from our service fee.</p>
+                </div>
+              </div>
+              <div class="fee-breakdown">
+                <div class="fee-item">
+                  <span class="fee-eyebrow">COURT FILING FEES</span>
+                  <h3 id="courtFeeHeading">Select your case state to see filing-fee guidance</h3>
+                  <p id="courtFeeDetails">Confirm any required filing fees with the court before submitting.</p>
+                  <a id="courtFeeSource" href="https://codes.ohio.gov/ohio-revised-code/section-2953.32" target="_blank" rel="noopener noreferrer" hidden>View the official Ohio law</a>
+                </div>
+                <div class="fee-item fee-service">
+                  <span class="fee-eyebrow">RECORDPATHAI SERVICE</span>
+                  <h3>$50 for your final packet and tracked mailing</h3>
+                  <p>Packet preparation and mailing with tracking when this service is available. Charged only at checkout, not during case intake. Any court filing fees are separate and will be identified before purchase.</p>
+                </div>
+              </div>
             </section>
             <div class="actions">
               <a href="eligibility.html" class="btn btn-secondary">Back</a>
@@ -1034,19 +1090,21 @@
             <p class="record-status" id="saveStatus" aria-live="polite">Changes save automatically.</p>
           </form>
 
-          <aside class="recordwatch-panel" aria-live="polite">
-            <h3>RecordWatch background tracking</h3>
-            <p class="section-copy">This unified intake updates your court packet data and RecordWatch tracking from the same saved case.</p>
-            <div class="recordwatch-panel-grid">
-              <div class="recordwatch-panel-item"><strong>Tracking</strong><span id="rwTrackingStatus">Enabled</span></div>
+          <aside class="recordwatch-panel" aria-labelledby="saveRecordWatchTitle">
+            <h3 id="saveRecordWatchTitle">Save to RecordWatch (optional)</h3>
+            <p class="section-copy">Your case is already saved in this browser. Choose RecordWatch to track estimated eligibility and return to your saved case. Sign in to sync a saved case to your account across devices.</p>
+            <button type="button" id="saveRecordWatchBtn" class="btn btn-primary">Save to RecordWatch</button>
+            <p id="recordWatchSaveMessage" class="record-status" role="status" aria-live="polite">Not yet added to RecordWatch.</p>
+            <div class="recordwatch-panel-grid" id="recordWatchSummary" hidden>
+              <div class="recordwatch-panel-item"><strong>Tracking</strong><span id="rwTrackingStatus">Not enabled</span></div>
               <div class="recordwatch-panel-item"><strong>Estimated eligibility</strong><span id="rwEligibilityStatus">More information needed</span></div>
               <div class="recordwatch-panel-item"><strong>Missing requirements</strong><span id="rwMissingRequirements">Case details</span></div>
-              <div class="recordwatch-panel-item"><strong>Next action</strong><span id="rwNextAction">Complete intake, then continue to packet.</span></div>
+              <div class="recordwatch-panel-item"><strong>Next action</strong><span id="rwNextAction">Complete the case details.</span></div>
             </div>
-            <a href="recordwatch-dashboard.html">Open full RecordWatch dashboard</a>
+            <p><a href="recordwatch-dashboard.html">Open RecordWatch dashboard</a></p>
           </aside>
-          <p class="note" data-i18n="record.note">
-            RecordPathAI stores this information locally in your browser for packet generation and RecordWatch tracking. Eligibility results are still finalized on <code>packet.html</code>.
+          <p class="note">
+            Draft case details remain on this device after refresh or navigation unless browser storage is cleared. Private-browsing mode may erase them. Court eligibility is not guaranteed; RecordWatch estimates depend on the case details you provide.
           </p>
         </section>
       </div>
@@ -1079,12 +1137,12 @@
 
   <script src="js/packet-data-bridge.js"></script>
   <script src="js/record-collection.js"></script>
-  <script src="js/ohio-case-review.js"></script>
   <script src="js/wave1-form-requirements.js"></script>
   <script src="js/form-pipeline-core.js"></script>
   <script src="js/wave1-intake-ui.js"></script>
   <script src="js/court-record-import-core.js"></script>
   <script src="js/court-record-import-ui.js"></script>
+  <script src="js/filing-fee-summary.js"></script>
   <script src="js/recordwatch-rules.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
   <script src="js/translate.js"></script>
