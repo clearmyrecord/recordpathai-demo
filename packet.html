@@ -3139,7 +3139,7 @@ document.addEventListener("DOMContentLoaded", async function () {
               ? "Review Packet Readiness"
               : "Pay $50 & Generate Packet";
           } else if (state === "eligiblePaid") {
-            generateBtn.textContent = "Generate PDF Packet";
+            generateBtn.textContent = "Download Approved Signed PDF";
           } else if (state === "devBypass") {
             generateBtn.textContent = "Generate PDF Packet (Dev Mode)";
           } else {
@@ -3181,7 +3181,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         if (state === "eligiblePaid" || state === "devBypass") {
           if (!ensurePacketGenerationPrerequisites()) return;
-          await generateSealingPdf();
+          if(state==="eligiblePaid")await downloadApprovedPacket();
+          else await generateSealingPdf();
           return;
         }
 
@@ -3540,6 +3541,47 @@ document.addEventListener("DOMContentLoaded", async function () {
         return payload;
       }
 
+      async function downloadApprovedPacket() {
+        setCheckoutError("");
+        try {
+          const sessionId=verifiedPacketSessionId;
+          if(!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
+            throw new Error("Payment has not been verified. Do not pay again; verify your Stripe return.");
+          const resolved=await resolveCheckoutCase();
+          const caseId=resolved?.checkoutCase?.saved_case_id||resolved?.checkoutCase?.case_id;
+          if(!isInternalUuid(caseId))throw new Error("The original saved case could not be found.");
+          const client=await window.RecordPathSupabase.getClient();
+          const session=await client.auth.getSession();
+          const token=session?.data?.session?.access_token;
+          if(!token)throw new Error("Sign in to the account that purchased this packet.");
+          setStatus("Retrieving your paid, reviewer-approved signed packet...");
+          const endpoint=getCheckoutEndpoint().replace(/\/api\/create-checkout-session$/,"/api/packet/download-approved");
+          const response=await fetch(endpoint,{
+            method:"POST",cache:"no-store",
+            headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},
+            body:JSON.stringify({case_id:caseId,session_id:sessionId})
+          });
+          if(!response.ok){
+            const error=await response.json().catch(()=>({}));
+            throw new Error(error.error||"Your approved PDF is temporarily unavailable. Do not pay again.");
+          }
+          const blob=await response.blob();
+          if(blob.type!=="application/pdf"||blob.size<500)
+            throw new Error("The server did not return a valid signed PDF.");
+          const url=URL.createObjectURL(blob);
+          const link=document.createElement("a");
+          link.href=url;
+          link.download="recordpathai-approved-signed-packet.pdf";
+          document.body.appendChild(link);
+          link.click();link.remove();
+          setTimeout(function(){URL.revokeObjectURL(url);},5000);
+          setStatus("Your signed, reviewer-approved PDF has been downloaded. Court submission status is tracked separately.");
+        }catch(error){
+          const message=error?.message||"Paid packet download failed; no additional payment is necessary.";
+          setCheckoutError(message);setStatus(message,"error");
+        }
+      }
+
       async function startCheckout(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         console.log("[packet checkout] Pay button clicked");
@@ -3555,7 +3597,11 @@ document.addEventListener("DOMContentLoaded", async function () {
           let packetEligibility = resolveCurrentPacketEligibility(normalizedData);
           let checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
           const packetGenerationState = getPacketGenerationState(packetEligibility);
-          if (packetGenerationState === "eligiblePaid" || packetGenerationState === "devBypass") {
+          if (packetGenerationState === "eligiblePaid") {
+            await downloadApprovedPacket();
+            return;
+          }
+          if (packetGenerationState === "devBypass") {
             if (!ensurePacketGenerationPrerequisites()) return;
             await generateSealingPdf();
             return;
