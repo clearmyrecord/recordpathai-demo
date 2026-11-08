@@ -125,6 +125,24 @@
     return authError(message || (window.RecordPathSupabase && RecordPathSupabase.missingConfigMessage) || "Supabase is not configured. Ask an administrator to set the public Supabase URL and anon key.", "supabase_unavailable");
   }
 
+  async function checkAuthService() {
+    // Unlike an environment-variable-only check, this endpoint verifies
+    // that the configured Supabase project hostname resolves.
+    if (typeof fetch !== "function") return;
+    let response;
+    try {
+      response = await fetch("/api/auth/health", { cache: "no-store" });
+    } catch (error) {
+      throw authError("Unable to reach RecordPathAI authentication. Please check your connection or contact support.", "auth_service_network_error");
+    }
+    // Static preview hosting may not expose the Cloud Run health API.
+    if (response.status === 404) return;
+    if (response.ok) return;
+    let details = {};
+    try { details = await response.json(); } catch (error) {}
+    throw authError(details.message || "RecordPathAI authentication is temporarily unavailable. Please try again later.", "auth_service_unavailable");
+  }
+
   async function client() {
     if (!window.RecordPathSupabase) throw supabaseUnavailableError("Supabase client was not loaded. Ask an administrator to confirm js/supabase-client.js is included before js/user-store.js.");
     try {
@@ -334,6 +352,7 @@
     if (!normalizedEmail) throw new Error("Email is required.");
     if (!password || String(password).length < 6) throw new Error("Password must be at least 6 characters.");
 
+    await checkAuthService();
     const supabase = await client();
     const { data, error } = await supabase.auth.signUp({
       email: normalizedEmail,
@@ -365,6 +384,7 @@
 
   async function login({ email, password }) {
     const normalizedEmail = normalizeEmail(email);
+    await checkAuthService();
     const supabase = await client();
     const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password: String(password || "") });
     if (error) {
@@ -384,6 +404,7 @@
   async function loginWithGoogle(returnUrl) {
     const target = sanitizeReturnUrl(returnUrl || getReturnUrl("dashboard.html"), "dashboard.html");
     if (target) localStorage.setItem(RETURN_KEY, target);
+    await checkAuthService();
     const supabase = await client();
     // Use one stable callback for Google sign-up and Google sign-in. This
     // avoids separate inconsistent callback URLs for login vs signup.
@@ -410,6 +431,7 @@
   async function sendPasswordReset(email) {
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail) throw new Error("Enter your email address first.");
+    await checkAuthService();
     const supabase = await client();
     const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo: authRedirectUrl() });
     if (error) throw new Error(error.message);
@@ -1517,6 +1539,7 @@
     get casesReady() { return queueCaseReadiness(); },
     signup,
     login,
+    checkAuthService,
     loginWithGoogle,
     sendPasswordReset,
     updatePasswordAfterReset,
