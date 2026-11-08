@@ -116,6 +116,40 @@ report_auth_readiness() {
   fi
 }
 
+# Fail closed before exposing paid subscription endpoints. These booleans are
+# deliberately public, but credentials and secret values are never logged.
+check_recordwatch_readiness() {
+  local label="$1" body="$SMOKE_DIR/recordwatch-billing-readiness.json"
+  echo "Verifying RecordWatch sandbox readiness on $label..."
+  if ! curl --fail --location --silent --show-error --max-time 20 \
+    --output "$body" "$URL/api/recordwatch/billing-readiness"; then
+    echo "::error::RecordWatch readiness endpoint failed on $label. Keeping existing traffic." >&2
+    return 1
+  fi
+  python3 - "$body" "$label" <<'PY'
+import json,sys
+try:
+  with open(sys.argv[1]) as f:
+    status=json.load(f)
+except (OSError,ValueError) as exc:
+  print("RecordWatch readiness response is invalid:",type(exc).__name__,file=sys.stderr)
+  raise SystemExit(1)
+expected={
+  "mode":"sandbox",
+  "prices_configured":True,
+  "webhook_configured":True,
+  "secure_database_configured":True,
+  "live_enabled":False,
+  "ready":True
+}
+failed=[k for k,v in expected.items() if status.get(k)!=v]
+if failed:
+  print("RecordWatch not ready on",sys.argv[2],"; mismatched flags:",", ".join(failed),file=sys.stderr)
+  raise SystemExit(1)
+print("RecordWatch sandbox configuration verified on",sys.argv[2])
+PY
+}
+
 rollback_after_smoke_failure() {
   local reason="$1"
   echo "$reason; reverting traffic to $OLD_REV" >&2
@@ -133,6 +167,7 @@ smoke_check "js/pilot-demo.js" "DEMO-2006-001" "Fictional pilot script" || \
   { echo "Candidate failed smoke check. Production traffic is unchanged." >&2; exit 5; }
 
 report_auth_readiness
+check_recordwatch_readiness "zero-traffic candidate" || { echo "Candidate lacks RecordWatch configuration. Existing traffic is unchanged." >&2; exit 5; }
 
 echo "Promoting validated revision $NEW_REV to 100% customer traffic..."
 gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \
@@ -165,6 +200,8 @@ smoke_check "js/pilot-demo.js" "DEMO-2006-001" "Production pilot script" || \
   rollback_after_smoke_failure "Production pilot script failed smoke check"
 
 report_auth_readiness
+check_recordwatch_readiness "promoted production revision" || \
+  rollback_after_smoke_failure "Promoted revision failed RecordWatch readiness"
 
 echo "Cloud Run deployed revision $NEW_REV confirmed serving 100% of traffic and passing production smoke checks: $URL"
 echo "Public court-record indexing remains OFF until court authorization and status review."

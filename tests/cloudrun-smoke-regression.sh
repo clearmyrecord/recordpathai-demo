@@ -59,6 +59,20 @@ while (( $# )); do
 done
 [[ -n "$output" ]] || { echo "Expected full response to file" >&2;exit 80; }
 case "$url" in
+  */api/recordwatch/billing-readiness)
+    case "$url" in
+      https://recordpathai-preview---recordpathai-abc-uw.a.run.app/*)
+        failed="${MOCK_FAIL_STAGE:-}" ;;
+      https://recordpathai-abc-uw.a.run.app/*)
+        failed="${MOCK_FAIL_PRODUCTION:-}" ;;
+      *) echo "Unexpected billing URL" >&2; exit 82 ;;
+    esac
+    if [[ "$failed" == recordwatch-billing ]]; then
+      printf '%s\n' '{"mode":"unconfigured","prices_configured":false,"webhook_configured":false,"secure_database_configured":false,"live_enabled":false,"ready":false}' > "$output"
+    else
+      printf '%s\n' '{"mode":"sandbox","prices_configured":true,"webhook_configured":true,"secure_database_configured":true,"live_enabled":false,"ready":true}' > "$output"
+    fi
+    exit 0 ;;
   */self-search.html)marker="Find your own court records";page="self-search.html";;
   */pilot-demo.html)marker="Illustrative demo";page="pilot-demo.html";;
   */js/pilot-demo.js)marker="DEMO-2006-001";page="pilot-demo.js";;
@@ -115,6 +129,25 @@ MOCK_FAIL_PRODUCTION=pilot-demo.html bash scripts/deploy-existing-cloudrun.sh > 
 rc=$?
 set -e
 [[ "$rc" == 5 ]] || { echo "Broken public endpoint must roll back (got $rc)" >&2;cat "$TMP/prod-broken.log" >&2;exit 1; }
+grep -qF 'recordpathai-new=100' "$MOCK_ACTIONS"
+grep -qF 'recordpathai-old=100' "$MOCK_ACTIONS"
+[[ "$(cat "$MOCK_STATE")" == rolledback ]]
+
+setup_case
+set +e
+MOCK_FAIL_STAGE=recordwatch-billing bash scripts/deploy-existing-cloudrun.sh > "$TMP/billing-candidate-broken.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" == 5 ]] || { echo "Unconfigured RecordWatch candidate must fail safely (got $rc)" >&2;cat "$TMP/billing-candidate-broken.log" >&2;exit 1; }
+[[ ! -s "$MOCK_ACTIONS" ]] || { echo "Never route traffic to unconfigured RecordWatch" >&2;exit 1; }
+[[ "$(cat "$MOCK_STATE")" == deployed ]]
+
+setup_case
+set +e
+MOCK_FAIL_PRODUCTION=recordwatch-billing bash scripts/deploy-existing-cloudrun.sh > "$TMP/billing-production-broken.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" == 5 ]] || { echo "Unconfigured public RecordWatch endpoint must roll back (got $rc)" >&2;cat "$TMP/billing-production-broken.log" >&2;exit 1; }
 grep -qF 'recordpathai-new=100' "$MOCK_ACTIONS"
 grep -qF 'recordpathai-old=100' "$MOCK_ACTIONS"
 [[ "$(cat "$MOCK_STATE")" == rolledback ]]
