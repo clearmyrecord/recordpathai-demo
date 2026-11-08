@@ -115,9 +115,11 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
 app.use(express.json());
 
 function publicSupabaseConfig() {
+  // All three supported names must agree with supabaseRestConfig, otherwise
+  // RecordWatch can have a connected backend but broken public sign-in.
   return {
-    url: process.env.RECORDPATH_SUPABASE_URL || process.env.SUPABASE_URL || "",
-    anonKey: process.env.RECORDPATH_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
+    url: process.env.RECORDPATH_SUPABASE_URL || process.env.SUPABASE_URL || process.env.PUBLIC_SUPABASE_URL || "",
+    anonKey: process.env.RECORDPATH_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.PUBLIC_SUPABASE_ANON_KEY || ""
   };
 }
 
@@ -449,10 +451,27 @@ app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
 
 app.get("/api/config/supabase", (req, res) => {
   const config = publicSupabaseConfig();
+  res.setHeader("Cache-Control", "no-store");
   res.json({
     url: config.url,
     anonKey: config.anonKey,
     configured: Boolean(config.url && config.anonKey)
+  });
+});
+
+// Never expose actual credentials or user records in readiness checks.
+// A 200-only smoke test is not evidence that account sign-in is configured.
+app.get("/api/auth/health", (req, res) => {
+  const config = publicSupabaseConfig();
+  const ready = /^https:\/\//.test(config.url) && Boolean(config.anonKey);
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(ready ? 200 : 503).json({
+    ready,
+    emailPassword: ready ? "configured_in_app" : "unavailable",
+    googleOAuth: ready ? "provider_must_be_verified_in_supabase" : "unavailable",
+    message: ready
+      ? "RecordPathAI auth configuration is present. Provider authentication must be tested separately."
+      : "RecordWatch sign-in is unavailable because the public authentication configuration is missing."
   });
 });
 
