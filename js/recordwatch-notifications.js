@@ -317,6 +317,10 @@
     return premiumApiPost("/api/recordwatch/cancel", {});
   }
 
+  function openBillingPortal() {
+    return premiumApiPost("/api/recordwatch/billing-portal", {});
+  }
+
   function fetchPremiumPreferences() {
     return premiumApiGet("/api/recordwatch/premium-preferences");
   }
@@ -339,6 +343,7 @@
     verifyPremiumCheckout: verifyPremiumCheckout,
     fetchPremiumSubscription: fetchPremiumSubscription,
     cancelPremiumSubscription: cancelPremiumSubscription,
+    openBillingPortal: openBillingPortal,
     fetchPremiumPreferences: fetchPremiumPreferences,
     savePremiumPreferences: savePremiumPreferences,
     registerSubscription: registerSubscription,
