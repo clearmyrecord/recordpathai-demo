@@ -1637,7 +1637,7 @@ function isActiveRecordwatchSubscription(row) {
 }
 
 async function getRecordwatchBillingRow(userId) {
-  if(!supabaseRestConfig()) throw new Error("RecordWatch billing persistence is not configured.");
+  if(!packetDatabaseReady()) throw new Error("Verified RecordWatch billing requires private database write access.");
   const rows=await supabaseRest("recordwatch_subscriptions",{
     query:"?user_id=eq."+encodeURIComponent(userId)+
       "&stripe_subscription_id=not.is.null&order=updated_at.desc&limit=1"
@@ -1797,6 +1797,7 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
     const user=await recordwatchAuthToken(req,res);
     if(!user)return;
     if(!stripe)return res.status(503).json({ok:false,error:"RecordWatch Stripe is not configured."});
+    if(!packetDatabaseReady())return res.status(503).json({ok:false,error:"Secure RecordWatch billing storage is not configured. No charge was created."});
     const plan=recordwatchPlan(req.body?.plan);
     if(!plan)return res.status(400).json({ok:false,error:"Choose monthly or annual RecordWatch billing."});
     const priceId=process.env[RECORDWATCH_BILLING[plan].env];
