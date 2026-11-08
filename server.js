@@ -216,6 +216,48 @@ app.post("/api/operator/packet/release",async(req,res)=>{
 
 // Stripe sandbox exercise for authorized operators only. It is intentionally
 // isolated from customer cases, releases and Lob. It never sends real mail.
+// Lob TEST environment only: synthetic addresses and a public blank form.
+// Does not print, mail, issue live checks, or access applicant data.
+app.post("/api/operator/lob-test-check",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  const key=process.env.LOB_TEST_API_KEY||"";
+  const bank=process.env.LOB_TEST_BANK_ACCOUNT_ID||"";
+  if(!key.startsWith("test_")||!/^bank_[A-Za-z0-9]+$/.test(bank))
+    return res.status(503).json({ok:false,error:"Lob test API key and test bank are required."});
+  const payload={
+    bank_account:bank,amount:100,
+    to:{name:"Test Court Recipient",address_line1:"One Courthouse Square",
+      address_city:"Bowling Green",address_state:"OH",address_zip:"43402"},
+    from:{name:"RecordPathAI TEST",address_line1:"210 King St",
+      address_city:"San Francisco",address_state:"CA",address_zip:"94107"},
+    message:"TEST ONLY - not a real court filing deposit",
+    memo:"TEST ONLY",mail_type:"usps_first_class",use_type:"operational",
+    attachment:"https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/142/Application-for-Sealing-295332-Conviction-PDF"
+  };
+  try{
+    const response=await fetch("https://api.lob.com/v1/checks",{
+      method:"POST",headers:{
+        Authorization:"Basic "+Buffer.from(key+":").toString("base64"),
+        "Content-Type":"application/json",
+        "Idempotency-Key":"recordpathai-sandbox-"+Date.now()
+      },body:JSON.stringify(payload),signal:AbortSignal.timeout(25000)
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok) {
+      return res.status(502).json({ok:false,lobStatus:response.status,
+        code:result?.error?.code||null,
+        error:"Lob test check API denied the request. Verify checks entitlement and test funding setup with Lob support."});
+    }
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,environment:"test",testCheckId:result.id||null,
+      renderStatus:result.status||"processing",proofPdfUrl:result.url||null,
+      note:"Lob test-mode creates no mailed check, court payment or filing."});
+  }catch(error){
+    console.warn("Lob test check transport failed",error?.name||"unknown");
+    return res.status(502).json({ok:false,error:"Lob test check transport unavailable."});
+  }
+});
+
 app.post("/api/operator/stripe-test-checkout",async(req,res)=>{
   if(!requireOperationsKey(req,res))return;
   const key=process.env.STRIPE_TEST_SECRET_KEY||"";
