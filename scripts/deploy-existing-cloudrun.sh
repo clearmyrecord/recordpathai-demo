@@ -41,27 +41,41 @@ PY
 echo "Deploying a tagged new revision at 0% traffic for independent verification..."
 gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" \
   --no-traffic --tag "$CANDIDATE_TAG" --quiet
-gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" \
-  --format=json > "$AFTER"
-readarray -t CANDIDATE < <(python3 - "$AFTER" "$CANDIDATE_TAG" "$OLD_REV" <<'PY'
+# Cloud Run status can lag the successful deploy response. Retry the
+# control-plane read, but NEVER promote unless a single tagged ready revision
+# is proven to be distinct from the currently serving one and at 0% traffic.
+CANDIDATE_FILE="$SMOKE_DIR/candidate-target"
+CANDIDATE=()
+for attempt in $(seq 1 12); do
+  gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" \
+    --format=json > "$AFTER"
+  if python3 - "$AFTER" "$CANDIDATE_TAG" "$OLD_REV" > "$CANDIDATE_FILE" <<'PY'
 import json,sys
 with open(sys.argv[1]) as f: record=json.load(f)
 status=record.get("status",{})
-tag=sys.argv[2]; old=sys.argv[3]
+tag=sys.argv[2];old=sys.argv[3]
 new=status.get("latestReadyRevisionName") or ""
 created=status.get("latestCreatedRevisionName") or ""
 matches=[t for t in status.get("traffic",[]) if t.get("tag")==tag]
 if not new or created!=new or new==old or len(matches)!=1 or matches[0].get("revisionName")!=new:
-  raise SystemExit("New ready revision and preflight tag could not be verified")
+  raise SystemExit("New ready revision and preflight tag are not yet consistent")
 if matches[0].get("percent",0)!=0:
-  raise SystemExit("Refusing to preflight a candidate already receiving customer traffic")
+  raise SystemExit("Refusing a candidate already receiving customer traffic")
 url=matches[0].get("url","")
 if not isinstance(url,str) or not url.startswith("https://") or ".run.app" not in url:
-  raise SystemExit("Missing official HTTPS preview URL for new revision")
+  raise SystemExit("Missing official HTTPS preview URL")
 print(new)
 print(url)
 PY
-)
+  then
+    mapfile -t CANDIDATE < "$CANDIDATE_FILE"
+    break
+  fi
+  if [ "$attempt" -lt 12 ]; then
+    echo "Cloud Run preflight metadata is still propagating ($attempt/12); checking again..."
+    sleep 3
+  fi
+done
 if [ "${#CANDIDATE[@]}" -ne 2 ]; then
   echo "Cannot validate preflight revision. Old serving traffic remains unchanged." >&2
   exit 4
