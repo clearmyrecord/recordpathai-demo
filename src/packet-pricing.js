@@ -1,67 +1,42 @@
-// Public court-fee quoting only. A quote never authorizes payment, issuance of
-// checks, filing, or mail. The service fee and court's money stay separate.
+import { courtFilingPlan, normalizeCourtFormType } from "./court-profiles.js";
+
+// Fee quotes are informative only; collecting funds requires server-validated
+// reviewer release, current court rules and a confirmed fulfillment route.
 export const SERVICE_PREPARATION_CENTS = 5000;
 export const WOOD_COMMON_PLEAS_CONVICTION_COURT_CENTS = 10000;
 
-// Sources: https://clerkofcourt.co.wood.oh.us/189/Criminal-Division-of-the-Clerk-of-Courts
-// https://codes.ohio.gov/ohio-revised-code/section-2953.32
-// Last reviewed 2026-11-07. Always reverify at actual filing.
-const clean = (value) => String(value ?? "").trim().toLowerCase().replace(/[\s_]+/g, "-");
-const stateCode = (value) => {
-  const state = clean(value);
-  return state === "oh" || state === "ohio" ? "OH" : state.toUpperCase();
-};
-const normalizeCourtType = (value) => {
-  const type = clean(value);
-  if (["court-of-common-pleas","common-pleas","common-pleas-court","wood-county-court-of-common-pleas"].includes(type))
-    return "court-of-common-pleas";
-  return type;
-};
-const formCategory = (value) => {
-  const type = clean(value);
-  if (["sealing-conviction","conviction","convicted","sealing-of-conviction"].includes(type))
-    return "conviction";
-  if (["sealing-dismissal","nonconviction","dismissal","dismissed","acquittal","not-guilty","no-bill"].includes(type))
-    return "nonconviction";
-  return "unknown";
-};
-
 export function quotePacketPricing(input = {}) {
-  const state = stateCode(input.state || input.caseState || input.case_state);
-  const county = clean(input.county || input.caseCounty).replace(/-county$/, "");
-  const courtType = normalizeCourtType(input.courtType || input.court_type);
-  const category = formCategory(input.formType || input.form_type || input.finalOutcome);
-  const core = {
-    serviceFeeCents: SERVICE_PREPARATION_CENTS,
-    courtFeeCents: null,
-    totalCents: null,
-    currency: "usd",
-    canCollect: false,
-    filingMethod: "not_verified",
-    message: "Court fee, payment method and filing requirements must be verified before charging."
+  const plan = courtFilingPlan(input);
+  const type=normalizeCourtFormType(input.formType || input.form_type || input.finalOutcome);
+  const core={
+    serviceFeeCents:SERVICE_PREPARATION_CENTS,
+    courtFeeCents:plan.courtFeeCents,
+    totalCents:plan.courtFeeCents===null ? null : SERVICE_PREPARATION_CENTS+plan.courtFeeCents,
+    currency:"usd",
+    canCollect:false,
+    filingMethod:plan.filingMethod,
+    profileId:plan.profileId,
+    postalTrackingGuaranteed:Boolean(plan.postalTrackingGuaranteed)
   };
-  if (state === "OH" && county === "wood" && courtType === "court-of-common-pleas") {
-    if (category === "conviction") {
-      return {
-        ...core, courtFeeCents: WOOD_COMMON_PLEAS_CONVICTION_COURT_CENTS,
-        totalCents: SERVICE_PREPARATION_CENTS + WOOD_COMMON_PLEAS_CONVICTION_COURT_CENTS,
-        scope: "wood-common-pleas-conviction", courtName: "Wood County Court of Common Pleas",
-        message: "Illustrative total for conviction sealing without an approved poverty affidavit: $50 document preparation + $100 Wood County court deposit. Review is still required. Checkout, checks, mailing and e-filing are not active."
-      };
-    }
-    if (category === "nonconviction") {
-      return {
-        ...core, courtFeeCents: 0, totalCents: SERVICE_PREPARATION_CENTS,
-        scope: "wood-common-pleas-nonconviction",
-        courtName: "Wood County Court of Common Pleas",
-        message: "A dismissal, acquittal or no-bill generally has no sealing/expungement filing fee. Verify the exact disposition and court requirements before purchasing document preparation."
-      };
-    }
+  if(plan.profileId==="oh-wood-common-pleas"){
+    if(type==="sealing-conviction") return {
+      ...core,scope:"wood-common-pleas-conviction",
+      courtName:plan.courtName,
+      message:"Standard Wood County Common Pleas conviction sealing (no approved fee waiver): $50 RecordPathAI preparation plus the court's $100 deposit, total $150. Check, filing and mailing are on hold pending verification and customer authorization."
+    };
+    if(type==="sealing-dismissal") return {
+      ...core,scope:"wood-common-pleas-nonconviction",
+      courtName:plan.courtName,
+      message:"A dismissal, not-guilty or no-bill application generally has no conviction filing fee. Verify all final outcomes and court instructions before purchasing $50 document preparation."
+    };
     return {
-      ...core, scope: "wood-common-pleas-outcome-unverified",
-      courtName: "Wood County Court of Common Pleas",
-      message: "If this is a conviction-sealing application with no approved poverty affidavit, the expected total is $150 ($50 preparation + $100 court deposit). A dismissal or acquittal generally has no conviction filing fee. Confirm the final outcome and fee before a total can be charged."
+      ...core,scope:"wood-common-pleas-outcome-unverified",
+      courtName:plan.courtName,
+      message:"For a standard conviction filing without fee waiver, Wood County's published court deposit is $100 (proposed total $150 including preparation). Unknown and nonconviction outcomes have different fee rules. No payment until confirmed."
     };
   }
-  return { ...core, scope: "unknown", message: "The RecordPathAI preparation service is $50. Court fees vary by case, court, relief type and fee-waiver status. Total cannot be quoted yet." };
+  return {
+    ...core,scope:"unknown",
+    message:"RecordPathAI's preparation charge is $50. Court fees and filing methods depend on the exact court, case, outcome and accepted waiver. No verified total yet."
+  };
 }
