@@ -78,17 +78,16 @@ test("No paid entitlement for forged, unpaid, canceled, or expired subscriptions
 
 test("Production webhook handles Stripe renewals, cancellation and payment failures while preserving packet processing", () => {
   const server=read("server.js");
-  assert.match(server,/stripe\\.webhooks\\.constructEvent/);
-  for(const event of ["customer.subscription.created","customer.subscription.updated","customer.subscription.deleted","invoice.paid","invoice.payment_failed","checkout.session.completed"]) {
-    assert.ok(server.includes('"' + event + '"'),event);
-  }
-  assert.match(server,/syncVerifiedRecordwatchStripeSubscription/);
-  assert.match(server,/verifiedPacketSession\\(session,owner,caseId\\)/);
-  assert.match(server,/app\\.post\\("\/api\/recordwatch\/billing-portal"/);
-  assert.match(server,/stripe\\.billingPortal\\.sessions\\.create/);
-  assert.match(server,/getRecordwatchBillingRow\\(user\\.id\\)/);
-  assert.match(server,/const planType = "free"/);
-  assert.match(server,/const premiumActive = false/);
+  assert.ok(server.includes("stripe.webhooks.constructEvent"));
+  for (const event of ["customer.subscription.created","customer.subscription.updated","customer.subscription.deleted","invoice.paid","invoice.payment_failed","checkout.session.completed"])
+    assert.ok(server.includes('"' + event + '"'), event);
+  assert.ok(server.includes("syncVerifiedRecordwatchStripeSubscription"));
+  assert.ok(server.includes("verifiedPacketSession(session,owner,caseId)"));
+  assert.ok(server.includes('app.post("/api/recordwatch/billing-portal"'));
+  assert.ok(server.includes("stripe.billingPortal.sessions.create"));
+  assert.ok(server.includes("getRecordwatchBillingRow(user.id)"));
+  assert.ok(server.includes('const planType = "free"'));
+  assert.ok(server.includes("const premiumActive = false"));
 });
 
 test("Customer-facing checkout and account management are wired with no local paid fallback", () => {
