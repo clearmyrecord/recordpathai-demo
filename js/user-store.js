@@ -167,6 +167,13 @@
           }
           const profile = await loadProfile(authUser);
           currentUser = publicUser(authUser, profile);
+          if (!profile) {
+            // Google accounts may not have a profile row at first login.
+            // Never fail authentication just because profile sync is down.
+            upsertProfile(authUser, { email: authUser.email }).catch(function (profileError) {
+              console.warn("Profile sync after authentication skipped:", profileError.message);
+            });
+          }
           queueCaseReadiness();
           return currentUser;
         } catch (error) {
@@ -281,7 +288,10 @@
     const { data, error } = await supabase.auth.signUp({
       email: normalizedEmail,
       password: String(password),
-      options: { data: { full_name: String(fullName).trim(), phone: String(phone || "").trim() } }
+      options: {
+        data: { full_name: String(fullName).trim(), phone: String(phone || "").trim() },
+        emailRedirectTo: authRedirectUrl()
+      }
     });
     if (error) {
       if (isAccountExistsSignupError(error)) throw authError(SIGNUP_ACCOUNT_EXISTS_MESSAGE, "account_exists");
@@ -324,9 +334,26 @@
     const target = sanitizeReturnUrl(returnUrl || getReturnUrl("dashboard.html"), "dashboard.html");
     if (target) localStorage.setItem(RETURN_KEY, target);
     const supabase = await client();
-    const redirectTo = `${window.location.origin}${window.location.pathname}?returnUrl=${encodeURIComponent(target)}`;
-    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
-    if (error) throw new Error(error.message);
+    // Use one stable callback for Google sign-up and Google sign-in. This
+    // avoids separate inconsistent callback URLs for login vs signup.
+    const redirectTo = authRedirectUrl();
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true
+      }
+    });
+    if (error) {
+      if (/provider.*not.*enabled|unsupported provider|provider is disabled/i.test(error.message || "")) {
+        throw new Error("Google sign-in needs to be enabled for RecordPathAI in Supabase. You can still use email and password.");
+      }
+      throw new Error(error.message);
+    }
+    if (!data || !/^https:\/\//.test(data.url || "")) {
+      throw new Error("Google sign-in could not start. Please retry or use email and password.");
+    }
+    window.location.assign(data.url);
   }
 
   async function sendPasswordReset(email) {
