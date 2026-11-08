@@ -79,6 +79,14 @@ test("No paid entitlement for forged, unpaid, canceled, or expired subscriptions
 test("Production webhook handles Stripe renewals, cancellation and payment failures while preserving packet processing", () => {
   const server=read("server.js");
   assert.ok(server.includes("stripe.webhooks.constructEvent"));
+  assert.ok(server.includes('app.post("/api/recordwatch/stripe-webhook"'));
+  assert.ok(server.includes("recordwatchStripe.webhooks.constructEvent"));
+  assert.ok(server.includes('process.env.STRIPE_RECORDWATCH_SECRET_KEY'));
+  assert.ok(server.includes('process.env.STRIPE_RECORDWATCH_WEBHOOK_SECRET'));
+  assert.ok(server.includes('app.get("/api/recordwatch/billing-readiness"'));
+  assert.ok(server.includes('recordwatchBillingReadiness().ready'));
+  assert.ok(server.includes('RECORDWATCH_LIVE_BILLING_ENABLED'));
+
   for (const event of ["customer.subscription.created","customer.subscription.updated","customer.subscription.deleted","invoice.paid","invoice.payment_failed","checkout.session.completed"])
     assert.ok(server.includes('"' + event + '"'), event);
   assert.ok(server.includes("syncVerifiedRecordwatchStripeSubscription"));
