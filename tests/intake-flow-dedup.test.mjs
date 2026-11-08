@@ -66,6 +66,6 @@ test("Mapped court fields cannot duplicate visible case questions or personal de
 
 test("Canonical legal name cannot be overwritten by legacy first/last aliases", () => {
   assert.match(bridge, /if \(normalizeString\(p\.full_name\)\.trim\(\)\) return;/);
-  assert.match(step1, /data\.petitioner\.dob/);
+  assert.match(step1, /id="dateOfBirth" data-path="petitioner\.dob"/);
   assert.match(step1, /data\?\.court\?\.state/);
 });
