@@ -2,10 +2,14 @@
 export const PACKET_PRICE_CENTS = 5000;
 export function verifiedPacketSession(session, userId, caseId = null) {
   const m = session?.metadata || {};
+  const courtFee = Number(m.courtFeeCents ?? 0);
+  const serviceFee = Number(m.serviceFeeCents ?? PACKET_PRICE_CENTS);
+  const feeValid = Number.isSafeInteger(courtFee) && courtFee >= 0 &&
+    Number.isSafeInteger(serviceFee) && serviceFee === PACKET_PRICE_CENTS;
   return Boolean(session?.id && session.status === "complete" &&
     session.payment_status === "paid" && session.currency === "usd" &&
-    Number.isSafeInteger(session.amount_total) &&
-    session.amount_total >= PACKET_PRICE_CENTS &&
+    feeValid && Number.isSafeInteger(session.amount_total) &&
+    session.amount_total >= serviceFee + courtFee &&
     m.productType === "record-sealing-packet" &&
     m.userId && m.userId === userId &&
     (!caseId || m.saved_case_id === caseId || m.case_id === caseId));
