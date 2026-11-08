@@ -72,3 +72,66 @@ test("The Ohio pilot review is not presented in the customer case intake", () =>
   assert.match(details, /id="courtFeeSource"/);
   assert.match(intake, /document\.getElementById\("formRequirementsReviewDetails"\)/);
 });
+
+
+test("RecordWatch case normalization keeps individual outcomes and proof dates after account save", async () => {
+  const storeSource = readFileSync("js/user-store.js", "utf8");
+  const values = new Map();
+  const localStorage = {
+    getItem(key) { return values.has(key) ? values.get(key) : null; },
+    setItem(key, value) { values.set(key, String(value)); },
+    removeItem(key) { values.delete(key); }
+  };
+  const context = {
+    localStorage,
+    console,
+    URL,
+    CustomEvent: class { constructor() {} },
+    document: { dispatchEvent() {} },
+    window: { location: { pathname: "/record-details.html", origin: "https://recordpathai.com", search: "" } }
+  };
+  vm.runInNewContext(storeSource, context);
+  const store = context.window.RecordPathUserStore;
+  await store.ready;
+  const original = {
+    charge_name: "Possession",
+    charge_code: "2925.11",
+    degree: "F5",
+    original_charge_name: "Trafficking allegation",
+    original_charge_code: "2925.03",
+    final_disposition: "Convicted",
+    disposition_date: "2008-04-09",
+    discharge_date: "2010-06-15",
+    notes: "Plea reduced from original allegation",
+    isViolentOffense: false
+  };
+  const entered = store.normalizeCase({
+    caseState: "OH", county: "Wood", courtName: "Wood County Court of Common Pleas",
+    caseNumber: "SYNTHETIC-2008", charges: [original]
+  });
+  const chargeSavedToDb = entered.chargeDetails[0];
+  assert.equal(chargeSavedToDb.flags.recordPathIntake.original_charge_name, original.original_charge_name);
+  assert.equal(chargeSavedToDb.flags.recordPathIntake.discharge_date, original.discharge_date);
+  // Simulate the schema-backed fields returned by case_charges after logging in on another device.
+  const reloaded = store.normalizeCase({
+    caseState: "OH", county: "Wood", courtName: "Wood County Court of Common Pleas",
+    caseNumber: "SYNTHETIC-2008",
+    charges: [{
+      charge_name: chargeSavedToDb.charge_name,
+      offense_code: chargeSavedToDb.offense_code,
+      offense_level: chargeSavedToDb.offense_level,
+      offense_date: chargeSavedToDb.offense_date,
+      charge_notes: chargeSavedToDb.charge_notes,
+      flags: chargeSavedToDb.flags
+    }]
+  });
+  assert.equal(reloaded.chargeDetails[0].original_charge_name, original.original_charge_name);
+  assert.equal(reloaded.chargeDetails[0].final_disposition, original.final_disposition);
+  assert.equal(reloaded.chargeDetails[0].disposition_date, original.disposition_date);
+  assert.equal(reloaded.chargeDetails[0].discharge_date, original.discharge_date);
+  const restored = store.caseToPacketData(reloaded).charges[0];
+  assert.equal(restored.original_charge_code, original.original_charge_code);
+  assert.equal(restored.final_disposition, original.final_disposition);
+  assert.equal(restored.discharge_date, original.discharge_date);
+  assert.equal(restored.notes, original.notes);
+});
