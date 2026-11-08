@@ -1,37 +1,125 @@
-name: Deploy RecordPathAI to Google Cloud Run (manual)
+name: Deploy RecordPathAI to Google Cloud Run
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
-  id-token: write
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('recordpathai-auto-release-pr-{0}', github.event.pull_request.number) || 'recordpathai-existing-production' }}
+  cancel-in-progress: false
 jobs:
-  deploy:
+  validate:
+    name: Gate production on tests, dependency audit, and rollback regression
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify locked production packages and application syntax
+        run: |
+          npm ci --ignore-scripts --omit=dev
+          node --check server.js
+          bash -n scripts/deploy-existing-cloudrun.sh
+          test -f self-search.html
+          test -f eligibility.html
+          test -f record-details.html
+          test -f pilot-demo.html
+          test -f js/pilot-demo.js
+          grep -qi 'Illustrative demo' pilot-demo.html
+          node -e 'if (require("./package.json").engines.node !== "22") process.exit(1)'
+      - name: Run security and intake regression tests
+        run: npm run test:security
+      - name: Verify zero-traffic preflight, promotion and rollback behavior
+        run: bash tests/cloudrun-smoke-regression.sh
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+  container-smoke:
+    name: Build and start real Cloud Run container before release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify production image and credentials exclusions
+        run: |
+          grep -q '^FROM node:22-' Dockerfile
+          grep -Fq 'CMD ["node", "server.js"]' Dockerfile
+          grep -Fq 'gha-creds-*.json' .dockerignore
+          grep -Fq 'gha-creds-*.json' .gcloudignore
+      - name: Build the production image
+        run: docker build --pull -t recordpathai-cloudrun-auto:ci .
+      - name: Smoke-test server, guided search and both intake steps
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="$(docker run --rm --detach --publish 127.0.0.1:18080:8080 --env PORT=8080 --env RECORDWATCH_DISABLE_SCHEDULER=true recordpathai-cloudrun-auto:ci)"
+          trap 'docker logs "$container" || true; docker stop "$container" >/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:18080/self-search.html -o /tmp/recordpathai-smoke.html; then
+              grep -qi 'Find your own court records' /tmp/recordpathai-smoke.html
+              curl -fsS --max-time 5 http://127.0.0.1:18080/eligibility.html -o /tmp/recordpathai-personal.html
+              grep -Fq 'Your Personal Information' /tmp/recordpathai-personal.html
+              curl -fsS --max-time 5 http://127.0.0.1:18080/record-details.html -o /tmp/recordpathai-case.html
+              grep -Fq 'Your Case Information' /tmp/recordpathai-case.html
+              curl -fsS --max-time 5 http://127.0.0.1:18080/api/config/supabase >/dev/null
+              echo "Production container and both updated intake steps passed."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Production container failed to become healthy." >&2
+          exit 1
+  deploy:
+    name: Release tested commit to existing Cloud Run service
+    if: github.ref == 'refs/heads/main'
+    needs: [validate, container-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: production
+    permissions:
+      contents: read
+      id-token: write
     env:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'recordpathai-production' }}
       CLOUD_RUN_REGION: ${{ vars.CLOUD_RUN_REGION || 'us-west1' }}
       CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'recordpathai' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Validate deploy target and runtime
+      - name: Skip stale commits that are no longer main
+        id: current
+        shell: bash
         run: |
-          node --check server.js
-          node -p 'require("./package.json").engines.node'
-          test -f self-search.html
-          test -f pilot-demo.html
-          test -f js/pilot-demo.js
-          grep -qi 'Illustrative demo' pilot-demo.html
-          test -f scripts/deploy-existing-cloudrun.sh
-          bash -n scripts/deploy-existing-cloudrun.sh
+          set -euo pipefail
+          current="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+          if [ "$current" != "$GITHUB_SHA" ]; then
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping stale commit; the newest main commit has its own deployment run."
+          else
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Require authorized short-lived Google deployment identity
+        if: steps.current.outputs.current == 'true'
+        shell: bash
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOY_SA: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOY_SA" ]; then
+            echo "::error::Cloud Run deployment requires GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOY_SERVICE_ACCOUNT in the production environment."
+            exit 1
+          fi
       - name: Authenticate with short-lived Google identity
+        if: steps.current.outputs.current == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Deploy existing Cloud Run service and roll back on failed smoke test
+        if: steps.current.outputs.current == 'true'
+      - name: Deploy preview at zero traffic, verify, promote, and rollback on failure
+        if: steps.current.outputs.current == 'true'
         run: bash scripts/deploy-existing-cloudrun.sh

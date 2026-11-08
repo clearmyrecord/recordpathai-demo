@@ -1,6 +1,6 @@
 # RecordPathAI.com production release
 
-This repository contains the Cloud Run application backing the existing public domain. Code merged into GitHub is **not automatically deployed** by this repository's currently known configuration.
+This repository contains the Cloud Run application backing the existing public domain. The deployment workflow automatically releases new commits pushed or merged to **main**, but only after its own full validation and real container startup tests succeed. A manual dispatch remains available as a fallback.
 
 ## Existing functionality and privacy requirements
 - The new `self-search.html` finds official courts and only asks the separate Render backend for matches after `/ready` explicitly confirms an approved index.
@@ -8,19 +8,33 @@ This repository contains the Cloud Run application backing the existing public d
 - The private backend must stay `PUBLIC_SEARCH_ENABLED=false` until source permitted use, individual current-status checks, and a removal/refresh program are independently verified.
 - Do not commit real court extracts, birth dates, case identities, or database connection strings to this public repository.
 
-## Deploying current GitHub code to the existing Cloud Run service
-A manual GitHub Actions workflow is available at **Actions > Deploy RecordPathAI to Google Cloud Run (manual)**. It requires one-time configuration by an authorized Google Cloud administrator:
+## Automatic production deployment
 
-Repository **Variables**:
-- `GCP_PROJECT_ID`: the *existing* Cloud Run project ID.
-- `CLOUD_RUN_REGION`: the existing service's region.
-- `CLOUD_RUN_SERVICE`: the existing service name.
+The GitHub Actions workflow **Deploy RecordPathAI to Google Cloud Run** runs automatically for every new commit on the `main` branch, and can also be started manually as a fallback.
 
-Repository **Secrets**:
-- `GCP_WORKLOAD_IDENTITY_PROVIDER`: Google Cloud Workload Identity Federation resource for this repo.
-- `GCP_DEPLOY_SERVICE_ACCOUNT`: service account with only the permissions required for source-based Cloud Run deployment and image builds.
+**Release gates (run before any Google Cloud authentication or traffic change):**
+1. Install the locked Node.js 22 production dependencies, verify expected application assets and syntax.
+2. Run the full security/intake regression suite, the offline zero-traffic/safe-rollback tests, and the production dependency audit.
+3. Build and start the real production Docker image and verify the application, guided record search, **Step 1 Personal Information**, **Step 2 Case Information**, and the Supabase public configuration endpoint.
+4. Check that the tested commit is still the tip of `main`; obsolete queued deployments are skipped.
+5. Authenticate through short-lived Google Workload Identity Federation, deploy an isolated Cloud Run revision at **0% customer traffic**, validate the preview, promote it to **100%**, then confirm production health and revert traffic to the prior revision if verification fails.
 
-Run the workflow with the protected **production** environment. It uses GitHub OIDC and short-lived Google credentials, not a stored long-lived service account key. Do not guess project/service names: verify them in the Cloud Run console before dispatch. The workflow does not run on pushes or on pull requests, so it cannot accidentally overwrite production.
+Automatic deployment is serialized with the separate one-time release workflow; neither one should compete for live traffic. The `production` GitHub environment remains in place, so any configured required-reviewer or protection rules continue to apply. If a reviewer is required, that approval must be changed separately in GitHub environment settings for completely hands-off releases.
+
+**One-time required configuration (production environment):**
+
+Repository variables, with defaults that must be verified against the actual existing Google Cloud service:
+- `GCP_PROJECT_ID` — currently defaults to `recordpathai-production`
+- `CLOUD_RUN_REGION` — currently defaults to `us-west1`
+- `CLOUD_RUN_SERVICE` — currently defaults to `recordpathai`
+
+Environment secrets:
+- `GCP_WORKLOAD_IDENTITY_PROVIDER` — Workload Identity Federation resource authorized for this repository
+- `GCP_DEPLOY_SERVICE_ACCOUNT` — least-privilege Google service account for Cloud Run source build and deployment
+
+Missing credentials fail the deployment loudly rather than silently claiming success. No Google keys, court records, or customer data belong in the repository.
+
+**Repository security:** Automatic releases make the integrity of `main` especially important. Protect `main` with a pull request requirement and passing checks in GitHub repository rules/branch protection. As of November 7, 2026, `main` was reported as unprotected; that administrative setting is not changed by this workflow.
 
 ## Production acceptance checks
 1. Confirm live root and `/self-search.html` serve the latest source and are HTTPS.
