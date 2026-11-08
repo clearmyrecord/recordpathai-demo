@@ -91,7 +91,7 @@
           <p>RecordWatch tracks your eligibility timeline and reminds you when it may be time to take action.</p>
           <div class="recordwatch-plan-grid">
             <article class="recordwatch-plan-card"><h3>Free Eligibility Reminders</h3><ul><li>Email reminders</li><li>Countdown dashboard</li><li>Saved eligibility date</li></ul></article>
-            <article class="recordwatch-plan-card premium"><h3>Premium RecordWatch</h3><p class="price-line"><strong>$4.99/month</strong><br><span>or $39/year</span></p><ul><li>SMS alerts</li><li>Filing reminders</li><li>Court status updates when available</li><li>Eligibility countdown</li><li>Missing-info reminders</li><li>Multi-case monitoring</li></ul><p class="meta-note">Automated court integrations will be added as supported courts come online.</p><div class="recordwatch-actions"><button class="btn" type="button" data-recordwatch-checkout="monthly">Start Monthly</button><button class="btn secondary" type="button" data-recordwatch-checkout="annual">Save with Annual</button></div></article>
+            <article class="recordwatch-plan-card premium"><h3>Premium RecordWatch</h3><p class="price-line"><strong>$4.99/month</strong><br><span>or $39/year</span></p><ul><li>SMS alerts</li><li>Filing reminders</li><li>Court status updates when available</li><li>Eligibility countdown</li><li>Missing-info reminders</li><li>Multi-case monitoring</li></ul><p class="meta-note">Billed in advance and renews automatically until canceled. Manage or cancel billing in your account. Court fees and the optional $50 packet service are separate. SMS delivery requires an opted-in number and an available messaging provider. Automated court integrations will be added as supported courts come online.</p><div class="recordwatch-actions"><button class="btn" type="button" data-recordwatch-checkout="monthly">Start Monthly</button><button class="btn secondary" type="button" data-recordwatch-checkout="annual">Save with Annual</button></div></article>
           </div>
           <div class="recordwatch-countdown-panel">
             <div><strong id="recordwatchEstimatedDate">Not available yet</strong><span>Estimated eligibility date</span></div>
@@ -231,6 +231,23 @@
           summary.innerHTML = '<h3>No saved case found</h3><p class="meta-note">Start with Eligibility Check or Enter Record Details so RecordWatch can monitor your case without re-entry.</p><div class="recordwatch-actions"><a class="btn" href="eligibility.html">Start with Eligibility Check</a><a class="btn secondary" href="record-details.html">Enter Record Details</a></div>';
         }
       }
+      document.querySelectorAll("[data-recordwatch-checkout]").forEach(function (button) {
+        button.addEventListener("click", async function () {
+          if (!window.RecordPathAuth || !(await RecordPathAuth.requireAuthAsync("subscribe to Premium RecordWatch", "recordwatch.html"))) return;
+          button.disabled = true;
+          const status = document.getElementById("recordwatchEnrollmentStatus");
+          status.textContent = "Opening secure Stripe checkout…";
+          try {
+            const plan = button.getAttribute("data-recordwatch-checkout");
+            const data = await RecordWatchNotifications.checkoutPremium(plan, { saved_case_id: active && active.id });
+            if (!data.url) throw new Error("Stripe checkout did not return a URL.");
+            window.location.assign(data.url);
+          } catch (error) {
+            status.textContent = error.message || "Could not start checkout.";
+            button.disabled = false;
+          }
+        });
+      });
       var smsToggle = document.getElementById("recordwatchNotifySms");
       var smsNotice = document.getElementById("recordwatchSmsNotice");
       smsToggle.addEventListener("change", function () { smsNotice.hidden = !smsToggle.checked; });
