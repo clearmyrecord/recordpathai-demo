@@ -255,6 +255,45 @@
       border: 1px solid #d7e4fb;
     }
 
+    /* Make the official court docket action unmissable without changing its URL. */
+    #recordCollectionDocketLink.record-docket-button {
+      max-width: 100%;
+      margin: 8px 0 4px;
+      padding: 16px 22px;
+      min-height: 58px;
+      border: 2px solid #103e89;
+      border-radius: 14px;
+      background: #1455b3;
+      color: #fff;
+      font-size: 16px;
+      line-height: 1.35;
+      font-weight: 800;
+      text-align: center;
+      box-shadow: 0 10px 22px rgba(20, 61, 143, 0.2);
+    }
+
+    #recordCollectionDocketLink.record-docket-button::after {
+      content: "↗";
+      font-size: 20px;
+      line-height: 1;
+      margin-left: 10px;
+    }
+
+    #recordCollectionDocketLink.record-docket-button:hover,
+    #recordCollectionDocketLink.record-docket-button:focus-visible {
+      background: #103e89;
+      color: #fff;
+    }
+
+    #recordCollectionDocketLink.record-docket-button:focus-visible {
+      outline: 3px solid #82b7ff;
+      outline-offset: 3px;
+    }
+
+    #recordCollectionDocketLink.record-docket-button[hidden] {
+      display: none;
+    }
+
     /* OFFENSE LIST */
     .record-list {
       display: grid;
@@ -863,7 +902,7 @@
               <div class="record-grid">
                 <div class="field" style="grid-column:1/-1">
                   <p id="recordCollectionInstructions">Select the state and county where your case was filed above to find an official court resource.</p>
-                  <a id="recordCollectionDocketLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Open court records</a>
+                  <a id="recordCollectionDocketLink" class="btn btn-primary record-docket-button" href="#" target="_blank" rel="noopener noreferrer" hidden>Open official court records</a>
                   <p class="helper" id="recordCollectionHelp">Not every court offers online case search. If your record is not available, contact the clerk. Never enter your password or sensitive identity information into an unfamiliar website.</p>
                 </div>
               </div>
