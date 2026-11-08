@@ -1056,6 +1056,7 @@
               <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
               <div class="sample-pdf-tools" style="margin-top:12px; padding:16px; border:1px solid #d2def3; border-radius:14px; background:#f7faff;">
                 <button type="button" class="sig-small-btn" id="downloadSamplePdfBtn">Test Signed PDF — Download Sample (No Payment)</button>
+                <button type="button" class="sig-small-btn" id="prepareSignedReviewBtn" style="margin-left:8px;">Prepare My Signed Packet for Private Review</button>
                 <p style="margin:9px 0 0; color:#526780; font-size:13px; line-height:1.5;">Tests the court PDF mapping with sample fields and the signature you draw above. Clearly watermarked NOT FOR FILING. No real case details, checkout or mailing; your signature stays in this browser download.</p>
               </div>
               <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
@@ -2801,51 +2802,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
       }
 
-      async function generateSealingPdf() {
-        try {
-          if (!ensurePacketGenerationPrerequisites()) return;
-          setStatus("Generating PDF packet...");
 
-          if (window.RecordPathAuth && !RecordPathAuth.requireAuth("generate PDF packet", "packet.html")) return;
-          if (!window.PDFLib) throw new Error("pdf-lib failed to load.");
-
-          const raw = readPacketData();
-          const data = buildNormalizedPacketData(raw);
-          if(normalizeState(data?.court?.state)==="OH") {
-            const resolved=await resolveCheckoutCase();
-            const activeCase=resolved?.checkoutCase?.saved_case_id||resolved?.checkoutCase?.case_id;
-            await checkServerPacketReadiness(activeCase);
-          } else if (!await ensureWave1FormReady(raw)) return;
-          const packetEligibility = calculatePacketEligibility(data);
-          if (!packetEligibility.isEligibleNow) {
-            throw new Error(packetEligibility.isNotYetEligible
-              ? `You are not yet eligible based on this screening. Estimated eligible date: ${formatDateForDisplay(packetEligibility.estimatedEligibleDate)}.`
-              : "Eligibility needs review before packet generation.");
-          }
-          if (!isPacketPaymentComplete()) {
-            throw new Error("Payment is required before generating the PDF packet.");
-          }
-
-          if (!requireSavedDrawnSignature()) return;
-
-          const selected = await loadActiveTemplateForPacket(data);
-          if (!selected) {
-            await exportManualFilingSummaryPdf(data);
-            setStatus("No active template is available for this court yet. You can still export a data-only packet summary.", "error");
-            return;
-          }
-          const schema = await loadFormSchema(selected, data);
-          const notaryBanner = document.getElementById("notaryWarningBanner");
-          if (notaryBanner) notaryBanner.style.display = schema?.notaryRequired ? "block" : "none";
-
-          const templateMapping = await loadTemplateMapping(selected);
-          const missingFields = getMissingRequiredFields(data, schema);
-          const rawMutable = readPacketData();
-          renderMissingInfoPanel(missingFields, rawMutable, data, schema);
-          if (missingFields.length) {
-            setStatus("Missing required information. Please complete the highlighted fields.", "error");
-            return;
-          }
+      // The same mapped renderer is used for private pre-payment review and
+      // paid delivery; only review copies stay server-private until approved.
+      async function renderSignedCourtPdfBytes(data,selected) {
+        const templateMapping=await loadTemplateMapping(selected);
           const fields = normalizeFields(templateMapping);
           const pdfBytes = await loadTemplatePdf(selected);
 
@@ -2955,6 +2916,102 @@ document.addEventListener("DOMContentLoaded", async function () {
           });
 
           const finalBytes = await pdfDoc.save();
+        return finalBytes;
+      }
+
+      async function prepareSignedReviewPdf() {
+        const button=document.getElementById("prepareSignedReviewBtn");
+        if(button)button.disabled=true;
+        setCheckoutError("");
+        try {
+          if(!window.PDFLib)throw new Error("PDF rendering library unavailable.");
+          if(!requireSavedDrawnSignature())return;
+          if(window.RecordPathAuth && !window.RecordPathAuth.requireAuth(
+            "prepare your private signed court packet", "packet.html"))return;
+          const raw=readPacketData(),data=buildNormalizedPacketData(raw);
+          const selected=await loadActiveTemplateForPacket(data);
+          if(!selected)throw new Error("No verified form mapping exists for the exact court and final charge outcomes. Complete Record Details first.");
+          const schema=await loadFormSchema(selected,data);
+          if(schema?.notaryRequired)throw new Error("This form requires signing before a notary. Do not submit this browser signature as a filing signature.");
+          const missing=getMissingRequiredFields(data,schema);
+          renderMissingInfoPanel(missing,raw,data,schema);
+          if(missing.length)throw new Error("Complete the missing court form fields above before preparing the review copy.");
+          const resolved=await resolveCheckoutCase();
+          if(!resolved?.checkoutCase || !validateCheckoutCase(resolved.checkoutCase).ok)
+            throw new Error("Save your case information before preparing a packet.");
+          setStatus("Preparing your signed PDF in private storage for court review...");
+          const packetEligibility=resolveCurrentPacketEligibility(data);
+          const stored=await saveCheckoutCaseIfNeeded(resolved.checkoutCase,packetEligibility);
+          const caseId=stored.saved_case_id||stored.case_id;
+          if(!isInternalUuid(caseId))throw new Error("A saved account case ID is required.");
+          const bytes=await renderSignedCourtPdfBytes(data,selected);
+          const client=await window.RecordPathSupabase.getClient();
+          const session=await client.auth.getSession();
+          const token=session?.data?.session?.access_token;
+          if(!token)throw new Error("Please sign in again before uploading the private draft.");
+          const endpoint=getCheckoutEndpoint().replace(/\/api\/create-checkout-session$/,"/api/packet/private-upload");
+          const response=await fetch(endpoint,{
+            method:"POST",
+            headers:{"Content-Type":"application/pdf",
+              "Authorization":"Bearer "+token,"x-recordpath-case-id":caseId},
+            body:bytes
+          });
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok||result.ok!==true)throw new Error(result.error||"Private PDF upload failed.");
+          setStatus("Signed PDF was saved privately for court review. No payment was collected, no filing occurred and nothing was mailed.");
+        }catch(error){
+          const msg=error?.message||"Unable to prepare the private signed review copy.";
+          setCheckoutError(msg);
+          setStatus(msg,"error");
+        }finally{if(button)button.disabled=false;}
+      }
+
+      async function generateSealingPdf() {
+        try {
+          if (!ensurePacketGenerationPrerequisites()) return;
+          setStatus("Generating PDF packet...");
+
+          if (window.RecordPathAuth && !RecordPathAuth.requireAuth("generate PDF packet", "packet.html")) return;
+          if (!window.PDFLib) throw new Error("pdf-lib failed to load.");
+
+          const raw = readPacketData();
+          const data = buildNormalizedPacketData(raw);
+          if(normalizeState(data?.court?.state)==="OH") {
+            const resolved=await resolveCheckoutCase();
+            const activeCase=resolved?.checkoutCase?.saved_case_id||resolved?.checkoutCase?.case_id;
+            await checkServerPacketReadiness(activeCase);
+          } else if (!await ensureWave1FormReady(raw)) return;
+          const packetEligibility = calculatePacketEligibility(data);
+          if (!packetEligibility.isEligibleNow) {
+            throw new Error(packetEligibility.isNotYetEligible
+              ? `You are not yet eligible based on this screening. Estimated eligible date: ${formatDateForDisplay(packetEligibility.estimatedEligibleDate)}.`
+              : "Eligibility needs review before packet generation.");
+          }
+          if (!isPacketPaymentComplete()) {
+            throw new Error("Payment is required before generating the PDF packet.");
+          }
+
+          if (!requireSavedDrawnSignature()) return;
+
+          const selected = await loadActiveTemplateForPacket(data);
+          if (!selected) {
+            await exportManualFilingSummaryPdf(data);
+            setStatus("No active template is available for this court yet. You can still export a data-only packet summary.", "error");
+            return;
+          }
+          const schema = await loadFormSchema(selected, data);
+          const notaryBanner = document.getElementById("notaryWarningBanner");
+          if (notaryBanner) notaryBanner.style.display = schema?.notaryRequired ? "block" : "none";
+
+          const templateMapping = await loadTemplateMapping(selected);
+          const missingFields = getMissingRequiredFields(data, schema);
+          const rawMutable = readPacketData();
+          renderMissingInfoPanel(missingFields, rawMutable, data, schema);
+          if (missingFields.length) {
+            setStatus("Missing required information. Please complete the highlighted fields.", "error");
+            return;
+          }
+          const finalBytes = await renderSignedCourtPdfBytes(data,selected);
           const blob = new Blob([finalBytes], { type: "application/pdf" });
           const singleFileBytes = blob.size;
           const totalPacketBytes = blob.size;
@@ -3701,6 +3758,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       document.getElementById("downloadSamplePdfBtn")?.addEventListener("click", downloadSamplePdf);
+      document.getElementById("prepareSignedReviewBtn")?.addEventListener("click", prepareSignedReviewPdf);
       document.getElementById("testPdfBtn")?.addEventListener("click", testPdfAccess);
       const generateBtn = document.getElementById("generateSealingBtn");
       if (generateBtn) generateBtn.addEventListener("click", startCheckout);
