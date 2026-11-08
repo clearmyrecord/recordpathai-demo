@@ -34,6 +34,7 @@ const woodCommon = Object.freeze({
   submissionMethod:"physical-only-pending-clerk-confirmation",
   courtFeePayee:null, // Never guess whom an actual check should be made payable to.
   lobChecksAuthorized:false, // Lob's current 403 and bank/funding verification not resolved.
+  mappedApprovedFormTypes:["sealing-conviction"],
   maxAttachmentPages:6, // conservative Lob attachment limit
   trackingGuarantee:false
 });
@@ -55,7 +56,7 @@ export function courtFilingPlan(input={}) {
   };
   const courtFeeCents=formType==="sealing-conviction"?10000:formType==="sealing-dismissal"?0:null;
   return {
-    supported:Boolean(formType), profileId:profile.id,
+    supported:Boolean(formType) && profile.mappedApprovedFormTypes.includes(formType), profileId:profile.id,
     courtName:profile.courtName, address:profile.postalAddress,
     courtFeeCents, courtFeePayee:profile.courtFeePayee,
     filingMethod:profile.submissionMethod,
