@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import {
   RECORDWATCH_BILLING, recordwatchPlan, assertRecordwatchStripePrice,
   billingPeriod, verifyRecordwatchSubscription, paidRecordwatchCheckout,
@@ -31,6 +32,16 @@ const subscription = (plan = "monthly") => ({
     current_period_start: 1780000000,
     current_period_end: 1782678400
   }] }
+});
+
+test("RecordWatch dashboard formats both date-only eligibility and Stripe ISO renewal timestamps", () => {
+  const context = { window: {} };
+  runInNewContext(read("js/recordwatch-rules.js"), context);
+  const formatDate = context.window.RecordWatchRules.formatDate;
+  assert.notEqual(formatDate("2026-12-08"), "Not available");
+  assert.notEqual(formatDate("2026-12-08T20:42:43.000Z"), "Not available");
+  assert.equal(formatDate(""), "Not available");
+  assert.equal(formatDate("not-a-date"), "Not available");
 });
 
 test("Price IDs are checked against real Stripe amount, currency, and recurring interval", () => {
