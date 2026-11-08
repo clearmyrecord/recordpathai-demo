@@ -12,8 +12,8 @@ test("Homepage prioritizes the free three-step eligibility journey",()=>{
 test("Homepage distinguishes available tools from unlaunched paid fulfillment",()=>{
   assert.match(html,/id="available-now"/);
   assert.match(html,/href="recordwatch-dashboard\.html"/);
-  assert.match(html,/Monthly Premium billing has been tested/);
-  assert.match(html,/real subscription charges are not enabled yet/i);
+  assert.match(html,/\$39 one-time payment per saved case/);
+  assert.match(html,/live billing requires final verification/i);
   assert.match(html,/No automatic mailing or filing is offered yet/);
   assert.match(html,/signed-packet preparation and fulfillment launch/);
   assert.ok(!html.includes("Choose a $50 packet and tracked mailing where available"));
