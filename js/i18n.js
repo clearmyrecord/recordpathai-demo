@@ -76,6 +76,7 @@
     nav: {
       home: "Home",
       how: "How It Works",
+      courtFinder: "Court Finder",
       eligibility: "Eligibility",
       recordDetails: "Record Details",
       packetGeneration: "Packet Generation",
@@ -394,7 +395,7 @@
       arrestState: "Estado del arresto"
     },
     nav: {
-      home: "Inicio", how: "Cómo funciona", eligibility: "Elegibilidad", recordDetails: "Detalles del antecedente", packetGeneration: "Generación del paquete", recordWatch: "RecordWatch", courtAccess: "Acceso para tribunales", packet: "Paquete", dashboard: "Panel", account: "Cuenta", login: "Iniciar sesión", logout: "Cerrar sesión", createAccount: "Crear cuenta", checkEligibility: "Comenzar revisión gratuita de elegibilidad"
+      home: "Inicio", how: "Cómo funciona", courtFinder: "Buscador de tribunales", eligibility: "Elegibilidad", recordDetails: "Detalles del antecedente", packetGeneration: "Generación del paquete", recordWatch: "RecordWatch", courtAccess: "Acceso para tribunales", packet: "Paquete", dashboard: "Panel", account: "Cuenta", login: "Iniciar sesión", logout: "Cerrar sesión", createAccount: "Crear cuenta", checkEligibility: "Comenzar revisión gratuita de elegibilidad"
     },
     footer: {
       copy: "Flujo guiado de alivio de antecedentes y preparación de paquetes judiciales.",
