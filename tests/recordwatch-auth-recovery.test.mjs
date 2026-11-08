@@ -100,11 +100,12 @@ test("Email confirmation and Google use a single RecordWatch-safe callback", asy
   await store.ready;
   const signUpResult=await store.signup({fullName:"Sample Applicant",email:"someone@example.invalid",phone:"",password:"longpassword"});
   assert.equal(signUpResult.needsEmailConfirmation,true);
-  assert.ok(signupRequest.options.emailRedirectTo.includes("/login.html?returnUrl=recordwatch-dashboard.html"));
+  assert.equal(signupRequest.options.emailRedirectTo,"https://recordpathai.com/login.html");
   await store.loginWithGoogle("recordwatch-dashboard.html");
   assert.equal(oauthRequest.provider,"google");
   assert.equal(oauthRequest.options.skipBrowserRedirect,true);
-  assert.ok(oauthRequest.options.redirectTo.includes("/login.html?returnUrl=recordwatch-dashboard.html"));
+  assert.equal(oauthRequest.options.redirectTo,"https://recordpathai.com/login.html");
+  assert.equal(context.localStorage.getItem("recordPathAuthReturnUrl"),"recordwatch-dashboard.html");
   assert.equal(window.location.assigned,redirect);
 });
 test("Dashboard still protects private cases and does not bypass login",()=>{
