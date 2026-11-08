@@ -8,6 +8,11 @@ import {
   recordwatchEntitled
 } from "../src/recordwatch-billing.js";
 
+import {
+  RECORDWATCH_LIFETIME_CENTS, assertRecordwatchLifetimePrice,
+  paidRecordwatchLifetimeCheckout, lifetimeCaseEntitled
+} from "../src/recordwatch-lifetime.js";
+
 const read = file => readFileSync(new URL("../" + file, import.meta.url), "utf8");
 const owner = "f613dc41-4fb4-4804-994e-8b2341dd099c";
 const env = {
@@ -122,10 +127,77 @@ test("Customer-facing checkout and account management are wired with no local pa
   const account=read("account.html");
   const provider=read("js/recordwatch-message-provider.js");
   assert.ok(recordwatch.includes('checkoutPremium(plan'));
-  assert.ok(recordwatch.includes('data-recordwatch-checkout="monthly"'));
-  assert.ok(recordwatch.includes('data-recordwatch-checkout="annual"'));
+  assert.ok(recordwatch.includes('data-recordwatch-checkout="lifetime_case"'));
+  assert.ok(!recordwatch.includes('data-recordwatch-checkout="monthly"'));
+  assert.ok(!recordwatch.includes('data-recordwatch-checkout="annual"'));
   assert.ok(dashboard.includes('openBillingPortal()'));
   assert.ok(account.includes('accountBillingPortal'));
   assert.ok(provider.includes('subscription.stripe_subscription_id'));
   assert.ok(dashboard.includes("premiumState.subscription || null"));
+});
+
+const savedCaseId = "c08d053f-63c7-4a65-997c-df0c40253c15";
+const lifetimePriceId = "price_lifetime_case_test";
+const lifetimePrice = {
+  id: lifetimePriceId, active: true, currency: "usd", unit_amount: 3900,
+  billing_scheme: "per_unit", type: "one_time", recurring: null
+};
+const lifetimeCheckout = {
+  id: "cs_test_lifetime123", mode: "payment", status: "complete",
+  payment_status: "paid", amount_total: 3900, currency: "usd",
+  client_reference_id: owner, payment_intent: "pi_test_lifetime123",
+  metadata: {
+    product: "premium_recordwatch_lifetime", plan: "lifetime_case",
+    user_id: owner, saved_case_id: savedCaseId, price_id: lifetimePriceId
+  }
+};
+test("One-time RecordWatch product is strictly $39 USD, not a recurring price", () => {
+  assert.equal(RECORDWATCH_LIFETIME_CENTS, 3900);
+  assert.equal(assertRecordwatchLifetimePrice(lifetimePrice), lifetimePriceId);
+  assert.throws(() => assertRecordwatchLifetimePrice({ ...lifetimePrice, unit_amount: 499 }));
+  assert.throws(() => assertRecordwatchLifetimePrice({ ...lifetimePrice, type: "recurring", recurring: { interval: "year" } }));
+});
+
+test("Paid lifetime checkout must match owner, saved case, price, mode and paid Stripe intent", () => {
+  assert.equal(paidRecordwatchLifetimeCheckout(lifetimeCheckout,owner,savedCaseId,lifetimePriceId),true);
+  for(const changed of [
+    {status:"open"}, {payment_status:"unpaid"}, {mode:"subscription"}, {amount_total:499},
+    {currency:"eur"}, {payment_intent:null}, {client_reference_id:"attacker"},
+    {metadata:{...lifetimeCheckout.metadata,saved_case_id:"attacker"}}
+  ]) assert.equal(paidRecordwatchLifetimeCheckout({...lifetimeCheckout,...changed},owner,savedCaseId,lifetimePriceId),false);
+  assert.equal(paidRecordwatchLifetimeCheckout(lifetimeCheckout,owner,"random-case",lifetimePriceId),false);
+  assert.equal(paidRecordwatchLifetimeCheckout(lifetimeCheckout,owner,savedCaseId,"price_other"),false);
+});
+
+test("Lifetime access never expires, but is revoked on refund, dispute, or different case", () => {
+  const row = {
+    saved_case_id:savedCaseId,plan:"lifetime_case",status:"active",
+    stripe_checkout_session_id:lifetimeCheckout.id,
+    stripe_payment_intent_id:lifetimeCheckout.payment_intent,
+    amount_cents:3900,currency:"usd",revoked_at:null
+  };
+  assert.equal(lifetimeCaseEntitled(row,savedCaseId),true);
+  assert.equal(lifetimeCaseEntitled({...row,status:"refunded"},savedCaseId),false);
+  assert.equal(lifetimeCaseEntitled({...row,status:"disputed",revoked_at:new Date().toISOString()},savedCaseId),false);
+  assert.equal(lifetimeCaseEntitled({...row,stripe_payment_intent_id:"forged"},savedCaseId),false);
+  assert.equal(lifetimeCaseEntitled(row,owner),false);
+});
+
+test("Only verified lifetime case purchases can be persisted; packet checkout cannot sell retired add-on", () => {
+  const server=read("server.js");
+  const migration=read("supabase/migrations/20261108020000_recordwatch_lifetime_cases.sql");
+  const packet=read("packet.html");
+  const dashboard=read("recordwatch-dashboard.html");
+  assert.ok(server.includes('mode:"payment",ui_mode:"hosted"'));
+  assert.ok(server.includes("paidRecordwatchLifetimeCheckout"));
+  assert.ok(server.includes("getSavedCaseReviewFacts(userId,caseId)"));
+  assert.ok(server.includes('app.post("/api/recordwatch/stripe-webhook"'));
+  assert.ok(server.includes('"charge.refunded","charge.dispute.created"'));
+  assert.ok(server.includes('recordwatch_lifetime_cases'));
+  assert.ok(server.includes('if(!await recordwatchBillingMigrationVerified())'));
+  assert.ok(migration.includes("revoke all on public.recordwatch_lifetime_cases from public, anon, authenticated"));
+  assert.ok(migration.includes("on public.recordwatch_lifetime_cases for select to authenticated"));
+  assert.ok(!packet.includes('recordwatchAddon'));
+  assert.ok(!dashboard.includes('Subscribe — $4.99/month'));
+  assert.ok(dashboard.includes('Unlock this case — $39 once'));
 });
