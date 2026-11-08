@@ -126,3 +126,66 @@ test("RecordWatch enrollment requires an authenticated account and preserves pen
   const register=enrollment.indexOf('RecordWatchNotifications.registerSubscription({');
   assert.ok(savePending>=0 && authGuard>savePending && register>authGuard);
 });
+
+test("Late OAuth and recovery events synchronize the shared user session", async () => {
+  let onAuthChange;
+  const events = [];
+  const supabase = {
+    auth: {
+      getSession: async () => ({ data: { session: null } }),
+      onAuthStateChange(handler) {
+        onAuthChange = handler;
+        return { data: { subscription: { unsubscribe() {} } } };
+      }
+    },
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                maybeSingle: async () => ({ data: null, error: null })
+              };
+            }
+          };
+        }
+      };
+    }
+  };
+  const window = {
+    location: fakeLocation("/login.html"),
+    RecordPathSupabase: { getClient: async () => supabase }
+  };
+  const context = {
+    window, localStorage: memoryStorage(), sessionStorage: memoryStorage(),
+    document: { dispatchEvent(event) { events.push(event); } },
+    CustomEvent: class { constructor(name, options) { this.type = name; this.detail = options?.detail; } },
+    console: { warn() {} }, Date, URL, URLSearchParams, setTimeout, clearTimeout
+  };
+  runInNewContext(storeScript, context);
+  const store = window.RecordPathUserStore;
+  await store.ready;
+  assert.equal(typeof onAuthChange, "function");
+  assert.equal(store.isLoggedIn(), false);
+  const user = { id: "oauth-user", email: "person@example.invalid", user_metadata: {} };
+  const session = { user, access_token: "mock-token" };
+  onAuthChange("SIGNED_IN", session);
+  assert.equal(store.isLoggedIn(), true);
+  assert.equal(store.getCurrentSession(), session);
+  assert.equal(store.getCurrentUser().email, user.email);
+  onAuthChange("PASSWORD_RECOVERY", session);
+  assert.equal(store.passwordRecoveryActive, true);
+  onAuthChange("SIGNED_OUT", null);
+  assert.equal(store.passwordRecoveryActive, false);
+  assert.equal(store.getCurrentUser(), null);
+  assert.equal(store.getCurrentSession(), null);
+  assert.ok(events.some(event => event.type === "recordpath:auth-change" && event.detail.event === "SIGNED_IN"));
+  assert.ok(events.some(event => event.type === "recordpath:auth-change" && event.detail.event === "PASSWORD_RECOVERY"));
+});
+
+test("Login reacts to recovery callbacks and live account-state events", () => {
+  assert.match(login, /recordpath:auth-change/);
+  assert.match(login, /detail\\.event === "PASSWORD_RECOVERY"/);
+  assert.match(login, /showPasswordRecovery\\(\\)/);
+  assert.match(login, /store\\.passwordRecoveryActive/);
+});
