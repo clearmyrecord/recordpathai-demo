@@ -1284,10 +1284,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       function getPacketGenerationState(packetEligibility) {
+        // A previously paid and Stripe-verified customer must retain access
+        // to the approved signed PDF even if a fresh advisory screen changes.
+        if (verifiedPacketSessionId) return "eligiblePaid";
+        if (isPacketPaymentBypassEnabled()) return "devBypass";
         const checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
         if (!checkoutEligibility.canCheckout) return "notEligible";
-        if (isPacketPaymentBypassEnabled()) return "devBypass";
-        if (isPacketPaymentComplete()) return "eligiblePaid";
         return "eligibleUnpaid";
       }
 
