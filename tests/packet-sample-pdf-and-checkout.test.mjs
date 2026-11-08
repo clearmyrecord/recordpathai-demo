@@ -16,8 +16,11 @@ test("packet embedded JavaScript compiles, including checkout and preview click 
   }
 });
 
-test("sample PDF check downloads a clearly non-filing PDF with synthetic values only", () => {
+test("sample PDF check downloads watermarked synthetic fields and user-drawn signature only", () => {
   assert.match(html, /id="downloadSamplePdfBtn"/);
+  assert.match(html, /Test Signed PDF/);
+  assert.match(html, /id="packetEstimatedTotal"/);
+  assert.match(html, /renderPacketFeeQuote\(raw\)/);
   assert.match(html, /addEventListener\("click", downloadSamplePdf\)/);
   const section = html.split("async function downloadSamplePdf()")[1]?.split("async function testPdfAccess()")[0];
   assert.ok(section, "Sample preview should be its own action");
@@ -29,7 +32,11 @@ test("sample PDF check downloads a clearly non-filing PDF with synthetic values 
   assert.match(section, /NOT FOR FILING/);
   assert.match(section, /sample@example\.invalid/);
   assert.doesNotMatch(section, /readPacketData\(/);
-  assert.doesNotMatch(section, /signatureImageBytes/);
+  assert.match(section, /embedPng\(signatureImageBytes\)/);
+  assert.match(section, /signatureMappings\+\+/);
+  assert.match(section, /page\.drawImage\(signature/);
+  assert.match(section, /hasUsableDrawnSignature\(\)/);
+  assert.match(section, /The court PDF template is missing a mapped signature field/);
   assert.doesNotMatch(section, /startCheckout\(/);
   assert.doesNotMatch(section, /isPacketPaymentComplete\(/);
 });
@@ -43,6 +50,9 @@ test("actual packet payment still requires checkout verification", () => {
   assert.match(server, /assertFixedPacketAmount\(amount, currency\)/);
   assert.match(server, /const checkoutUser = await requireApiUser\(req, res\)/);
   assert.match(server, /client_reference_id: internalOrderId/);
+  assert.match(server, /quotePacketPricing\(/);
+  assert.match(server, /if \(isOhio\)/);
+  assert.match(server, /Court filing deposit/);
 });
 
 test("sample generator uses a reviewed active template and existing mapped PDF", () => {
