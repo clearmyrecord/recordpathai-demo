@@ -47,6 +47,25 @@ jobs:
                   print("PRODUCTION_PUBLIC_BETA_PAGE=" + ("present" if response.status==200 and "PUBLIC BETA" in html else "not_verified"))
           except Exception as e:
               print("PRODUCTION_PUBLIC_BETA_PAGE=not_verified",type(e).__name__)
+          # A present Supabase URL/key is not enough: an absent DNS record
+          # produces "Failed to fetch" and breaks both email and Google sign-in.
+          # Read only the public URL; never log the public key or any user data.
+          try:
+              import json,socket,urllib.parse
+              req=urllib.request.Request(root+"/api/config/supabase",headers={"User-Agent":"RecordPathAI-auth-dns-check/1.0"})
+              with urllib.request.urlopen(req,timeout=12) as response:
+                  config=json.load(response)
+              hostname=urllib.parse.urlsplit(config.get("url") or "").hostname
+              if not hostname:
+                  print("PRODUCTION_SUPABASE_DNS=missing_config")
+              else:
+                  try:
+                      socket.getaddrinfo(hostname,443,type=socket.SOCK_STREAM)
+                      print("PRODUCTION_SUPABASE_DNS=resolved")
+                  except socket.gaierror:
+                      print("PRODUCTION_SUPABASE_DNS=unresolved")
+          except Exception as e:
+              print("PRODUCTION_SUPABASE_DNS_CHECK_UNAVAILABLE",type(e).__name__)
           # Probe only anonymous status codes; never print API response bodies or account data.
           for url,method in [
               ("/api/config/supabase","GET"),
