@@ -138,7 +138,7 @@
     // entered by the user. Stripe renewal dates are full ISO timestamps.
     // Appending T00:00:00 to an ISO timestamp produces an invalid date.
     var raw = String(dateString).trim();
-    var date = new Date(/^\\d{4}-\\d{2}-\\d{2}$/.test(raw) ? raw + "T00:00:00" : raw);
+    var date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw + "T00:00:00" : raw);
     if (Number.isNaN(date.getTime())) return "Not available";
     return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
   }
