@@ -1046,6 +1046,10 @@
             <div class="button-stack">
               <div id="checkoutError" class="callout danger" style="display:none; margin-bottom:12px;" role="alert" aria-live="polite"></div>
               <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
+              <div class="sample-pdf-tools" style="margin-top:12px; padding:16px; border:1px solid #d2def3; border-radius:14px; background:#f7faff;">
+                <button type="button" class="sig-small-btn" id="downloadSamplePdfBtn">Test PDF — Download Sample (No Payment)</button>
+                <p style="margin:9px 0 0; color:#526780; font-size:13px; line-height:1.5;">Uses a reviewed form template, sample-only information and a permanent TEST / NOT FOR FILING watermark. No personal or case information, signature, charge, or payment is used.</p>
+              </div>
               <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
                 <button type="button" class="debug-pdf-link" id="testPdfBtn">Test PDF Access</button>
                 <button type="button" class="debug-pdf-link" id="openSourceBtn">Open Source PDF</button>
@@ -2508,6 +2512,108 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
       }
 
+
+      // Operator/customer PDF rendering smoke test. Never uses saved user or court data.
+      // This is entirely independent of eligibility, Stripe, signatures and filing.
+      async function downloadSamplePdf() {
+        const button = document.getElementById("downloadSamplePdfBtn");
+        if (button) button.disabled = true;
+        setCheckoutError("");
+        try {
+          setStatus("Loading the reviewed PDF template and mapping for a sample test...");
+          if (!window.PDFLib) throw new Error("The PDF renderer did not load. Refresh and retry.");
+          const registry = await loadTemplateRegistry();
+          const selected = registry.find(function (entry) {
+            return entry && entry.status === "active" && entry.pdfPath && entry.mappingPath;
+          });
+          if (!selected) throw new Error("No reviewed active PDF template is available for the sample test.");
+
+          const mapping = await loadTemplateMapping(selected);
+          const fields = normalizeFields(mapping);
+          if (!fields.length) throw new Error("The active PDF template does not have mapped fields.");
+          const sourceBytes = await loadTemplatePdf(selected);
+          const { PDFDocument, StandardFonts, rgb, degrees } = window.PDFLib;
+          const pdfDoc = await PDFDocument.load(sourceBytes);
+          const pages = pdfDoc.getPages();
+          if (!pages.length) throw new Error("The sample PDF template has no pages.");
+          const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+          const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+          // The same coordinates, page indexes and mapped field types as packet production.
+          // Only synthetic values are ever written. Signature fields stay blank.
+          const sampleValues = {
+            "petitioner.full_name": "SAMPLE APPLICANT",
+            "petitioner.address.line1": "123 Example Street",
+            "petitioner.address.line2": "Suite TEST",
+            "petitioner.address.city": "Test City",
+            "petitioner.address.state": "OH",
+            "petitioner.address.zip": "00000",
+            "petitioner.email": "sample@example.invalid",
+            "petitioner.phone": "000-000-0000",
+            "court.case_number": "TEST-ONLY",
+            "court.judge_name": "SAMPLE",
+            "charges.0.charge_name": "SAMPLE CHARGE",
+            "charges.0.charge_code": "TEST",
+            "charges.0.level": "TEST",
+            "charges.0.disposition_date": "01/01/2020",
+            "charges.0.discharge_date": "01/01/2021",
+            "generated.current_date": "01/01/2020"
+          };
+          let mapped = 0;
+          fields.forEach(function (field) {
+            const page = pages[Number(field.page || 1) - 1];
+            if (!page || field.type === "signature") return;
+            const path = fieldPath(field);
+            if (!Object.prototype.hasOwnProperty.call(sampleValues, path)) return;
+            const srcW = Number(mapping.pageWidth || 768);
+            const srcH = Number(mapping.pageHeight || 994);
+            const sx = page.getWidth() / srcW, sy = page.getHeight() / srcH;
+            const x = Number(field.x || 0) * sx;
+            const height = Number(field.height || 18) * sy;
+            const y = page.getHeight() - Number(field.y || 0) * sy - height + 3;
+            const width = Math.max(20, Number(field.width || 180) * sx);
+            const value = String(sampleValues[path]);
+            let size = Math.min(10, Math.max(7, height - 2));
+            while (font.widthOfTextAtSize(value, size) > width && size > 6) size -= .5;
+            page.drawText(value, { x, y, size, font, color: rgb(.18,.27,.39) });
+            mapped++;
+          });
+          if (!mapped) throw new Error("The active PDF mapping did not match the synthetic test fields.");
+
+          pages.forEach(function (page) {
+            const w = page.getWidth(), h = page.getHeight();
+            const sampleLabel = "TEST SAMPLE - NOT FOR FILING";
+            const size = Math.min(36, Math.max(19, w / 22));
+            page.drawText(sampleLabel, {
+              x: Math.max(24, w * .07), y: h * .43,
+              size, font: boldFont, rotate: degrees(32),
+              color: rgb(.70,.11,.14), opacity:.28
+            });
+            page.drawText("TEST FILE - NOT FOR FILING - NO REAL CUSTOMER DATA", {
+              x: 22, y: 14, size: Math.min(9, w / 70),
+              font: boldFont, color: rgb(.70,.11,.14)
+            });
+          });
+          const bytes = await pdfDoc.save();
+          const blob = new Blob([bytes], { type: "application/pdf" });
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = "recordpathai-sample-packet-NOT-FOR-FILING.pdf";
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 2500);
+          setStatus("Sample PDF created: " + pages.length + " pages and " + mapped + " mapped sample fields. Open the download to inspect it. No payment was made.");
+        } catch (error) {
+          const message = "Sample PDF test failed: " + (error?.message || "Unable to render the reviewed PDF template.");
+          setCheckoutError(message);
+          setStatus(message, "error");
+        } finally {
+          if (button) button.disabled = false;
+        }
+      }
+
       async function testPdfAccess() {
         try {
           setStatus("Testing template and PDF access...");
@@ -2897,7 +3003,11 @@ document.addEventListener("DOMContentLoaded", async function () {
           generateBtn.classList.toggle("packet-btn-primary", state !== "notEligible");
 
           if (state === "eligibleUnpaid") {
-            generateBtn.textContent = "Pay $50 & Generate Packet";
+            const rawForReadiness = readPacketData();
+            const readinessState = normalizeState(rawForReadiness?.court?.state || "");
+            generateBtn.textContent = readinessState === "OH"
+              ? "Review Packet Readiness"
+              : "Pay $50 & Generate Packet";
           } else if (state === "eligiblePaid") {
             generateBtn.textContent = "Generate PDF Packet";
           } else if (state === "devBypass") {
@@ -2918,7 +3028,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         } else if (state === "eligibleUnpaid") {
           const checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
           paymentCallout.className = "callout warning";
-          paymentCallout.textContent = checkoutEligibility.warning || "Eligible now — continue to secure checkout to unlock PDF packet generation.";
+          const rawForReadiness = readPacketData();
+          const readinessState = normalizeState(rawForReadiness?.court?.state || "");
+          paymentCallout.textContent = readinessState === "OH"
+            ? "Your screening estimate is not a verified filing approval. Ohio packet checkout is under review until official court requirements are confirmed. Select Review Packet Readiness to see the blocker, or download a free sample PDF below to test the renderer."
+            : checkoutEligibility.warning || "Based on the information entered, you may qualify. Select Pay to verify requirements and continue to secure checkout.";
         } else if (packetEligibility?.isNotYetEligible) {
           paymentCallout.className = "callout danger";
           paymentCallout.innerHTML = `You are not yet eligible based on this screening. Estimated eligible date: <strong>${escapeHtml(formatDateForDisplay(packetEligibility.estimatedEligibleDate))}</strong>.`;
@@ -3418,7 +3532,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             console.log("[packet checkout] create-checkout-session response", {
               status: response.status,
               ok: response.ok,
-              body: responseText.slice(0, 1000)
+              errorCode: typeof data?.code === "string" ? data.code : undefined
             });
             if (responseText) {
               try {
@@ -3433,7 +3547,16 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
 
           if (!response.ok) {
-            throw new Error("Secure checkout could not be opened. Please try again.");
+            const errorType = response.status === 401
+              ? "Your sign-in session expired. Please sign in again and retry."
+              : response.status === 503
+                ? "Stripe checkout is not configured or temporarily unavailable."
+                : response.status === 404 || response.status === 405
+                  ? "Checkout service not found at this site address. Contact support."
+                  : (response.status === 400 && typeof data?.error === "string" && data.error.length < 200)
+                    ? data.error
+                    : "Secure checkout could not be opened (HTTP " + response.status + "). Please try again.";
+            throw new Error(errorType);
           }
 
           if (!data?.url) {
@@ -3470,6 +3593,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         RecordWatchBridge.syncExistingRecordPathData();
       }
 
+      document.getElementById("downloadSamplePdfBtn")?.addEventListener("click", downloadSamplePdf);
       document.getElementById("testPdfBtn")?.addEventListener("click", testPdfAccess);
       const generateBtn = document.getElementById("generateSealingBtn");
       if (generateBtn) generateBtn.addEventListener("click", startCheckout);
