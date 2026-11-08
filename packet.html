@@ -939,7 +939,7 @@
                 <div class="recordwatch-panel-item"><strong>Missing requirements</strong><span id="rwMissingRequirements">Case details</span></div>
                 <div class="recordwatch-panel-item"><strong>Next action</strong><span id="rwNextAction">Review packet details.</span></div>
               </div>
-              <label class="toggle-row"><input id="recordwatchAddon" type="checkbox" /> <span>Add Premium RecordWatch for 12 months — $19</span></label><p class="meta-note">Optional SMS and reminder monitoring add-on. This does not block the $50 packet generation purchase.</p><a href="recordwatch-dashboard.html">Open full RecordWatch dashboard</a>
+              <p class="meta-note"><strong>RecordWatch Premium:</strong> $39 once for lifetime tracking of this saved case, purchased separately. No subscription or automatic renewal. Packet preparation remains $50 plus applicable court filing fees.</p><a href="recordwatch-dashboard.html">View RecordWatch Premium →</a>
             </aside>
           </section>
 
@@ -3491,16 +3491,6 @@ document.addEventListener("DOMContentLoaded", async function () {
           packetStatus: isPacketPaymentComplete() ? "paid" : "Packet reviewed",
           paymentStatus: isPacketPaymentComplete() ? "paid" : "unpaid"
         });
-        const wantsRecordWatchAddon = Boolean(document.getElementById("recordwatchAddon") && document.getElementById("recordwatchAddon").checked);
-        if (wantsRecordWatchAddon) {
-          localStorage.setItem("recordpathai_pending_recordwatch_enrollment", JSON.stringify({
-            plan: "premium_packet_addon",
-            status: "pending_checkout",
-            caseId: checkoutCase.case_id || checkoutCase.saved_case_id || checkoutCase.caseNumber,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }));
-        }
         if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) await RecordPathUserStore.saveCurrentCaseDraft(draftPayload, { network: true }).catch(function (error) { console.warn("Packet case draft save skipped:", error); });
         const isAuthenticated = Boolean(window.RecordPathUserStore && RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn());
         if (!isAuthenticated) {
@@ -3715,8 +3705,7 @@ document.addEventListener("DOMContentLoaded", async function () {
               manualReview: packetEligibility.needsReview || checkoutEligibility.kind === "review_allowed" || Boolean(normalizedData?.eligibility?.manualReview)
             },
             amount: 5000,
-            currency: "usd",
-            recordwatchAddon: Boolean(document.getElementById("recordwatchAddon") && document.getElementById("recordwatchAddon").checked)
+            currency: "usd"
           };
 
           const checkoutEndpoint = getCheckoutEndpoint();
