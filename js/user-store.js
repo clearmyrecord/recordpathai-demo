@@ -58,8 +58,11 @@
   }
 
   function authRedirectUrl() {
+    // Exact, stable callback URL. OAuth providers and Supabase redirect
+    // allowlists often reject variable query-string callback URLs.
+    // The intended RecordWatch destination stays in localStorage instead.
     const basePath = window.location.pathname.replace(/[^/]*$/, "");
-    return `${window.location.origin}${basePath}login.html?returnUrl=${encodeURIComponent(getReturnUrl("dashboard.html"))}`;
+    return `${window.location.origin}${basePath}login.html`;
   }
 
   function sanitizeReturnUrl(value, defaultUrl) {
@@ -279,6 +282,8 @@
   }
 
   async function signup({ fullName, email, phone, password }) {
+    const target = getReturnUrl("dashboard.html");
+    if (target) localStorage.setItem(RETURN_KEY, target);
     const normalizedEmail = normalizeEmail(email);
     if (!fullName || !String(fullName).trim()) throw new Error("Full name is required.");
     if (!normalizedEmail) throw new Error("Email is required.");
