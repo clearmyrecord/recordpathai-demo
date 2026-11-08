@@ -69,3 +69,23 @@ before update on public.packet_fulfillment_jobs for each row execute function pu
 alter table public.packet_fulfillment_jobs enable row level security;
 revoke all on public.packet_fulfillment_jobs from anon, authenticated;
 grant all on public.packet_fulfillment_jobs to service_role;
+
+
+-- Private applicant PDF review copies. Owner can request upload through the
+-- authenticated application endpoint only; no browser RLS policy is granted.
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+values ('packet-documents','packet-documents',false,8388608,array['application/pdf'])
+on conflict (id) do update
+set public=false,file_size_limit=8388608,allowed_mime_types=array['application/pdf'];
+
+create table if not exists public.packet_drafts (
+  case_id uuid primary key references public.saved_cases(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  case_snapshot_sha256 text not null check(case_snapshot_sha256 ~ '^[a-f0-9]{64}$'),
+  signed_pdf_sha256 text not null check(signed_pdf_sha256 ~ '^[a-f0-9]{64}$'),
+  signed_pdf_private_path text not null unique,
+  created_at timestamptz not null default now()
+);
+alter table public.packet_drafts enable row level security;
+revoke all on public.packet_drafts from anon,authenticated;
+grant all on public.packet_drafts to service_role;
