@@ -45,7 +45,6 @@
           <nav class="nav" id="primary-navigation" aria-label="Primary navigation">
             <a href="index.html" class="active" aria-current="page" data-i18n="nav.home">Home</a>
             <a href="how-it-works.html" data-i18n="nav.how">How It Works</a>
-            <a href="self-search.html" data-i18n="nav.courtFinder">Court Finder</a>
             <a href="recordwatch-dashboard.html" data-i18n="nav.recordWatch">RecordWatch</a>
             <a href="eligibility.html" class="nav-cta" data-i18n="nav.checkEligibility">Start Free Eligibility Check</a>
           </nav>
@@ -59,32 +58,25 @@
       <div class="container home-hero-shell">
         <div class="home-hero-copy">
           <span class="home-eyebrow">Guided record relief · Private intake</span>
-          <h1>Understand your record.<br><em>Know your options.</em></h1>
-          <p class="home-lead">RecordPathAI helps you organize your information, find the official court record, and explore whether sealing or expungement may be available under your case state's rules.</p>
+          <h1>Find out if your record<br><em>may qualify for relief.</em></h1>
+          <p class="home-lead">Complete our guided three-step process to organize your case, review potential sealing or expungement eligibility, and prepare an optional filing packet.</p>
           <div class="home-actions">
             <a class="home-btn" href="eligibility.html">Start Free Eligibility Check →</a>
             <a class="home-btn home-btn-quiet" href="how-it-works.html">How It Works</a>
           </div>
-          <p class="home-note">Start with your contact information. Add court and case details in the next step. You can save your progress and continue in the workflow.</p>
+          <p class="home-note">Three steps. Your information carries forward, and your browser saves your progress as you go.</p>
         </div>
-        <div class="home-finder-card" id="search">
-          <div class="home-finder-heading">
-            <span class="home-finder-icon" aria-hidden="true">⌕</span>
-            <h2>Find your court</h2>
-          </div>
-          <p>Not sure where to get your case details? Start with an official court portal. Choose the state where your case was filed.</p>
-          <form id="searchForm">
-            <label for="state">State where your case was filed</label>
-            <select id="state" name="state" required>
-              <option value="">Choose a state</option>
-              <option value="OH">Ohio</option>
-              <option value="NV">Nevada</option>
-              <option value="FL">Florida</option>
-            </select>
-            <button class="home-btn" type="submit">Find Official Court Portals →</button>
-          </form>
-          <p class="finder-privacy">This tool links to official sources; it does not search for individual records or collect your name. <a href="self-search.html">Select a county or court instead.</a></p>
-        </div>
+        <aside class="home-conversion-card" aria-labelledby="conversion-title">
+          <span class="home-eyebrow">Your three-step eligibility journey</span>
+          <h2 id="conversion-title">Finish all three steps</h2>
+          <ol class="home-conversion-list">
+            <li><span class="home-conversion-number">1</span><span><strong>Personal information</strong><small>Enter your identity and contact details once.</small></span></li>
+            <li><span class="home-conversion-number">2</span><span><strong>Case details</strong><small>Add court, charge, disposition, and sentence-completion information.</small></span></li>
+            <li><span class="home-conversion-number">3</span><span><strong>Eligibility &amp; packet</strong><small>Review your screening and choose whether to purchase packet preparation.</small></span></li>
+          </ol>
+          <a class="home-btn" href="eligibility.html">Begin Step 1 — Free →</a>
+          <p class="home-conversion-price">No charge to start. Optional <strong>$50 packet and tracked mailing</strong> where available. Court fees are separate.</p>
+        </aside>
       </div>
     </section>
 
@@ -92,29 +84,30 @@
       <div class="container">
         <div class="home-section-head">
           <span class="home-eyebrow">A simple process</span>
-          <h2>One workflow. From intake to next steps.</h2>
-          <p>Follow the same sequence as our eligibility application—no separate website experience to learn.</p>
+          <h2>Three steps to eligibility and packet preparation.</h2>
+          <p>Start free, enter your information once, and review the result before choosing a paid packet service.</p>
         </div>
         <div class="home-grid">
           <article class="home-feature">
             <span class="home-step-number">STEP 01</span>
-            <h3>Start your intake</h3>
+            <h3>Personal information</h3>
             <p>Enter identity, contact, and mailing information once. Your saved details move with you as you continue.</p>
-            <a href="eligibility.html">Start free →</a>
+            <span class="home-step-caption">Free • Step 1</span>
           </article>
           <article class="home-feature">
             <span class="home-step-number">STEP 02</span>
-            <h3>Add case details</h3>
+            <h3>Court &amp; case details</h3>
             <p>Use court and docket information to document charges, dispositions, and sentence-completion dates.</p>
-            <a href="record-details.html">View record details →</a>
+            <span class="home-step-caption">Free • Step 2</span>
           </article>
           <article class="home-feature">
             <span class="home-step-number">STEP 03</span>
-            <h3>Understand your next step</h3>
-            <p>Review possible eligibility, monitor milestones, and explore filing packet preparation where supported.</p>
-            <a href="recordwatch-dashboard.html">Explore RecordWatch →</a>
+            <h3>Eligibility &amp; packet</h3>
+            <p>Review potential eligibility. Choose a $50 packet and tracked mailing where available; court fees are separate.</p>
+            <span class="home-step-caption">Step 3 • Optional purchase</span>
           </article>
         </div>
+        <div class="home-process-action"><a class="home-btn" href="eligibility.html">Start Step 1 — Free →</a></div>
       </div>
     </section>
 
@@ -125,6 +118,11 @@
           <h2>Find the information you need.</h2>
         </div>
         <div class="home-two-grid">
+          <article class="home-section-card" id="search">
+            <h3>Need your court record?</h3>
+            <p>Use the official Court Finder to locate your docket before entering case details in Step 2.</p>
+            <a class="home-text-link" href="self-search.html">Find my court →</a>
+          </article>
           <article class="home-section-card">
             <h3>Track eligibility with RecordWatch</h3>
             <p>Keep your saved information together and see what is still needed to assess your record-relief timeline.</p>
@@ -158,8 +156,8 @@
       <div class="container">
         <div class="home-bottom-card">
           <div>
-            <h2>Your next step starts here.</h2>
-            <p>Eligibility intake is free. Optional packet services, when available, have separate pricing; court fees vary by jurisdiction. RecordPathAI is not a court or law firm and does not guarantee eligibility or filing outcomes.</p>
+            <h2>Ready to check your eligibility?</h2>
+            <p>Start the three-step process for free. The optional packet and tracked mailing service is $50 where available, with applicable court fees separate. Eligibility and filing outcomes are not guaranteed.</p>
           </div>
           <a class="home-btn" href="eligibility.html">Start Free Eligibility Check →</a>
         </div>
