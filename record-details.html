@@ -1131,7 +1131,7 @@
         const petitioner = RecordPathDataBridge.loadPacketData().petitioner || {};
         const address = petitioner.address || {};
         const fullName = petitioner.full_name || localStorage.getItem("fullName") || "";
-        const parts = fullName.trim().split(/\\s+/).filter(Boolean);
+        const parts = fullName.trim().split(/\s+/).filter(Boolean);
         return {
           firstName: petitioner.first_name || parts[0] || "",
           lastName: petitioner.last_name || parts.slice(1).join(" "),
