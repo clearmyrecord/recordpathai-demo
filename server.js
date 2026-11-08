@@ -938,18 +938,40 @@ async function createRecordwatchNotification(subscription, type, context = {}) {
   let preferences = Object.assign(getMemoryPreferences(subscription.user_id), context.preferences || {});
   const remotePreferences = await fetchRecordwatchRows("user_notification_preferences", subscription.user_id);
   if (remotePreferences && remotePreferences[0]) preferences = Object.assign(preferences, remotePreferences[0]);
+  // Notification delivery must read the server-verified entitlement for
+  // this specific case, not the free subscription's client-writable flags.
+  let authorizedPremium=false, casePremiumPreferences=null;
+  if(packetDatabaseReady() && isUuid(subscription.user_id) && isUuid(subscription.case_id)){
+    try{
+      const [lifetime, existingSubscription, casePrefs]=await Promise.all([
+        getRecordwatchLifetimeCase(subscription.user_id,subscription.case_id),
+        getActiveRecordwatchSubscription(subscription.user_id),
+        getRecordwatchPreferences(subscription.user_id,subscription.case_id)
+      ]);
+      authorizedPremium=lifetimeCaseEntitled(lifetime,subscription.case_id) || Boolean(existingSubscription);
+      casePremiumPreferences=casePrefs;
+    }catch(error){
+      console.warn("RecordWatch paid notification verification unavailable",error?.name||"unknown");
+    }
+  }
+  const caseSmsOptIn=Boolean(authorizedPremium && casePremiumPreferences?.sms_enabled === true &&
+    casePremiumPreferences?.sms_consent_at && !casePremiumPreferences?.sms_opted_out_at);
+  const paidCaseSubscription={...subscription,premium_active:authorizedPremium,
+    notify_sms:caseSmsOptIn,
+    notification_phone:caseSmsOptIn ? casePremiumPreferences.phone_number : null};
+  if(casePremiumPreferences)preferences.eligibility_sms=caseSmsOptIn;
   const subject = recordwatchSubject(type, context);
   const message = recordwatchMessage(type, context);
   const channels = [];
-  if (subscription.notify_email !== false && subscription.notification_email) channels.push("email");
-  if (subscription.notify_sms && subscription.notification_phone) channels.push("sms");
+  if (paidCaseSubscription.notify_email !== false && paidCaseSubscription.notification_email) channels.push("email");
+  if (paidCaseSubscription.notify_sms && paidCaseSubscription.notification_phone) channels.push("sms");
   if (!channels.length) channels.push("in_app");
 
-  const eligibleChannels = channels.filter((channel) => shouldSendChannel({ channel, type, subscription, preferences, adminOverride: context.admin_override === true }));
+  const eligibleChannels = channels.filter((channel) => shouldSendChannel({ channel, type, subscription:paidCaseSubscription, preferences, adminOverride: context.admin_override === true }));
   if (!eligibleChannels.length) eligibleChannels.push("in_app");
   const sent = [];
   for (const channel of eligibleChannels) {
-    const blockedAlert = channels.length > 0 && channel === "in_app" && type.startsWith("court_status_") && !subscription.premium_active && context.admin_override !== true;
+    const blockedAlert = channels.length > 0 && channel === "in_app" && type.startsWith("court_status_") && !paidCaseSubscription.premium_active && context.admin_override !== true;
     const row = {
       id: recordwatchId("rwn"),
       user_id: subscription.user_id,
@@ -964,8 +986,8 @@ async function createRecordwatchNotification(subscription, type, context = {}) {
       notification_date: context.notification_date || recordwatchDateOnly(new Date())
     };
     try {
-      if (!blockedAlert && channel === "email") row.status = (await sendRecordwatchEmail(subscription.notification_email, subject, message)).status;
-      if (!blockedAlert && channel === "sms") row.status = (await sendRecordwatchSms(subscription.notification_phone, row.message)).status;
+      if (!blockedAlert && channel === "email") row.status = (await sendRecordwatchEmail(paidCaseSubscription.notification_email, subject, message)).status;
+      if (!blockedAlert && channel === "sms") row.status = (await sendRecordwatchSms(paidCaseSubscription.notification_phone, row.message)).status;
       if (!blockedAlert && channel === "in_app") row.status = "logged";
     } catch (error) {
       row.status = "failed";
