@@ -6,6 +6,7 @@ import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect
 import { quotePacketPricing } from "./src/packet-pricing.js";
 import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
 import { timingSafeEqual, createHash } from "node:crypto";
+import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
 
@@ -26,6 +27,42 @@ app.use(cors({
 
 // Private applicant PDF submission; store only to the server's non-public
 // Supabase Storage bucket. This does not collect payment, file, or mail.
+// Stripe requires the original raw body for signature verification.
+// Payment completion creates a persistent paid-but-NOT-mailed job only.
+app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb"}),async(req,res)=>{
+  const secret=process.env.STRIPE_WEBHOOK_SECRET||"";
+  if(!stripe||!secret||!packetDatabaseReady())
+    return res.status(503).json({ok:false,error:"Verified Stripe webhook persistence unavailable."});
+  let event;
+  try{
+    event=stripe.webhooks.constructEvent(req.body,req.get("stripe-signature"),secret);
+  }catch{return res.status(400).json({ok:false,error:"Invalid Stripe signature."});}
+  if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
+    return res.json({received:true});
+  const session=event.data?.object;
+  const owner=session?.metadata?.userId,caseId=session?.metadata?.saved_case_id;
+  if(!validCaseId(owner)||!validCaseId(caseId)||
+     !verifiedPacketSession(session,owner,caseId))
+    return res.status(400).json({ok:false,error:"Session is not a verified paid court packet."});
+  const fee=Number(session.metadata.courtFeeCents||0);
+  const method=session.metadata.fulfillmentMode||"";
+  if(!Number.isSafeInteger(fee)||fee<0||
+     !["lob_check","court_online","no_fee"].includes(method))
+    return res.status(400).json({ok:false,error:"Court-fee settlement metadata missing."});
+  try{
+    await supabaseRest("packet_fulfillment_jobs",{
+      method:"POST",query:"?on_conflict=stripe_session_id",
+      prefer:"resolution=ignore-duplicates,return=representation",
+      body:{user_id:owner,case_id:caseId,stripe_session_id:session.id,
+        status:"paid_hold",court_fee_cents:fee,payment_method:method}
+    });
+    return res.json({received:true,status:"paid_hold"});
+  }catch(error){
+    console.warn("Stripe webhook store unavailable",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Payment recorded by Stripe, fulfillment queue unavailable. Retry requested."});
+  }
+});
+
 app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:"8mb"}),async(req,res)=>{
   const user=await requireApiUser(req,res);
   if(!user)return;
@@ -38,6 +75,15 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
      !bytes.subarray(Math.max(0,bytes.length-2048)).toString("latin1").includes("%%EOF"))
     return res.status(400).json({ok:false,error:"A valid PDF under 8 MB is required."});
   try {
+    // Validate PDF structure and page count before accepting the signed review
+    // copy. Lob checks support up to 6 PDF attachment pages.
+    const {getDocument}=await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const parser=getDocument({data:new Uint8Array(bytes),useSystemFonts:true});
+    const document=await parser.promise;
+    const pdfPages=document.numPages;
+    await document.destroy();
+    if(!Number.isInteger(pdfPages)||pdfPages<1||pdfPages>6)
+      return res.status(400).json({ok:false,error:"Signed court PDF must contain 1 to 6 pages for check attachment."});
     const facts=await getSavedCaseReviewFacts(user.id,caseId);
     const sha=createHash("sha256").update(bytes).digest("hex");
     const objectPath="private/packets/"+caseId+"/"+sha+".pdf";
@@ -54,7 +100,7 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
       method:"POST",query:"?on_conflict=case_id",
       prefer:"resolution=merge-duplicates,return=representation",
       body:{case_id:caseId,user_id:user.id,case_snapshot_sha256:snapshot,
-        signed_pdf_sha256:sha,signed_pdf_private_path:objectPath}
+        signed_pdf_sha256:sha,signed_pdf_private_path:objectPath,pdf_pages:pdfPages}
     });
     res.setHeader("Cache-Control","no-store, private");
     return res.json({ok:true,storedFor:"private_review",case_id:caseId,
