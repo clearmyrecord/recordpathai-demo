@@ -310,6 +310,55 @@ app.get("/api/operator/packet/fulfillment-status",async(req,res)=>{
 
 // Explicit operator action only. Webhooks NEVER send mail. Stripe paid session,
 // unchanged case, approved private PDF and verified Lob bank are required.
+
+// Read Lob's actual check status without inventing postal tracking or court
+// acceptance. This is an operator check, not an automatic mail send.
+app.get("/api/operator/packet/lob-check-status",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  const sessionId=safe(req.query.stripe_session_id);
+  if(!/^cs_live_[A-Za-z0-9]+$/.test(sessionId))
+    return res.status(400).json({ok:false,error:"Live paid Stripe session required."});
+  if(!(process.env.LOB_LIVE_API_KEY||"").startsWith("live_"))
+    return res.status(503).json({ok:false,error:"Lob live account is not configured."});
+  try{
+    const rows=await supabaseRest("packet_fulfillment_jobs",{
+      query:"?stripe_session_id=eq."+encodeURIComponent(sessionId)+"&limit=1"
+    });
+    const job=Array.isArray(rows)?rows[0]:null;
+    if(!job||!/^chk_[A-Za-z0-9]+$/.test(job.lob_check_id||""))
+      return res.status(404).json({ok:false,error:"No Lob check has been submitted for this paid order."});
+    const remote=await fetch("https://api.lob.com/v1/checks/"+job.lob_check_id,{
+      headers:{Authorization:"Basic "+Buffer.from(process.env.LOB_LIVE_API_KEY+":").toString("base64")},
+      signal:AbortSignal.timeout(15000)
+    });
+    if(!remote.ok)return res.status(502).json({ok:false,error:"Cannot confirm current Lob check status."});
+    const result=await remote.json();
+    const events=Array.isArray(result.tracking_events)?result.tracking_events:[];
+    const eventNames=events.map(e=>String(e?.type||e?.event_type||e?.name||"").toLowerCase());
+    const delivered=eventNames.some(x=>x.includes("delivered"));
+    const mailed=eventNames.some(x=>x.includes("mailed")||x.includes("in_transit"));
+    const failed=result.status==="failed" || eventNames.some(x=>x.includes("failed")||x.includes("returned_to_sender"));
+    let status=failed?"failed":delivered?"delivered":mailed?"mailed":"processing";
+    if(delivered||failed||mailed){
+      const patch={};
+      if(delivered)patch.status="delivered";
+      if(failed)patch.status="failed";
+      if(mailed&&!job.mailed_at)patch.mailed_at=new Date().toISOString();
+      if(Object.keys(patch).length)await supabaseRest("packet_fulfillment_jobs",{
+        method:"PATCH",query:"?stripe_session_id=eq."+encodeURIComponent(sessionId),body:patch
+      });
+    }
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,lobCheckId:job.lob_check_id,renderStatus:result.status||null,
+      postalStatus:status,hasPostalTrackingNumber:Boolean(result.tracking_number),
+      trackingNumber:result.tracking_number||null,
+      note:"Delivery is not proof of court acceptance or granted record relief."});
+  }catch(error){
+    console.warn("Lob tracking verification unavailable",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Unable to verify the Lob check status."});
+  }
+});
+
 app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
   if(!requireOperationsKey(req,res))return;
   if(!requireLobLiveDispatch(process.env))
