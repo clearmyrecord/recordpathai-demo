@@ -99,7 +99,7 @@
       var recordwatchPreferencesPanel = document.getElementById("recordwatchPreferencesPanel");
       var recordwatchReminderSchedule = document.getElementById("recordwatchReminderSchedule");
       var recordwatchHistoryPanel = document.getElementById("recordwatchHistoryPanel");
-      var premiumState = { subscription: null, preferences: null };
+      var premiumState = { subscription: null, preferences: null, error: '' };
 
       function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
       function list(items) { return items && items.length ? "<ul>" + items.map(function (item) { return "<li>" + esc(item) + "</li>"; }).join("") + "</ul>" : "<span class='muted'>None recorded</span>"; }
@@ -202,7 +202,7 @@
 
 
       function activeUser() { return window.RecordPathUserStore && RecordPathUserStore.getCurrentUser ? RecordPathUserStore.getCurrentUser() : null; }
-      function activeSubscription() { return premiumState.subscription || (RecordWatchNotifications.loadSubscriptions && RecordWatchNotifications.loadSubscriptions()[0]) || null; }
+      function activeSubscription() { return premiumState.subscription || null; }
       function renderPremiumPanels(cases) {
         var user = activeUser();
         var subscription = activeSubscription();
@@ -211,7 +211,12 @@
         var renewal = subscription && (subscription.current_period_end || subscription.premium_expires_at);
         recordwatchPremiumPanel.innerHTML = '<div class="case-header"><div><p class="eyebrow-mini">Premium RecordWatch</p><h2>' + (premium ? 'Premium active <span class="status-badge eligible-now">Premium</span>' : 'Free monitoring') + '</h2><p class="muted">Paid monitoring adds SMS reminders, court-status updates when available, missing-info reminders, and multi-case monitoring.</p></div></div>' +
           '<div class="recordwatch-monitor-grid">' + statCard('Current status', premium ? 'Premium' : 'Free') + statCard('Plan', subscription && subscription.plan || 'Free') + statCard('Renewal date', renewal ? RecordWatchRules.formatDate(renewal) : 'Not scheduled') + statCard('Notification status', preferences.sms_enabled ? 'Email + SMS' : 'Email / dashboard') + '</div>' +
-          '<div class="recordwatch-actions"><button class="btn" type="button" data-premium-action="monthly">Monthly checkout — $4.99/month</button><button class="btn secondary" type="button" data-premium-action="annual">Annual checkout — $39/year</button><button class="btn danger" type="button" data-premium-action="cancel">Cancel subscription</button></div><p id="premiumActionStatus" class="muted"></p>';
+          '<div class="recordwatch-actions">' +
+          (premium ? '<button class="btn" type="button" data-premium-action="portal">Manage billing & payment method</button><button class="btn danger" type="button" data-premium-action="cancel">Cancel at period end</button>'
+            : '<button class="btn" type="button" data-premium-action="monthly">Subscribe — $4.99/month</button><button class="btn secondary" type="button" data-premium-action="annual">Subscribe — $39/year</button>' +
+              (subscription && subscription.stripe_customer_id ? '<button class="btn secondary" type="button" data-premium-action="portal">Manage existing billing</button>' : '')) +
+          '</div><p class="meta-note">Recurring RecordWatch billing begins at checkout. You can cancel renewal in your billing portal. Court fees and the optional $50 packet service are not included.</p>' +
+          '<p id="premiumActionStatus" class="muted">' + esc(premiumState.error || '') + '</p>';
         var consentText = window.RecordWatchMessageProvider ? RecordWatchMessageProvider.SMS_CONSENT_TEXT : 'By enabling SMS notifications, you agree to receive RecordWatch reminders from RecordPathAI. Message and data rates may apply. Reply STOP to opt out.';
         var phone = preferences.phone_number || (user && user.phone) || '';
         var consentChecked = Boolean(preferences.sms_consent_at || preferences.sms_consent);
@@ -232,7 +237,7 @@
             var action = button.getAttribute('data-premium-action');
             var status = document.getElementById('premiumActionStatus');
             button.disabled = true;
-            var request = action === 'cancel' ? RecordWatchNotifications.cancelPremiumSubscription() : RecordWatchNotifications.checkoutPremium(action);
+            var request = action === 'cancel' ? RecordWatchNotifications.cancelPremiumSubscription() : action === 'portal' ? RecordWatchNotifications.openBillingPortal() : RecordWatchNotifications.checkoutPremium(action);
             request.then(function (result) { if (result.url) window.location.href = result.url; else { if (status) status.textContent = 'Premium RecordWatch updated.'; loadPremiumState(); } }).catch(function (error) { if (status) status.textContent = error.message; }).finally(function () { button.disabled = false; });
           });
         });
@@ -248,9 +253,10 @@
       }
       function loadPremiumState() {
         if (!window.RecordWatchNotifications || !RecordWatchNotifications.fetchPremiumSubscription) return Promise.resolve();
-        return Promise.all([RecordWatchNotifications.fetchPremiumSubscription().catch(function () { return {}; }), RecordWatchNotifications.fetchPremiumPreferences().catch(function () { return {}; })]).then(function (results) {
-          premiumState.subscription = results[0].subscription || results[0];
+        return Promise.all([RecordWatchNotifications.fetchPremiumSubscription().catch(function (error) { return { error: error.message }; }), RecordWatchNotifications.fetchPremiumPreferences().catch(function () { return {}; })]).then(function (results) {
+          premiumState.subscription = results[0].subscription || null;
           premiumState.preferences = results[1].preferences || null;
+          premiumState.error = results[0].error || '';
           renderPremiumPanels([]);
         });
       }
@@ -291,7 +297,7 @@
       render();
       loadPremiumState();
       var successSessionId = new URLSearchParams(window.location.search).get("session_id");
-      if (new URLSearchParams(window.location.search).get("recordwatch") === "success" && successSessionId && RecordWatchNotifications.verifyPremiumCheckout) { RecordWatchNotifications.verifyPremiumCheckout(successSessionId).then(loadPremiumState).catch(function (error) { recordwatchDataNotice.textContent = error.message; }); }
+      if (new URLSearchParams(window.location.search).get("recordwatch") === "success" && successSessionId && RecordWatchNotifications.verifyPremiumCheckout) { RecordWatchNotifications.verifyPremiumCheckout(successSessionId).then(function () { var u = new URL(window.location.href); u.searchParams.delete("recordwatch"); u.searchParams.delete("session_id"); window.history.replaceState({}, "", u.pathname + u.search + u.hash); return loadPremiumState(); }).catch(function (error) { recordwatchDataNotice.textContent = "Payment verification is pending: " + error.message + " No new purchase is needed."; }); }
       if (window.RecordWatchNotifications && RecordWatchNotifications.fetchRemoteData) {
         var userId = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id;
         RecordWatchNotifications.fetchRemoteData(userId).then(function (data) {
