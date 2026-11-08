@@ -31,3 +31,16 @@ where stripe_subscription_id is null
 
 comment on table public.recordwatch_subscriptions is
   'Stripe-verified RecordWatch subscription snapshots; clients are read-only.';
+
+-- Migration receipt: only the privileged server can read it. Checkout checks
+-- for this after the entire billing-security migration succeeds.
+create table if not exists public.recordwatch_billing_migration_receipts (
+  id text primary key,
+  applied_at timestamptz not null default now()
+);
+alter table public.recordwatch_billing_migration_receipts enable row level security;
+revoke all on public.recordwatch_billing_migration_receipts from public, anon, authenticated;
+grant select on public.recordwatch_billing_migration_receipts to service_role;
+insert into public.recordwatch_billing_migration_receipts (id)
+values ('20261108010000_recordwatch_stripe_entitlements')
+on conflict (id) do nothing;

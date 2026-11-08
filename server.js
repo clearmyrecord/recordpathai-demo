@@ -1833,6 +1833,28 @@ function recordwatchBillingReadiness() {
     secure_database_configured:persistence,live_enabled:mode==="live"&&liveAllowed,
     ready:Boolean(recordwatchStripe&&prices&&webhook&&persistence&&liveAllowed)};
 }
+// Only this server-side receipt (created by the security migration) can
+// authorize Checkout. A configured service-role key alone is insufficient.
+async function recordwatchBillingMigrationVerified() {
+  if (!packetDatabaseReady()) return false;
+  try {
+    const rows=await supabaseRest("recordwatch_billing_migration_receipts",{
+      query:"?id=eq.20261108010000_recordwatch_stripe_entitlements&select=id&limit=1"
+    });
+    return Array.isArray(rows) && rows.length===1;
+  } catch {
+    return false;
+  }
+}
+
+app.get("/api/recordwatch/database-readiness",async(req,res)=>{
+  const migration_verified=await recordwatchBillingMigrationVerified();
+  res.setHeader("Cache-Control","no-store");
+  return res.status(migration_verified?200:503).json({
+    migration_verified,ready:migration_verified
+  });
+});
+
 app.get("/api/recordwatch/billing-readiness",(req,res)=>{
   const status=recordwatchBillingReadiness();
   res.setHeader("Cache-Control","no-store");
@@ -1845,6 +1867,7 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
     if(!user)return;
     if(!recordwatchBillingReadiness().ready)return res.status(503).json({ok:false,error:"Secure RecordWatch billing is not fully configured. No charge was created."});
     if(!packetDatabaseReady())return res.status(503).json({ok:false,error:"Secure RecordWatch billing storage is not configured. No charge was created."});
+    if(!await recordwatchBillingMigrationVerified())return res.status(503).json({ok:false,error:"RecordWatch subscription security setup is incomplete. No charge was created."});
     const plan=recordwatchPlan(req.body?.plan);
     if(!plan)return res.status(400).json({ok:false,error:"Choose monthly or annual RecordWatch billing."});
     const priceId=process.env[RECORDWATCH_BILLING[plan].env];

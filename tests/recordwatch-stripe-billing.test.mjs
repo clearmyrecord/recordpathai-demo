@@ -85,6 +85,13 @@ test("Production webhook handles Stripe renewals, cancellation and payment failu
   assert.ok(server.includes('process.env.STRIPE_RECORDWATCH_WEBHOOK_SECRET'));
   assert.ok(server.includes('app.get("/api/recordwatch/billing-readiness"'));
   assert.ok(server.includes('recordwatchBillingReadiness().ready'));
+  assert.ok(server.includes("async function recordwatchBillingMigrationVerified()"));
+  assert.ok(server.includes('app.get("/api/recordwatch/database-readiness"'));
+  assert.ok(server.includes("if(!await recordwatchBillingMigrationVerified())"));
+  const migration=read("supabase/migrations/20261108010000_recordwatch_stripe_entitlements.sql");
+  assert.ok(migration.includes("recordwatch_billing_migration_receipts"));
+  assert.ok(migration.includes("revoke all on public.recordwatch_billing_migration_receipts"));
+  assert.ok(migration.includes("on conflict (id) do nothing"));
   assert.ok(server.includes('RECORDWATCH_LIVE_BILLING_ENABLED'));
 
   for (const event of ["customer.subscription.created","customer.subscription.updated","customer.subscription.deleted","invoice.paid","invoice.payment_failed","checkout.session.completed"])
