@@ -302,15 +302,16 @@
   }
 
   function checkoutPremium(plan, context) {
-    return premiumApiPost("/api/recordwatch/checkout", Object.assign({ plan: plan }, context || {}));
+    // The previous monthly/annual selectors are retired. Only one-time case purchases.
+    return premiumApiPost("/api/recordwatch/checkout", Object.assign({}, context || {}, { plan: "lifetime_case" }));
   }
 
-  function verifyPremiumCheckout(sessionId) {
-    return premiumApiPost("/api/recordwatch/verify-checkout", { session_id: sessionId });
+  function verifyPremiumCheckout(sessionId, savedCaseId) {
+    return premiumApiPost("/api/recordwatch/verify-checkout", { session_id: sessionId, saved_case_id: savedCaseId });
   }
 
-  function fetchPremiumSubscription() {
-    return premiumApiGet("/api/recordwatch/subscription");
+  function fetchPremiumSubscription(savedCaseId) {
+    return premiumApiGet("/api/recordwatch/subscription" + (savedCaseId ? "?saved_case_id=" + encodeURIComponent(savedCaseId) : ""));
   }
 
   function cancelPremiumSubscription() {
@@ -321,8 +322,8 @@
     return premiumApiPost("/api/recordwatch/billing-portal", {});
   }
 
-  function fetchPremiumPreferences() {
-    return premiumApiGet("/api/recordwatch/premium-preferences");
+  function fetchPremiumPreferences(savedCaseId) {
+    return premiumApiGet("/api/recordwatch/premium-preferences" + (savedCaseId ? "?saved_case_id=" + encodeURIComponent(savedCaseId) : ""));
   }
 
   function savePremiumPreferences(payload) {
