@@ -310,6 +310,9 @@
 
   function buildFullName(data) {
     const p = data.petitioner || {};
+    // The full legal name is the one question the customer answers.
+    // Legacy first/middle/last aliases must not overwrite their answer.
+    if (normalizeString(p.full_name).trim()) return;
     p.full_name = [p.first_name, p.middle_name, p.last_name]
       .map((part) => normalizeString(part).trim())
       .filter(Boolean)
@@ -497,6 +500,19 @@
       const handler = () => {
         const current = loadPacketData();
         setValueByPath(current, path, getInputValue(input));
+        if (path === "petitioner.full_name") {
+          const name = normalizeString(current.petitioner.full_name).trim();
+          const parts = name.split(/\s+/).filter(Boolean);
+          current.petitioner.first_name = parts[0] || "";
+          current.petitioner.last_name = parts.slice(1).join(" ");
+          current.petitioner.middle_name = "";
+        } else if (["petitioner.first_name", "petitioner.middle_name", "petitioner.last_name"].includes(path)) {
+          // Keep older component-name screens compatible with the canonical name.
+          current.petitioner.full_name = [
+            current.petitioner.first_name, current.petitioner.middle_name,
+            current.petitioner.last_name
+          ].map(part => normalizeString(part).trim()).filter(Boolean).join(" ");
+        }
         derivePacketData(current);
         savePacketData(current);
         refreshComputedFields(document, current);
