@@ -5,7 +5,7 @@ import path from "path";
 import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect, assertFixedPacketAmount, PACKET_PRICE_CENTS } from "./src/payment-security.js";
 import { quotePacketPricing } from "./src/packet-pricing.js";
 import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, createHash } from "node:crypto";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
 
@@ -23,6 +23,48 @@ app.use(cors({
     "https://www.recordpathai.com"
   ]
 }));
+
+// Private applicant PDF submission; store only to the server's non-public
+// Supabase Storage bucket. This does not collect payment, file, or mail.
+app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:"8mb"}),async(req,res)=>{
+  const user=await requireApiUser(req,res);
+  if(!user)return;
+  const caseId=safe(req.get("x-recordpath-case-id"));
+  if(!validCaseId(caseId))return res.status(400).json({ok:false,error:"Saved case ID required."});
+  if(!packetDatabaseReady())return res.status(503).json({ok:false,error:"Private packet storage has not been configured."});
+  const bytes=req.body;
+  if(!Buffer.isBuffer(bytes)||bytes.length<500 || bytes.length>8388608 ||
+     bytes.subarray(0,8).toString("ascii").indexOf("%PDF-")!==0 ||
+     !bytes.subarray(Math.max(0,bytes.length-2048)).toString("latin1").includes("%%EOF"))
+    return res.status(400).json({ok:false,error:"A valid PDF under 8 MB is required."});
+  try {
+    const facts=await getSavedCaseReviewFacts(user.id,caseId);
+    const sha=createHash("sha256").update(bytes).digest("hex");
+    const objectPath="private/packets/"+caseId+"/"+sha+".pdf";
+    const config=supabaseRestConfig();
+    const response=await fetch(config.url+"/storage/v1/object/packet-documents/"+objectPath,{
+      method:"POST",headers:{
+        apikey:config.key,Authorization:"Bearer "+config.key,
+        "Content-Type":"application/pdf","x-upsert":"true"
+      },body:bytes,signal:AbortSignal.timeout(20000)
+    });
+    if(!response.ok)throw new Error("Private PDF storage unavailable.");
+    const snapshot=caseReviewFingerprint(facts.savedCase,facts.charges);
+    await supabaseRest("packet_drafts",{
+      method:"POST",query:"?on_conflict=case_id",
+      prefer:"resolution=merge-duplicates,return=representation",
+      body:{case_id:caseId,user_id:user.id,case_snapshot_sha256:snapshot,
+        signed_pdf_sha256:sha,signed_pdf_private_path:objectPath}
+    });
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,storedFor:"private_review",case_id:caseId,
+      signed_pdf_sha256:sha,case_snapshot_sha256:snapshot,
+      note:"Review copy received. This is not a filing, payment, or mailing."});
+  }catch(error){
+    console.warn("Private packet upload failed",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Unable to save signed review PDF. No payment or mail was created."});
+  }
+});
 
 app.use(express.json());
 
@@ -96,6 +138,15 @@ app.post("/api/operator/packet/release",async(req,res)=>{
     if(review.status!=="approved"||
       !Array.isArray(review.reviewer_evidence_links)||!review.reviewer_evidence_links.length)
       return res.status(400).json({ok:false,error:"Approved review with evidence references required."});
+    const drafts=await supabaseRest("packet_drafts",{
+      query:"?case_id=eq."+encodeURIComponent(caseId)+"&user_id=eq."+encodeURIComponent(userId)+"&limit=1"
+    });
+    const draft=Array.isArray(drafts)?drafts[0]:null;
+    const snapshot=caseReviewFingerprint(facts.savedCase,facts.charges);
+    if(!draft || draft.case_snapshot_sha256!==snapshot ||
+       draft.signed_pdf_sha256!==review.signed_pdf_sha256 ||
+       draft.signed_pdf_private_path!==review.signed_pdf_private_path)
+      return res.status(409).json({ok:false,error:"Approved signature must match the actual private applicant PDF and unchanged case snapshot."});
     const result=evaluatePacketRelease({
       userId,caseId,...facts,review,
       runtime:{stripeLiveEnabled:true,lobLiveEnabled:true,lobVerifiedBank:true,
