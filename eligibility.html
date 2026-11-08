@@ -857,7 +857,7 @@
       });
 
       const fullName = getValue("fullName");
-      const parts = fullName.split(/\\s+/).filter(Boolean);
+      const parts = fullName.split(/\s+/).filter(Boolean);
       const firstName = parts[0] || "";
       const lastName = parts.slice(1).join(" ");
       const email = getValue("email");
