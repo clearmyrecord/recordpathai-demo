@@ -4,6 +4,8 @@ import cors from "cors";
 import path from "path";
 import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect, assertFixedPacketAmount, PACKET_PRICE_CENTS } from "./src/payment-security.js";
 import { quotePacketPricing } from "./src/packet-pricing.js";
+import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
+import { timingSafeEqual } from "node:crypto";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
 
@@ -41,6 +43,77 @@ app.get("/api/packet/quote", (req, res) => {
     formType: req.query.formType
   });
   return res.json({ ok: true, quote });
+});
+
+
+app.get("/api/packet/checkout-readiness",async(req,res)=>{
+  const user=await requireApiUser(req,res);
+  if(!user)return;
+  const caseId=safe(req.query.case_id);
+  if(!validCaseId(caseId))return res.status(400).json({ok:false,error:"Saved case ID required."});
+  const result=await packetReleaseStatus(user.id,caseId);
+  res.setHeader("Cache-Control","no-store, private");
+  return res.status(result.ready?200:409).json({
+    ok:result.ready,ready:result.ready,
+    missing:result.missing,quote:result.quote,
+    profileId:result.profileId||null
+  });
+});
+// This endpoint never returns applicant data and never creates a release.
+// Operations key is server-only; it must not be placed in the browser.
+app.get("/api/operator/packet/fingerprint",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  const userId=safe(req.query.user_id),caseId=safe(req.query.case_id);
+  try{
+    const facts=await getSavedCaseReviewFacts(userId,caseId);
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,userId,caseId,
+      caseFingerprint:caseReviewFingerprint(facts.savedCase,facts.charges),
+      chargeCount:facts.charges.length});
+  }catch(error){return res.status(409).json({ok:false,error:"Saved case cannot be reviewed."});}
+});
+app.post("/api/operator/packet/release",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  const userId=safe(req.body?.user_id),caseId=safe(req.body?.case_id);
+  if(!validCaseId(userId)||!validCaseId(caseId))
+    return res.status(400).json({ok:false,error:"Valid saved case and owner identifiers required."});
+  try {
+    const facts=await getSavedCaseReviewFacts(userId,caseId);
+    const source=req.body?.review || {};
+    const allowed=[
+      "status","form_type","case_snapshot_sha256","signed_pdf_sha256",
+      "signed_pdf_private_path","reviewer_id","reviewed_at",
+      "identity_verified","official_docket_verified","all_charges_verified",
+      "final_discharge_verified","statutory_exclusions_reviewed",
+      "filing_instructions_verified","exact_court_form_verified",
+      "applicant_signature_verified","filing_authorization_verified",
+      "accepted_fee_waiver","fee_waiver_evidence","approved_court_fee_cents",
+      "fee_payment_method","verified_check_payee","verified_filing_address",
+      "reviewer_evidence_links"
+    ];
+    const review={user_id:userId,case_id:caseId};
+    for(const key of allowed)if(Object.prototype.hasOwnProperty.call(source,key))review[key]=source[key];
+    if(review.status!=="approved"||
+      !Array.isArray(review.reviewer_evidence_links)||!review.reviewer_evidence_links.length)
+      return res.status(400).json({ok:false,error:"Approved review with evidence references required."});
+    const result=evaluatePacketRelease({
+      userId,caseId,...facts,review,
+      runtime:{stripeLiveEnabled:true,lobLiveEnabled:true,lobVerifiedBank:true,
+        onlineCourtPaymentVerified:true}
+    });
+    if(result.missing.length)return res.status(409).json({ok:false,missing:result.missing});
+    await supabaseRest("packet_releases",{
+      method:"POST",query:"?on_conflict=case_id",body:review,
+      prefer:"resolution=merge-duplicates,return=representation"
+    });
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,status:"review_recorded",
+      readyForPayment:false,
+      note:"A recorded review does not enable live checkout until every runtime credential and court fulfillment check passes."});
+  }catch(error){
+    console.warn("Packet release update failed",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Unable to store private reviewer release."});
+  }
 });
 
 app.get("/api/config/supabase", (req, res) => {
@@ -287,6 +360,79 @@ async function supabaseRest(table, { method = "GET", query = "", body, prefer = 
   if (!response.ok) throw new Error(`Supabase ${table} ${method} failed: ${response.status} ${await response.text()}`);
   if (response.status === 204) return [];
   return response.json();
+}
+
+
+function requireOperationsKey(req,res) {
+  const secret=process.env.RECORDPATH_OPERATIONS_KEY || "";
+  const supplied=req.get("x-recordpath-operations-key") || "";
+  if(!secret || secret.length<32) {
+    res.status(503).json({ok:false,error:"Operations authorization has not been configured."});
+    return false;
+  }
+  const a=Buffer.from(supplied),b=Buffer.from(secret);
+  if(a.length!==b.length || !timingSafeEqual(a,b)) {
+    res.status(403).json({ok:false,error:"Operations access denied."});
+    return false;
+  }
+  return true;
+}
+function packetDatabaseReady(){
+  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY &&
+    (process.env.SUPABASE_URL||process.env.PUBLIC_SUPABASE_URL));
+}
+async function getSavedCaseReviewFacts(userId,caseId) {
+  if(!packetDatabaseReady())throw new Error("Private case review database not configured");
+  if(!validCaseId(userId)||!validCaseId(caseId))throw new Error("Invalid case identifier");
+  const rows=await supabaseRest("saved_cases",{
+    query:"?id=eq."+encodeURIComponent(caseId)+"&user_id=eq."+encodeURIComponent(userId)+
+      "&deleted_at=is.null&limit=1"
+  });
+  const savedCase=Array.isArray(rows)?rows[0]:null;
+  if(!savedCase)throw new Error("Saved case not found for authenticated owner");
+  const charges=await supabaseRest("case_charges",{
+    query:"?case_id=eq."+encodeURIComponent(caseId)+"&user_id=eq."+encodeURIComponent(userId)
+  });
+  return {savedCase,charges:Array.isArray(charges)?charges:[]};
+}
+async function lobBankVerified() {
+  const key=process.env.LOB_LIVE_API_KEY||"";
+  const bank=process.env.LOB_VERIFIED_BANK_ID||"";
+  if(process.env.LOB_LIVE_CHECKS_ENABLED!=="true" ||
+     !key.startsWith("live_") || !/^bank_[a-zA-Z0-9]+$/.test(bank))return false;
+  try {
+    const response=await fetch("https://api.lob.com/v1/bank_accounts/"+bank,{
+      headers:{Authorization:"Basic "+Buffer.from(key+":").toString("base64")},
+      signal:AbortSignal.timeout(10000)
+    });
+    if(!response.ok)return false;
+    const result=await response.json();
+    return result.id===bank && result.verified===true;
+  } catch {return false;}
+}
+async function packetReleaseStatus(userId,caseId) {
+  if(!packetDatabaseReady())return {
+    ready:false,missing:["Private approval storage is not configured."],
+    quote:null
+  };
+  try {
+    const facts=await getSavedCaseReviewFacts(userId,caseId);
+    const rows=await supabaseRest("packet_releases",{
+      query:"?case_id=eq."+encodeURIComponent(caseId)+"&user_id=eq."+encodeURIComponent(userId)+"&limit=1"
+    });
+    const review=Array.isArray(rows)?rows[0]:null;
+    const runtime={
+      stripeLiveEnabled:process.env.RECORDPATH_LIVE_PACKET_CHECKOUT==="true" &&
+        (process.env.STRIPE_SECRET_KEY||"").startsWith("sk_live_"),
+      lobLiveEnabled:process.env.LOB_LIVE_CHECKS_ENABLED==="true",
+      lobVerifiedBank:await lobBankVerified(),
+      onlineCourtPaymentVerified:false
+    };
+    return evaluatePacketRelease({userId,caseId,...facts,review,runtime});
+  } catch (error) {
+    console.warn("Private packet release preflight unavailable",error?.name||"unknown");
+    return {ready:false,missing:["Case approval or private review record is unavailable."],quote:null};
+  }
 }
 
 function supabaseSafeCaseId(caseId) {
@@ -1471,19 +1617,14 @@ app.post("/api/create-checkout-session", async (req, res) => {
     const numericAmount = PACKET_PRICE_CENTS;
     // The applicant's browser may suggest a fee category, but never approve
     // a court-fee remittance, eligibility, or a mailing instruction.
-    const quote = quotePacketPricing({
+    let quote = quotePacketPricing({
       state: caseInfo.caseState || caseInfo.state,
       county: caseInfo.county,
       courtType: caseInfo.courtType || caseInfo.court_type,
       formType: caseInfo.formType || caseInfo.form_type
     });
-    const isOhio = ["OH", "OHIO"].includes(safe(caseInfo.caseState || caseInfo.state).toUpperCase());
-    if (isOhio) {
-      return res.status(409).json({
-        error: "Ohio checkout is not released. The $150 Wood County conviction quote is informational; complete verified case approval and court-fee remittance setup before paying.",
-        quote
-      });
-    }
+    // Server-owned case, reviewer release and fee are checked after UUID validation.
+    // Browser claims of eligibility or fee cannot authorize a Stripe charge.
 
     const baseUrl = getBaseUrl(req);
 
@@ -1499,6 +1640,15 @@ app.post("/api/create-checkout-session", async (req, res) => {
     if (!isUuid(savedCaseId)) {
       return res.status(400).json({ error: "Save your case to your account before checkout" });
     }
+    const release=await packetReleaseStatus(checkoutUser.id,savedCaseId);
+    if(!release.ready){
+      return res.status(409).json({
+        error:"Packet checkout is pending verified case review and court-fee setup. No payment has been taken.",
+        missing:release.missing,
+        quote:release.quote||quote
+      });
+    }
+    quote={...release.quote,canCollect:true};
     const checkoutCaseNumber = safe((req.body || {}).case_number || (req.body || {}).caseNumber || caseInfo.case_number || caseInfo.caseNumber);
     const wantsRecordwatchAddon = recordwatchAddon === true || recordwatchAddon === "true" || (req.body || {}).recordwatch_addon === true || (req.body || {}).recordwatchAddon === true;
     const recordwatchAddonPriceId = process.env.STRIPE_RECORDWATCH_ADDON_PRICE_ID;
@@ -1548,6 +1698,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
         orderId: internalOrderId,
         serviceFeeCents: String(PACKET_PRICE_CENTS),
         courtFeeCents: String(quote.canCollect && quote.courtFeeCents > 0 ? quote.courtFeeCents : 0),
+        courtProfileId:String(release.profileId||""),
+        fulfillmentMode:String(release.fulfillmentMode||"") ,
         recordwatchAddon: String(Boolean(wantsRecordwatchAddon)),
         recordwatchPlan: wantsRecordwatchAddon ? "addon_12_month" : "",
         userId: checkoutUser.id,
