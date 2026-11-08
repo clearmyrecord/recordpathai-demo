@@ -102,7 +102,7 @@
           showPasswordRecovery();
           return;
         }
-        if (!isPasswordRecovery && detail.event === "SIGNED_IN" &&
+        if (!busy && !isPasswordRecovery && detail.event === "SIGNED_IN" &&
             detail.user && (query.has("code") || hash.has("access_token") || store.getCurrentSession())) {
           store.clearReturnUrl();
           window.location.replace(returnUrl);
