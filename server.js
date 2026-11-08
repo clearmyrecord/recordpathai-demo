@@ -19,6 +19,12 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
+// Separate RecordWatch subscription billing from court-packet payments.
+// Sandbox prices can be tested without changing the packet-payment provider.
+const recordwatchStripe = process.env.STRIPE_RECORDWATCH_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_RECORDWATCH_SECRET_KEY)
+  : null;
+
 app.use(cors({
   origin: [
     "https://clearmyrecord.github.io",
@@ -31,6 +37,58 @@ app.use(cors({
 // Supabase Storage bucket. This does not collect payment, file, or mail.
 // Stripe requires the original raw body for signature verification.
 // Payment completion creates a persistent paid-but-NOT-mailed job only.
+// Dedicated RecordWatch Stripe Billing webhook. Sandbox and live endpoints
+// sign with separate secrets and MUST never be mistaken for packet payments.
+app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",limit:"256kb"}),async(req,res)=>{
+  const secret=process.env.STRIPE_RECORDWATCH_WEBHOOK_SECRET||"";
+  if(!recordwatchStripe||!secret||!packetDatabaseReady())
+    return res.status(503).json({ok:false,error:"RecordWatch Stripe webhook is not ready."});
+  let event;
+  try {
+    event=recordwatchStripe.webhooks.constructEvent(req.body,req.get("stripe-signature"),secret);
+  }catch{
+    return res.status(400).json({ok:false,error:"Invalid RecordWatch Stripe signature."});
+  }
+  try {
+    if(["customer.subscription.created","customer.subscription.updated","customer.subscription.deleted"].includes(event.type)){
+      const raw=event.data?.object;
+      if(raw?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
+      const sub=event.type==="customer.subscription.deleted" ? raw : await recordwatchStripe.subscriptions.retrieve(raw.id);
+      await syncVerifiedRecordwatchStripeSubscription(sub);
+      return res.json({received:true,product:"premium_recordwatch"});
+    }
+    if(["invoice.paid","invoice.payment_failed"].includes(event.type)){
+      const invoice=event.data?.object||{};
+      const subId=typeof invoice.subscription==="string"?invoice.subscription:
+        invoice.subscription?.id||invoice.parent?.subscription_details?.subscription||"";
+      if(!subId)return res.json({received:true});
+      const sub=await recordwatchStripe.subscriptions.retrieve(subId);
+      if(sub?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
+      await syncVerifiedRecordwatchStripeSubscription(sub);
+      return res.json({received:true,product:"premium_recordwatch"});
+    }
+    if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
+      return res.json({received:true});
+    const session=event.data?.object;
+    if(session?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
+    if(!paidRecordwatchCheckout(session,session.metadata.user_id))
+      return res.status(400).json({ok:false,error:"RecordWatch payment is not verified."});
+    const subId=typeof session.subscription==="string"?session.subscription:session.subscription?.id;
+    const sub=await recordwatchStripe.subscriptions.retrieve(subId);
+    const plan=verifyRecordwatchSubscription(sub,process.env,session.metadata.user_id);
+    if(plan!==session.metadata.plan)
+      return res.status(400).json({ok:false,error:"RecordWatch subscription plan mismatch."});
+    await syncVerifiedRecordwatchStripeSubscription(sub,session.id);
+    await createRecordwatchLedgerEntryFromSession(session.metadata.user_id,session,plan);
+    return res.json({received:true,product:"premium_recordwatch"});
+  }catch(error){
+    console.warn("RecordWatch webhook reconciliation failed",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Could not reconcile Stripe event; delivery will retry."});
+  }
+});
+
+// The original packet webhook remains independent, preserving paid-hold
+// fulfillment for court packets and refusing RecordWatch subscription events.
 app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb"}),async(req,res)=>{
   const secret=process.env.STRIPE_WEBHOOK_SECRET||"";
   if(!stripe||!secret||!packetDatabaseReady())
@@ -39,50 +97,19 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
   try{
     event=stripe.webhooks.constructEvent(req.body,req.get("stripe-signature"),secret);
   }catch{return res.status(400).json({ok:false,error:"Invalid Stripe signature."});}
-  try {
-    // Event delivery is asynchronous and can be repeated or reordered.
-    // Always read Stripe's latest subscription state for renewals and updates.
-    if (["customer.subscription.created","customer.subscription.updated","customer.subscription.deleted"].includes(event.type)) {
-      const raw=event.data?.object;
-      if(raw?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
-      const sub=event.type==="customer.subscription.deleted" ? raw : await stripe.subscriptions.retrieve(raw.id);
-      await syncVerifiedRecordwatchStripeSubscription(sub);
-      return res.json({received:true,product:"premium_recordwatch"});
-    }
-    if (["invoice.paid","invoice.payment_failed"].includes(event.type)) {
-      const invoice=event.data?.object||{};
-      const subscriptionId=typeof invoice.subscription==="string" ? invoice.subscription :
-        invoice.subscription?.id || invoice.parent?.subscription_details?.subscription || "";
-      if (!subscriptionId) return res.json({received:true});
-      const sub=await stripe.subscriptions.retrieve(subscriptionId);
-      if(sub?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
-      await syncVerifiedRecordwatchStripeSubscription(sub);
-      return res.json({received:true,product:"premium_recordwatch"});
-    }
-    if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
-      return res.json({received:true});
-    const session=event.data?.object;
-    if(session?.metadata?.product==="premium_recordwatch"){
-      if(!paidRecordwatchCheckout(session,session.metadata.user_id))
-        return res.status(400).json({ok:false,error:"RecordWatch payment not verified."});
-      const subId=typeof session.subscription==="string" ? session.subscription : session.subscription?.id;
-      const sub=await stripe.subscriptions.retrieve(subId);
-      const plan=verifyRecordwatchSubscription(sub,process.env,session.metadata.user_id);
-      if(plan!==session.metadata.plan)return res.status(400).json({ok:false,error:"RecordWatch subscription mismatch."});
-      await syncVerifiedRecordwatchStripeSubscription(sub,session.id);
-      await createRecordwatchLedgerEntryFromSession(session.metadata.user_id,session,plan);
-      return res.json({received:true,product:"premium_recordwatch"});
-    }
-    // Court packet payments retain their own independent verified fulfillment gate.
-    const owner=session?.metadata?.userId,caseId=session?.metadata?.saved_case_id;
-    if(!validCaseId(owner)||!validCaseId(caseId)||
-       !verifiedPacketSession(session,owner,caseId))
-      return res.status(400).json({ok:false,error:"Session is not a verified paid court packet."});
-    const fee=Number(session.metadata.courtFeeCents||0);
-    const method=session.metadata.fulfillmentMode||"";
-    if(!Number.isSafeInteger(fee)||fee<0||
-       !["lob_check","court_online","no_fee"].includes(method))
-      return res.status(400).json({ok:false,error:"Court-fee settlement metadata missing."});
+  if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
+    return res.json({received:true});
+  const session=event.data?.object;
+  const owner=session?.metadata?.userId,caseId=session?.metadata?.saved_case_id;
+  if(!validCaseId(owner)||!validCaseId(caseId)||
+     !verifiedPacketSession(session,owner,caseId))
+    return res.status(400).json({ok:false,error:"Session is not a verified paid court packet."});
+  const fee=Number(session.metadata.courtFeeCents||0);
+  const method=session.metadata.fulfillmentMode||"";
+  if(!Number.isSafeInteger(fee)||fee<0||
+     !["lob_check","court_online","no_fee"].includes(method))
+    return res.status(400).json({ok:false,error:"Court-fee settlement metadata missing."});
+  try{
     await supabaseRest("packet_fulfillment_jobs",{
       method:"POST",query:"?on_conflict=stripe_session_id",
       prefer:"resolution=ignore-duplicates,return=representation",
@@ -91,8 +118,8 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
     });
     return res.json({received:true,status:"paid_hold"});
   }catch(error){
-    console.warn("Verified Stripe webhook persistence failed",error?.name||"unknown");
-    return res.status(503).json({ok:false,error:"Verified payment could not be reconciled. Stripe will retry."});
+    console.warn("Stripe webhook store unavailable",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Payment recorded by Stripe, fulfillment queue unavailable. Retry requested."});
   }
 });
 
@@ -1796,7 +1823,7 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
   try {
     const user=await recordwatchAuthToken(req,res);
     if(!user)return;
-    if(!stripe)return res.status(503).json({ok:false,error:"RecordWatch Stripe is not configured."});
+    if(!recordwatchStripe)return res.status(503).json({ok:false,error:"RecordWatch Stripe is not configured."});
     if(!packetDatabaseReady())return res.status(503).json({ok:false,error:"Secure RecordWatch billing storage is not configured. No charge was created."});
     const plan=recordwatchPlan(req.body?.plan);
     if(!plan)return res.status(400).json({ok:false,error:"Choose monthly or annual RecordWatch billing."});
@@ -1805,7 +1832,7 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
     const current=await getRecordwatchBillingRow(user.id);
     if(current && ["active","trialing","past_due","unpaid","incomplete"].includes(current.status))
       return res.status(409).json({ok:false,error:"A RecordWatch subscription already exists. Use Manage Billing instead of purchasing twice.",manageBilling:true});
-    const price=await stripe.prices.retrieve(priceId);
+    const price=await recordwatchStripe.prices.retrieve(priceId);
     assertRecordwatchStripePrice(price,plan);
     const base=getBaseUrl(req);
     const metadata={product:"premium_recordwatch",user_id:user.id,plan};
@@ -1825,7 +1852,7 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
     else checkout.customer_email=user.email||undefined;
     const bucket=Math.floor(Date.now()/300000);
     const idempotencyKey=createHash("sha256").update("recordwatch:"+user.id+":"+plan+":"+bucket).digest("hex");
-    const session=await stripe.checkout.sessions.create(checkout,{idempotencyKey});
+    const session=await recordwatchStripe.checkout.sessions.create(checkout,{idempotencyKey});
     if(!session.url||!session.id)return res.status(502).json({ok:false,error:"Stripe did not create a checkout link."});
     return res.json({ok:true,url:session.url,sessionId:session.id});
   }catch(error){
@@ -1838,15 +1865,15 @@ app.post("/api/recordwatch/verify-checkout", async (req, res) => {
   try {
     const user=await recordwatchAuthToken(req,res);
     if(!user)return;
-    if(!stripe)return res.status(503).json({ok:false,error:"Stripe verification is unavailable."});
+    if(!recordwatchStripe)return res.status(503).json({ok:false,error:"Stripe verification is unavailable."});
     const sessionId=safe(req.body?.session_id||req.body?.sessionId);
     if(!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
       return res.status(400).json({ok:false,error:"Valid checkout reference required."});
-    const session=await stripe.checkout.sessions.retrieve(sessionId);
+    const session=await recordwatchStripe.checkout.sessions.retrieve(sessionId);
     if(!paidRecordwatchCheckout(session,user.id))
       return res.status(403).json({ok:false,error:"Payment is not confirmed for this account."});
     const subId=typeof session.subscription==="string"?session.subscription:session.subscription?.id;
-    const subscription=await stripe.subscriptions.retrieve(subId);
+    const subscription=await recordwatchStripe.subscriptions.retrieve(subId);
     const plan=verifyRecordwatchSubscription(subscription,process.env,user.id);
     if(plan!==session.metadata.plan)
       return res.status(403).json({ok:false,error:"Checkout and billing plan do not match."});
@@ -1878,11 +1905,11 @@ app.post("/api/recordwatch/billing-portal", async (req, res) => {
   try {
     const user=await recordwatchAuthToken(req,res);
     if(!user)return;
-    if(!stripe)return res.status(503).json({ok:false,error:"Stripe billing is not configured."});
+    if(!recordwatchStripe)return res.status(503).json({ok:false,error:"Stripe billing is not configured."});
     const current=await getRecordwatchBillingRow(user.id);
     if(!current?.stripe_customer_id||!current?.stripe_subscription_id)
       return res.status(404).json({ok:false,error:"No RecordWatch billing account was found."});
-    const session=await stripe.billingPortal.sessions.create({
+    const session=await recordwatchStripe.billingPortal.sessions.create({
       customer:current.stripe_customer_id,
       return_url:getBaseUrl(req)+"/recordwatch-dashboard.html"
     });
@@ -1897,11 +1924,11 @@ app.post("/api/recordwatch/cancel", async (req, res) => {
   try {
     const user=await recordwatchAuthToken(req,res);
     if(!user)return;
-    if(!stripe)return res.status(503).json({ok:false,error:"Stripe billing is not configured."});
+    if(!recordwatchStripe)return res.status(503).json({ok:false,error:"Stripe billing is not configured."});
     const current=await getActiveRecordwatchSubscription(user.id);
     if(!current?.stripe_subscription_id)
       return res.status(404).json({ok:false,error:"No active Premium subscription found."});
-    const updated=await stripe.subscriptions.update(current.stripe_subscription_id,{cancel_at_period_end:true});
+    const updated=await recordwatchStripe.subscriptions.update(current.stripe_subscription_id,{cancel_at_period_end:true});
     const subscription=await syncVerifiedRecordwatchStripeSubscription(updated);
     return res.json({ok:true,subscription});
   }catch(error){
