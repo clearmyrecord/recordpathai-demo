@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import cors from "cors";
 import path from "path";
 import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect, assertFixedPacketAmount, PACKET_PRICE_CENTS } from "./src/payment-security.js";
+import { quotePacketPricing } from "./src/packet-pricing.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
 
@@ -29,6 +30,18 @@ function publicSupabaseConfig() {
     anonKey: process.env.RECORDPATH_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
   };
 }
+
+// Public pricing information only; this endpoint accepts no names, signatures or case numbers.
+app.get("/api/packet/quote", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const quote = quotePacketPricing({
+    state: req.query.state,
+    county: req.query.county,
+    courtType: req.query.courtType,
+    formType: req.query.formType
+  });
+  return res.json({ ok: true, quote });
+});
 
 app.get("/api/config/supabase", (req, res) => {
   const config = publicSupabaseConfig();
@@ -1456,6 +1469,21 @@ app.post("/api/create-checkout-session", async (req, res) => {
     try { assertFixedPacketAmount(amount, currency); }
     catch (error) { return res.status(400).json({ error: error.message }); }
     const numericAmount = PACKET_PRICE_CENTS;
+    // The applicant's browser may suggest a fee category, but never approve
+    // a court-fee remittance, eligibility, or a mailing instruction.
+    const quote = quotePacketPricing({
+      state: caseInfo.caseState || caseInfo.state,
+      county: caseInfo.county,
+      courtType: caseInfo.courtType || caseInfo.court_type,
+      formType: caseInfo.formType || caseInfo.form_type
+    });
+    const isOhio = ["OH", "OHIO"].includes(safe(caseInfo.caseState || caseInfo.state).toUpperCase());
+    if (isOhio) {
+      return res.status(409).json({
+        error: "Ohio checkout is not released. The $150 Wood County conviction quote is informational; complete verified case approval and court-fee remittance setup before paying.",
+        quote
+      });
+    }
 
     const baseUrl = getBaseUrl(req);
 
@@ -1487,6 +1515,22 @@ app.post("/api/create-checkout-session", async (req, res) => {
         }
       }
     ];
+    // Court fee is an earmarked pass-through line item, not preparation revenue.
+    // The review-only Ohio guard above prevents collecting the $100 until the
+    // actual filing and disbursement workflow is verified and approved.
+    if (quote.courtFeeCents > 0 && quote.canCollect === true) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: quote.courtFeeCents,
+          product_data: {
+            name: "Court filing deposit",
+            description: "Amount payable to filing court; separate from RecordPathAI preparation"
+          }
+        }
+      });
+    }
     if (wantsRecordwatchAddon && recordwatchAddonPriceId) lineItems.push({ price: recordwatchAddonPriceId, quantity: 1 });
     else if (wantsRecordwatchAddon) lineItems.push({ quantity: 1, price_data: { currency: safe(currency, "usd").toLowerCase(), unit_amount: RECORDWATCH_PLAN_AMOUNTS.addon_12_month, product_data: { name: "Premium RecordWatch 12-month add-on", description: "SMS reminders and premium monitoring for 12 months" } } });
 
@@ -1502,6 +1546,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
       metadata: {
         productType: "record-sealing-packet",
         orderId: internalOrderId,
+        serviceFeeCents: String(PACKET_PRICE_CENTS),
+        courtFeeCents: String(quote.canCollect && quote.courtFeeCents > 0 ? quote.courtFeeCents : 0),
         recordwatchAddon: String(Boolean(wantsRecordwatchAddon)),
         recordwatchPlan: wantsRecordwatchAddon ? "addon_12_month" : "",
         userId: checkoutUser.id,
