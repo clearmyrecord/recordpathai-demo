@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import cors from "cors";
 import path from "path";
 import dns from "node:dns/promises";
+import { RECORDWATCH_BILLING, recordwatchPlan, assertRecordwatchStripePrice, billingPeriod, verifyRecordwatchSubscription, paidRecordwatchCheckout, recordwatchEntitled } from "./src/recordwatch-billing.js";
 import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect, assertFixedPacketAmount, PACKET_PRICE_CENTS } from "./src/payment-security.js";
 import { quotePacketPricing } from "./src/packet-pricing.js";
 import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
@@ -38,19 +39,50 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
   try{
     event=stripe.webhooks.constructEvent(req.body,req.get("stripe-signature"),secret);
   }catch{return res.status(400).json({ok:false,error:"Invalid Stripe signature."});}
-  if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
-    return res.json({received:true});
-  const session=event.data?.object;
-  const owner=session?.metadata?.userId,caseId=session?.metadata?.saved_case_id;
-  if(!validCaseId(owner)||!validCaseId(caseId)||
-     !verifiedPacketSession(session,owner,caseId))
-    return res.status(400).json({ok:false,error:"Session is not a verified paid court packet."});
-  const fee=Number(session.metadata.courtFeeCents||0);
-  const method=session.metadata.fulfillmentMode||"";
-  if(!Number.isSafeInteger(fee)||fee<0||
-     !["lob_check","court_online","no_fee"].includes(method))
-    return res.status(400).json({ok:false,error:"Court-fee settlement metadata missing."});
-  try{
+  try {
+    // Event delivery is asynchronous and can be repeated or reordered.
+    // Always read Stripe's latest subscription state for renewals and updates.
+    if (["customer.subscription.created","customer.subscription.updated","customer.subscription.deleted"].includes(event.type)) {
+      const raw=event.data?.object;
+      if(raw?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
+      const sub=event.type==="customer.subscription.deleted" ? raw : await stripe.subscriptions.retrieve(raw.id);
+      await syncVerifiedRecordwatchStripeSubscription(sub);
+      return res.json({received:true,product:"premium_recordwatch"});
+    }
+    if (["invoice.paid","invoice.payment_failed"].includes(event.type)) {
+      const invoice=event.data?.object||{};
+      const subscriptionId=typeof invoice.subscription==="string" ? invoice.subscription :
+        invoice.subscription?.id || invoice.parent?.subscription_details?.subscription || "";
+      if (!subscriptionId) return res.json({received:true});
+      const sub=await stripe.subscriptions.retrieve(subscriptionId);
+      if(sub?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
+      await syncVerifiedRecordwatchStripeSubscription(sub);
+      return res.json({received:true,product:"premium_recordwatch"});
+    }
+    if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
+      return res.json({received:true});
+    const session=event.data?.object;
+    if(session?.metadata?.product==="premium_recordwatch"){
+      if(!paidRecordwatchCheckout(session,session.metadata.user_id))
+        return res.status(400).json({ok:false,error:"RecordWatch payment not verified."});
+      const subId=typeof session.subscription==="string" ? session.subscription : session.subscription?.id;
+      const sub=await stripe.subscriptions.retrieve(subId);
+      const plan=verifyRecordwatchSubscription(sub,process.env,session.metadata.user_id);
+      if(plan!==session.metadata.plan)return res.status(400).json({ok:false,error:"RecordWatch subscription mismatch."});
+      await syncVerifiedRecordwatchStripeSubscription(sub,session.id);
+      await createRecordwatchLedgerEntryFromSession(session.metadata.user_id,session,plan);
+      return res.json({received:true,product:"premium_recordwatch"});
+    }
+    // Court packet payments retain their own independent verified fulfillment gate.
+    const owner=session?.metadata?.userId,caseId=session?.metadata?.saved_case_id;
+    if(!validCaseId(owner)||!validCaseId(caseId)||
+       !verifiedPacketSession(session,owner,caseId))
+      return res.status(400).json({ok:false,error:"Session is not a verified paid court packet."});
+    const fee=Number(session.metadata.courtFeeCents||0);
+    const method=session.metadata.fulfillmentMode||"";
+    if(!Number.isSafeInteger(fee)||fee<0||
+       !["lob_check","court_online","no_fee"].includes(method))
+      return res.status(400).json({ok:false,error:"Court-fee settlement metadata missing."});
     await supabaseRest("packet_fulfillment_jobs",{
       method:"POST",query:"?on_conflict=stripe_session_id",
       prefer:"resolution=ignore-duplicates,return=representation",
@@ -59,8 +91,8 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
     });
     return res.json({received:true,status:"paid_hold"});
   }catch(error){
-    console.warn("Stripe webhook store unavailable",error?.name||"unknown");
-    return res.status(503).json({ok:false,error:"Payment recorded by Stripe, fulfillment queue unavailable. Retry requested."});
+    console.warn("Verified Stripe webhook persistence failed",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Verified payment could not be reconciled. Stripe will retry."});
   }
 });
 
