@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stripe Sandbox Test | RecordPathAI</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="css/styles.css">
+<style>body{background:#eef2f8;color:#233d70;font-family:Arial,sans-serif}.demo-panel{max-width:700px;margin:9vh auto;background:white;border:1px solid #dbe3f0;border-radius:24px;padding:36px;box-shadow:0 10px 30px #233d7010}.demo-panel h1{margin-top:0}.demo-label{display:inline-block;padding:8px 12px;border-radius:10px;background:#fff2d2;color:#714c0a;font-weight:800}.demo-panel a{color:#265da6;font-weight:700}</style></head>
+<body><main class="demo-panel"><p class="demo-label">TEST MODE ONLY — NO REAL MONEY</p>
+<h1 id="resultTitle">Stripe sandbox checkout returned</h1>
+<p id="resultBody">This is a Stripe test checkout. No real customer account has been charged, no packet has been unlocked, no check issued and nothing filed or mailed.</p>
+<p>For actual filing, return to the three-step eligibility process. The official court packet cannot be released from this sandbox flow.</p>
+<a href="eligibility.html">Return to eligibility</a></main>
+<script>
+(function(){const p=new URLSearchParams(location.search);if(p.has("cancelled")){document.getElementById("resultTitle").textContent="Stripe sandbox checkout cancelled";}else if(!/^cs_test_[A-Za-z0-9]+$/.test(p.get("session_id")||"")){document.getElementById("resultTitle").textContent="No Stripe sandbox session supplied";}else{document.getElementById("resultBody").textContent="A Stripe test checkout has returned. An operator must verify its payment status in Stripe test mode. No PDF access, court funds or mailing is authorized by this page.";}})();
+</script></body></html>
