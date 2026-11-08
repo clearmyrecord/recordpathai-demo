@@ -1389,15 +1389,22 @@
           if (!hasTypedValue) return;
           const outcome = String(charge.final_disposition || "").toLowerCase();
           charge.is_dismissed = outcome === "dismissed" || outcome === "not guilty" || outcome === "acquitted" || outcome === "no bill";
-          charge.level = firstNonEmpty(charge.level, charge.degree, charge.chargeLevel);
-          charge.degree = firstNonEmpty(charge.degree, charge.level, charge.chargeLevel);
-          charge.charge_level = charge.level;
+          // The visible inputs, not stale legacy aliases, are authoritative.
+          const selectedDegree = String(card.querySelector('[data-field="degree"]')?.value || "").trim();
+          charge.level = selectedDegree;
+          charge.degree = selectedDegree;
+          charge.charge_level = selectedDegree;
+          const enteredDischarge = String(card.querySelector('[data-field="discharge_date"]')?.value || "").trim();
+          charge.discharge_date = enteredDischarge;
+          charge.dischargeDate = enteredDischarge;
+          charge.probation_end_date = enteredDischarge;
+          charge.probationEndDate = enteredDischarge;
           charge.is_convicted = outcome === "convicted";
           charge.pendingCharges = outcome === "pending";
           charge.pending_charges = charge.pendingCharges;
           charge.sex_offense_registry = charge.isSexOffense || charge.sex_offense_registry;
           charge.felony_violence_offense = charge.isViolentOffense || charge.felony_violence_offense;
-          charge.chargeLevel = charge.level;
+          charge.chargeLevel = selectedDegree;
           charges.push(charge);
         });
         return charges;
@@ -1712,8 +1719,8 @@
         document.getElementById("saveRecordWatchBtn")?.addEventListener("click", async function () {
           const result = saveDraft(false);
           if (result.error) return;
-          if (!hasRecordDetailsCompletion(result.charges)) {
-            setText("recordWatchSaveMessage", "Add at least one charge or case number before adding this case to RecordWatch.");
+          if (!result.charges.length) {
+            setText("recordWatchSaveMessage", "Add at least one charge before tracking eligibility with RecordWatch.");
             return;
           }
           try {
@@ -1721,10 +1728,10 @@
             syncRecordWatchFromDraft();
             const saved = await persistCurrentCaseDraft(result.casePayload, true);
             const loggedIn = !!window.RecordPathUserStore?.isLoggedIn?.();
+            renderRecordWatchPanel();
             setText("recordWatchSaveMessage", loggedIn && saved
               ? "Saved in RecordWatch on this device. Open your dashboard to confirm account synchronization."
               : "Saved in RecordWatch on this device. Sign in for account-backed storage.");
-            renderRecordWatchPanel();
           } catch (error) {
             console.warn("RecordWatch save failed:", error);
             setText("recordWatchSaveMessage", "Unable to save to RecordWatch. Your browser draft is still available.");
