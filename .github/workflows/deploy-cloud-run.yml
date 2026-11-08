@@ -2,15 +2,15 @@ name: Deploy RecordPathAI to Google Cloud Run
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: recordpathai-existing-production
+  group: ${{ github.event_name == 'pull_request' && format('recordpathai-auto-release-pr-{0}', github.event.pull_request.number) || 'recordpathai-existing-production' }}
   cancel-in-progress: false
 jobs:
   validate:
-    if: github.ref == 'refs/heads/main'
     name: Gate production on tests, dependency audit, and rollback regression
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -39,7 +39,6 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
   container-smoke:
-    if: github.ref == 'refs/heads/main'
     name: Build and start real Cloud Run container before release
     runs-on: ubuntu-latest
     timeout-minutes: 20
