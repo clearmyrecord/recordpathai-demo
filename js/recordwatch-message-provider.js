@@ -6,10 +6,18 @@
   function clean(value) { return String(value == null ? "" : value).trim(); }
   function digits(value) { return clean(value).replace(/\D+/g, ""); }
   function isPremium(subscription) {
-    // Display state and SMS entitlement must come from the server-verified
-    // Stripe subscription, never localStorage or a customer-submitted plan.
-    if (!subscription || !/^sub_/.test(String(subscription.stripe_subscription_id || ""))) return false;
+    // Display status is returned by the authenticated server. The server checks
+    // Stripe and saved-case ownership before granting a paid entitlement.
+    if (!subscription) return false;
     var status = clean(subscription.status).toLowerCase();
+    if (subscription.plan === "lifetime_case") {
+      return status === "active" && !subscription.revoked_at &&
+        /^cs_/.test(clean(subscription.stripe_checkout_session_id)) &&
+        /^pi_/.test(clean(subscription.stripe_payment_intent_id)) &&
+        Boolean(subscription.saved_case_id);
+    }
+    // Honor existing, unexpired recurring subscriptions; no new ones are sold.
+    if (!/^sub_/.test(clean(subscription.stripe_subscription_id))) return false;
     if (status !== "active" && status !== "trialing") return false;
     var end = new Date(subscription.current_period_end || "").getTime();
     return Number.isFinite(end) && end > Date.now();
