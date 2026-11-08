@@ -25,6 +25,9 @@
   let lastCaseLoadError = null;
   let lastDraftMigrationError = null;
   let supabaseCasesUnavailable = false;
+  let authListenerRegistered = false;
+  let passwordRecoveryActive = false;
+  let authRevision = 0;
 
   const LOGIN_INVALID_CREDENTIALS_MESSAGE = "Email or password is incorrect. If you just confirmed your email, use Reset Password to set a new password.";
   const SIGNUP_ACCOUNT_EXISTS_MESSAGE = "Account already exists. Please log in or reset your password.";
@@ -155,13 +158,54 @@
     return currentUser;
   }
 
+  function bindAuthStateChanges(supabase) {
+    if (authListenerRegistered) return;
+    authListenerRegistered = true;
+    // OAuth and password-reset redirects can finish after the page first loads.
+    // Sync shared account state from Supabase events, not a one-time session read.
+    supabase.auth.onAuthStateChange(function (event, session) {
+      if (event === "PASSWORD_RECOVERY") passwordRecoveryActive = true;
+      if (event === "SIGNED_OUT") passwordRecoveryActive = false;
+      const previousId = currentUser && currentUser.id;
+      const authUser = session && session.user;
+      currentSession = session || null;
+      if (authUser) {
+        const previousProfile = previousId === authUser.id ? {
+          full_name: currentUser.fullName,
+          email: currentUser.email,
+          phone: currentUser.phone,
+          created_at: currentUser.createdAt
+        } : null;
+        currentUser = publicUser(authUser, previousProfile);
+        if (previousId !== authUser.id) {
+          cachedCases = [];
+          casesInitPromise = null;
+        }
+      } else {
+        currentUser = null;
+        if (event === "SIGNED_OUT") {
+          cachedCases = [];
+          casesInitPromise = null;
+        }
+      }
+      authRevision += 1;
+      document.dispatchEvent(new CustomEvent("recordpath:auth-change", {
+        detail: { event: event, user: currentUser, passwordRecovery: passwordRecoveryActive }
+      }));
+      if (authUser && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) queueCaseReadiness();
+    });
+  }
+
   async function init() {
     if (!initPromise) {
       initPromise = (async function () {
         try {
           const supabase = await client();
+          bindAuthStateChanges(supabase);
+          const revisionAtRequest = authRevision;
           const sessionResult = await supabase.auth.getSession();
-          currentSession = sessionResult && sessionResult.data ? sessionResult.data.session : null;
+          // Do not overwrite an OAuth callback event with a stale session read.
+          if (revisionAtRequest === authRevision) currentSession = sessionResult && sessionResult.data ? sessionResult.data.session : null;
           const authUser = currentSession && currentSession.user;
           if (!authUser) {
             currentUser = null;
@@ -169,6 +213,7 @@
             return null;
           }
           const profile = await loadProfile(authUser);
+          if (!currentSession || !currentSession.user || currentSession.user.id !== authUser.id) return currentUser;
           currentUser = publicUser(authUser, profile);
           if (!profile) {
             // Google accounts may not have a profile row at first login.
@@ -330,6 +375,7 @@
     const profile = await loadProfile(data.user);
     currentUser = publicUser(data.user, profile);
     if (!profile) upsertProfile(data.user, { email: normalizedEmail }).catch(function (profileError) { console.warn("Profile setup failed after login:", profileError); });
+    passwordRecoveryActive = false;
     resetAuthReadiness();
     queueCaseReadiness();
     return currentUser;
@@ -378,6 +424,7 @@
     currentSession = null;
     currentUser = null;
     cachedCases = [];
+    passwordRecoveryActive = false;
     resetAuthReadiness();
   }
 
@@ -387,6 +434,7 @@
     currentSession = null;
     currentUser = null;
     cachedCases = [];
+    passwordRecoveryActive = false;
     resetAuthReadiness();
   }
 
@@ -1475,6 +1523,7 @@
     logout,
     getCurrentUser: function () { return currentUser; },
     getCurrentSession: function () { return currentSession; },
+    get passwordRecoveryActive() { return passwordRecoveryActive; },
     refreshCurrentUser: init,
     updateCurrentUser,
     getCases,
