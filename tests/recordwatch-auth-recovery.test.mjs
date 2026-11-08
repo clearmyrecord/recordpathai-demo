@@ -114,3 +114,15 @@ test("Dashboard still protects private cases and does not bypass login",()=>{
   assert.match(clientScript,/persistSession: true/);
   assert.match(clientScript,/autoRefreshToken: true/);
 });
+
+test("RecordWatch enrollment requires an authenticated account and preserves pending preferences",()=>{
+  const enrollment=read("recordwatch.html");
+  assert.match(enrollment,/id="recordwatchEnrollmentForm"/);
+  assert.match(enrollment,/signup\.html\?returnUrl=recordwatch\.html/);
+  assert.match(enrollment,/login\.html\?returnUrl=recordwatch\.html/);
+  assert.match(enrollment,/RecordPathAuth\.requireAuthAsync\("activate RecordWatch reminders", "recordwatch\.html"\)/);
+  const savePending=enrollment.indexOf('localStorage.setItem("recordpathai_pending_recordwatch_enrollment"');
+  const authGuard=enrollment.indexOf('RecordPathAuth.requireAuthAsync("activate RecordWatch reminders"');
+  const register=enrollment.indexOf('RecordWatchNotifications.registerSubscription({');
+  assert.ok(savePending>=0 && authGuard>savePending && register>authGuard);
+});
