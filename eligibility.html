@@ -784,33 +784,18 @@
     function hydrateFromLandingPage() {
       const savedLandingData = localStorage.getItem("recordPathLandingData");
       if (!savedLandingData) return;
-
       try {
         const data = JSON.parse(savedLandingData);
-
-        if (data.fullName) {
-          setValue("fullName", data.fullName);
-
-          const parts = data.fullName.trim().split(" ");
-          if (parts.length > 0 && !getValue("firstName")) {
-            setValue("firstName", parts[0]);
-          }
-
-          if (parts.length > 1 && !getValue("lastName")) {
-            setValue("lastName", parts.slice(1).join(" "));
-          }
-        }
-
-        if (data.email) setValue("email", data.email);
-
-        if (data.caseState) {
-          setValue("caseState", data.caseState);
-          localStorage.setItem("caseState", data.caseState);
-          localStorage.setItem("state", data.caseState);
-        }
-
-        if (data.residenceState) {
+        // A saved profile or an active case always takes precedence over a
+        // potentially older landing-page search.
+        if (data.fullName && !getValue("fullName")) setValue("fullName", data.fullName);
+        if (data.email && !getValue("email")) setValue("email", data.email);
+        if (data.residenceState && !getValue("residenceState")) {
           setValue("residenceState", data.residenceState);
+        }
+        if (data.caseState && !localStorage.getItem("caseState")) {
+          // Keep landing-page context for Step 2; do not ask case questions here.
+          localStorage.setItem("caseState", data.caseState);
         }
       } catch (error) {
         console.warn("Could not load RecordPathAI landing data:", error);
