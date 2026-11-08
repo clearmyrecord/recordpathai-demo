@@ -144,6 +144,12 @@
         });
       });
       Promise.resolve(store.readyForAuth).then(async function () {
+        // Show a clear outage warning when the Supabase hostname cannot resolve.
+        // Do not mistake present environment variables for working authentication.
+        if (typeof store.checkAuthService === "function") {
+          try { await store.checkAuthService(); }
+          catch (error) { feedback(error.message || "Authentication service is unavailable.", true); return; }
+        }
         if (store.isLoggedIn()) {
           store.clearReturnUrl();
           window.location.replace(returnUrl);
