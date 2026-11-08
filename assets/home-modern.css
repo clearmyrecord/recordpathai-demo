@@ -161,3 +161,17 @@
 @media(min-width:761px) and (max-width:980px){
   .rp-home .home-two-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Distinguish available tools from features still being tested. */
+.rp-home .home-capabilities .home-feature{display:flex;flex-direction:column}
+.rp-home .home-capabilities .home-feature h3{margin-top:14px}
+.rp-home .home-capabilities .home-feature p{flex:1}
+.rp-home .home-capability-tag{display:inline-flex;align-self:flex-start;padding:8px 12px;
+  border:1px solid #d6e3f8;border-radius:999px;background:#f0f6ff;
+  color:#31588f;font-weight:800;font-size:12px;line-height:1.25}
+.rp-home .home-capabilities a.home-text-link{font-weight:800;color:var(--blue-dark)}
+.rp-home .home-launch-note{padding:18px 22px;margin-top:18px;
+  background:#fff;border:1px solid var(--line);border-radius:20px;
+  font-size:14px;color:var(--muted);line-height:1.65}
+.rp-home .home-launch-note strong{color:var(--text)}
+.rp-home .home-launch-note a{font-weight:800;color:var(--blue-dark)}
