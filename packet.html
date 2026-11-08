@@ -2811,7 +2811,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
           const raw = readPacketData();
           const data = buildNormalizedPacketData(raw);
-          if (!await ensureWave1FormReady(raw)) return;
+          if(normalizeState(data?.court?.state)==="OH") {
+            const resolved=await resolveCheckoutCase();
+            const activeCase=resolved?.checkoutCase?.saved_case_id||resolved?.checkoutCase?.case_id;
+            await checkServerPacketReadiness(activeCase);
+          } else if (!await ensureWave1FormReady(raw)) return;
           const packetEligibility = calculatePacketEligibility(data);
           if (!packetEligibility.isEligibleNow) {
             throw new Error(packetEligibility.isNotYetEligible
@@ -3456,6 +3460,29 @@ document.addEventListener("DOMContentLoaded", async function () {
         });
       }
 
+      function serverReadinessUrl(caseId) {
+        return getCheckoutEndpoint().replace(/\/api\/create-checkout-session$/, "/api/packet/checkout-readiness")+
+          "?case_id="+encodeURIComponent(caseId);
+      }
+      async function checkServerPacketReadiness(caseId) {
+        if(!isInternalUuid(caseId))throw new Error("Save the case to your account before payment.");
+        if(!window.RecordPathSupabase)throw new Error("Sign in before checkout.");
+        const client=await window.RecordPathSupabase.getClient();
+        const session=await client.auth.getSession();
+        const token=session?.data?.session?.access_token;
+        if(!token)throw new Error("Please sign in again before checkout.");
+        const response=await fetch(serverReadinessUrl(caseId),{
+          headers:{Authorization:"Bearer "+token},cache:"no-store"
+        });
+        let payload=null;
+        try{payload=await response.json();}catch{}
+        if(!response.ok || payload?.ready!==true){
+          const reasons=Array.isArray(payload?.missing)?payload.missing.slice(0,5).join(" "):"";
+          throw new Error((payload?.error||"Packet not released for payment.")+(reasons?" "+reasons:""));
+        }
+        return payload;
+      }
+
       async function startCheckout(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         console.log("[packet checkout] Pay button clicked");
@@ -3466,7 +3493,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (!ensureCheckoutPrerequisites()) return;
           const raw = readPacketData();
           const normalizedData = buildNormalizedPacketData(raw);
-          if(!await ensureWave1FormReady(raw))return;
+          // Resolve, save and verify the case with the server first. A client-only
+          // Ohio pilot flag must not permanently block an approved checkout.
           let packetEligibility = resolveCurrentPacketEligibility(normalizedData);
           let checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
           const packetGenerationState = getPacketGenerationState(packetEligibility);
@@ -3524,7 +3552,13 @@ document.addEventListener("DOMContentLoaded", async function () {
             return;
           }
 
-          setStatus("Opening secure checkout...");
+          setStatus("Verifying court approval and exact filing fees...");
+          const verifiedCaseId=checkoutCase.saved_case_id||checkoutCase.case_id;
+          const packetRelease=await checkServerPacketReadiness(verifiedCaseId);
+          const priceCents=packetRelease?.quote?.totalCents;
+          if(!Number.isSafeInteger(priceCents) || priceCents<5000)
+            throw new Error("Court filing fees have not been approved. No charge was made.");
+          setStatus("Opening secure checkout for $"+(priceCents/100).toFixed(2)+"...");
 
           const currentUser = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser ? RecordPathUserStore.getCurrentUser() : null;
           const payload = {
@@ -3616,7 +3650,11 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
 
           if (!response.ok) {
-            const errorType = response.status === 401
+            const reasons=response.status===409 && Array.isArray(data?.missing)
+              ? " "+data.missing.slice(0,5).join(" ") : "";
+            const errorType = response.status === 409
+              ? (data?.error||"Checkout is pending verified court review.")+reasons
+              : response.status === 401
               ? "Your sign-in session expired. Please sign in again and retry."
               : response.status === 503
                 ? "Stripe checkout is not configured or temporarily unavailable."
@@ -3666,6 +3704,19 @@ document.addEventListener("DOMContentLoaded", async function () {
       document.getElementById("testPdfBtn")?.addEventListener("click", testPdfAccess);
       const generateBtn = document.getElementById("generateSealingBtn");
       if (generateBtn) generateBtn.addEventListener("click", startCheckout);
+      // Update CTA to the verified quote only when the server has released
+      // this case. Client-side eligibility labels never grant payment access.
+      (async function() {
+        try {
+          const resolved=await resolveCheckoutCase();
+          const caseId=resolved?.checkoutCase?.saved_case_id||"";
+          if(!isInternalUuid(caseId)||!generateBtn||isPacketPaymentComplete())return;
+          const readiness=await checkServerPacketReadiness(caseId);
+          const cents=readiness?.quote?.totalCents;
+          if(Number.isSafeInteger(cents))generateBtn.textContent=
+            "Pay $"+(cents/100).toFixed(2)+" & Generate Packet";
+        }catch{/* Pending review remains the primary status; no permission bypass. */}
+      })();
       document.getElementById("openSourceBtn")?.addEventListener("click", openSourcePdf);
       document.getElementById("useDrawnSigBtn").addEventListener("click", setDrawnSignature);
       document.getElementById("clearPadBtn").addEventListener("click", clearSignature);
@@ -3689,7 +3740,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       renderDebugPdfTools();
 
       if (normalizeState(normalizedData?.court?.state) === "OH") {
-        setStatus("Ohio checkout is on hold for case and fee review. No payment can be made yet. Use Test Signed PDF to verify the document and your drawn signature.");
+        setStatus("Complete the court review requirements shown above. Checkout unlocks after the verified packet and fee are approved; no money has been collected.");
         loadAndRenderCourtInstructions(normalizedData, false);
       } else if (checkoutEligibility.canCheckout) {
         setStatus(checkoutEligibility.warning || (packetUnlocked
