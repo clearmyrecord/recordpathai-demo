@@ -91,7 +91,7 @@
           <p>RecordWatch tracks your eligibility timeline and reminds you when it may be time to take action.</p>
           <div class="recordwatch-plan-grid">
             <article class="recordwatch-plan-card"><h3>Free Eligibility Reminders</h3><ul><li>Email reminders</li><li>Countdown dashboard</li><li>Saved eligibility date</li></ul></article>
-            <article class="recordwatch-plan-card premium"><h3>Premium RecordWatch</h3><p class="price-line"><strong>$4.99/month</strong><br><span>or $39/year</span></p><ul><li>SMS alerts</li><li>Filing reminders</li><li>Court status updates when available</li><li>Eligibility countdown</li><li>Missing-info reminders</li><li>Multi-case monitoring</li></ul><p class="meta-note">Billed in advance and renews automatically until canceled. Manage or cancel billing in your account. Court fees and the optional $50 packet service are separate. SMS delivery requires an opted-in number and an available messaging provider. Automated court integrations will be added as supported courts come online.</p><div class="recordwatch-actions"><button class="btn" type="button" data-recordwatch-checkout="monthly">Start Monthly</button><button class="btn secondary" type="button" data-recordwatch-checkout="annual">Save with Annual</button></div></article>
+            <article class="recordwatch-plan-card premium"><h3>Premium RecordWatch — Lifetime per Case</h3><p class="price-line"><strong>$39 one time</strong><br><span>Lifetime access for one saved case. No monthly or annual renewal.</span></p><ul><li>SMS alerts (with consent and provider availability)</li><li>Filing and missing-information reminders</li><li>Court status updates when available</li><li>Eligibility countdown for this case</li><li>Ongoing dashboard tracking for this case</li></ul><p class="meta-note">One payment covers a single saved case while RecordWatch remains available. Additional cases require separate purchases. The free eligibility check, optional $50 packet preparation service and court filing fees are separate. Updates depend on court and messaging-provider availability.</p><div class="recordwatch-actions"><button class="btn" type="button" data-recordwatch-checkout="lifetime_case">Unlock This Case — $39 Once</button></div></article>
           </div>
           <div class="recordwatch-countdown-panel">
             <div><strong id="recordwatchEstimatedDate">Not available yet</strong><span>Estimated eligibility date</span></div>
@@ -233,13 +233,14 @@
       }
       document.querySelectorAll("[data-recordwatch-checkout]").forEach(function (button) {
         button.addEventListener("click", async function () {
-          if (!window.RecordPathAuth || !(await RecordPathAuth.requireAuthAsync("subscribe to Premium RecordWatch", "recordwatch.html"))) return;
+          if (!window.RecordPathAuth || !(await RecordPathAuth.requireAuthAsync("purchase lifetime Premium RecordWatch for a saved case", "recordwatch.html"))) return;
           button.disabled = true;
           const status = document.getElementById("recordwatchEnrollmentStatus");
           status.textContent = "Opening secure Stripe checkout…";
           try {
             const plan = button.getAttribute("data-recordwatch-checkout");
-            const data = await RecordWatchNotifications.checkoutPremium(plan, { saved_case_id: active && active.id });
+            const caseId = window.RecordPathUserStore?.getActiveCaseId?.() || active && active.id;
+            const data = await RecordWatchNotifications.checkoutPremium("lifetime_case", { saved_case_id: caseId });
             if (!data.url) throw new Error("Stripe checkout did not return a URL.");
             window.location.assign(data.url);
           } catch (error) {
