@@ -92,7 +92,7 @@ test("Production webhook handles Stripe renewals, cancellation and payment failu
   assert.ok(server.includes("syncVerifiedRecordwatchStripeSubscription"));
   assert.ok(server.includes("verifiedPacketSession(session,owner,caseId)"));
   assert.ok(server.includes('app.post("/api/recordwatch/billing-portal"'));
-  assert.ok(server.includes("stripe.billingPortal.sessions.create"));
+  assert.ok(server.includes("recordwatchStripe.billingPortal.sessions.create"));
   assert.ok(server.includes("getRecordwatchBillingRow(user.id)"));
   assert.ok(server.includes('const planType = "free"'));
   assert.ok(server.includes("const premiumActive = false"));
