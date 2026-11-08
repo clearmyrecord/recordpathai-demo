@@ -89,6 +89,19 @@ smoke_check() {
   fi
 }
 
+# Authentication can be unavailable even when static pages return HTTP 200.
+# Surface it explicitly without ever logging public keys, tokens or credentials.
+report_auth_readiness() {
+  local status
+  status="$(curl --silent --show-error --max-time 20 --output "$SMOKE_DIR/auth-status.json" \
+    --write-out '%{http_code}' "$URL/api/auth/health" || true)"
+  if [ "$status" = "200" ]; then
+    echo "RecordWatch authentication configuration is present. Google provider must still be verified."
+  else
+    echo "::warning::RecordWatch email/Google sign-in is not configured in Cloud Run (auth readiness HTTP $status). Verify public Supabase URL + anon key; Google provider and allowed redirects in Supabase."
+  fi
+}
+
 rollback_after_smoke_failure() {
   local reason="$1"
   echo "$reason; reverting traffic to $OLD_REV" >&2
@@ -104,6 +117,8 @@ smoke_check "pilot-demo.html" "Illustrative demo" "Fictional pilot page" || \
   { echo "Candidate failed smoke check. Production traffic is unchanged." >&2; exit 5; }
 smoke_check "js/pilot-demo.js" "DEMO-2006-001" "Fictional pilot script" || \
   { echo "Candidate failed smoke check. Production traffic is unchanged." >&2; exit 5; }
+
+report_auth_readiness
 
 echo "Promoting validated revision $NEW_REV to 100% customer traffic..."
 gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \
@@ -134,6 +149,8 @@ smoke_check "pilot-demo.html" "Illustrative demo" "Production fictional pilot" |
   rollback_after_smoke_failure "Production pilot failed smoke check"
 smoke_check "js/pilot-demo.js" "DEMO-2006-001" "Production pilot script" || \
   rollback_after_smoke_failure "Production pilot script failed smoke check"
+
+report_auth_readiness
 
 echo "Cloud Run deployed revision $NEW_REV confirmed serving 100% of traffic and passing production smoke checks: $URL"
 echo "Public court-record indexing remains OFF until court authorization and status review."
