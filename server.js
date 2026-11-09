@@ -2125,14 +2125,20 @@ async function voidAffiliateCommission(paymentIntent,reason) {
     body:{status:"void",voided_at:new Date().toISOString(),void_reason:reason}
   });
 }
-app.get("/api/affiliates/readiness",async(req,res)=>{
+function affiliateApi(handler){
+  return (req,res)=>Promise.resolve(handler(req,res)).catch(error=>{
+    console.warn("Affiliate endpoint unavailable",error?.name||"unknown");
+    if(!res.headersSent)res.status(503).json({ok:false,error:"Partner service unavailable. Please retry later."});
+  });
+}
+app.get("/api/affiliates/readiness",affiliateApi(async(req,res)=>{
   const ready=await affiliateProgramMigrationReady();
   res.setHeader("Cache-Control","no-store");
   return res.json({applications_open:ready,referral_tracking_enabled:ready,
     automatic_payouts_enabled:false,commission_percent:20,
     paid_service_only:true,requires_partner_approval:true});
-});
-app.get("/api/affiliates/me",async(req,res)=>{
+}));
+app.get("/api/affiliates/me",affiliateApi(async(req,res)=>{
   const user=await requireApiUser(req,res);
   if(!user)return;
   if(!await affiliateProgramMigrationReady())
@@ -2161,8 +2167,8 @@ app.get("/api/affiliates/me",async(req,res)=>{
     referral_link:partner.status==="approved"?
       "https://recordpathai.com/?ref="+encodeURIComponent(partner.code):null
   }:null,totals});
-});
-app.post("/api/affiliates/apply",async(req,res)=>{
+}));
+app.post("/api/affiliates/apply",affiliateApi(async(req,res)=>{
   const user=await requireApiUser(req,res);
   if(!user)return;
   if(!await affiliateProgramMigrationReady())
@@ -2199,16 +2205,15 @@ app.post("/api/affiliates/apply",async(req,res)=>{
   });
   return res.status(201).json({ok:true,status:"pending",partner_id:rows?.[0]?.id,
     note:"Manual compliance review is required before a referral link becomes active."});
-});
-app.post("/api/affiliates/claim",async(req,res)=>{
+}));
+app.post("/api/affiliates/claim",affiliateApi(async(req,res)=>{
   const user=await requireApiUser(req,res);
   if(!user)return;
   if(!await affiliateProgramMigrationReady())
     return res.status(503).json({ok:false,error:"Referral attribution is not enabled."});
   const result=await claimAffiliateReferral(user.id,req.body?.referral_code);
   return res.status(result.claimed?200:409).json({ok:result.claimed,...result});
-});
-
+}));
 app.get("/api/recordwatch/database-readiness",async(req,res)=>{
   const migration_verified=await recordwatchBillingMigrationVerified();
   res.setHeader("Cache-Control","no-store");
