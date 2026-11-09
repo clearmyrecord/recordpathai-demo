@@ -245,11 +245,10 @@ export function registerAffiliatePayoutRoutes(app, {
     if(!Number.isFinite(available)||available<eligibility.amount_cents+feeReserve)
       return res.status(409).json({ok:false,error:"Stripe financial account needs sufficient available funds plus payout fees."});
     // Database RPC selects rows with FOR UPDATE and prevents duplicate reservations.
-    const batch=first(await supabaseRest("rpc/reserve_affiliate_payout_batch",{
+    const batchResult=await supabaseRest("rpc/reserve_affiliate_payout_batch",{
       method:"POST",body:{p_partner_id:id},prefer:"return=representation"
-    }));
-    // RPC may return an object rather than array, depending on PostgREST signature.
-    const reserved=batch||null;
+    });
+    const reserved=Array.isArray(batchResult)?batchResult[0]:batchResult;
     if(!reserved||!isUuid(reserved.id))
       throw new Error("Could not reserve affiliate commission batch.");
     if(reserved.stripe_recipient_account_id!==partner.stripe_recipient_account_id)
