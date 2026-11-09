@@ -4,68 +4,57 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title>RecordWatch SMS Opt-In — Public UI Preview | RecordPathAI</title>
+  <title>RecordWatch Premium Pre-Checkout Opt-In — Public Preview | RecordPathAI</title>
   <style>
-    :root { font: 16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#142742; background:#f2f5fb; }
-    * { box-sizing:border-box; }
-    main { max-width:780px; margin:35px auto; padding:0 16px 35px; }
-    header { padding:10px 0 18px; }
-    h1 { font-size:1.75rem; margin:12px 0 8px; } h2 { margin:0 0 12px; font-size:1.25rem; }
-    .card { border:1px solid #d3dded; border-radius:16px; background:white; padding:24px; box-shadow:0 4px 22px #193d7010; }
-    .tag { font-size:.75rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#34639b; }
-    p { margin:10px 0; }
-    .muted,.meta-note { font-size:.89rem; color:#48617c; }
-    .notice { border-left:4px solid #4368b3; padding:10px 14px; background:#eaf0fa; }
-    .recordwatch-optin-field { display:grid; gap:.35rem; margin:1rem 0; }
-    .recordwatch-optin-field input[type=tel] { width:100%; max-width:28rem; padding:.75rem; border:1px solid #9caac3; border-radius:8px; }
-    .recordwatch-optin-group { border:1px solid #d6e1ef; border-radius:12px; padding:1rem; margin:1rem 0; }
-    .recordwatch-optin-group legend { font-weight:700; }
-    .toggle-row { display:flex; align-items:flex-start; gap:.7rem; margin:.8rem 0; }
-    .toggle-row input { flex-shrink:0; width:1.1rem; height:1.1rem; margin-top:.3rem; }
-    .recordwatch-sms-disclosure { background:#f2f6fc; padding:.85rem 1rem; border-radius:8px; line-height:1.6; }
-    button { background:#1e4d9c; border:0; border-radius:8px; padding:12px 17px; color:white; font-weight:700; cursor:pointer; }
-    .confirmation { background:#f0f9f3; border:1px solid #b9dfc5; border-radius:10px; padding:16px; margin-top:16px; }
-    .confirmation[hidden] { display:none; }
-    a { color:#164b9e; }
+    :root{font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172c45;background:#f1f5fa}
+    *{box-sizing:border-box}main{max-width:800px;margin:28px auto;padding:0 18px 45px}
+    h1{font-size:1.8rem;line-height:1.2}h2{font-size:1.2rem}h3{font-size:1.05rem}
+    .card{background:white;padding:24px;margin:20px 0;border:1px solid #d2ddec;border-radius:14px}
+    .eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:#355f91;font-weight:700}
+    .note{background:#e8f0fb;border-left:4px solid #315d97;padding:12px 16px}
+    .muted{color:#506077;font-size:.9rem}.field{display:grid;gap:5px;margin:16px 0}
+    .field input{width:100%;max-width:420px;padding:11px;border:1px solid #99aac0;border-radius:8px;background:#fff}
+    fieldset{border:1px solid #d2ddec;border-radius:10px;margin:16px 0;padding:12px 16px}
+    legend{font-weight:700;padding:0 5px}.toggle{display:flex;gap:12px;align-items:flex-start;margin:12px 0}
+    .toggle input{margin-top:5px;accent-color:#204b93;width:19px;height:19px;flex:none}
+    .disclosure{background:#f0f4fb;padding:12px 16px;border-radius:8px;margin:12px 0}
+    a{color:#12469a}button{padding:12px 16px;color:white;background:#1d4c93;border:0;border-radius:8px;font-weight:700;cursor:pointer}
+    .confirmation{background:#f1faf3;border:1px solid #b2d5bc;padding:14px;border-radius:10px;margin-top:14px}
+    .confirmation[hidden]{display:none}
   </style>
 </head>
-<body>
-  <main>
-    <header><span class="tag">RecordPathAI · RecordWatch Premium</span>
-      <h1>SMS consent form — public preview</h1>
-      <p class="notice"><strong>For compliance review:</strong> This public page shows the same disclosure and opt-in controls used in the authenticated paid RecordWatch dashboard. This is an illustrative preview, not a live sign-up. No phone number or consent is collected here.</p>
-      <p>Actual authenticated enrollment: <a href="https://recordpathai.com/recordwatch-dashboard.html">RecordWatch Dashboard</a> (sign-in and a paid saved case required).</p>
-    </header>
-    <section class="card" aria-label="RecordWatch opt-in preview">
-      <span class="tag">Example: before consent is saved</span>
-      <h2>SMS opt-in and email preferences</h2>
-      <p class="muted">Choose the alerts you want. There are no marketing texts. Voluntary consent; not required to purchase Premium.</p>
-      <div id="recordwatchOptinPreview"></div>
-      <button type="button" id="showConfirmation">Preview the saved-confirmation screen</button>
-      <div class="confirmation" role="status" id="previewConfirmation" hidden>
-        <strong>Example: after the customer saves SMS preferences</strong>
-        <p>Preferences saved. SMS consent recorded for this paid case. No text was sent by saving; delivery depends on provider approval and availability.</p>
-        <p class="muted">Illustrative confirmation only. No real preferences were saved and no SMS was sent on this page.</p>
-      </div>
-    </section>
-    <p class="muted">RecordWatch eligibility updates are estimates, not court notifications. Customers can disable alerts in their dashboard or reply STOP. For assistance: <a href="mailto:matt@recordpathai.com">matt@recordpathai.com</a>.</p>
-  </main>
-  <script src="js/recordwatch-sms-opt-in.js"></script>
-  <script>
-    (function () {
-      "use strict";
-      var target=document.getElementById("recordwatchOptinPreview");
-      target.innerHTML=window.RecordWatchSmsOptIn.fields({
-        phone:"",emailChecked:false,smsConsentChecked:false,smsEnabledChecked:false
-      });
-      // The public preview never collects a phone number or consent.
-      var phone=document.getElementById("premiumPhone");
-      phone.disabled=true;
-      phone.placeholder="Private authenticated dashboard only";
-      document.getElementById("showConfirmation").addEventListener("click",function(){
-        document.getElementById("previewConfirmation").hidden=false;
-      });
-    }());
-  </script>
-</body>
-</html>
+<body><main>
+  <header>
+    <div class="eyebrow">RecordPathAI · RecordWatch Premium</div>
+    <h1>Notification preferences and SMS consent — checkout preview</h1>
+    <p class="note"><strong>Public compliance illustration — not an active enrollment.</strong> This page shows the planned pre-checkout form and confirmation for the $39 one-time RecordWatch Premium upgrade. It does not collect contact information, store consent, charge a card, or send messages. Actual account and payment activity is in the <a href="https://recordpathai.com/recordwatch-dashboard.html">RecordWatch dashboard</a>; pre-checkout preference integration is not yet live.</p>
+  </header>
+  <section class="card" aria-label="Illustration of pre-checkout opt-in">
+    <span class="eyebrow">Step A · Before Stripe Checkout</span>
+    <h2>RecordWatch Premium — $39 one time for one saved case</h2>
+    <p>No recurring subscription. Choose where you would like optional Premium timeline updates delivered. These notification contacts are separate from the email and phone entered during your eligibility intake.</p>
+    <div class="field"><label for="notifyEmail"><strong>Notification email (optional)</strong></label><input id="notifyEmail" type="email" autocomplete="off" placeholder="Email for Premium alerts" disabled><small class="muted">Used for RecordWatch notifications only if you opt in.</small></div>
+    <div class="field"><label for="notifyPhone"><strong>Notification mobile number (optional)</strong></label><input id="notifyPhone" type="tel" autocomplete="off" placeholder="US mobile number for Premium texts" disabled><small class="muted">Separate from any phone number provided during eligibility intake.</small></div>
+    <fieldset>
+      <legend>Optional notification choices</legend>
+      <label class="toggle"><input type="checkbox"><span>Yes, send non-marketing RecordWatch Premium timeline updates to the notification email address I entered above.</span></label>
+      <label class="toggle"><input type="checkbox"><span><strong>Optional SMS consent:</strong> Yes, I expressly agree to receive automated, non-marketing RecordWatch Premium estimated eligibility reminders and account updates from RecordPathAI at the mobile number I entered above.</span></label>
+      <p class="disclosure"><strong>SMS program:</strong> Message frequency varies based on saved-case milestones: up to five scheduled eligibility-date reminders per estimated eligibility date when applicable, plus occasional case-related account updates. <strong>Msg &amp; data rates may apply.</strong> Reply <strong>STOP</strong> to unsubscribe or <strong>HELP</strong> for assistance. SMS consent is <strong>not required to purchase Premium</strong> and can be withdrawn at any time. No marketing texts or sensitive court/charge details. Messages begin only after recorded consent, verified payment, and carrier/provider approval.</p>
+    </fieldset>
+    <fieldset>
+      <legend>Required purchase agreement — separate from SMS consent</legend>
+      <label class="toggle"><input type="checkbox"><span>I have read and agree to the <a href="https://recordpathai.com/terms.html">Terms of Service</a> and acknowledge the <a href="https://recordpathai.com/privacy.html">Privacy Policy</a>. This is required to continue to payment. Checking this box does not grant SMS or email notification consent.</span></label>
+    </fieldset>
+    <p class="muted">In the active checkout implementation, customers may leave SMS and email unchecked and still purchase Premium. The purchase button follows the agreements and routes to secure Stripe Checkout.</p>
+    <button type="button" id="previewButton">Preview what customers see after consent and purchase</button>
+    <div id="confirmation" class="confirmation" hidden role="status" aria-live="polite">
+      <span class="eyebrow">Step B · Example after successful payment and preference save</span>
+      <h3>Your RecordWatch Premium purchase is confirmed</h3>
+      <p>Your selected notification preferences have been saved for this paid case. SMS alerts will be enabled only if you expressly opted in and carrier approval is complete. You can edit destinations or disable notifications in RecordWatch at any time. No message was sent by viewing this confirmation.</p>
+      <p class="muted">Illustration only. This preview did not verify a payment or store any contact details or consent.</p>
+    </div>
+  </section>
+  <p class="muted">RecordWatch gives estimated eligibility reminders, not legal advice or official court notifications. For help email <a href="mailto:matt@recordpathai.com">matt@recordpathai.com</a>. <a href="https://recordpathai.com/privacy.html">Privacy Policy</a> · <a href="https://recordpathai.com/terms.html">Terms of Service</a>.</p>
+</main>
+<script>document.getElementById("previewButton").addEventListener("click",function(){document.getElementById("confirmation").hidden=false;});</script>
+</body></html>
