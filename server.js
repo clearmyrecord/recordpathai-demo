@@ -2291,7 +2291,8 @@ app.post("/api/affiliates/claim",affiliateApi(async(req,res)=>{
 // Secure affiliate recipient onboarding and owner-reviewed payouts.
 registerAffiliatePayoutRoutes(app,{
   requireApiUser,requireOperationsKey,supabaseRest,
-  affiliateApi,affiliateProgramMigrationReady,packetDatabaseReady,isUuid
+  affiliateApi,affiliateProgramMigrationReady,packetDatabaseReady,isUuid,
+  stripe,recordwatchStripe,affiliateCommissionCents
 });
 app.get("/api/recordwatch/database-readiness",async(req,res)=>{
   const migration_verified=await recordwatchBillingMigrationVerified();
