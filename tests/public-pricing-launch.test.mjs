@@ -14,7 +14,7 @@ test("Website publishes verified lifetime RecordWatch checkout without inventing
   assert.match(home, /RecordWatch Premium is live/);
   assert.match(home, /Only the \$39 RecordWatch purchase is live today/);
   assert.match(recordwatch, /data-recordwatch-checkout="lifetime_case"/);
-  assert.match(pricing, /The \$39 one-time RecordWatch purchase|independent \$39 RecordWatch Premium checkout/);
+  assert.match(pricing, /\$39 live one-time Premium checkout/);
   assert.match(pricing, /not yet available as a bundled purchase|not a live bundle checkout/i);
   assert.match(pricing, /Lob printing and mailing/);
 });
