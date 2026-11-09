@@ -1958,16 +1958,26 @@ async function recordwatchAuthToken(req, res) {
 
 // Public readiness check returns only booleans. It never exposes API keys,
 // webhook signing secrets, or customer information.
-function recordwatchBillingReadiness() {
+async function recordwatchBillingReadiness() {
   const key=process.env.STRIPE_RECORDWATCH_SECRET_KEY||"";
   const mode=/^(sk|rk)_test_/.test(key)?"sandbox":/^(sk|rk)_live_/.test(key)?"live":"unconfigured";
-  const prices=Boolean(process.env[RECORDWATCH_LIFETIME_PRICE_ENV]);
+  const priceId=process.env[RECORDWATCH_LIFETIME_PRICE_ENV]||"";
   const webhook=Boolean((process.env.STRIPE_RECORDWATCH_WEBHOOK_SECRET||"").startsWith("whsec_"));
   const persistence=packetDatabaseReady();
   const liveAllowed=mode!=="live"||process.env.RECORDWATCH_LIVE_BILLING_ENABLED==="true";
-  return {mode,prices_configured:prices,webhook_configured:webhook,
+  // Confirm the configured price belongs to the SAME Stripe account as the
+  // secret key, and is an active non-recurring USD $39 price, not just a string.
+  let verifiedPrice=false;
+  if(recordwatchStripe && /^price_/.test(priceId) && liveAllowed){
+    try{
+      const price=await recordwatchStripe.prices.retrieve(priceId);
+      assertRecordwatchLifetimePrice(price);
+      verifiedPrice=true;
+    }catch(error){ console.warn("RecordWatch price validation unavailable",error?.type||error?.name||"unknown"); }
+  }
+  return {mode,prices_configured:verifiedPrice,webhook_configured:webhook,
     secure_database_configured:persistence,live_enabled:mode==="live"&&liveAllowed,
-    ready:Boolean(recordwatchStripe&&prices&&webhook&&persistence&&liveAllowed)};
+    ready:Boolean(recordwatchStripe&&verifiedPrice&&webhook&&persistence&&liveAllowed)};
 }
 // Only this server-side receipt (created by the security migration) can
 // authorize Checkout. A configured service-role key alone is insufficient.
@@ -1991,8 +2001,8 @@ app.get("/api/recordwatch/database-readiness",async(req,res)=>{
   });
 });
 
-app.get("/api/recordwatch/billing-readiness",(req,res)=>{
-  const status=recordwatchBillingReadiness();
+app.get("/api/recordwatch/billing-readiness",async(req,res)=>{
+  const status=await recordwatchBillingReadiness();
   res.setHeader("Cache-Control","no-store");
   return res.status(status.ready?200:503).json(status);
 });
@@ -2001,7 +2011,7 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
   try {
     const user=await recordwatchAuthToken(req,res);
     if(!user)return;
-    if(!recordwatchBillingReadiness().ready || !await recordwatchBillingMigrationVerified())
+    if(!(await recordwatchBillingReadiness()).ready || !await recordwatchBillingMigrationVerified())
       return res.status(503).json({ok:false,error:"RecordWatch lifetime checkout is not configured. No charge was created."});
     if(req.body?.plan && req.body.plan!=="lifetime_case")
       return res.status(400).json({ok:false,error:"RecordWatch Premium is $39 once per saved case; subscriptions are no longer sold."});
