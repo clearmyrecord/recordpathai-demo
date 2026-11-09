@@ -241,10 +241,43 @@
           recordwatchPreferencesPanel.innerHTML = '<div class="recordwatch-enrollment-form"><p class="eyebrow-mini">Premium notification preferences</p><h2>Email + SMS require Premium</h2><p class="muted">Free case tracking includes an on-screen countdown only. Unlock this case for $39 once to configure email reminders and opt-in SMS notifications.</p></div>';
         }
         var events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
-        var schedule = [180, 90, 30, 7, 0].map(function (days) { return days === 0 ? 'Eligibility-day reminder' : days + '-day eligibility reminder'; });
-        recordwatchReminderSchedule.innerHTML = '<p class="eyebrow-mini">Reminder schedule</p><h2>Upcoming Premium reminders</h2>' + list(schedule.concat(['Packet-not-generated reminders', 'Missing-info reminders', 'Court-status updates when supported courts come online.']));
+        var schedule = [
+          { time: '180 days', description: 'Advance eligibility reminder' },
+          { time: '90 days', description: 'Eligibility reminder' },
+          { time: '30 days', description: 'Eligibility reminder' },
+          { time: '7 days', description: 'Final eligibility reminder' },
+          { time: 'Day of', description: 'Estimated eligibility-date alert' }
+        ];
+        recordwatchReminderSchedule.innerHTML =
+          '<div class="recordwatch-section-heading"><p class="eyebrow-mini">Reminder schedule</p>' +
+          '<h2>Upcoming Premium reminders</h2>' +
+          '<p class="muted">Notifications are available with paid RecordWatch Premium for this filing. Reminder timing is based on estimated eligibility.</p></div>' +
+          '<div class="recordwatch-schedule-grid">' +
+            '<div class="recordwatch-schedule-group"><h3>Eligibility countdown</h3>' +
+              '<ol class="recordwatch-schedule-list">' + schedule.map(function (item) {
+                return '<li><span class="recordwatch-schedule-time">' + esc(item.time) + '</span><span>' + esc(item.description) + '</span></li>';
+              }).join('') + '</ol></div>' +
+            '<div class="recordwatch-schedule-group"><h3>Additional notifications</h3>' +
+              '<ul class="recordwatch-schedule-list">' +
+                '<li><span class="recordwatch-schedule-time">Packet progress</span><span>Reminders for incomplete or ungenerated packets</span></li>' +
+                '<li><span class="recordwatch-schedule-time">Missing details</span><span>Prompts to complete required case information</span></li>' +
+                '<li><span class="recordwatch-schedule-time">Court status</span><span>Updates only when a supported court integration is available</span></li>' +
+              '</ul></div></div>' +
+          '<p class="recordwatch-schedule-note">' +
+            (premium
+              ? 'Email delivery depends on the configured provider. SMS also requires your consent and an available provider.'
+              : 'These are Premium features, not scheduled free alerts. Unlock this filing to configure email and opt-in SMS notifications.') +
+          '</p>';
         var notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
-        recordwatchHistoryPanel.innerHTML = '<p class="eyebrow-mini">Reminder history / upcoming alerts</p><h2>Recent RecordWatch reminders</h2>' + (notifications.length ? list(notifications.slice(-6).reverse().map(function (item) { return (item.subject || item.type) + ' — ' + item.channel + ' — ' + (item.status || 'logged'); })) : '<p class="muted">No reminder history yet.</p>');
+        recordwatchHistoryPanel.innerHTML =
+          '<div class="recordwatch-section-heading"><p class="eyebrow-mini">Activity</p><h2>Recent RecordWatch reminders</h2>' +
+          '<p class="muted">Notification history for saved cases.</p></div>' +
+          (notifications.length
+            ? '<ul class="recordwatch-history-list">' + notifications.slice(-6).reverse().map(function (item) {
+                return '<li><span class="recordwatch-history-title">' + esc(item.subject || item.type) + '</span>' +
+                  '<span class="recordwatch-history-meta">' + esc(item.channel || 'in-app') + ' · ' + esc(item.status || 'logged') + '</span></li>';
+              }).join('') + '</ul>'
+            : '<p class="recordwatch-empty-copy">No reminders recorded yet.</p>');
         bindPremiumPanelEvents();
       }
       function bindPremiumPanelEvents() {
