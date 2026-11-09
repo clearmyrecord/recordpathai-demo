@@ -44,7 +44,7 @@
     </div>
   </header>
   <main><section class="page-hero"><div class="container hero-card"><span class="eyebrow">Account</span><h1>Account settings</h1><p>Update your Supabase account profile.</p></div></section><section class="page-section"><div class="container"><section class="page-card auth-card"><form id="accountForm" class="form-grid" onsubmit="return false;"><div class="field field-full"><label for="fullName">Full name</label><input id="fullName" type="text" required /></div><div class="field"><label for="email">Email</label><input id="email" type="email" required /></div><div class="field"><label for="phone">Phone</label><input id="phone" type="tel" /></div><div class="summary-box field-full"><h3>Account metadata</h3><div class="summary-list"><div class="summary-row"><strong>User ID</strong><span id="userId">—</span></div><div class="summary-row"><strong>Created</strong><span id="createdAt">—</span></div><div class="summary-row"><strong>Last login</strong><span id="lastLoginAt">—</span></div></div></div><div class="button-row field-full"><button class="btn btn-primary" type="submit">Save Account</button><button class="btn btn-secondary" id="logoutBtn" type="button">Logout</button></div></form><p id="accountStatus" class="meta-note" role="status"></p></section>
-<section class="page-card auth-card notification-preferences-card"><h2>Notification Preferences</h2><p class="meta-note">Choose how RecordPathAI may contact you about eligibility reminders, packet reminders, and product updates.</p><form id="notificationPreferencesForm" class="form-grid" onsubmit="return false;"><label class="toggle-row field-full"><input id="prefEligibilityEmail" type="checkbox" checked /> <span>Email me when I may become eligible</span></label><label class="toggle-row field-full"><input id="prefEligibilitySms" type="checkbox" /> <span>Text me when I may become eligible</span></label><label class="toggle-row field-full"><input id="prefCourtStatus" type="checkbox" checked /> <span>Send court status updates</span></label><label class="toggle-row field-full"><input id="prefPacketReminders" type="checkbox" checked /> <span>Remind me to finish my packet</span></label><label class="toggle-row field-full"><input id="prefMarketingEmails" type="checkbox" /> <span>Send product updates and announcements</span></label><div class="button-row field-full"><button class="btn btn-primary" type="submit">Save Notification Preferences</button></div></form><p id="notificationPreferencesStatus" class="meta-note" role="status"></p></section>
+<section class="page-card auth-card notification-preferences-card"><h2>Notification Preferences</h2><p class="meta-note">Email and SMS alerts for eligibility, court-status, and packet reminders require $39 lifetime Premium for each saved case. Marketing opt-in is separate.</p><form id="notificationPreferencesForm" class="form-grid" onsubmit="return false;"><label class="toggle-row field-full"><input id="prefEligibilityEmail" type="checkbox" checked /> <span>Premium: Email eligibility reminders</span></label><label class="toggle-row field-full"><input id="prefEligibilitySms" type="checkbox" /> <span>Premium: SMS eligibility reminders (consent required)</span></label><label class="toggle-row field-full"><input id="prefCourtStatus" type="checkbox" checked /> <span>Premium: Court status updates when supported</span></label><label class="toggle-row field-full"><input id="prefPacketReminders" type="checkbox" checked /> <span>Premium: Packet reminders</span></label><label class="toggle-row field-full"><input id="prefMarketingEmails" type="checkbox" /> <span>Send product updates and announcements</span></label><div class="button-row field-full"><button class="btn btn-primary" type="submit">Save Notification Preferences</button></div></form><p id="notificationPreferencesStatus" class="meta-note" role="status"></p></section>
 <section class="page-card auth-card"><h2>RecordWatch Premium — One-Time Per Case</h2>
   <p id="accountSubscriptionStatus" class="meta-note" role="status">Checking paid case status…</p>
   <div class="button-row"><a class="btn btn-secondary" href="recordwatch-dashboard.html">View RecordWatch</a>
@@ -74,13 +74,23 @@
         prefMarketingEmails.checked = prefs.marketing_emails === true;
         notificationPreferencesStatus.textContent = data.source === "local_fallback" ? data.fallbackNote : "Preferences loaded from Supabase.";
       }
+      function setPaidNotificationControls(premium) {
+        // Free accounts can save their case but cannot activate any automated
+        // RecordWatch email/SMS reminders. Marketing preferences stay separate.
+        [prefEligibilityEmail, prefEligibilitySms, prefCourtStatus, prefPacketReminders].forEach(function (input) {
+          input.disabled = !premium;
+        });
+      }
       async function loadRecordWatchBilling() {
+        setPaidNotificationControls(false);
         try {
           const savedCaseId = RecordPathUserStore.getActiveCaseId?.() || "";
           const result = await RecordWatchNotifications.fetchPremiumSubscription(savedCaseId);
           const sub = result.subscription;
-          if (!sub) {
-            accountSubscriptionStatus.textContent = "Free RecordWatch for the selected case. Lifetime Premium is $39 once per case. No subscription required.";
+          const verifiedPremium = Boolean(window.RecordWatchMessageProvider && RecordWatchMessageProvider.isPremium(sub));
+          setPaidNotificationControls(verifiedPremium);
+          if (!verifiedPremium) {
+            accountSubscriptionStatus.textContent = "Free case tracking only: No email or SMS notifications. Unlock $39 lifetime Premium for this saved case to activate alerts.";
             accountBillingPortal.hidden = true;
             return;
           }
@@ -94,6 +104,7 @@
             accountBillingPortal.hidden = !sub.stripe_customer_id;
           }
         } catch (error) {
+          setPaidNotificationControls(false);
           accountSubscriptionStatus.textContent = "Unable to verify subscription status: " + error.message;
           accountBillingPortal.hidden = true;
         }
