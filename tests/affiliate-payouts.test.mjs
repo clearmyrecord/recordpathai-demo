@@ -49,6 +49,7 @@ test("Stripe recipient, payout bank account and exact immutable batch amount mus
   const account={identity:{country:"US"},
     configuration:{recipient:{capabilities:{bank_accounts:{ach:{status:"active"}}}}}};
   assert.equal(hasActiveUsAchRecipient(account),true);
+  assert.equal(hasActiveUsAchRecipient({...account,identity:{country:"us"}}),true);
   assert.equal(hasActiveUsAchRecipient({...account,identity:{country:"CA"}}),false);
   const intent={id:"poi_1234ABC",confirmation_method:"manual",
     from:{financial_account:"fa_ABC",currency:"usd"},
@@ -72,6 +73,9 @@ test("Private-only payout API retains separated keys and operator approval",()=>
   assert.match(service,/STRIPE_AFFILIATE_PAYOUT_KEY/);
   assert.match(service,/confirmation_method:"manual"/);
   assert.match(service,/recordpath-affiliate-payout-confirm-/);
+  assert.match(service,/accountLinkType=hasActiveUsAchRecipient/);
+  assert.match(service,/type:accountLinkType/);
+  assert.doesNotMatch(service,/configurations:\["recipient"\]/);
   assert.match(service,/\/api\/affiliates\/ops\/review-commissions/);
   assert.match(service,/\/api\/affiliates\/ops\/reconcile/);
   assert.match(service,/charge\.amount_refunded/);

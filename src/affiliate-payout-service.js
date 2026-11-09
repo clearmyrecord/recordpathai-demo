@@ -116,7 +116,7 @@ export function registerAffiliatePayoutRoutes(app, {
         return res.status(400).json({ok:false,error:"Select individual or organization."});
       const created=await stripeV2("POST","/v2/core/accounts",{
         contact_email:user.email,display_name:partner.display_name,
-        identity:{country:"US",entity_type:entityType},
+        identity:{country:"us",entity_type:entityType},
         configuration:{recipient:{capabilities:{bank_accounts:{ach:{requested:true}}}}},
         include:["configuration.recipient","identity","requirements"]
       },"recordpath-affiliate-recipient-"+partner.id);
@@ -140,15 +140,14 @@ export function registerAffiliatePayoutRoutes(app, {
     const acct=await recipientAccount(recipient);
     if(acct.contact_email&&acct.contact_email.toLowerCase()!==user.email.toLowerCase())
       return res.status(403).json({ok:false,error:"Recipient email does not match the partner account."});
+    const accountLinkType=hasActiveUsAchRecipient(acct)?"account_update":"account_onboarding";
+    const returnUrl="https://recordpathai.com/partners.html?stripe_payout_return=1";
+    const refreshUrl="https://recordpathai.com/partners.html?stripe_payout_refresh=1";
     const link=await stripeV2("POST","/v2/core/account_links",{
       account:recipient,
       use_case:{
-        type:"account_onboarding",
-        account_onboarding:{
-          configurations:["recipient"],
-          return_url:"https://recordpathai.com/partners.html?stripe_payout_return=1",
-          refresh_url:"https://recordpathai.com/partners.html?stripe_payout_refresh=1"
-        }
+        type:accountLinkType,
+        [accountLinkType]:{return_url:returnUrl,refresh_url:refreshUrl}
       }
     });
     const url=new URL(link.url||"");
