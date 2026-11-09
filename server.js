@@ -960,10 +960,14 @@ async function createRecordwatchNotification(subscription, type, context = {}) {
   }
   const caseSmsOptIn=Boolean(authorizedPremium && casePremiumPreferences?.sms_enabled === true &&
     casePremiumPreferences?.sms_consent_at && !casePremiumPreferences?.sms_opted_out_at);
+  // Paid case-level email preferences take precedence over the free
+  // enrollment row, whose notify_email flag is intentionally always false.
+  // Existing recurring customers without case preferences retain their prior opt-in.
   const caseEmailOptIn=Boolean(authorizedPremium &&
-    casePremiumPreferences?.email_enabled !== false &&
-    preferences.eligibility_email !== false &&
-    subscription.notify_email !== false);
+    (casePremiumPreferences
+      ? casePremiumPreferences.email_enabled !== false
+      : subscription.notify_email !== false));
+  if(casePremiumPreferences)preferences.eligibility_email=caseEmailOptIn;
   const paidCaseSubscription={...subscription,premium_active:authorizedPremium,
     notify_email:caseEmailOptIn,
     notify_sms:caseSmsOptIn,
