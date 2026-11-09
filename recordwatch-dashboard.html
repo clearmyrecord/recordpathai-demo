@@ -374,6 +374,60 @@
             request.then(function (result) { if (result.url) window.location.href = result.url; else { if (status) status.textContent = 'Premium RecordWatch updated.'; loadPremiumState(); } }).catch(function (error) { if (status) status.textContent = error.message; }).finally(function () { button.disabled = false; });
           });
         });
+        var purchaseForm = document.getElementById('recordwatchPreCheckoutForm');
+        if (purchaseForm) {
+          purchaseForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var status=document.getElementById('recordwatchCheckoutStatus');
+            var submit=purchaseForm.querySelector('button[type="submit"]');
+            var email=String(document.getElementById('premiumNotificationEmail').value||'').trim().toLowerCase();
+            var phone=RecordWatchMessageProvider.normalizePhoneForPayload(
+              document.getElementById('premiumPhone').value);
+            var emailEnabled=document.getElementById('premiumEmailEnabled').checked;
+            var smsEnabled=document.getElementById('premiumSmsEnabled').checked;
+            var smsConsent=document.getElementById('premiumSmsConsent').checked;
+            var smsTerms=document.getElementById('premiumSmsTerms').checked;
+            var purchaseTerms=document.getElementById('recordwatchPurchaseTerms').checked;
+            var user=activeUser(),caseId=selectedSavedCaseId();
+            if (!purchaseTerms) {status.textContent='Please review and accept the purchase Terms and Privacy Policy before continuing.';return;}
+            if (emailEnabled && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+              status.textContent='Enter the email address you want notifications delivered to.';return;
+            }
+            if (smsEnabled && (!/^\+1[2-9][0-9]{9}$/.test(phone)||!smsConsent||!smsTerms)) {
+              status.textContent='To opt into SMS, provide a valid US mobile number, consent to texts and acknowledge Terms/Privacy.';return;
+            }
+            if (!user?.id || !caseId) {
+              status.textContent='Sign in and save a case before purchasing Premium.';return;
+            }
+            // This short-lived same-tab draft is NEVER sent to Stripe, and
+            // cannot activate alerts without a verified paid-case entitlement.
+            var draft={
+              userId:user.id,caseId:caseId,createdAt:Date.now(),
+              notification_email:email,phone_number:phone,
+              email_enabled:emailEnabled,
+              sms_enabled:smsEnabled,sms_consent:smsEnabled && smsConsent,
+              sms_terms_acknowledged:smsEnabled && smsTerms,
+              disclosure_version:RecordWatchSmsOptIn.DISCLOSURE_VERSION
+            };
+            try {
+              sessionStorage.setItem('recordwatchPendingCheckoutConsent',JSON.stringify(draft));
+            }catch(error) {
+              status.textContent='Your browser must permit session storage so these preferences can be restored after Stripe checkout.';return;
+            }
+            submit.disabled=true;
+            status.textContent='Opening secure Stripe checkout for $39…';
+            RecordWatchNotifications.checkoutPremium('lifetime_case',{
+              saved_case_id:caseId,purchase_terms_acknowledged:true,
+              sms_consent_disclosure_version:RecordWatchSmsOptIn.DISCLOSURE_VERSION
+            }).then(function(result){
+              if(!result.url)throw new Error('Stripe checkout did not provide a payment link.');
+              window.location.assign(result.url);
+            }).catch(function(error){
+              status.textContent=error.message||'Checkout is unavailable. No charge was created.';
+              submit.disabled=false;
+            });
+          });
+        }
         var form = document.getElementById('premiumPreferencesForm');
         if(form){
           fetch("/api/recordwatch/alerts/readiness",{cache:"no-store"}).then(function(r){return r.json();}).then(function(r){
