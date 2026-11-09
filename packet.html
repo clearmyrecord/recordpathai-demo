@@ -2978,8 +2978,16 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       async function generateSealingPdf() {
         try {
+          // Live paid purchases must download the SAME approved PDF that was
+          // hashed and stored for court review. Never regenerate after payment.
+          if(verifiedPacketSessionId){
+            await downloadApprovedPacket();
+            return;
+          }
+          if(!isPacketPaymentBypassEnabled())
+            throw new Error("The final court packet requires verified Stripe payment and independent court review.");
           if (!ensurePacketGenerationPrerequisites()) return;
-          setStatus("Generating PDF packet...");
+          setStatus("Generating local development PDF packet...");
 
           if (window.RecordPathAuth && !RecordPathAuth.requireAuth("generate PDF packet", "packet.html")) return;
           if (!window.PDFLib) throw new Error("pdf-lib failed to load.");
@@ -3111,7 +3119,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           <li>${hasSignature ? "✅" : "⚠️"} Signature present (conformed format: <strong>${escapeHtml(conformedSignature)}</strong>).</li>
           <li>⚠️ Proposed order needed? If yes, generate as DOCX later.</li>
           <li>⚠️ User is not incarcerated self-represented filer (confirm before filing).</li>
-          <li>✅ User understands this is an e-filing-ready packet, not automatic e-filing.</li>
+          <li>✅ This is a document-preparation PDF, not an automatic court filing. Wood County sealing applications may require paper filing and a separate confirmed court fee.</li>
         `;
 
         checklist.style.display = "block";
@@ -3159,7 +3167,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         if (state === "eligiblePaid") {
           paymentCallout.className = "callout success";
-          paymentCallout.textContent = "Payment complete. Your packet is unlocked and ready to generate.";
+          paymentCallout.textContent = "Payment verified. Download the same signed PDF approved before checkout. Mailing and court filing are tracked separately in RecordWatch.";
         } else if (state === "devBypass") {
           paymentCallout.className = "callout success";
           paymentCallout.textContent = "Dev payment bypass active. Your packet is unlocked and ready to generate.";
@@ -3188,9 +3196,13 @@ document.addEventListener("DOMContentLoaded", async function () {
         const state = getPacketGenerationState(packetEligibility);
 
         if (state === "eligiblePaid" || state === "devBypass") {
-          if (!ensurePacketGenerationPrerequisites()) return;
+          // An already-paid case remains entitled to its exact approved PDF,
+          // regardless of later browser draft changes or missing local intake.
           if(state==="eligiblePaid")await downloadApprovedPacket();
-          else await generateSealingPdf();
+          else {
+            if (!ensurePacketGenerationPrerequisites()) return;
+            await generateSealingPdf();
+          }
           return;
         }
 
@@ -3604,11 +3616,9 @@ document.addEventListener("DOMContentLoaded", async function () {
             await generateSealingPdf();
             return;
           }
-          if (!requireSavedDrawnSignature()) {
-            setCheckoutError(SIGNATURE_REQUIRED_MESSAGE);
-            setStatus(SIGNATURE_REQUIRED_MESSAGE, "error");
-            return;
-          }
+          // Signature is required at private-PDF preparation and independently
+          // checked by the server-side reviewer. Customers returning to checkout
+          // must not re-draw or replace their already approved signed PDF.
           if (window.RecordPathAuth && !RecordPathAuth.requireAuth("pay for and unlock your packet", "packet.html")) {
             const authMessage = "Please sign in before checkout so RecordPathAI can save this packet to your account.";
             setCheckoutError(authMessage);
