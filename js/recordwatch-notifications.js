@@ -110,23 +110,22 @@
     payload = payload || {};
     var userId = clean(payload.user_id || payload.userId || currentUserId());
     var caseId = clean(payload.case_id || payload.caseId || "demo-case");
-    var planType = clean(payload.plan_type || payload.planType || "free").toLowerCase() === "premium" ? "premium" : "free";
-    var expiresAt = payload.premium_expires_at || payload.premiumExpiresAt || null;
-    var notExpired = !expiresAt || new Date(expiresAt).getTime() > Date.now();
-    var premiumActive = Boolean(payload.premium_active || payload.premiumActive || planType === "premium") && notExpired;
+    // The public enrollment form creates only free, on-screen tracking.
+    // Browser-supplied Premium flags never create paid messaging access.
+    var premiumActive = false;
     var wantsSms = Boolean(payload.notify_sms || payload.notifySms);
     var subscriptions = loadSubscriptions();
     var existing = subscriptions.find(function (item) { return item.user_id === userId && item.case_id === caseId; });
     var row = Object.assign(existing || { id: id("rws"), user_id: userId, case_id: caseId, created_at: new Date().toISOString() }, {
       notification_email: clean(payload.notification_email || payload.notificationEmail || payload.email),
       notification_phone: clean(payload.notification_phone || payload.notificationPhone || payload.phone),
-      notify_email: payload.notify_email !== false && payload.notifyEmail !== false,
-      notify_sms: premiumActive && wantsSms,
-      sms_requires_premium: wantsSms && !premiumActive,
-      plan_type: premiumActive ? "premium" : planType,
-      premium_active: premiumActive,
-      premium_started_at: payload.premium_started_at || payload.premiumStartedAt || (premiumActive ? new Date().toISOString() : null),
-      premium_expires_at: expiresAt,
+      notify_email: false,
+      notify_sms: false,
+      sms_requires_premium: wantsSms,
+      plan_type: "free",
+      premium_active: false,
+      premium_started_at: null,
+      premium_expires_at: null,
       status: clean(payload.status) || "active"
     });
     if (!existing) subscriptions.push(row);
@@ -204,12 +203,9 @@
 
   function createNotification(subscription, type, context) {
     var rows = loadNotifications();
-    var preferences = loadPreferences(subscription.user_id);
-    var channels = [];
-    if (subscription.notify_email !== false && subscription.notification_email) channels.push("email");
-    if (subscription.notify_sms && subscription.notification_phone && subscription.premium_active && preferences.eligibility_sms) channels.push("sms");
-    if (!channels.length) channels.push("in_app");
-    if (type.indexOf("court_status_") === 0 && !subscription.premium_active && !(context && context.admin_override)) channels = ["in_app"];
+    // Local fallback can only display an on-screen entry. Email and SMS
+    // delivery happens exclusively on the server after Stripe verification.
+    var channels = ["in_app"];
     var made = channels.map(function (channel) {
       return { id: id("rwn"), user_id: subscription.user_id, case_id: subscription.case_id, type: type, channel: channel, subject: subject(type), message: channel === "sms" ? "You may now be eligible to clear your record. Log in to RecordPathAI to continue." : message(type, context), sent_at: new Date().toISOString(), status: "logged", source: context && context.source || "local_fallback", notification_date: context && context.notification_date || dateOnly(new Date()) };
     });
