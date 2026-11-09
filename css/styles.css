@@ -3195,3 +3195,25 @@ body.home-page .cta .btn {
   .recordwatch-live-banner-inner { align-items: flex-start; }
   .recordwatch-live-banner-actions { width: 100%; }
 }
+
+
+/* Planned fulfillment tracking panel inside RecordWatch */
+.recordwatch-dashboard-page .recordwatch-fulfillment-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 12px;
+}
+.recordwatch-dashboard-page .recordwatch-fulfillment-steps > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 15px;
+  border: 1px solid #dbe7fb;
+  border-radius: 15px;
+  background: #fff;
+  color: #596d8e;
+}
+.recordwatch-dashboard-page .recordwatch-fulfillment-steps strong { font-size: 14px; color: #183c7b; line-height: 1.3; }
+.recordwatch-dashboard-page .recordwatch-fulfillment-steps span { font-size: 13px; line-height: 1.5; }
+.recordwatch-dashboard-page .recordwatch-filing-roadmap .recordwatch-section-heading { max-width: 860px; }
