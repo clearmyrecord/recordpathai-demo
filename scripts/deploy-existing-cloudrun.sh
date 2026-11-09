@@ -58,7 +58,9 @@ new=status.get("latestReadyRevisionName") or ""
 created=status.get("latestCreatedRevisionName") or ""
 matches=[t for t in status.get("traffic",[]) if t.get("tag")==tag]
 if not new or created!=new or new==old or len(matches)!=1 or matches[0].get("revisionName")!=new:
-  raise SystemExit("New ready revision and preflight tag are not yet consistent")
+  # Log only revision metadata. Never expose environment, credentials or service config.
+  tags=[(t.get("tag"),t.get("revisionName"),t.get("percent",0)) for t in status.get("traffic",[]) if t.get("tag")==tag]
+  raise SystemExit("Preflight revision metadata mismatch: created=%r ready=%r old=%r preview_tags=%r" % (created,new,old,tags))
 if matches[0].get("percent",0)!=0:
   raise SystemExit("Refusing a candidate already receiving customer traffic")
 url=matches[0].get("url","")
