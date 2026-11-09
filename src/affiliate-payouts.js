@@ -57,7 +57,7 @@ export function validatePayoutIntent(intent, { recipient, financialAccount, amou
 }
 export function hasActiveUsAchRecipient(recipient) {
   const capabilities = recipient?.configuration?.recipient?.capabilities;
-  return recipient?.identity?.country === "US" &&
+  return String(recipient?.identity?.country || "").toUpperCase() === "US" &&
     capabilities?.bank_accounts?.ach?.status === "active";
 }
 export function shouldRecordPayoutPaid(stripeStatus) {
