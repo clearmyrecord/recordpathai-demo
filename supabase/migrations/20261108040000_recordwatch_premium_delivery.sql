@@ -10,7 +10,7 @@ alter table public.recordwatch_notification_preferences
 -- No alert can depend on the old email_enabled=true default without this new
 -- opt-in timestamp. Existing customers must affirm email preference in UI.
 create table if not exists public.recordwatch_sms_suppressions (
-  phone_number text primary key check(phone_number ~ '^[+]1[2-9][0-9]{9}
+  phone_number text primary key check(phone_number ~ '^[+]1[2-9][0-9]{9}$'),
   opted_out_at timestamptz not null default now(),
   source text not null default 'twilio_signed_stop'
 );
