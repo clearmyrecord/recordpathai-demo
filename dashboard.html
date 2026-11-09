@@ -58,7 +58,7 @@
         <div class="section-heading-row">
           <div>
             <h2>RecordWatch</h2>
-            <p class="muted">Track your eligibility date, reminders, notification status, and upcoming alerts.</p>
+            <p class="muted">Track your eligibility date and saved cases. Email and SMS alerts require $39 lifetime Premium per case.</p>
           </div>
           <a class="btn secondary" href="recordwatch-dashboard.html">Open RecordWatch</a>
         </div>
@@ -185,7 +185,7 @@
       const user = RecordPathUserStore.getCurrentUser();
       const data = await RecordWatchNotifications.fetchRemoteData(user && user.id);
       if (RecordWatchNotifications.fetchPremiumSubscription) {
-        try { localStorage.setItem("recordwatchPremiumSubscription", JSON.stringify(await RecordWatchNotifications.fetchPremiumSubscription())); } catch (error) {}
+        try { localStorage.setItem("recordwatchPremiumSubscription", JSON.stringify(await RecordWatchNotifications.fetchPremiumSubscription(window.RecordPathUserStore?.getActiveCaseId?.() || ""))); } catch (error) {}
       }
       return data;
     }
@@ -211,10 +211,10 @@
         ["Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")],
         ["Confidence", confidence ? confidence.replace(/_/g, " ") + " — " + confidenceReason : "Needs review"],
         ["Premium RecordWatch", isPremium ? "Premium" : "Free"],
-        ["Next Reminder Date", days !== null && days > 180 ? "180-day reminder" : (days !== null && days > 90 ? "90-day reminder" : (days !== null && days > 30 ? "30-day reminder" : (days !== null && days > 7 ? "7-day reminder" : (days !== null && days >= 0 ? "Eligibility-day reminder" : "No alerts scheduled"))))],
-        ["Notification Status", isPremium ? "Email + SMS available" : (subscriptions.length ? "Free email reminders active" : "Not activated")],
-        ["Communication Preferences", subscriptions[0] && subscriptions[0].notify_sms ? "Premium SMS + email" : "Email reminders"],
-        ["Upcoming Alerts", days !== null && days > 0 ? "180, 90, 30, 7, and day-of reminders" : "No alerts scheduled"],
+        ["Next Reminder Date", !isPremium ? "Premium required" : (days !== null && days > 180 ? "180-day reminder" : (days !== null && days > 90 ? "90-day reminder" : (days !== null && days > 30 ? "30-day reminder" : (days !== null && days > 7 ? "7-day reminder" : (days !== null && days >= 0 ? "Eligibility-day reminder" : "No alerts scheduled")))))],
+        ["Notification Status", isPremium ? "Email + SMS available with consent" : "Email + SMS: Premium only"],
+        ["Communication Preferences", isPremium ? "Manage paid email / SMS alerts" : "No free email or SMS"],
+        ["Upcoming Alerts", isPremium && days !== null && days > 0 ? "180, 90, 30, 7, and day-of reminders" : (isPremium ? "No alerts scheduled" : "Premium required")],
         ["Reminder History", notifications.length ? notifications.slice(-3).map((item) => item.subject).filter(Boolean).join("; ") || "No reminders yet" : "No reminders yet"]
       ];
       document.getElementById("recordWatchWidget").innerHTML = items.map((item) => {
