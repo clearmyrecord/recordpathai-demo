@@ -57,10 +57,12 @@
     var consent = Boolean(formValues.sms_consent || formValues.smsConsent || formValues.sms_consent_at || formValues.smsConsentAt);
     var optedOut = formValues.sms_opted_out_at || formValues.smsOptedOutAt || null;
     var candidate = {
-      email_enabled: formValues.email_enabled !== false && formValues.emailEnabled !== false,
+      email_enabled: formValues.email_enabled === true || formValues.emailEnabled === true,
       sms_enabled: wantsSms,
       phone_number: phone,
-      sms_consent_at: consent ? (formValues.sms_consent_at || formValues.smsConsentAt || new Date().toISOString()) : null,
+      sms_consent: consent,
+      // Server alone timestamps and persists fresh affirmative consent.
+      sms_consent_at: consent ? (formValues.sms_consent_at || formValues.smsConsentAt || null) : null,
       sms_opted_out_at: optedOut,
       reminder_180_enabled: formValues.reminder_180_enabled !== false,
       reminder_90_enabled: formValues.reminder_90_enabled !== false,
