@@ -11,7 +11,8 @@ import {
 
 export function registerAffiliatePayoutRoutes(app, {
   requireApiUser, requireOperationsKey, supabaseRest,
-  affiliateApi, affiliateProgramMigrationReady, packetDatabaseReady, isUuid
+  affiliateApi, affiliateProgramMigrationReady, packetDatabaseReady, isUuid,
+  stripe, recordwatchStripe, affiliateCommissionCents
 }) {
   const minAmount=5000;
   const payoutEnabled=()=>process.env.AFFILIATE_PAYOUTS_LIVE_ENABLED==="true" &&
@@ -62,7 +63,7 @@ export function registerAffiliatePayoutRoutes(app, {
   async function loadCommissions(partnerId){
     const rows=await supabaseRest("affiliate_commissions",{
       query:"?partner_id=eq."+encodeURIComponent(partnerId)+
-        "&select=id,commission_cents,status,available_after,payout_batch_id,paid_at"
+        "&select=id,commission_cents,status,available_after,payout_batch_id,paid_at,product,stripe_checkout_session_id,stripe_payment_intent_id,service_fee_cents,commission_bps"
     });
     return Array.isArray(rows)?rows:[];
   }
@@ -228,6 +229,73 @@ export function registerAffiliatePayoutRoutes(app, {
     return privateResponse(res,{ok:true,status:first(rows)?.status||patch.status||partner.status,
       payouts_paused:first(rows)?.payouts_paused});
   }));
+
+  // Maturity alone NEVER approves payment. Owner reviews every candidate
+  // against its own Stripe Checkout session and actual charge before release.
+  app.post("/api/affiliates/ops/review-commissions",affiliateApi(async(req,res)=>{
+    const owner=await requireOwner(req,res);if(!owner)return;
+    if(!await migrationReady()||req.body?.reviewed_payments!==true)
+      return res.status(409).json({ok:false,error:"Private migration and explicit payment review required."});
+    const id=req.body?.partner_id;
+    if(!isUuid(id))return res.status(400).json({ok:false,error:"Partner ID required."});
+    const partner=await loadPartner(id);
+    if(!partner||partner.status!=="approved"||!partner.compliance_approved_at)
+      return res.status(409).json({ok:false,error:"Approved partner required."});
+    const entries=await loadCommissions(id);
+    const mature=entries.filter(c=>c.status==="pending" && !c.payout_batch_id &&
+      Number.isFinite(new Date(c.available_after).getTime()) &&
+      new Date(c.available_after).getTime()<=Date.now()).slice(0,50);
+    let approved=0,voided=0,manualReview=0;
+    for(const c of mature){
+      const client=c.product==="recordwatch_lifetime"?recordwatchStripe:
+        c.product==="packet_preparation"?stripe:null;
+      if(!client){manualReview++;continue;}
+      try{
+        const session=await client.checkout.sessions.retrieve(c.stripe_checkout_session_id,{
+          expand:["payment_intent.latest_charge"]
+        });
+        const payment=session.payment_intent;
+        const pi=typeof payment==="object"?payment:null;
+        const charge=typeof pi?.latest_charge==="object"?pi.latest_charge:null;
+        const valid=Boolean(session.id===c.stripe_checkout_session_id &&
+          session.payment_status==="paid" && session.status==="complete" &&
+          session.mode==="payment" && session.currency==="usd" &&
+          pi?.id===c.stripe_payment_intent_id && pi.status==="succeeded" &&
+          charge && charge.paid===true && charge.currency==="usd" &&
+          charge.disputed!==true && !charge.refunded &&
+          Number(charge.amount_refunded||0)===0 &&
+          affiliateCommissionCents(c.product,Number(c.service_fee_cents),
+            Number(c.commission_bps))===Number(c.commission_cents));
+        if(!valid){
+          // A refunded or disputed session is not payable. Other mismatches require investigation.
+          if(charge && (charge.disputed===true||charge.refunded===true||
+            Number(charge.amount_refunded||0)>0)){
+            await supabaseRest("affiliate_commissions",{
+              method:"PATCH",query:"?id=eq."+encodeURIComponent(c.id)+"&status=eq.pending",
+              body:{status:"void",void_reason:charge.disputed?"dispute":"refund",
+                voided_at:new Date().toISOString(),reviewed_at:new Date().toISOString()}
+            });
+            voided++;
+          }else{manualReview++;}
+          continue;
+        }
+        await supabaseRest("affiliate_commissions",{
+          method:"PATCH",query:"?id=eq."+encodeURIComponent(c.id)+
+            "&status=eq.pending&payout_batch_id=is.null&available_after=lte."+
+            encodeURIComponent(new Date().toISOString()),
+          body:{status:"approved",reviewed_at:new Date().toISOString()}
+        });
+        approved++;
+      }catch(error){
+        console.warn("Affiliate commission needs manual review",error?.name||"unknown");
+        manualReview++;
+      }
+    }
+    return privateResponse(res,{ok:true,checked:mature.length,approved,voided,
+      manual_review:manualReview,remaining_review:entries.filter(c=>c.status==="pending").length-mature.length,
+      note:"Only verified mature, nonrefunded, nondisputed service payments were approved."});
+  }));
+
   app.post("/api/affiliates/ops/prepare",affiliateApi(async(req,res)=>{
     const owner=await requireOwner(req,res);if(!owner)return;
     if(!await migrationReady()||!payoutEnabled())
