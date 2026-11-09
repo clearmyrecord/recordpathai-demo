@@ -120,9 +120,9 @@ test("RecordWatch enrollment requires an authenticated account and preserves pen
   assert.match(enrollment,/id="recordwatchEnrollmentForm"/);
   assert.match(enrollment,/signup\.html\?returnUrl=recordwatch\.html/);
   assert.match(enrollment,/login\.html\?returnUrl=recordwatch\.html/);
-  assert.match(enrollment,/RecordPathAuth\.requireAuthAsync\("activate RecordWatch reminders", "recordwatch\.html"\)/);
+  assert.match(enrollment,/RecordPathAuth\.requireAuthAsync\("save RecordWatch case tracking", "recordwatch\.html"\)/);
   const savePending=enrollment.indexOf('localStorage.setItem("recordpathai_pending_recordwatch_enrollment"');
-  const authGuard=enrollment.indexOf('RecordPathAuth.requireAuthAsync("activate RecordWatch reminders"');
+  const authGuard=enrollment.indexOf('RecordPathAuth.requireAuthAsync("save RecordWatch case tracking"');
   const register=enrollment.indexOf('RecordWatchNotifications.registerSubscription({');
   assert.ok(savePending>=0 && authGuard>savePending && register>authGuard);
 });
