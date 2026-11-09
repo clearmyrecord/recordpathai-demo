@@ -100,7 +100,8 @@ test("Production webhook handles Stripe renewals, cancellation and payment failu
   assert.ok(server.includes('process.env.STRIPE_RECORDWATCH_SECRET_KEY'));
   assert.ok(server.includes('process.env.STRIPE_RECORDWATCH_WEBHOOK_SECRET'));
   assert.ok(server.includes('app.get("/api/recordwatch/billing-readiness"'));
-  assert.ok(server.includes('recordwatchBillingReadiness().ready'));
+  assert.ok(server.includes('(await recordwatchBillingReadiness()).ready'));
+  assert.ok(server.includes('assertRecordwatchLifetimePrice(price)'));
   assert.ok(server.includes("async function recordwatchBillingMigrationVerified()"));
   assert.ok(server.includes('app.get("/api/recordwatch/database-readiness"'));
   assert.ok(server.includes("if(!await recordwatchBillingMigrationVerified())"));
