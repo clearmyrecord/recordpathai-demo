@@ -61,7 +61,7 @@ export function hasActiveUsAchRecipient(recipient) {
     capabilities?.bank_accounts?.ach?.status === "active";
 }
 export function shouldRecordPayoutPaid(stripeStatus) {
-  // 'succeeded' means the entire payout intent completed; merely 'posted'
-  // or 'processing' is not proof that the destination was paid.
-  return stripeStatus === "succeeded";
+  // 'posted' means funds have left Stripe. It is not proof of bank receipt;
+  // returned payouts must be reversed in the commission ledger.
+  return stripeStatus === "posted";
 }
