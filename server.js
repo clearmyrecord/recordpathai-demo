@@ -719,6 +719,10 @@ function upsertMemoryPreferences(payload = {}) {
 }
 
 function shouldSendChannel({ channel, type, subscription, preferences, adminOverride = false }) {
+  // Neither email nor SMS may ever be delivered for a free case, including
+  // reminders, court updates, or requests carrying an admin_override flag.
+  // premium_active is resolved from Stripe-backed server entitlements.
+  if ((channel === "email" || channel === "sms") && subscription.premium_active !== true) return false;
   if (channel === "in_app") return true;
   if (channel === "email") {
     if (type.startsWith("eligibility_")) return preferences.eligibility_email !== false;
@@ -956,15 +960,21 @@ async function createRecordwatchNotification(subscription, type, context = {}) {
   }
   const caseSmsOptIn=Boolean(authorizedPremium && casePremiumPreferences?.sms_enabled === true &&
     casePremiumPreferences?.sms_consent_at && !casePremiumPreferences?.sms_opted_out_at);
+  const caseEmailOptIn=Boolean(authorizedPremium &&
+    casePremiumPreferences?.email_enabled !== false &&
+    preferences.eligibility_email !== false &&
+    subscription.notify_email !== false);
   const paidCaseSubscription={...subscription,premium_active:authorizedPremium,
+    notify_email:caseEmailOptIn,
     notify_sms:caseSmsOptIn,
     notification_phone:caseSmsOptIn ? casePremiumPreferences.phone_number : null};
   if(casePremiumPreferences)preferences.eligibility_sms=caseSmsOptIn;
   const subject = recordwatchSubject(type, context);
   const message = recordwatchMessage(type, context);
   const channels = [];
-  if (paidCaseSubscription.notify_email !== false && paidCaseSubscription.notification_email) channels.push("email");
-  if (paidCaseSubscription.notify_sms && paidCaseSubscription.notification_phone) channels.push("sms");
+  if (authorizedPremium && paidCaseSubscription.notify_email &&
+      paidCaseSubscription.notification_email) channels.push("email");
+  if (authorizedPremium && paidCaseSubscription.notify_sms && paidCaseSubscription.notification_phone) channels.push("sms");
   if (!channels.length) channels.push("in_app");
 
   const eligibleChannels = channels.filter((channel) => shouldSendChannel({ channel, type, subscription:paidCaseSubscription, preferences, adminOverride: context.admin_override === true }));
@@ -1040,15 +1050,15 @@ function upsertRecordwatchSubscription(payload) {
   const userId = safe(payload.user_id || payload.userId, "demo-user");
   const caseId = safe(payload.case_id || payload.caseId, "demo-case");
   const existing = recordwatchMemory.subscriptions.find((item) => item.user_id === userId && item.case_id === caseId);
-  // Public enrollment only creates the FREE reminder plan.
-  // Stripe webhooks are the only path that grants paid entitlements.
+  // Public enrollment only saves the FREE case and on-screen countdown.
+  // NO email or SMS reminders are included; only Stripe verifies paid access.
   const planType = "free";
   const expiresAt = null;
   const premiumActive = false;
   const row = Object.assign(existing || { id: recordwatchId("rws"), user_id: userId, case_id: caseId, created_at: new Date().toISOString() }, {
     notification_email: safe(payload.notification_email || payload.notificationEmail || payload.email),
     notification_phone: safe(payload.notification_phone || payload.notificationPhone || payload.phone),
-    notify_email: payload.notify_email !== false && payload.notifyEmail !== false,
+    notify_email: false,
     notify_sms: false,
     plan_type: "free",
     premium_active: false,
