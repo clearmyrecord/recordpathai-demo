@@ -251,7 +251,7 @@
     recordWatch: {
       title: "RecordWatch",
       neverMiss: "Never Miss Your Eligibility Date",
-      freeReminders: "Free Eligibility Reminders",
+      freeReminders: "Free Case Tracking",
       premium: "Premium RecordWatch",
       smsAlerts: "SMS alerts",
       emailReminders: "Email reminders",
@@ -432,7 +432,7 @@
       welcome: "Bienvenido", nextAction: "Siguiente acción", reviewPacketPayment: "Revisar paquete y pago", savedCases: "Casos guardados", purchaseLedger: "Registro de compras", totalPurchases: "Compras totales", creditsRefunds: "Créditos / Reembolsos", currentBalance: "Saldo actual", lastTransaction: "Última transacción", noTransactions: "Aún no hay transacciones", ledgerEmpty: "Sus compras y créditos aparecerán aquí cuando haya actividad disponible."
     },
     recordWatch: {
-      title: "RecordWatch", neverMiss: "No pierda su fecha de elegibilidad", freeReminders: "Recordatorios gratuitos de elegibilidad", premium: "RecordWatch Premium", smsAlerts: "Alertas por SMS", emailReminders: "Recordatorios por correo electrónico", filingReminders: "Recordatorios de presentación", courtStatusUpdates: "Actualizaciones del estado del tribunal", communicationPreferences: "Preferencias de comunicación", upcomingAlerts: "Próximas alertas", reminderHistory: "Historial de recordatorios", notificationStatus: "Estado de notificación", noReminders: "Aún no hay recordatorios", noAlerts: "No hay alertas programadas", notActivated: "RecordWatch: no activado", smsConsent: "Acepto recibir recordatorios de elegibilidad y alertas de RecordWatch por SMS.", stopOptOut: "Responda STOP para dejar de recibir mensajes SMS en cualquier momento.", signInSms: "Inicie sesión para administrar recordatorios SMS.", premiumRequiredSms: "Se requiere RecordWatch Premium antes de activar SMS.", enterPhoneSms: "Ingrese un número de teléfono antes de activar SMS.", checkConsentSms: "Marque la casilla de consentimiento SMS antes de activar SMS.", optedOutSms: "SMS está dado de baja. Responda START a su proveedor de SMS si está disponible y luego guarde el consentimiento de nuevo."
+      title: "RecordWatch", neverMiss: "No pierda su fecha de elegibilidad", freeReminders: "Seguimiento gratuito de casos", premium: "RecordWatch Premium", smsAlerts: "Alertas por SMS", emailReminders: "Recordatorios por correo electrónico", filingReminders: "Recordatorios de presentación", courtStatusUpdates: "Actualizaciones del estado del tribunal", communicationPreferences: "Preferencias de comunicación", upcomingAlerts: "Próximas alertas", reminderHistory: "Historial de recordatorios", notificationStatus: "Estado de notificación", noReminders: "Aún no hay recordatorios", noAlerts: "No hay alertas programadas", notActivated: "RecordWatch: no activado", smsConsent: "Acepto recibir recordatorios de elegibilidad y alertas de RecordWatch por SMS.", stopOptOut: "Responda STOP para dejar de recibir mensajes SMS en cualquier momento.", signInSms: "Inicie sesión para administrar recordatorios SMS.", premiumRequiredSms: "Se requiere RecordWatch Premium antes de activar SMS.", enterPhoneSms: "Ingrese un número de teléfono antes de activar SMS.", checkConsentSms: "Marque la casilla de consentimiento SMS antes de activar SMS.", optedOutSms: "SMS está dado de baja. Responda START a su proveedor de SMS si está disponible y luego guarde el consentimiento de nuevo."
     },
     courtAccess: { title: "Acceso para tribunales", onlineFilings: "Presentaciones en línea", filingReview: "Revisión de presentaciones", approvals: "Aprobaciones", integrations: "Integraciones", dashboard: "Panel del tribunal" },
     clerk: { title: "Cuenta del secretario" },
@@ -528,7 +528,7 @@
     "No transactions yet": "Aún no hay transacciones",
     "Your purchases and credits will appear here...": "Sus compras y créditos aparecerán aquí...",
     "Never Miss Your Eligibility Date": "No pierda su fecha de elegibilidad",
-    "Free Eligibility Reminders": "Recordatorios gratuitos de elegibilidad",
+    "Free Case Tracking": "Seguimiento gratuito de casos",
     "Premium RecordWatch": "RecordWatch Premium",
     "SMS alerts": "Alertas por SMS",
     "Email reminders": "Recordatorios por correo electrónico",
