@@ -8,6 +8,7 @@ const dashboard=read("recordwatch-dashboard.html");
 const provider=read("js/recordwatch-sms-opt-in.js");
 const preview=read("recordwatch-sms-opt-in-preview.html");
 const server=read("server.js");
+const providerDispatch=read("src/recordwatch-alert-dispatch.js");
 const terms=read("terms.html");
 const privacy=read("privacy.html");
 
@@ -57,7 +58,7 @@ test("Server requires Terms acknowledgment and current disclosure for fresh SMS 
   assert.match(server,/const changedPhone=Boolean/);
   assert.match(server,/recordwatch_sms_suppressions/);
   assert.match(server,/Paid RecordWatch Premium is required/);
-  assert.match(server,/RECORDWATCH_SMS_CAMPAIGN_APPROVED/);
+  assert.match(providerDispatch,/RECORDWATCH_SMS_CAMPAIGN_APPROVED/);
 });
 
 test("Terms and Privacy match the SMS program and include mandatory disclosures",()=>{
