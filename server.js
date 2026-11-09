@@ -2636,7 +2636,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
       finalSuccessUrl = rawSuccessUrl.includes("session_id=") ? rawSuccessUrl : `${rawSuccessUrl}${rawSuccessUrl.includes("?") ? "&" : "?"}session_id={CHECKOUT_SESSION_ID}`;
       finalCancelUrl = safeCheckoutRedirect(cancelUrl, baseUrl, "/packet.html?payment=cancelled");
     } catch (error) { return res.status(400).json({ error: error.message }); }
-    const internalOrderId = `packet_${Date.now()}`;
     const savedCaseId = safe((req.body || {}).saved_case_id || (req.body || {}).savedCaseId || caseInfo.saved_case_id || caseInfo.savedCaseId);
     const checkoutCaseId = safe((req.body || {}).case_id || (req.body || {}).caseId || caseInfo.case_id || caseInfo.caseId || savedCaseId || caseInfo.caseNumber);
     if (!isUuid(savedCaseId)) {
@@ -2651,6 +2650,25 @@ app.post("/api/create-checkout-session", async (req, res) => {
       });
     }
     quote={...release.quote,canCollect:true};
+    // A paid filing already held or sent for the same saved case must not be
+    // charged again. A refund/dispute or failed mail needs support review first.
+    const priorOrders=await supabaseRest("packet_fulfillment_jobs",{
+      query:"?user_id=eq."+encodeURIComponent(checkoutUser.id)+
+        "&case_id=eq."+encodeURIComponent(savedCaseId)+
+        "&select=status&order=created_at.desc&limit=10"
+    });
+    if(Array.isArray(priorOrders) && priorOrders.some(order=>
+      ["paid_hold","ready_for_dispatch","submitted_to_lob","manual_filing","delivered"].includes(order.status)))
+      return res.status(409).json({ok:false,alreadyPurchased:true,
+        error:"A verified packet payment already exists for this saved case. Open RecordWatch to check filing progress; do not pay again."});
+    // Repeat clicks within the same 5-minute window reuse a single Stripe
+    // Checkout Session with exactly matching metadata and redirect URLs.
+    const checkoutBucket=Math.floor(Date.now()/300000);
+    const checkoutKey=createHash("sha256").update([
+      "packet-checkout",checkoutUser.id,savedCaseId,release.caseFingerprint,
+      quote.totalCents,finalSuccessUrl,finalCancelUrl,checkoutBucket
+    ].join(":")).digest("hex");
+    const internalOrderId="packet_"+checkoutKey.slice(0,24);
     const checkoutCaseNumber = safe((req.body || {}).case_number || (req.body || {}).caseNumber || caseInfo.case_number || caseInfo.caseNumber);
     const wantsRecordwatchAddon = recordwatchAddon === true || recordwatchAddon === "true" || (req.body || {}).recordwatch_addon === true || (req.body || {}).recordwatchAddon === true;
     if(wantsRecordwatchAddon)return res.status(400).json({error:"The 12-month RecordWatch add-on has been retired. Purchase $39 lifetime monitoring separately for your saved case."});
@@ -2705,7 +2723,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
         // Do not send criminal charges, case numbers, dates or addresses to Stripe metadata.
 
       }
-    });
+    },{idempotencyKey:checkoutKey});
 
     return res.json({
       url: session.url,
