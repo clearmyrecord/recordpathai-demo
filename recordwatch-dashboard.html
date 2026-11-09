@@ -67,18 +67,20 @@
       <section class="recordwatch-widget recordwatch-preferences-panel" id="recordwatchPreferencesPanel"></section>
       <section class="recordwatch-widget recordwatch-reminder-schedule" id="recordwatchReminderSchedule"></section>
       <section class="recordwatch-widget recordwatch-history-panel" id="recordwatchHistoryPanel"></section>
-       <section class="recordwatch-widget recordwatch-filing-roadmap" aria-label="Upcoming filing fulfillment tracker">
-         <div class="recordwatch-section-heading"><p class="eyebrow-mini">Next integration · Filing and delivery</p><h2>Packet and mailing tracker — coming next</h2>
-           <p class="muted">RecordWatch will keep the full filing timeline in one place after signed packet checkout and Lob mailing are connected. These stages are a preview, not current shipment statuses.</p>
+       <section class="recordwatch-widget recordwatch-filing-roadmap" aria-label="Private filing and delivery status">
+         <div class="recordwatch-section-heading">
+           <p class="eyebrow-mini">Packet · payment · Lob · court</p>
+           <h2>My packet and mailing status</h2>
+           <p class="muted">This panel reads your private saved-case filing records, not an estimated or simulated order. Lob mailing and court filing are separate steps.</p>
          </div>
-         <div class="recordwatch-fulfillment-steps">
-           <div><strong>1. Signed packet</strong><span>PDF generation and signature review</span></div>
-           <div><strong>2. Payment verified</strong><span>$50 service + applicable court fee</span></div>
-           <div><strong>3. Printed &amp; mailed</strong><span>Planned Lob production and mailing</span></div>
-           <div><strong>4. Delivery tracked</strong><span>Tracking number and delivery history</span></div>
-           <div><strong>5. Court progress</strong><span>Filing/receipt status when verified</span></div>
+         <p id="recordwatchFilingStatus" class="recordwatch-empty-copy" role="status" aria-live="polite">Select a saved case to check its packet and mailing status.</p>
+         <div id="recordwatchFilingSteps" class="recordwatch-fulfillment-steps" aria-label="Verified filing milestones"></div>
+         <div id="recordwatchFilingReference" class="recordwatch-schedule-note"></div>
+         <div class="recordwatch-actions">
+           <button class="btn secondary" id="refreshRecordwatchFiling" type="button">Refresh filing status</button>
+           <a class="btn secondary" id="recordwatchPacketLink" href="packet.html">Open signed-packet preparation</a>
          </div>
-         <p class="recordwatch-schedule-note">These five fulfillment stages are not yet linked to live Lob events or court docket status. The independent $39 RecordWatch Premium checkout is live and was payment-tested. <a href="pricing.html">See the full $189 Wood County example</a>.</p>
+         <p class="recordwatch-schedule-note">A payment alone does not submit documents to a court. Lob submission is not USPS mailing, and USPS delivery is not court acceptance. The $50 packet service and Lob live dispatch remain subject to court review, authorization and provider setup. <a href="pricing.html">Pricing and fulfillment status</a>.</p>
        </section>
       <div class="recordwatch-actions"><button class="btn secondary" id="exportJson" type="button">Export RecordWatch Data JSON</button><button class="btn danger" id="clearData" type="button">Clear Demo Data</button></div>
       <div id="casesContainer" class="recordwatch-stack"></div>
@@ -107,6 +109,7 @@
   <script src="js/saved-case-cards.js"></script>
   <script src="js/i18n.js" defer></script>
   <script src="js/auth.js"></script>
+  <script src="js/recordwatch-filing-tracker.js"></script>
   <script>
     (function () {
       "use strict";
