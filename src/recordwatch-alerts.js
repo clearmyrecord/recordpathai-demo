@@ -35,12 +35,17 @@ export function isPremiumAlertAllowed({lifetime,caseId,prefs,channel,phoneSuppre
   return false;
 }
 export function neutralAlertContent(kind,channel){
-  const message="A RecordWatch Premium timeline update is available. Sign in to RecordPathAI to review your saved case.";
+  const milestoneReached=kind==="eligibility_reached";
+  // Keep case details, dates and charge/docket information out of SMS.
+  const message=milestoneReached
+    ?"A RecordWatch Premium timeline milestone is ready for review. Sign in to RecordPathAI for your saved case."
+    :"A RecordWatch Premium timeline update is available. Sign in to RecordPathAI to review your saved case.";
+  const smsText=milestoneReached
+    ?"RecordPathAI RecordWatch: A saved timeline milestone is ready for review. Sign in to your account for details. Reply STOP to opt out; HELP for help. Msg & data rates may apply."
+    :"RecordPathAI RecordWatch: A timeline update is available. Sign in to your account to review it. Reply STOP to opt out; HELP for help. Msg & data rates may apply.";
   return {
-    subject:"RecordWatch Premium: Timeline update",
-    message:channel==="sms"
-      ? "RecordPathAI RecordWatch: A timeline update is available. Sign in to your account to review it. Reply STOP to opt out; HELP for help. Msg & data rates may apply."
-      : message,
+    subject:milestoneReached?"RecordWatch Premium: Timeline milestone":"RecordWatch Premium: Timeline update",
+    message:channel==="sms"?smsText:message,
     kind
   };
 }
