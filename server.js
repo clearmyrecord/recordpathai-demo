@@ -2423,6 +2423,164 @@ app.post("/api/recordwatch/cancel", async (req, res) => {
   }
 });
 
+// Alert delivery is never enabled merely because Stripe Premium is active.
+// The operator applies the opt-in migration, verifies each provider and
+// schedules an authenticated daily job before setting LIVE_ENABLED=true.
+async function recordwatchAlertMigrationReady(){
+  if(!packetDatabaseReady())return false;
+  try{
+    const rows=await supabaseRest("recordwatch_alert_migration_receipts",{
+      query:"?id=eq.20261108040000_recordwatch_premium_delivery&select=id&limit=1"
+    });
+    return Array.isArray(rows)&&rows.length===1;
+  }catch{return false;}
+}
+function alertsLiveReady(r,db){
+  return Boolean(r.enabled && db && (r.email_ready||r.sms_ready));
+}
+app.get("/api/recordwatch/alerts/readiness",async(req,res)=>{
+  const providers=providerReadiness(process.env);
+  const migration_verified=await recordwatchAlertMigrationReady();
+  res.setHeader("Cache-Control","no-store");
+  return res.json({...providers,migration_verified,
+    ready:alertsLiveReady(providers,migration_verified),
+    daily_scheduler_configured:Boolean((process.env.RECORDWATCH_ALERTS_SCHEDULER_KEY||"").length>=32),
+    preview_only:!alertsLiveReady(providers,migration_verified)});
+});
+async function alertRecipientEmail(userId){
+  const config=supabaseRestConfig();
+  if(!config||!process.env.SUPABASE_SERVICE_ROLE_KEY)return "";
+  const response=await fetch(config.url+"/auth/v1/admin/users/"+encodeURIComponent(userId),{
+    headers:{apikey:process.env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization:"Bearer "+process.env.SUPABASE_SERVICE_ROLE_KEY},
+    signal:AbortSignal.timeout(12000)
+  });
+  if(!response.ok)throw new Error("Recipient's authenticated email unavailable");
+  const json=await response.json();
+  return json.email_confirmed_at && validAlertEmail(json.email)?json.email:"";
+}
+async function verifyPremiumAlertPayment(row){
+  if(!recordwatchStripe||!row||row.status!=="active"||row.revoked_at)return false;
+  try{
+    const intent=await recordwatchStripe.paymentIntents.retrieve(
+      row.stripe_payment_intent_id,{expand:["latest_charge"]});
+    const charge=typeof intent.latest_charge==="string"
+      ?await recordwatchStripe.charges.retrieve(intent.latest_charge):intent.latest_charge;
+    return intent.status==="succeeded" && intent.currency==="usd" &&
+      intent.amount_received===RECORDWATCH_LIFETIME_CENTS &&
+      !charge?.refunded && !charge?.disputed && Number(charge?.amount_refunded||0)===0 &&
+      intent.metadata?.product==="premium_recordwatch_lifetime" &&
+      intent.metadata?.user_id===row.user_id &&
+      intent.metadata?.saved_case_id===row.saved_case_id;
+  }catch(error){
+    console.warn("RecordWatch alert payment verification unavailable",error?.type||error?.name||"unknown");
+    return false;
+  }
+}
+async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today}){
+  const r=providerReadiness(process.env);
+  if(!(await recordwatchAlertMigrationReady())||
+    !(channel==="email"?r.email_ready:r.sms_ready))return {status:"provider_unavailable"};
+  const [lifetime,preferences]=await Promise.all([
+    getRecordwatchLifetimeCase(userId,caseId),
+    supabaseRest("recordwatch_notification_preferences",{query:"?user_id=eq."+
+      encodeURIComponent(userId)+"&saved_case_id=eq."+encodeURIComponent(caseId)+"&limit=1"})
+  ]);
+  const prefs=Array.isArray(preferences)?preferences[0]||null:null;
+  const suppressed=channel==="sms" && prefs?.phone_number
+    ?await supabaseRest("recordwatch_sms_suppressions",{
+      query:"?phone_number=eq."+encodeURIComponent(prefs.phone_number)+"&limit=1"
+    }):[];
+  if(!isPremiumAlertAllowed({lifetime,caseId,prefs,channel,
+      phoneSuppressed:Array.isArray(suppressed)&&suppressed.length>0}))
+    return {status:"not_consented_or_not_paid"};
+  if(!await verifyPremiumAlertPayment(lifetime))return {status:"payment_not_verified"};
+  const recipient=channel==="email"?await alertRecipientEmail(userId):prefs.phone_number;
+  if(!(channel==="email"?validAlertEmail(recipient):validSmsPhone(recipient)))
+    return {status:"recipient_unverified"};
+  const reservation=await supabaseRest("recordwatch_alert_deliveries",{
+    method:"POST",
+    query:"?on_conflict=saved_case_id,kind,channel,eligibility_date,reminder_on",
+    prefer:"resolution=ignore-duplicates,return=representation",
+    body:{user_id:userId,saved_case_id:caseId,kind,channel,
+      eligibility_date:date,reminder_on:today,
+      provider:channel==="email"?"resend":"twilio",status:"reserved"}
+  });
+  const entry=Array.isArray(reservation)?reservation[0]:null;
+  if(!entry)return {status:"already_reserved"};
+  try{
+    const text=neutralAlertContent(kind,channel);
+    const receipt=channel==="email"
+      ?await sendPremiumEmail({to:recipient,subject:text.subject,message:text.message})
+      :await sendPremiumSms({to:recipient,message:text.message});
+    await supabaseRest("recordwatch_alert_deliveries",{
+      method:"PATCH",query:"?id=eq."+encodeURIComponent(entry.id),
+      body:{status:"provider_accepted",provider_message_id:receipt.id,
+        updated_at:new Date().toISOString()}
+    });
+    return {status:"provider_accepted"};
+  }catch(error){
+    // Do not auto-retry ambiguous provider results: they can send duplicates.
+    await supabaseRest("recordwatch_alert_deliveries",{
+      method:"PATCH",query:"?id=eq."+encodeURIComponent(entry.id),
+      body:{status:"failed_review",updated_at:new Date().toISOString()}
+    }).catch(()=>{});
+    console.warn("Premium message needs delivery review",error?.name||"unknown");
+    return {status:"failed_review"};
+  }
+}
+async function runPaidRecordwatchAlerts(){
+  const providers=providerReadiness(process.env);
+  if(!alertsLiveReady(providers,await recordwatchAlertMigrationReady()))
+    throw new Error("Premium alerts not activated");
+  const now=new Date().toISOString(),today=now.slice(0,10);
+  const paidCases=await supabaseRest("recordwatch_lifetime_cases",{
+    query:"?status=eq.active&revoked_at=is.null&select=user_id,saved_case_id,status,revoked_at,amount_cents,currency,stripe_checkout_session_id,stripe_payment_intent_id&limit=1000"
+  });
+  const totals={cases_checked:0,provider_accepted:0,already_reserved:0,skipped:0,
+    failed_review:0,more_cases_possible:paidCases.length===1000};
+  for(const entitlement of paidCases){
+    totals.cases_checked++;
+    const caseRows=await supabaseRest("saved_cases",{
+      query:"?id=eq."+encodeURIComponent(entitlement.saved_case_id)+
+        "&user_id=eq."+encodeURIComponent(entitlement.user_id)+
+        "&select=id,eligibility_date&limit=1"
+    });
+    const date=Array.isArray(caseRows)?caseRows[0]?.eligibility_date:null;
+    const reminder=reminderForDate(date,today);
+    if(!reminder){totals.skipped++;continue;}
+    for(const channel of ["email","sms"]){
+      const outcome=await sendCasePremiumAlert({
+        userId:entitlement.user_id,caseId:entitlement.saved_case_id,
+        kind:reminder.kind,date:String(date).slice(0,10),channel,today
+      });
+      if(outcome.status==="provider_accepted")totals.provider_accepted++;
+      else if(outcome.status==="already_reserved")totals.already_reserved++;
+      else if(outcome.status==="failed_review")totals.failed_review++;
+      else totals.skipped++;
+    }
+  }
+  return totals;
+}
+app.post("/api/operator/recordwatch/run-alerts",async(req,res)=>{
+  const expected=process.env.RECORDWATCH_ALERTS_SCHEDULER_KEY||"";
+  const supplied=req.get("x-recordwatch-alerts-key")||"";
+  const a=Buffer.from(expected),b=Buffer.from(supplied);
+  if(expected.length<32||a.length!==b.length||!timingSafeEqual(a,b))
+    return res.status(403).json({ok:false,error:"Authorized alert scheduler only."});
+  if(!await recordwatchAlertMigrationReady())
+    return res.status(503).json({ok:false,error:"Premium alert migration is not verified."});
+  if(!providerReadiness(process.env).enabled)
+    return res.status(503).json({ok:false,error:"Premium alert dispatch is disabled."});
+  try{
+    const result=await runPaidRecordwatchAlerts();
+    return res.json({ok:true,...result});
+  }catch(error){
+    console.warn("RecordWatch premium alert scheduler failure",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Alert run requires operator review."});
+  }
+});
+
 app.get("/api/recordwatch/premium-preferences", async (req, res) => {
   try {
     const user = await recordwatchAuthToken(req, res);
@@ -2913,6 +3071,9 @@ app.get("/", (req, res) => {
 });
 
 function scheduleRecordwatchNightlyJob() {
+  // The old in-memory loop is NOT reliable on Cloud Run or safe for customer
+  // messaging. Run the authenticated database-backed daily worker instead.
+  if (process.env.RECORDWATCH_LEGACY_NIGHTLY_ENABLED !== "true") return;
   if (process.env.RECORDWATCH_DISABLE_SCHEDULER === "true") return;
   setInterval(() => {
     const now = new Date();
