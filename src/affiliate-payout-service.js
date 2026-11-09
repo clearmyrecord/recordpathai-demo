@@ -187,7 +187,11 @@ export function registerAffiliatePayoutRoutes(app, {
     const items=(Array.isArray(partners)?partners:[]).map(partner=>{
       const entries=(Array.isArray(commissions)?commissions:[]).filter(c=>c.partner_id===partner.id);
       const payout=affiliatePayoutAllowed(partner,entries);
+      const maturedPending=entries.filter(c=>c.status==="pending" &&
+        new Date(c.available_after).getTime()<=Date.now());
+      const maturedPendingCents=maturedPending.reduce((n,c)=>n+Number(c.commission_cents||0),0);
       return {...partner,eligible_cents:payout.amount_cents,payout_ready:payout.ready,
+        matured_pending_cents:maturedPendingCents,matured_pending_count:maturedPending.length,
         has_recipient:Boolean(partner.stripe_recipient_account_id)};
     });
     return privateResponse(res,{ok:true,partners:items,batches:batches||[],
