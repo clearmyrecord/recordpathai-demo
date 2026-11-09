@@ -483,6 +483,8 @@
             var status = document.getElementById('premiumPreferencesStatus');
             var submitButton = form.querySelector('button[type="submit"]');
             var smsEnabled = document.getElementById('premiumSmsEnabled').checked;
+            var emailEnabled = document.getElementById('premiumEmailEnabled').checked;
+            var chosenEmail = String(document.getElementById('premiumNotificationEmail').value||'').trim().toLowerCase();
             var consent = document.getElementById('premiumSmsConsent').checked;
             var phoneInput = document.getElementById('premiumPhone');
             var phone = phoneInput.value;
@@ -490,6 +492,9 @@
             var canonical = RecordWatchMessageProvider.normalizePhoneForPayload(phone);
             var changedPhone = Boolean(previous.phone_number && canonical !== previous.phone_number);
             var firstEnrollment = smsEnabled && (!previous.sms_enabled || !previous.sms_consent_at || changedPhone);
+            if (emailEnabled && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(chosenEmail)) {
+              status.textContent = 'Enter your RecordWatch notification email address so we can verify it.';return;
+            }
             if (smsEnabled && (!consent || !/^\+1[2-9][0-9]{9}$/.test(canonical))) {
               status.textContent = 'Enter a valid US mobile number and affirm the separate SMS consent before enabling alerts.';
               return;
@@ -504,10 +509,11 @@
             }
             var payload = RecordWatchMessageProvider.buildPreferencePayload(activeUser(), {
               phone_number: phone,
-              email_enabled: document.getElementById('premiumEmailEnabled').checked,
+              email_enabled: emailEnabled,
               sms_consent: consent,
               sms_enabled: smsEnabled
             }, activeSubscription());
+            payload.notification_email=chosenEmail;
             payload.saved_case_id = selectedSavedCaseId() || null;
             payload.sms_consent_reconfirmed = consent && (phoneInput.dataset.consentReconfirmed === 'true');
             payload.sms_terms_acknowledged = document.getElementById('premiumSmsTerms').checked;
@@ -518,8 +524,14 @@
               premiumState.preferences = result.preferences;
               var stored = result.preferences || {};
               preferenceSaveNotice = stored.sms_enabled && stored.sms_consent_at
-                ? 'Preferences saved. SMS consent recorded for this paid case. No text was sent by saving; delivery depends on provider approval and availability.'
-                : 'Preferences saved. SMS is off for this case. No text message was sent.';
+                ? 'Preferences saved. SMS consent recorded for this paid case; sending remains disabled until the provider is approved.'
+                : 'Preferences saved. SMS is off for this case.';
+              if (stored.email_enabled && stored.notification_email)
+                preferenceSaveNotice += stored.notification_email_verified_at
+                  ? ' Your selected notification email is verified.'
+                  : (stored.email_verification_sent
+                     ? ' Check your selected email inbox for a verification link.'
+                     : ' Notification email verification is pending; no email alerts will be sent yet.');
               renderPremiumPanels([]);
               var panel = document.getElementById('recordwatchPreferencesPanel');
               if (panel) panel.scrollIntoView({block:'nearest'});
