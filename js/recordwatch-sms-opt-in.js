@@ -31,7 +31,7 @@
       '</fieldset>',
       '<fieldset class="recordwatch-optin-group"><legend>Terms acknowledgment (separate from messaging consent)</legend>',
         '<label class="toggle-row"><input id="premiumSmsTerms" type="checkbox"> ',
-        '<span>I have read the <a href="https://recordpathai.com/terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a> and ',
+        '<span>I have read and agree to the <a href="https://recordpathai.com/terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a> and ',
         '<a href="https://recordpathai.com/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>. ',
         'This acknowledgment is required only when newly enrolling in SMS or changing the SMS phone number; it is not required for purchasing Premium or disabling alerts.</span></label>',
       '</fieldset>'
