@@ -42,6 +42,11 @@ The owner verified direct Resend inbox delivery to `matt@recordpathai.com` on No
 4. Verify the message in the owner's inbox and the private `recordwatch_alert_deliveries` ledger. No scheduler job is needed for this user-initiated test, and no background alert is enabled by the test flag.
 5. Disable `RECORDWATCH_ALERTS_TEST_ENABLED` after testing; remove `RECORDWATCH_ALERTS_TEST_USER_ID` from Cloud Run when not needed.
 
+## RecordPathAI Twilio sender number
+- **Business SMS number:** `+1 702-605-6585` (Las Vegas, Nevada).
+- Twilio setup screenshot (2026-11-08): compliance profile **Complete**; Messaging Service selection and A2P registration **not yet started**. An assigned number does **not** establish authorization to send customer SMS.
+- Assign this number to the approved Messaging Service once registration is complete. Do not put Twilio tokens in this file.
+
 ## Phase C — US SMS (Twilio)
 1. Use a paid Twilio account. Complete US A2P 10DLC Brand and Campaign registration (or an applicable verified toll-free route), using a publicly inspectable RecordWatch opt-in screenshot/flow. Phone numbers/campaigns must be registered before production texts. Do **not** set campaign approval to true while registration is pending.
 2. Create Messaging Service, add the approved sender, enable automatic STOP/HELP filtering. In Twilio's Messaging Service request configuration, set incoming message webhook:
