@@ -8,6 +8,7 @@ import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect
 import { RECORDWATCH_LIFETIME_CENTS, RECORDWATCH_LIFETIME_PRICE_ENV, assertRecordwatchLifetimePrice, paidRecordwatchLifetimeCheckout, lifetimeCaseEntitled } from "./src/recordwatch-lifetime.js";
 import { quotePacketPricing } from "./src/packet-pricing.js";
 import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
+import { AFFILIATE_COMMISSION_BPS, AFFILIATE_ATTRIBUTION_DAYS, AFFILIATE_HOLD_DAYS, normalizeAffiliateCode, newAffiliateCode, eligibleAffiliatePurchase, affiliateCommissionCents, commissionAvailableAfter } from "./src/affiliate-program.js";
 import { timingSafeEqual, createHash } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
@@ -2017,6 +2018,184 @@ async function recordwatchBillingMigrationVerified() {
     return false;
   }
 }
+
+// Affiliate beta: intentionally OFF until the owner applies the migration,
+// reviews regulated-referral restrictions and explicitly enables the feature.
+// No unreviewed auto-payouts. Court deposits are never commissionable.
+function affiliateProgramEnabled() {
+  return process.env.AFFILIATE_PROGRAM_ENABLED === "true";
+}
+async function affiliateProgramMigrationReady() {
+  if (!affiliateProgramEnabled() || !packetDatabaseReady()) return false;
+  try {
+    const rows=await supabaseRest("affiliate_program_migrations",{
+      query:"?id=eq.20261108030000_affiliate_referrals&select=id&limit=1"
+    });
+    return Array.isArray(rows) && rows.length===1;
+  }catch{return false;}
+}
+async function affiliatePartnerForCode(raw) {
+  const code=normalizeAffiliateCode(raw);
+  if(!code)return null;
+  const rows=await supabaseRest("affiliate_partners",{
+    query:"?code=eq."+encodeURIComponent(code)+"&status=eq.approved&compliance_approved_at=not.is.null&limit=1"
+  });
+  return Array.isArray(rows)?rows[0]||null:null;
+}
+async function claimAffiliateReferral(userId,rawCode) {
+  if(!await affiliateProgramMigrationReady())return {claimed:false,reason:"not_enabled"};
+  const code=normalizeAffiliateCode(rawCode);
+  if(!code)return {claimed:false,reason:"invalid_code"};
+  const partner=await affiliatePartnerForCode(code);
+  if(!partner || partner.user_id===userId)return {claimed:false,reason:"not_eligible"};
+  const previous=await supabaseRest("affiliate_referrals",{
+    query:"?referred_user_id=eq."+encodeURIComponent(userId)+"&limit=1"
+  });
+  if(Array.isArray(previous)&&previous[0])
+    return {claimed:previous[0].partner_id===partner.id,reason:"already_attributed"};
+  // No retroactive credit for customers who bought lifetime Premium before referral.
+  const purchases=await supabaseRest("recordwatch_lifetime_cases",{
+    query:"?user_id=eq."+encodeURIComponent(userId)+"&select=id&limit=1"
+  });
+  if(Array.isArray(purchases)&&purchases.length)return {claimed:false,reason:"existing_customer"};
+  await supabaseRest("affiliate_referrals",{
+    method:"POST",query:"?on_conflict=referred_user_id",
+    prefer:"resolution=ignore-duplicates,return=representation",
+    body:{partner_id:partner.id,referred_user_id:userId,source:"partner_link"}
+  });
+  return {claimed:true};
+}
+async function recordAffiliateCommission(session,product,referredUserId,serviceFeeCents) {
+  if(!affiliateProgramEnabled())return null;
+  if(!await affiliateProgramMigrationReady())throw new Error("Affiliate tables not ready");
+  const pi=typeof session?.payment_intent==="string" ? session.payment_intent : session?.payment_intent?.id;
+  if(session?.payment_status!=="paid" || session?.status!=="complete" ||
+     session?.mode!=="payment" || session?.currency!=="usd" ||
+     !/^cs_(test|live)_[a-zA-Z0-9]+$/.test(session?.id||"") ||
+     !/^pi_[a-zA-Z0-9]+$/.test(pi||"") || !isUuid(referredUserId))
+    return null;
+  const referrals=await supabaseRest("affiliate_referrals",{
+    query:"?referred_user_id=eq."+encodeURIComponent(referredUserId)+"&limit=1"
+  });
+  const ref=Array.isArray(referrals)?referrals[0]:null;
+  if(!ref)return null;
+  const partners=await supabaseRest("affiliate_partners",{
+    query:"?id=eq."+encodeURIComponent(ref.partner_id)+
+      "&status=eq.approved&compliance_approved_at=not.is.null&limit=1"
+  });
+  const partner=Array.isArray(partners)?partners[0]:null;
+  const paidAt=new Date(Number(session.created)*1000).toISOString();
+  if(!partner||partner.user_id===referredUserId||
+     !eligibleAffiliatePurchase(ref.attributed_at,paidAt,AFFILIATE_ATTRIBUTION_DAYS))
+    return null;
+  const cents=affiliateCommissionCents(product,serviceFeeCents,partner.commission_bps);
+  if(cents<1)return null;
+  const rows=await supabaseRest("affiliate_commissions",{
+    method:"POST",query:"?on_conflict=stripe_checkout_session_id",
+    prefer:"resolution=ignore-duplicates,return=representation",
+    body:{
+      partner_id:partner.id,referral_id:ref.id,
+      stripe_checkout_session_id:session.id,stripe_payment_intent_id:pi,
+      product,service_fee_cents:serviceFeeCents,commission_bps:partner.commission_bps,
+      commission_cents:cents,currency:"usd",status:"pending",earned_at:paidAt,
+      available_after:commissionAvailableAfter(paidAt,AFFILIATE_HOLD_DAYS)
+    }
+  });
+  return Array.isArray(rows)?rows[0]||null:null;
+}
+async function voidAffiliateCommission(paymentIntent,reason) {
+  if(!affiliateProgramEnabled()||!await affiliateProgramMigrationReady())return;
+  if(!/^pi_[a-zA-Z0-9]+$/.test(paymentIntent||""))return;
+  await supabaseRest("affiliate_commissions",{
+    method:"PATCH",
+    query:"?stripe_payment_intent_id=eq."+encodeURIComponent(paymentIntent)+
+      "&status=in.(pending,approved)",
+    body:{status:"void",voided_at:new Date().toISOString(),void_reason:reason}
+  });
+}
+app.get("/api/affiliates/readiness",async(req,res)=>{
+  const ready=await affiliateProgramMigrationReady();
+  res.setHeader("Cache-Control","no-store");
+  return res.json({applications_open:ready,referral_tracking_enabled:ready,
+    automatic_payouts_enabled:false,commission_percent:20,
+    paid_service_only:true,requires_partner_approval:true});
+});
+app.get("/api/affiliates/me",async(req,res)=>{
+  const user=await requireApiUser(req,res);
+  if(!user)return;
+  if(!await affiliateProgramMigrationReady())
+    return res.status(503).json({ok:false,error:"Partner enrollment is not yet open."});
+  const partners=await supabaseRest("affiliate_partners",{
+    query:"?user_id=eq."+encodeURIComponent(user.id)+"&limit=1"
+  });
+  const partner=Array.isArray(partners)?partners[0]:null;
+  let totals={pending_cents:0,approved_cents:0,paid_cents:0,void_cents:0,referrals:0};
+  if(partner){
+    const [commissions,referrals]=await Promise.all([
+      supabaseRest("affiliate_commissions",{query:"?partner_id=eq."+encodeURIComponent(partner.id)+
+        "&select=commission_cents,status"}),
+      supabaseRest("affiliate_referrals",{query:"?partner_id=eq."+encodeURIComponent(partner.id)+"&select=id"})
+    ]);
+    totals.referrals=Array.isArray(referrals)?referrals.length:0;
+    for(const row of Array.isArray(commissions)?commissions:[]){
+      const key=({pending:"pending_cents",approved:"approved_cents",paid:"paid_cents",void:"void_cents"})[row.status];
+      if(key)totals[key]+=Number(row.commission_cents)||0;
+    }
+  }
+  res.setHeader("Cache-Control","no-store, private");
+  return res.json({ok:true,partner:partner?{
+    display_name:partner.display_name,code:partner.status==="approved"?partner.code:null,
+    status:partner.status,commission_percent:partner.commission_bps/100,
+    referral_link:partner.status==="approved"?
+      "https://recordpathai.com/?ref="+encodeURIComponent(partner.code):null
+  }:null,totals});
+});
+app.post("/api/affiliates/apply",async(req,res)=>{
+  const user=await requireApiUser(req,res);
+  if(!user)return;
+  if(!await affiliateProgramMigrationReady())
+    return res.status(503).json({ok:false,error:"Partner enrollment is not yet open."});
+  if(req.body?.accept_disclosures!==true)
+    return res.status(400).json({ok:false,error:"Partner disclosures and terms must be accepted."});
+  const name=safe(req.body?.display_name).slice(0,120);
+  const type=safe(req.body?.partner_type);
+  const types=["creator","publisher","community_business","nonprofit","other"];
+  const audience=safe(req.body?.audience_description).slice(0,800);
+  const rawWebsite=safe(req.body?.website);
+  let website=null;
+  if(rawWebsite){
+    try {
+      const u=new URL(rawWebsite);
+      if(u.protocol!=="https:"||u.username||u.password||rawWebsite.length>250)
+        throw Error("Invalid partner website");
+      website=u.origin+u.pathname;
+    }catch{return res.status(400).json({ok:false,error:"Enter a valid HTTPS website or leave it blank."});}
+  }
+  if(name.length<2||!types.includes(type)||audience.length<12)
+    return res.status(400).json({ok:false,error:"Enter your partner name, type and audience description."});
+  const current=await supabaseRest("affiliate_partners",{
+    query:"?user_id=eq."+encodeURIComponent(user.id)+"&limit=1"
+  });
+  if(Array.isArray(current)&&current[0])
+    return res.status(409).json({ok:false,error:"An application already exists for this account."});
+  const rows=await supabaseRest("affiliate_partners",{
+    method:"POST",
+    body:{user_id:user.id,code:newAffiliateCode(user.id),display_name:name,
+      partner_type:type,website,audience_description:audience,status:"pending",
+      commission_bps:AFFILIATE_COMMISSION_BPS},
+    prefer:"return=representation"
+  });
+  return res.status(201).json({ok:true,status:"pending",partner_id:rows?.[0]?.id,
+    note:"Manual compliance review is required before a referral link becomes active."});
+});
+app.post("/api/affiliates/claim",async(req,res)=>{
+  const user=await requireApiUser(req,res);
+  if(!user)return;
+  if(!await affiliateProgramMigrationReady())
+    return res.status(503).json({ok:false,error:"Referral attribution is not enabled."});
+  const result=await claimAffiliateReferral(user.id,req.body?.referral_code);
+  return res.status(result.claimed?200:409).json({ok:result.claimed,...result});
+});
 
 app.get("/api/recordwatch/database-readiness",async(req,res)=>{
   const migration_verified=await recordwatchBillingMigrationVerified();
