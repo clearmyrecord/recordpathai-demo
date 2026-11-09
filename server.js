@@ -12,7 +12,7 @@ import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src
 import { AFFILIATE_COMMISSION_BPS, AFFILIATE_ATTRIBUTION_DAYS, AFFILIATE_HOLD_DAYS, normalizeAffiliateCode, newAffiliateCode, eligibleAffiliatePurchase, affiliateCommissionCents, commissionAvailableAfter } from "./src/affiliate-program.js";
 import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neutralAlertContent, isPremiumAlertAllowed, validTwilioWebhookSignature, STOP_WORDS } from "./src/recordwatch-alerts.js";
 import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
-import { timingSafeEqual, createHash } from "node:crypto";
+import { timingSafeEqual, createHash, randomBytes } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
@@ -1979,6 +1979,32 @@ async function getRecordwatchPreferences(userId,caseId="") {
   return recordwatchMemory.preferences.find((item) => item.user_id === userId && (isUuid(caseId)?item.saved_case_id===caseId:!item.saved_case_id)) || null;
 }
 
+// Email verification challenges are never returned by authenticated preference reads.
+function publicRecordwatchPreferences(row){
+  if(!row)return row;
+  const {notification_email_token_sha256,notification_email_token_expires_at,
+    notification_email_token_sent_at,...fields}=row;
+  return fields;
+}
+async function sendRecordwatchVerificationEmail(recipient,caseId,token){
+  const from=process.env.RECORDWATCH_EMAIL_FROM||"";
+  const key=process.env.RESEND_API_KEY||"";
+  if(!key||!validAlertEmail(from)||!validAlertEmail(recipient))
+    throw new Error("Notification email verification sender unavailable");
+  const url=new URL("https://recordpathai.com/recordwatch-dashboard.html");
+  url.searchParams.set("caseId",caseId);
+  url.searchParams.set("verify_recordwatch_email",token);
+  const message="Confirm your chosen RecordWatch Premium notification email. This does not change your sign-in or billing email. The link expires in 24 hours. If you did not request this, ignore this message.\n\n"+url.toString();
+  const response=await fetch("https://api.resend.com/emails",{
+    method:"POST",
+    headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},
+    body:JSON.stringify({from:"RecordPathAI <"+from+">",to:[recipient],
+      subject:"Confirm your RecordWatch notification email",text:message}),
+    signal:AbortSignal.timeout(12000)
+  });
+  if(!response.ok)throw new Error("Verification email provider rejected the request");
+  return true;
+}
 async function saveRecordwatchPreferences(userId,payload={}){
   const caseId=safe(payload.saved_case_id||payload.savedCaseId);
   if(!isUuid(caseId))throw Object.assign(new Error("Select an owned saved case to manage Premium alerts."),{status:400});
@@ -2018,11 +2044,33 @@ async function saveRecordwatchPreferences(userId,payload={}){
   if(smsRequested && (previous?.sms_opted_out_at||Array.isArray(suppressed)&&suppressed.length))
     throw Object.assign(new Error("SMS remains opted out. Reply START to the sender and contact support before re-enabling."),{status:409});
   const emailEnabled=payload.email_enabled===true||payload.emailEnabled===true;
+  const notificationEmail=String(payload.notification_email||"").trim().toLowerCase();
+  if((emailEnabled||notificationEmail) && !validAlertEmail(notificationEmail))
+    throw Object.assign(new Error("Enter a valid separate notification email address."),{status:400});
+  const oldEmail=String(previous?.notification_email||"").trim().toLowerCase();
+  const emailChanged=Boolean(emailEnabled && notificationEmail!==oldEmail);
   const now=new Date().toISOString();
+  const verified=Boolean(!emailChanged && previous?.notification_email_verified_at);
+  const pending=Boolean(!emailChanged && previous?.notification_email_token_sha256 &&
+    Date.parse(previous.notification_email_token_expires_at||"")>Date.now());
+  const verifyNeeded=emailEnabled && !verified &&
+    (!pending || payload.resend_email_verification===true);
+  if(verifyNeeded && previous?.notification_email_token_sent_at &&
+     Date.now()-Date.parse(previous.notification_email_token_sent_at)<600000)
+    throw Object.assign(new Error("Check for your recent verification email or retry in 10 minutes."),{status:429});
+  const token=verifyNeeded?randomBytes(32).toString("hex"):"";
   const row={
     user_id:userId,saved_case_id:caseId,case_id:null,
     email_enabled:emailEnabled,
-    email_opted_in_at:emailEnabled?(previous?.email_opted_in_at||now):null,
+    email_opted_in_at:emailEnabled?(emailChanged?now:previous?.email_opted_in_at||now):null,
+    notification_email:notificationEmail||oldEmail||null,
+    notification_email_verified_at:emailChanged?null:previous?.notification_email_verified_at||null,
+    notification_email_token_sha256:verifyNeeded?createHash("sha256").update(token).digest("hex"):
+      (emailChanged?null:previous?.notification_email_token_sha256||null),
+    notification_email_token_expires_at:verifyNeeded?new Date(Date.now()+86400000).toISOString():
+      (emailChanged?null:previous?.notification_email_token_expires_at||null),
+    notification_email_token_sent_at:verifyNeeded?now:
+      (emailChanged?null:previous?.notification_email_token_sent_at||null),
     sms_enabled:smsRequested,
     phone_number:phone||null,
     sms_consent_at:smsRequested?(newSmsEnrollment?now:previous?.sms_consent_at||now):null,
@@ -2047,7 +2095,12 @@ async function saveRecordwatchPreferences(userId,payload={}){
   });
   if(!Array.isArray(result)||!result[0])
     throw Object.assign(new Error("Preferences could not be stored."),{status:503});
-  return result[0];
+  let verificationSent=false;
+  if(verifyNeeded){
+    try{verificationSent=await sendRecordwatchVerificationEmail(notificationEmail,caseId,token);}
+    catch(error){console.warn("RecordWatch verification email unavailable",error?.name||"unknown");}
+  }
+  return {...publicRecordwatchPreferences(result[0]),email_verification_sent:verificationSent};
 }
 
 async function recordwatchAuthToken(req, res) {
