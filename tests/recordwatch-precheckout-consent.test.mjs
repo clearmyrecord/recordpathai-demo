@@ -55,7 +55,9 @@ test("Unpaid and abandoned checkouts cannot save preferences or activate alerts"
   assert.match(dash,/RecordWatchNotifications\.verifyPremiumCheckout\(successSessionId, selectedSavedCaseId\(\)\)/);
   assert.match(dash,/if \(!result\?\.premium\) throw/);
   assert.ok(dash.indexOf('if (!result?.premium) throw') <
-    dash.indexOf('await saveCheckoutNotificationChoices()'));
+    dash.indexOf('await saveCheckoutNotificationChoices(successSessionId)'));
+  assert.match(dash,/pending\.sessionId!==paidSessionId/);
+  assert.match(dash,/draft\.sessionId=result\.sessionId/);
   assert.match(server,/Paid RecordWatch Premium is required for this saved case/);
   assert.match(server,/getRecordwatchLifetimeCase\(userId,caseId\)/);
   assert.match(server,/sms_consent_at:smsRequested\?\(newSmsEnrollment\?now:/);
