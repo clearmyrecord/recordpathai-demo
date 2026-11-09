@@ -3217,3 +3217,23 @@ body.home-page .cta .btn {
 .recordwatch-dashboard-page .recordwatch-fulfillment-steps strong { font-size: 14px; color: #183c7b; line-height: 1.3; }
 .recordwatch-dashboard-page .recordwatch-fulfillment-steps span { font-size: 13px; line-height: 1.5; }
 .recordwatch-dashboard-page .recordwatch-filing-roadmap .recordwatch-section-heading { max-width: 860px; }
+
+
+/* Affiliate and referral partner landing and secure application */
+.affiliate-page .hero-card { max-width: var(--container, 1180px); }
+.affiliate-page .hero-card > p { max-width: 870px; }
+.affiliate-page .recordwatch-pricing-total-amount { font-size: clamp(36px, 4.5vw, 60px); }
+.affiliate-page .recordwatch-enrollment-form { max-width: 880px; }
+.affiliate-page .recordwatch-enrollment-form[hidden] { display: none !important; }
+.affiliate-page .recordwatch-enrollment-form input:not([type="checkbox"]),
+.affiliate-page .recordwatch-enrollment-form select,
+.affiliate-page .recordwatch-enrollment-form textarea {
+  display: block; width: 100%; min-height: 44px; border-radius: 12px;
+  padding: 11px 12px; border: 1px solid #c8d9ed; background: #fff;
+  color: #203b6a; font: inherit; font-weight: 500;
+}
+.affiliate-page .recordwatch-enrollment-form textarea { resize: vertical; }
+.affiliate-page .recordwatch-enrollment-form .toggle-row { align-items: flex-start; font-weight: 550; line-height: 1.5; }
+.affiliate-page .recordwatch-enrollment-form .toggle-row input { width: 18px; height: 18px; flex: none; margin-top: 3px; }
+.affiliate-page .recordwatch-enrollment-form a.btn { width: fit-content; }
+.affiliate-page .recordwatch-enrollment-form .recordwatch-countdown-panel { margin: 0; }
