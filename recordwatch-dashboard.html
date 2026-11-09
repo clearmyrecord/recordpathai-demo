@@ -442,7 +442,7 @@
               premiumState.preferences = result.preferences;
               var stored = result.preferences || {};
               preferenceSaveNotice = stored.sms_enabled && stored.sms_consent_at
-                ? 'Preferences saved. SMS consent recorded for this paid case. Text messages remain unavailable until the messaging provider is approved and enabled.'
+                ? 'Preferences saved. SMS consent recorded for this paid case. No text was sent by saving; delivery depends on provider approval and availability.'
                 : 'Preferences saved. SMS is off for this case. No text message was sent.';
               renderPremiumPanels([]);
               var panel = document.getElementById('recordwatchPreferencesPanel');
