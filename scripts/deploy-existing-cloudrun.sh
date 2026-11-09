@@ -116,37 +116,51 @@ report_auth_readiness() {
   fi
 }
 
-# Fail closed before exposing paid subscription endpoints. These booleans are
-# deliberately public, but credentials and secret values are never logged.
+# Fail closed before exposing paid RecordWatch purchase endpoints.
+# A green response requires BOTH the billing key/webhook and the independent
+# server-side Supabase migration receipt. Accept live mode only when the
+# application reports live_enabled=true; sandbox remains safe for test deploys.
 check_recordwatch_readiness() {
-  local label="$1" body="$SMOKE_DIR/recordwatch-billing-readiness.json"
-  echo "Verifying RecordWatch sandbox readiness on $label..."
+  local label="$1"
+  local billing_body="$SMOKE_DIR/recordwatch-billing-readiness.json"
+  local database_body="$SMOKE_DIR/recordwatch-database-readiness.json"
+  echo "Verifying RecordWatch Stripe and entitlement database readiness on $label..."
   if ! curl --fail --location --silent --show-error --max-time 20 \
-    --output "$body" "$URL/api/recordwatch/billing-readiness"; then
-    echo "::error::RecordWatch readiness endpoint failed on $label. Keeping existing traffic." >&2
+    --output "$billing_body" "$URL/api/recordwatch/billing-readiness"; then
+    echo "::error::RecordWatch Stripe readiness failed on $label. Keeping existing traffic." >&2
     return 1
   fi
-  python3 - "$body" "$label" <<'PY'
+  if ! curl --fail --location --silent --show-error --max-time 20 \
+    --output "$database_body" "$URL/api/recordwatch/database-readiness"; then
+    echo "::error::RecordWatch lifetime migration readiness failed on $label. Keeping existing traffic." >&2
+    return 1
+  fi
+  python3 - "$billing_body" "$database_body" "$label" <<'PY'
 import json,sys
 try:
-  with open(sys.argv[1]) as f:
-    status=json.load(f)
-except (OSError,ValueError) as exc:
-  print("RecordWatch readiness response is invalid:",type(exc).__name__,file=sys.stderr)
+  with open(sys.argv[1]) as f: status=json.load(f)
+  with open(sys.argv[2]) as f: db=json.load(f)
+except (OSError,ValueError):
+  print("RecordWatch readiness response is invalid.",file=sys.stderr)
+  raise SystemExit(1)
+mode=status.get("mode")
+if mode not in ("sandbox","live"):
+  print("RecordWatch has no valid Stripe mode on",sys.argv[3],file=sys.stderr)
   raise SystemExit(1)
 expected={
-  "mode":"sandbox",
   "prices_configured":True,
   "webhook_configured":True,
   "secure_database_configured":True,
-  "live_enabled":False,
+  "live_enabled": mode=="live",
   "ready":True
 }
 failed=[k for k,v in expected.items() if status.get(k)!=v]
+if db.get("migration_verified") is not True or db.get("ready") is not True:
+  failed.append("lifetime_database_migration")
 if failed:
-  print("RecordWatch not ready on",sys.argv[2],"; mismatched flags:",", ".join(failed),file=sys.stderr)
+  print("RecordWatch not ready on",sys.argv[3],"; mismatched flags:",", ".join(failed),file=sys.stderr)
   raise SystemExit(1)
-print("RecordWatch sandbox configuration verified on",sys.argv[2])
+print("RecordWatch",mode,"billing and lifetime entitlement storage verified on",sys.argv[3])
 PY
 }
 
