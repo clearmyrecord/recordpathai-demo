@@ -833,38 +833,22 @@ function brandedEmailHtml({ subject, message, actionUrl }) {
   return `<!doctype html><html><body style="margin:0;background:#eef4ff;font-family:Arial,sans-serif;color:#17345f;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px;"><table role="presentation" width="100%" style="max-width:640px;background:#ffffff;border-radius:24px;border:1px solid #dbe7fb;box-shadow:0 16px 44px rgba(32,63,112,.12);overflow:hidden;"><tr><td style="padding:28px 32px;background:linear-gradient(135deg,#143d8f,#6da7ff);color:#fff;"><div style="font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">RecordPathAI</div><h1 style="margin:10px 0 0;font-size:28px;line-height:1.2;">${safeSubject}</h1></td></tr><tr><td style="padding:32px;"><p style="font-size:17px;line-height:1.7;margin:0 0 24px;">${safeMessage}</p><a href="${href}" style="display:inline-block;background:#143d8f;color:#fff;text-decoration:none;border-radius:999px;padding:14px 22px;font-weight:700;">Open RecordPathAI</a><p style="font-size:12px;color:#6a7894;line-height:1.6;margin:28px 0 0;">RecordWatch reminders are based on the information you provide. RecordPathAI is not a law firm and does not guarantee eligibility or court approval.</p></td></tr></table></td></tr></table></body></html>`;
 }
 
-async function sendRecordwatchEmail(to, subject, message) {
-  if (!to) return { status: "skipped", detail: "Missing email" };
-  if (!process.env.RESEND_API_KEY) return { status: RECORDWATCH_PROVIDER_MISSING, detail: "RESEND_API_KEY not configured" };
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: `RecordPathAI <${RECORDWATCH_FROM_EMAIL}>`,
-      reply_to: RECORDWATCH_FROM_EMAIL,
-      to,
-      subject,
-      html: brandedEmailHtml({ subject, message })
-    })
-  });
-  if (!response.ok) throw new Error(`Resend delivery failed: ${response.status}`);
-  return { status: "sent", detail: await response.text() };
+async function sendRecordwatchEmail(to,subject,message){
+  if(!providerReadiness(process.env).email_ready)
+    return {status:RECORDWATCH_PROVIDER_MISSING};
+  if(!validAlertEmail(to))return {status:"skipped"};
+  // Legacy handlers use neutral content and the same approved provider adapter.
+  const text=neutralAlertContent("legacy","email");
+  const receipt=await sendPremiumEmail({to,subject:text.subject,message:text.message});
+  return {status:"sent",detail:receipt.id};
 }
-
-async function sendRecordwatchSms(to, message) {
-  if (!to) return { status: "skipped", detail: "Missing phone" };
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM_NUMBER;
-  if (!sid || !token || !from) return { status: RECORDWATCH_PROVIDER_MISSING, detail: "Twilio is not configured" };
-  const params = new URLSearchParams({ To: to, From: from, Body: message });
-  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-    method: "POST",
-    headers: { Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" },
-    body: params
-  });
-  if (!response.ok) throw new Error(`Twilio delivery failed: ${response.status}`);
-  return { status: "sent", detail: await response.text() };
+async function sendRecordwatchSms(to,message){
+  if(!providerReadiness(process.env).sms_ready)
+    return {status:RECORDWATCH_PROVIDER_MISSING};
+  if(!validSmsPhone(to))return {status:"skipped"};
+  const text=neutralAlertContent("legacy","sms");
+  const receipt=await sendPremiumSms({to,message:text.message});
+  return {status:"sent",detail:receipt.id};
 }
 
 function supabaseRestConfig() {
@@ -1022,22 +1006,27 @@ async function createRecordwatchNotification(subscription, type, context = {}) {
   // Paid case-level email preferences take precedence over the free
   // enrollment row, whose notify_email flag is intentionally always false.
   // Existing recurring customers without case preferences retain their prior opt-in.
-  const caseEmailOptIn=Boolean(authorizedPremium &&
-    (casePremiumPreferences
-      ? casePremiumPreferences.email_enabled !== false
-      : subscription.notify_email !== false));
+  const caseEmailOptIn=Boolean(authorizedPremium && casePremiumPreferences &&
+    casePremiumPreferences.email_enabled===true &&
+    casePremiumPreferences.email_opted_in_at);
   if(casePremiumPreferences)preferences.eligibility_email=caseEmailOptIn;
+  const confirmedEmail=caseEmailOptIn ? await alertRecipientEmail(subscription.user_id) : "";
   const paidCaseSubscription={...subscription,premium_active:authorizedPremium,
     notify_email:caseEmailOptIn,
+    notification_email:confirmedEmail||null,
     notify_sms:caseSmsOptIn,
     notification_phone:caseSmsOptIn ? casePremiumPreferences.phone_number : null};
   if(casePremiumPreferences)preferences.eligibility_sms=caseSmsOptIn;
   const subject = recordwatchSubject(type, context);
   const message = recordwatchMessage(type, context);
   const channels = [];
-  if (authorizedPremium && paidCaseSubscription.notify_email &&
+  // Customer-written court notes and synthetic statuses never generate
+  // external messages claiming a court action, even with an admin_override.
+  const externalAllowed=!type.startsWith("court_status_") ||
+    context.source==="operator_verified";
+  if (externalAllowed && authorizedPremium && paidCaseSubscription.notify_email &&
       paidCaseSubscription.notification_email) channels.push("email");
-  if (authorizedPremium && paidCaseSubscription.notify_sms && paidCaseSubscription.notification_phone) channels.push("sms");
+  if (externalAllowed && authorizedPremium && paidCaseSubscription.notify_sms && paidCaseSubscription.notification_phone) channels.push("sms");
   if (!channels.length) channels.push("in_app");
 
   const eligibleChannels = channels.filter((channel) => shouldSendChannel({ channel, type, subscription:paidCaseSubscription, preferences, adminOverride: context.admin_override === true }));
@@ -2762,7 +2751,8 @@ app.post("/api/recordwatch/court-status", async (req, res) => {
     if (!COURT_STATUS_VALUES.includes(status)) return res.status(400).json({ ok: false, error: "Unsupported court status" });
     const userId = safe(payload.user_id || payload.userId, "demo-user");
     const caseId = safe(payload.case_id || payload.caseId, "demo-case");
-    const source = ["verified_court", "admin"].includes(payload.source) ? payload.source : safe(payload.source, "manual");
+    // Browser users cannot label their own status as an official court event.
+    const source = "manual";
     const previous = recordwatchMemory.courtStatuses.get(`${userId}:${caseId}`);
     recordwatchMemory.courtStatuses.set(`${userId}:${caseId}`, status);
     const subscription = recordwatchMemory.subscriptions.find((item) => item.user_id === userId && item.case_id === caseId && item.status === "active") || {
@@ -2782,7 +2772,7 @@ app.post("/api/recordwatch/court-status", async (req, res) => {
       court_id: payload.court_id || payload.courtId,
       hearing_date: payload.hearing_date || payload.hearingDate,
       source,
-      admin_override: payload.admin_override === true || payload.adminOverride === true,
+      admin_override: false,
       notification_date: `${caseId}:${status}:${recordwatchDateOnly(new Date())}`
     });
     res.json({ ok: true, previous_status: previous || null, status, source, notifications });
@@ -2792,6 +2782,8 @@ app.post("/api/recordwatch/court-status", async (req, res) => {
 });
 
 app.post("/api/recordwatch/run-daily", async (req, res) => {
+  if(process.env.RECORDWATCH_ALERTS_LIVE_ENABLED==="true")
+    return res.status(409).json({ok:false,error:"Legacy demo scheduler is disabled for live alerts."});
   if (!isAdminRequest(req)) return res.status(403).json({ ok: false, error: "Admin access required" });
   try {
     res.json({ ok: true, result: await runRecordwatchDailyJob() });
