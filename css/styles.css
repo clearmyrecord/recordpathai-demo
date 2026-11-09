@@ -2982,3 +2982,162 @@ body.home-page .cta .btn {
   .saved-case-card { padding: 20px; }
   .saved-case-actions .btn { width: 100%; justify-content: center; }
 }
+
+
+/* RecordWatch dashboard: each panel is a vertically stacked card.
+   The generic .recordwatch-widget uses a two-column enrollment layout;
+   that accidentally split headings and lists across opposite columns. */
+.recordwatch-dashboard-page .recordwatch-widget {
+  display: block;
+  min-width: 0;
+  padding: clamp(20px, 3vw, 32px);
+}
+.recordwatch-dashboard-page .recordwatch-widget > * {
+  min-width: 0;
+}
+.recordwatch-dashboard-page .recordwatch-widget h2 {
+  font-size: clamp(24px, 2.8vw, 34px);
+  line-height: 1.14;
+  letter-spacing: -.035em;
+  margin: 6px 0 12px;
+  max-width: 100%;
+  text-wrap: balance;
+}
+.recordwatch-dashboard-page .recordwatch-widget h3 {
+  color: #17345f;
+  font-size: clamp(17px, 1.7vw, 20px);
+  line-height: 1.25;
+  letter-spacing: -.015em;
+  margin: 0 0 16px;
+}
+.recordwatch-dashboard-page .recordwatch-widget .case-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.recordwatch-dashboard-page .recordwatch-widget .case-header > div {
+  min-width: 0;
+  flex: 1 1 340px;
+}
+.recordwatch-dashboard-page .recordwatch-widget .case-header .muted {
+  max-width: 780px;
+  margin: 0;
+}
+.recordwatch-dashboard-page .recordwatch-premium-panel .recordwatch-monitor-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 12px;
+}
+.recordwatch-dashboard-page .recordwatch-premium-panel .recordwatch-stat-card {
+  min-height: 112px;
+}
+.recordwatch-dashboard-page .recordwatch-preferences-panel .recordwatch-enrollment-form {
+  width: 100%;
+  max-width: 760px;
+}
+.recordwatch-dashboard-page .recordwatch-preferences-panel .toggle-row {
+  justify-content: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+.recordwatch-dashboard-page .recordwatch-section-heading {
+  margin-bottom: 22px;
+}
+.recordwatch-dashboard-page .recordwatch-section-heading .eyebrow-mini {
+  margin: 0;
+}
+.recordwatch-dashboard-page .recordwatch-section-heading .muted {
+  margin: 0;
+  max-width: 760px;
+}
+.recordwatch-dashboard-page .recordwatch-schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.recordwatch-dashboard-page .recordwatch-schedule-group {
+  min-width: 0;
+  background: rgba(255, 255, 255, .82);
+  border: 1px solid #dbe7fb;
+  border-radius: 20px;
+  padding: clamp(16px, 2vw, 22px);
+}
+.recordwatch-dashboard-page .recordwatch-schedule-list,
+.recordwatch-dashboard-page .recordwatch-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 9px;
+}
+.recordwatch-dashboard-page .recordwatch-schedule-list li {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f3f7ff;
+  color: #40577d;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.recordwatch-dashboard-page .recordwatch-schedule-time {
+  display: inline-block;
+  color: #163c81;
+  font-weight: 800;
+  flex: 0 0 110px;
+}
+.recordwatch-dashboard-page .recordwatch-schedule-note {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #5f6f91;
+  margin: 16px 0 0;
+}
+.recordwatch-dashboard-page .recordwatch-history-list {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr));
+  gap: 12px;
+}
+.recordwatch-dashboard-page .recordwatch-history-list li {
+  display: grid;
+  gap: 5px;
+  padding: 15px 18px;
+  border: 1px solid #dbe7fb;
+  border-radius: 14px;
+  background: #fff;
+  min-width: 0;
+}
+.recordwatch-dashboard-page .recordwatch-history-title {
+  color: #183c79;
+  font-size: 15px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.recordwatch-dashboard-page .recordwatch-history-meta {
+  font-size: 13px;
+  color: #62738f;
+}
+.recordwatch-dashboard-page .recordwatch-empty-copy {
+  margin: 0;
+  padding: 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .78);
+  color: #647590;
+}
+@media (max-width: 760px) {
+  .recordwatch-dashboard-page .recordwatch-schedule-grid {
+    grid-template-columns: 1fr;
+  }
+  .recordwatch-dashboard-page .recordwatch-schedule-group {
+    padding: 16px;
+  }
+}
+@media (max-width: 430px) {
+  .recordwatch-dashboard-page .recordwatch-schedule-list li {
+    flex-direction: column;
+    gap: 3px;
+  }
+  .recordwatch-dashboard-page .recordwatch-schedule-time {
+    flex-basis: auto;
+  }
+}
