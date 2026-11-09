@@ -2466,10 +2466,15 @@ async function verifyPremiumAlertPayment(row){
     return false;
   }
 }
-async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today}){
+async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today,testOnly=false}){
   const r=providerReadiness(process.env);
-  if(!(await recordwatchAlertMigrationReady())||
-    !(channel==="email"?r.email_ready:r.sms_ready))return {status:"provider_unavailable"};
+  // Test-mode messages are explicitly user initiated; background jobs cannot use this bypass.
+  if(testOnly && kind!=="test")return {status:"provider_unavailable"};
+  const providerReady=channel==="email"
+    ?(testOnly?r.test_email_ready:r.email_ready)
+    :(testOnly?r.test_sms_ready:r.sms_ready);
+  if(!(await recordwatchAlertMigrationReady())||!providerReady)
+    return {status:"provider_unavailable"};
   const [lifetime,preferences]=await Promise.all([
     getRecordwatchLifetimeCase(userId,caseId),
     supabaseRest("recordwatch_notification_preferences",{query:"?user_id=eq."+
@@ -2500,8 +2505,8 @@ async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today}){
   try{
     const text=neutralAlertContent(kind,channel);
     const receipt=channel==="email"
-      ?await sendPremiumEmail({to:recipient,subject:text.subject,message:text.message})
-      :await sendPremiumSms({to:recipient,message:text.message});
+      ?await sendPremiumEmail({to:recipient,subject:text.subject,message:text.message,testOnly})
+      :await sendPremiumSms({to:recipient,message:text.message,testOnly});
     await supabaseRest("recordwatch_alert_deliveries",{
       method:"PATCH",query:"?id=eq."+encodeURIComponent(entry.id),
       body:{status:"provider_accepted",provider_message_id:receipt.id,
@@ -2580,8 +2585,16 @@ app.post("/api/recordwatch/alerts/test",async(req,res)=>{
   if(!isUuid(caseId)||!["email","sms"].includes(channel))
     return res.status(400).json({ok:false,error:"Select a saved case and email or SMS."});
   const config=providerReadiness(process.env);
-  if(!await recordwatchAlertMigrationReady()||
-     !(channel==="email"?config.email_ready:config.sms_ready))
+  const testOnly=!config.enabled;
+  // Live customer alerts remain OFF while a single authorized owner exercises test mode.
+  // The verified owner ID must be explicitly set by the operator in Cloud Run.
+  if(testOnly && (process.env.RECORDWATCH_ALERTS_TEST_USER_ID!==user.id ||
+      !isUuid(process.env.RECORDWATCH_ALERTS_TEST_USER_ID||"")))
+    return res.status(403).json({ok:false,error:"Controlled test is not authorized for this account."});
+  const channelReady=channel==="email"
+    ?(testOnly?config.test_email_ready:config.email_ready)
+    :(testOnly?config.test_sms_ready:config.sms_ready);
+  if(!await recordwatchAlertMigrationReady()||!channelReady)
     return res.status(503).json({ok:false,
       error:"This alert provider is not approved and activated yet."});
   try{
@@ -2593,7 +2606,7 @@ app.post("/api/recordwatch/alerts/test",async(req,res)=>{
     const today=new Date().toISOString().slice(0,10);
     const date=String(owner[0].eligibility_date||today).slice(0,10);
     const result=await sendCasePremiumAlert({userId:user.id,caseId,
-      kind:"test",date,channel,today});
+      kind:"test",date,channel,today,testOnly});
     res.setHeader("Cache-Control","no-store, private");
     return res.status(result.status==="provider_accepted"?200:409)
       .json({ok:result.status==="provider_accepted",

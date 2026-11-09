@@ -70,6 +70,15 @@ test("Live outbound providers cannot send before explicit enablement and A2P app
   assert.equal(providerReadiness(env).sms_ready,false);
   assert.equal(providerReadiness({...env,RECORDWATCH_ALERTS_LIVE_ENABLED:"true"}).sms_ready,true);
   assert.equal(providerReadiness({...env,RECORDWATCH_ALERTS_LIVE_ENABLED:"true",RECORDWATCH_SMS_CAMPAIGN_APPROVED:"false"}).sms_ready,false);
+  // Owner-only test mode is independent of daily live alert activation.
+  const testConfig=providerReadiness({...env,RECORDWATCH_ALERTS_TEST_ENABLED:"true"});
+  assert.equal(testConfig.enabled,false);
+  assert.equal(testConfig.email_ready,false);
+  assert.equal(testConfig.test_email_ready,true);
+  assert.equal(testConfig.test_sms_ready,true);
+  assert.equal(providerReadiness({...env,RECORDWATCH_ALERTS_TEST_ENABLED:"true",RECORDWATCH_SMS_CAMPAIGN_APPROVED:"false"}).test_sms_ready,false);
+  assert.match(server,/RECORDWATCH_ALERTS_TEST_USER_ID/);
+  assert.match(server,/testOnly\s*&&\s*kind!=="test"/);
   const noNetwork=()=>{throw Error("A disabled provider must never make a network request");};
   await assert.rejects(sendPremiumEmail({to:"user@example.com",subject:"Test",message:"Test",env,fetchFn:noNetwork}),/disabled/);
   await assert.rejects(sendPremiumSms({to:"+17025551234",message:"Test",env,fetchFn:noNetwork}),/disabled/);
@@ -87,6 +96,21 @@ test("Provider API acceptance is tracked separately from confirmed delivery",asy
     fetchFn:async(url,opts)=>{assert.match(url,/twilio.com/);assert.equal(opts.method,"POST");return ok({sid:"SM"+"c".repeat(32)});}});
   assert.equal(email.status,"provider_accepted");
   assert.equal(sms.status,"provider_accepted");
+  const safeTestEnv={...env,RECORDWATCH_ALERTS_LIVE_ENABLED:"false",RECORDWATCH_ALERTS_TEST_ENABLED:"true"};
+  const testEmail=await sendPremiumEmail({
+    to:"user@example.com",subject:"Controlled test",message:"Test",env:safeTestEnv,testOnly:true,
+    fetchFn:async()=>ok({id:"01a1bef9-09c7-7ca3-9805-cba82959b198"})
+  });
+  assert.equal(testEmail.status,"provider_accepted");
+  const testSms=await sendPremiumSms({
+    to:"+17025551234",message:"Test",env:safeTestEnv,testOnly:true,
+    fetchFn:async()=>ok({sid:"SM"+"d".repeat(32)})
+  });
+  assert.equal(testSms.status,"provider_accepted");
+  await assert.rejects(sendPremiumEmail({
+    to:"user@example.com",subject:"Unapproved",message:"Not allowed",env:safeTestEnv,
+    fetchFn:()=>{throw Error("background delivery must not call provider");}
+  }),/disabled/);
 });
 test("Only signed webhook and authenticated operator daily worker can initiate sends",()=>{
   assert.match(server,/app\.post\("\/api\/recordwatch\/inbound-sms"/);
