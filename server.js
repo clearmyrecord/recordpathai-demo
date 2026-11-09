@@ -1724,7 +1724,18 @@ async function getRecordwatchBillingRow(userId) {
 
 async function getActiveRecordwatchSubscription(userId) {
   const row=await getRecordwatchBillingRow(userId);
-  return isActiveRecordwatchSubscription(row) ? row : null;
+  if(!isActiveRecordwatchSubscription(row) || !recordwatchStripe)return null;
+  // Legacy sandbox purchases may still be stored in Supabase. They must NOT
+  // grant entitlements or block purchases after switching to live Stripe.
+  try{
+    const current=await recordwatchStripe.subscriptions.retrieve(row.stripe_subscription_id);
+    const verifiedPlan=verifyRecordwatchSubscription(current,process.env,userId);
+    const period=billingPeriod(current);
+    return verifiedPlan && ["active","trialing"].includes(current.status) &&
+      period.end && new Date(period.end).getTime()>Date.now() ? row : null;
+  }catch{
+    return null;
+  }
 }
 // Lifetime records are separate from legacy Stripe subscriptions. Ownership is
 // scoped by saved_case_id. Never infer paid access from browser/local flags.
@@ -2077,9 +2088,9 @@ app.get("/api/recordwatch/subscription", async (req, res) => {
     const caseId=safe(req.query?.saved_case_id||req.query?.case_id);
     if(caseId && !isUuid(caseId))return res.status(400).json({ok:false,error:"Valid saved case required."});
     const lifetime=caseId ? await getRecordwatchLifetimeCase(user.id,caseId) : null;
-    const legacy=await getRecordwatchBillingRow(user.id);
+    const legacy=await getActiveRecordwatchSubscription(user.id);
     const subscription=lifetimeCaseEntitled(lifetime,caseId)
-      ? lifetimeAsSubscription(lifetime) : (isActiveRecordwatchSubscription(legacy)?legacy:null);
+      ? lifetimeAsSubscription(lifetime) : legacy;
     res.setHeader("Cache-Control","no-store, private");
     return res.json({ok:true,premium:Boolean(subscription),subscription:subscription||null,
       plan:subscription?.plan||"free",status:subscription?.status||"free",
