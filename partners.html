@@ -24,7 +24,7 @@
       <span class="eyebrow">RecordPathAI · Partner program</span>
       <h1>Help people find a path forward. Earn a share of our service revenue.</h1>
       <p>We are building an approval-only affiliate program for publishers, creators, nonprofits and community businesses that introduce customers to RecordPathAI's self-service eligibility and RecordWatch tools.</p>
-      <p class="meta-note"><strong>Rollout status:</strong> Program infrastructure is in development. Partner payouts are not active. Approved partners receive referral links only after compliance review, database activation and verification.</p>
+      <p class="meta-note"><strong>Rollout status:</strong> Partner applications and Stripe payout enrollment depend on activation and verification. No funds move without approved commissions and owner review.</p>
       <div class="hero-actions"><a class="btn" href="#partner-application">Join the partner interest list</a><a class="btn secondary" href="pricing.html">Customer pricing</a></div>
     </div></section>
     <section class="recordwatch-section"><div class="container">
@@ -42,14 +42,14 @@
       <div class="recordwatch-grid-3">
         <article class="mini-card"><h3>1. Apply &amp; get approved</h3><p>We review partner identity, audience, advertising approach and conflicts before activating any unique referral link.</p></article>
         <article class="mini-card"><h3>2. Share transparently</h3><p>Customers visit RecordPathAI through your tracked link and sign in. Attribution is first-touch per account with a 30-day purchase window; only the first eligible partner is credited.</p></article>
-        <article class="mini-card"><h3>3. Earn after verified payment</h3><p>Our server verifies Stripe payment and attributes commission to approved partners, with a 30-day hold for reversals. Payouts require manual approval and a $50 threshold.</p></article>
+        <article class="mini-card"><h3>3. Earn after verified payment</h3><p>Our server verifies Stripe payment and attributes commission to approved partners, with a 30-day hold for reversals. Payouts require owner review, tax clearance, Stripe recipient verification and a $50 threshold.</p></article>
       </div>
       <p class="meta-note"><strong>Important:</strong> Affiliates cannot promise that someone qualifies, imply court or government endorsement, solicit or publish private case data, or charge prospective customers for referrals. Paid promotion must clearly disclose the relationship near the recommendation, for example: “I may earn a commission if you purchase through my link.” <a href="https://www.ftc.gov/business-guidance/resources/ftcs-endorsement-guides-what-people-are-asking" rel="noopener noreferrer">FTC disclosure guidance</a>.</p>
       <p class="meta-note"><strong>Restricted partner categories:</strong> No payments to judges, clerks, court employees, public officials acting in their official role, probation/parole officers, or people for referring individuals they supervise. Attorney/legal-service relationships require separate attorney-ethics review; no sharing of legal fees or paid legal-client recommendations. We reserve the right to reject a partner, withhold disputed/fraudulent commissions, and comply with tax and identity-verification requirements.</p>
     </div></section>
     <section class="recordwatch-section" id="partner-application"><div class="container section-card">
       <span class="eyebrow-mini">Partner applications</span><h2>Become a RecordPathAI partner</h2>
-      <p>We are preparing secure, authenticated applications, approval and an earnings dashboard. This program does not send customer names, charges, or court records to partners.</p>
+      <p>Partners can apply for approval and use their private earnings dashboard when enrollment is enabled. This program does not send customer names, charges, or court records to partners.</p>
       <p id="affiliateProgramState" class="meta-note" role="status" aria-live="polite">Checking partner enrollment status…</p>
       <div id="affiliateInterest" class="recordwatch-enrollment-form" hidden>
         <h3>Request an invitation</h3>
@@ -74,7 +74,17 @@
         <label>Approved share link<input id="affiliateShareLink" readonly placeholder="Available after approval"></label>
         <button id="affiliateCopyLink" class="btn secondary" type="button" disabled>Copy referral link</button>
         <div class="recordwatch-countdown-panel"><div><strong id="affiliateReferralCount">0</strong><span>Attributed accounts</span></div><div><strong id="affiliatePending">$0.00</strong><span>Pending commissions</span></div><div><strong id="affiliatePaid">$0.00</strong><span>Paid commissions</span></div></div>
-        <p class="meta-note">Partner earnings never expose referred users' names or case data. Payouts are reviewed manually; no automatic transfers are enabled.</p>
+        <div class="recordwatch-countdown-panel"><div><strong id="affiliateEligible">$0.00</strong><span>Eligible after 30-day hold</span></div><div><strong>$50.00</strong><span>Minimum disbursement</span></div></div>
+        <div class="mini-card" id="affiliatePayoutPanel">
+          <h4>Set up affiliate payouts</h4>
+          <p id="affiliatePayoutStatus" role="status" aria-live="polite">Checking Stripe payout setup…</p>
+          <p>Only approved partners can receive commissions. Your bank and identity details are collected directly by Stripe; we do not store them.</p>
+          <label id="affiliatePayoutTypeLabel">Payout recipient type
+            <select id="affiliatePayoutEntityType"><option value="individual">Individual</option><option value="company">Company or nonprofit</option></select>
+          </label>
+          <button type="button" class="btn secondary" id="affiliatePayoutSetup">Set up secure Stripe payouts</button>
+        </div>
+        <p class="meta-note">Partner earnings never expose referred users' names or case data. Payouts require owner approval, a $50 threshold, identity and tax clearance, and a 30-day hold. No automatic transfers are enabled. A payout marked sent may still be delayed or returned by the recipient's bank.</p>
       </div>
     </div></section>
   </main>
