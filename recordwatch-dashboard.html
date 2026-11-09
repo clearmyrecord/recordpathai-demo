@@ -234,7 +234,7 @@
       function renderPremiumPanels(cases) {
         var user = activeUser();
         var subscription = activeSubscription();
-        var preferences = Object.assign({ email_enabled: true, sms_enabled: false }, premiumState.preferences || {});
+        var preferences = Object.assign({ email_enabled: false, sms_enabled: false }, premiumState.preferences || {});
         var premium = window.RecordWatchMessageProvider && RecordWatchMessageProvider.isPremium(subscription);
         var renewal = subscription && (subscription.current_period_end || subscription.premium_expires_at);
         var caseId=selectedSavedCaseId();
@@ -257,9 +257,9 @@
           '<p id="premiumActionStatus" class="muted">' + esc(premiumState.error || '') + '</p>';
         var consentText = window.RecordWatchMessageProvider ? RecordWatchMessageProvider.SMS_CONSENT_TEXT : 'By enabling SMS notifications, you agree to receive RecordWatch reminders from RecordPathAI. Message and data rates may apply. Reply STOP to opt out.';
         var phone = preferences.phone_number || (user && user.phone) || '';
-        var consentChecked = Boolean(preferences.sms_consent_at || preferences.sms_consent);
+        var consentChecked = Boolean((preferences.sms_consent_at || preferences.sms_consent) && !preferences.sms_opted_out_at);
         var smsReason = window.RecordWatchMessageProvider ? RecordWatchMessageProvider.smsDisabledReason(user, subscription, Object.assign({}, preferences, { phone_number: phone, sms_consent: consentChecked })) : '';
-        if (premium) recordwatchPreferencesPanel.innerHTML = '<form id="premiumPreferencesForm" class="recordwatch-enrollment-form"><p class="eyebrow-mini">Notification preferences / SMS consent</p><h2>Email + SMS preferences</h2><label>Phone number<input id="premiumPhone" type="tel" value="' + esc(phone) + '" placeholder="(555) 555-5555" /></label><label class="toggle-row"><input id="premiumEmailEnabled" type="checkbox" ' + (preferences.email_enabled !== false ? 'checked' : '') + ' /> <span>Email enabled</span></label><label class="toggle-row"><input id="premiumSmsConsent" type="checkbox" ' + (consentChecked ? 'checked' : '') + ' /> <span>' + esc(consentText) + '</span></label><label class="toggle-row"><input id="premiumSmsEnabled" type="checkbox" ' + (preferences.sms_enabled ? 'checked' : '') + ' /> <span>SMS enabled</span></label><p id="premiumSmsReason" class="meta-note">' + esc(smsReason || 'SMS is ready for Premium reminders.') + '</p><button class="btn" type="submit">Save preferences</button><p id="premiumPreferencesStatus" class="muted"></p></form>';
+        if (premium) recordwatchPreferencesPanel.innerHTML = '<form id="premiumPreferencesForm" class="recordwatch-enrollment-form"><p class="eyebrow-mini">Notification preferences / SMS consent</p><h2>Email + SMS preferences</h2><label>Phone number<input id="premiumPhone" type="tel" value="' + esc(phone) + '" placeholder="(555) 555-5555" /></label><label class="toggle-row"><input id="premiumEmailEnabled" type="checkbox" ' + (preferences.email_enabled === true && preferences.email_opted_in_at ? 'checked' : '') + ' /> <span>I opt in to case-specific RecordWatch Premium emails. I can disable them here at any time.</span></label><label class="toggle-row"><input id="premiumSmsConsent" type="checkbox" ' + (consentChecked ? 'checked' : '') + ' /> <span>' + esc(consentText) + ' Voluntary consent; not required to purchase Premium. Frequency varies by your case timeline. Reply HELP for help. See <a href="terms.html">Terms</a> and <a href="privacy.html">Privacy</a>.</span></label><label class="toggle-row"><input id="premiumSmsEnabled" type="checkbox" ' + (preferences.sms_enabled ? 'checked' : '') + ' /> <span>Send RecordWatch Premium SMS alerts to the number above</span></label><p id="premiumSmsReason" class="meta-note">' + esc(smsReason || 'SMS requires separate consent, an approved provider and verified case Premium.') + '</p><button class="btn" type="submit">Save preferences</button><p id="premiumPreferencesStatus" class="muted"></p></form>';
         if (!premium) {
           recordwatchPreferencesPanel.innerHTML = '<div class="recordwatch-enrollment-form"><p class="eyebrow-mini">Premium notification preferences</p><h2>Email + SMS require Premium</h2><p class="muted">Free case tracking includes an on-screen countdown only. Unlock this case for $39 once to configure email reminders and opt-in SMS notifications.</p></div>';
         }
@@ -316,12 +316,20 @@
           });
         });
         var form = document.getElementById('premiumPreferencesForm');
+        if(form && document.getElementById('premiumPhone')) {
+          document.getElementById('premiumPhone').addEventListener('input',function(){
+            document.getElementById('premiumSmsConsent').checked=false;
+            document.getElementById('premiumSmsEnabled').checked=false;
+            this.dataset.consentReconfirmed='true';
+          });
+        }
         if (form && form.dataset.bound !== 'true') {
           form.dataset.bound = 'true';
           form.addEventListener('submit', function (event) {
             event.preventDefault();
             var payload = RecordWatchMessageProvider.buildPreferencePayload(activeUser(), { phone_number: document.getElementById('premiumPhone').value, email_enabled: document.getElementById('premiumEmailEnabled').checked, sms_consent: document.getElementById('premiumSmsConsent').checked, sms_enabled: document.getElementById('premiumSmsEnabled').checked }, activeSubscription());
             payload.saved_case_id = selectedSavedCaseId() || null;
+            payload.sms_consent_reconfirmed = document.getElementById('premiumSmsConsent').checked && document.getElementById('premiumPhone').dataset.consentReconfirmed === 'true';
             RecordWatchNotifications.savePremiumPreferences(payload).then(function (result) { premiumState.preferences = result.preferences; document.getElementById('premiumPreferencesStatus').textContent = payload.sms_enabled ? 'Preferences saved with SMS enabled.' : 'Preferences saved. SMS remains disabled until all Premium requirements are met.'; renderPremiumPanels([]); }).catch(function (error) { document.getElementById('premiumPreferencesStatus').textContent = error.message; });
           });
         }
