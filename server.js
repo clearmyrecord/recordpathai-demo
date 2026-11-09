@@ -10,6 +10,8 @@ import { quotePacketPricing } from "./src/packet-pricing.js";
 import { projectPacketFulfillment } from "./src/packet-fulfillment-tracking.js";
 import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
 import { AFFILIATE_COMMISSION_BPS, AFFILIATE_ATTRIBUTION_DAYS, AFFILIATE_HOLD_DAYS, normalizeAffiliateCode, newAffiliateCode, eligibleAffiliatePurchase, affiliateCommissionCents, commissionAvailableAfter } from "./src/affiliate-program.js";
+import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neutralAlertContent, isPremiumAlertAllowed, validTwilioWebhookSignature, STOP_WORDS } from "./src/recordwatch-alerts.js";
+import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
 import { timingSafeEqual, createHash } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
@@ -1988,49 +1990,69 @@ async function getRecordwatchPreferences(userId,caseId="") {
   return recordwatchMemory.preferences.find((item) => item.user_id === userId && (isUuid(caseId)?item.saved_case_id===caseId:!item.saved_case_id)) || null;
 }
 
-async function saveRecordwatchPreferences(userId, payload = {}) {
-  const targetCaseId=safe(payload.saved_case_id||payload.savedCaseId);
-  const lifetime=await getRecordwatchLifetimeCase(userId,targetCaseId);
-  const activeSubscription=lifetimeCaseEntitled(lifetime,targetCaseId)
-    ? lifetimeAsSubscription(lifetime) : await getActiveRecordwatchSubscription(userId);
-  const phone = safe(payload.phone_number || payload.phoneNumber);
-  const consentAt = payload.sms_consent_at || payload.smsConsentAt || (payload.sms_consent || payload.smsConsent ? new Date().toISOString() : null);
-  const optedOutAt = payload.sms_opted_out_at || payload.smsOptedOutAt || null;
-  const wantsSms = payload.sms_enabled === true || payload.smsEnabled === true;
-  const smsAllowed = Boolean(activeSubscription && phone && consentAt && !optedOutAt);
-  const row = {
-    user_id: userId,
-    saved_case_id: isUuid(payload.saved_case_id || payload.savedCaseId) ? (payload.saved_case_id || payload.savedCaseId) : null,
-    case_id: safe(payload.case_id || payload.caseId) || null,
-    email_enabled: payload.email_enabled !== false && payload.emailEnabled !== false,
-    sms_enabled: wantsSms && smsAllowed,
-    phone_number: phone || null,
-    sms_consent_at: consentAt,
-    sms_opted_out_at: optedOutAt,
-    reminder_180_enabled: payload.reminder_180_enabled !== false && payload.reminder180Enabled !== false,
-    reminder_90_enabled: payload.reminder_90_enabled !== false && payload.reminder90Enabled !== false,
-    reminder_30_enabled: payload.reminder_30_enabled !== false && payload.reminder30Enabled !== false,
-    reminder_7_enabled: payload.reminder_7_enabled !== false && payload.reminder7Enabled !== false,
-    reminder_day_enabled: payload.reminder_day_enabled !== false && payload.reminderDayEnabled !== false,
-    court_status_enabled: payload.court_status_enabled !== false && payload.courtStatusEnabled !== false,
-    updated_at: new Date().toISOString()
+async function saveRecordwatchPreferences(userId,payload={}){
+  const caseId=safe(payload.saved_case_id||payload.savedCaseId);
+  if(!isUuid(caseId))throw Object.assign(new Error("Select an owned saved case to manage Premium alerts."),{status:400});
+  if(!packetDatabaseReady())throw Object.assign(new Error("Private notification preferences are unavailable."),{status:503});
+  const cases=await supabaseRest("saved_cases",{query:"?id=eq."+encodeURIComponent(caseId)+
+    "&user_id=eq."+encodeURIComponent(userId)+"&select=id&limit=1"});
+  if(!Array.isArray(cases)||!cases[0])
+    throw Object.assign(new Error("Saved case not found for this account."),{status:404});
+  const [lifetime,priorRows]=await Promise.all([
+    getRecordwatchLifetimeCase(userId,caseId),
+    supabaseRest("recordwatch_notification_preferences",{query:"?user_id=eq."+
+      encodeURIComponent(userId)+"&saved_case_id=eq."+encodeURIComponent(caseId)+"&limit=1"})
+  ]);
+  // New $39 case purchases are authoritative. Legacy recurring accounts remain
+  // grandfathered only if verified directly with their Stripe subscription.
+  const subscribed=lifetimeCaseEntitled(lifetime,caseId) ||
+    Boolean(await getActiveRecordwatchSubscription(userId));
+  if(!subscribed)throw Object.assign(new Error("Paid RecordWatch Premium is required for this saved case."),{status:403});
+  const previous=Array.isArray(priorRows)?priorRows[0]||null:null;
+  const phone=canonicalSmsPhone(payload.phone_number||payload.phoneNumber||previous?.phone_number);
+  const smsRequested=payload.sms_enabled===true||payload.smsEnabled===true;
+  const smsConsent=payload.sms_consent===true||payload.smsConsent===true;
+  const changedPhone=Boolean(previous?.phone_number && phone!==previous.phone_number);
+  const suppressed=phone?await supabaseRest("recordwatch_sms_suppressions",{
+    query:"?phone_number=eq."+encodeURIComponent(phone)+"&select=phone_number&limit=1"
+  }):[];
+  if(smsRequested && (!phone||!smsConsent))
+    throw Object.assign(new Error("Enter a valid US phone number and affirm optional SMS consent."),{status:400});
+  if(smsRequested && changedPhone && !payload.sms_consent_reconfirmed)
+    throw Object.assign(new Error("Confirm consent again for the new phone number."),{status:400});
+  if(smsRequested && (previous?.sms_opted_out_at||Array.isArray(suppressed)&&suppressed.length))
+    throw Object.assign(new Error("SMS remains opted out. Reply START to the sender and contact support before re-enabling."),{status:409});
+  const emailEnabled=payload.email_enabled===true||payload.emailEnabled===true;
+  const now=new Date().toISOString();
+  const row={
+    user_id:userId,saved_case_id:caseId,case_id:null,
+    email_enabled:emailEnabled,
+    email_opted_in_at:emailEnabled?(previous?.email_opted_in_at||now):null,
+    sms_enabled:smsRequested,
+    phone_number:phone||null,
+    sms_consent_at:smsRequested?(changedPhone?now:previous?.sms_consent_at||now):null,
+    sms_consent_source:smsRequested?"explicit_case_dashboard":previous?.sms_consent_source||null,
+    sms_consent_disclosure_version:smsRequested?"2026-11":previous?.sms_consent_disclosure_version||null,
+    sms_opted_out_at:previous?.sms_opted_out_at||null,
+    reminder_180_enabled:payload.reminder_180_enabled!==false,
+    reminder_90_enabled:payload.reminder_90_enabled!==false,
+    reminder_30_enabled:payload.reminder_30_enabled!==false,
+    reminder_7_enabled:payload.reminder_7_enabled!==false,
+    reminder_day_enabled:payload.reminder_day_enabled!==false,
+    court_status_enabled:payload.court_status_enabled!==false,
+    updated_at:now
   };
-  const existing = recordwatchMemory.preferences.find((item) => item.user_id === userId && (item.saved_case_id || null) === row.saved_case_id && (item.case_id || null) === row.case_id);
-  const memoryRow = Object.assign(existing || { id: recordwatchId("rwp"), created_at: new Date().toISOString() }, row);
-  if (!existing) recordwatchMemory.preferences.push(memoryRow);
-  try {
-    const savedFilter = row.saved_case_id ? `&saved_case_id=eq.${encodeURIComponent(row.saved_case_id)}` : "&saved_case_id=is.null&case_id=is.null";
-    const existingRows = await supabaseRest("recordwatch_notification_preferences", { query: `?user_id=eq.${encodeURIComponent(userId)}${savedFilter}&limit=1` });
-    if (Array.isArray(existingRows) && existingRows[0]) {
-      const persisted = await supabaseRest("recordwatch_notification_preferences", { method: "PATCH", query: `?id=eq.${encodeURIComponent(existingRows[0].id)}`, body: row, prefer: "return=representation" });
-      return Array.isArray(persisted) && persisted[0] ? persisted[0] : memoryRow;
-    }
-    const persisted = await supabaseRest("recordwatch_notification_preferences", { method: "POST", body: row, prefer: "return=representation" });
-    return Array.isArray(persisted) && persisted[0] ? persisted[0] : memoryRow;
-  } catch (error) {
-    console.warn("RecordWatch premium preference persistence fallback:", error.message);
-    return memoryRow;
-  }
+  let result;
+  if(previous)result=await supabaseRest("recordwatch_notification_preferences",{
+    method:"PATCH",query:"?id=eq."+encodeURIComponent(previous.id),
+    body:row,prefer:"return=representation"
+  });
+  else result=await supabaseRest("recordwatch_notification_preferences",{
+    method:"POST",body:row,prefer:"return=representation"
+  });
+  if(!Array.isArray(result)||!result[0])
+    throw Object.assign(new Error("Preferences could not be stored."),{status:503});
+  return result[0];
 }
 
 async function recordwatchAuthToken(req, res) {
@@ -2419,9 +2441,10 @@ app.post("/api/recordwatch/premium-preferences", async (req, res) => {
     const caseId=safe(req.body?.saved_case_id||req.body?.savedCaseId);
     if(caseId && !isUuid(caseId))return res.status(400).json({ok:false,error:"Valid saved case is required."});
     const preferences = await saveRecordwatchPreferences(user.id, req.body || {});
+    res.setHeader("Cache-Control","no-store, private");
     res.json({ ok: true, preferences });
   } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
+    res.status(error?.status||503).json({ ok: false, error: error.message });
   }
 });
 
