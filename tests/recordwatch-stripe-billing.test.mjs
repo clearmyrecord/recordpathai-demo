@@ -127,7 +127,9 @@ test("Customer-facing checkout and account management are wired with no local pa
   const recordwatch=read("recordwatch.html");
   const account=read("account.html");
   const provider=read("js/recordwatch-message-provider.js");
-  assert.ok(recordwatch.includes('checkoutPremium("lifetime_case"'));
+  assert.ok(dashboard.includes("RecordWatchNotifications.checkoutPremium('lifetime_case'"));
+  assert.ok(recordwatch.includes('recordwatch-dashboard.html?caseId='));
+  assert.ok(dashboard.includes('recordwatchPurchaseTerms'));
   assert.ok(recordwatch.includes('data-recordwatch-checkout="lifetime_case"'));
   assert.ok(!recordwatch.includes('data-recordwatch-checkout="monthly"'));
   assert.ok(!recordwatch.includes('data-recordwatch-checkout="annual"'));
@@ -200,5 +202,5 @@ test("Only verified lifetime case purchases can be persisted; packet checkout ca
   assert.ok(migration.includes("on public.recordwatch_lifetime_cases for select to authenticated"));
   assert.ok(!packet.includes('recordwatchAddon'));
   assert.ok(!dashboard.includes('Subscribe — $4.99/month'));
-  assert.ok(dashboard.includes('Unlock this case — $39 once'));
+  assert.ok(dashboard.includes('Accept terms &amp; continue to Stripe — $39'));
 });
