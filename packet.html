@@ -946,7 +946,7 @@
                 <div class="recordwatch-panel-item"><strong>Missing requirements</strong><span id="rwMissingRequirements">Case details</span></div>
                 <div class="recordwatch-panel-item"><strong>Next action</strong><span id="rwNextAction">Review packet details.</span></div>
               </div>
-              <p class="meta-note"><strong>RecordWatch Premium:</strong> $39 once for lifetime tracking of this saved case, purchased separately. No subscription or automatic renewal. Packet preparation remains $50 plus applicable court filing fees.</p><a href="recordwatch-dashboard.html">View RecordWatch Premium →</a>
+              <p class="meta-note"><strong>RecordWatch Premium is live:</strong> $39 one-time for paid alert access on this saved case, no renewal. This purchase is separate from the planned $50 signed packet and applicable court fees. Where several cases can legally be included on one application, contact us before buying duplicate case upgrades. <a href="pricing.html">See the Wood County $189 example</a>.</p><a href="recordwatch-dashboard.html">View RecordWatch Premium →</a>
             </aside>
           </section>
 
@@ -1053,10 +1053,11 @@
             <div class="button-stack">
               <div id="checkoutError" class="callout danger" style="display:none; margin-bottom:12px;" role="alert" aria-live="polite"></div>
               <div class="packet-fee-quote" id="packetFeeQuote" aria-live="polite" style="padding:18px 20px; border:1px solid #cfddf3; border-radius:16px; background:#f5f9ff; margin-bottom:8px;">
-                <h3 style="margin:0 0 10px; font-size:18px; color:#233d70;">Price breakdown</h3>
-                <div style="display:flex; justify-content:space-between; gap:16px; margin:5px 0;"><span>RecordPathAI packet preparation</span><strong id="packetServiceFee">$50.00</strong></div>
+                <h3 style="margin:0 0 10px; font-size:18px; color:#233d70;">Filing preparation quote — fulfillment pending</h3>
+                <div style="display:flex; justify-content:space-between; gap:16px; margin:5px 0;"><span>Planned RecordPathAI signed packet preparation</span><strong id="packetServiceFee">$50.00</strong></div>
                 <div style="display:flex; justify-content:space-between; gap:16px; margin:5px 0;"><span>Court filing fee / deposit</span><strong id="packetCourtFee">Checking court...</strong></div>
-                <div style="display:flex; justify-content:space-between; gap:16px; padding-top:12px; margin-top:10px; border-top:1px solid #cfddf3; font-size:18px;"><strong>Estimated total</strong><strong id="packetEstimatedTotal">Pending verification</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:16px; padding-top:12px; margin-top:10px; border-top:1px solid #cfddf3; font-size:18px;"><strong>Estimated packet + court cost (excludes RecordWatch)</strong><strong id="packetEstimatedTotal">Pending verification</strong></div>
+                 <p style="font-size:13px; line-height:1.55; color:#40577e; margin:10px 0 0;"><strong>RecordWatch Premium:</strong> $39 one time per saved case is available separately today. A qualifying Wood County Common Pleas conviction filing would total <strong>$189</strong> for $39 Premium + $50 packet + the clerk's $100 court fee/deposit when the full workflow launches. This $189 bundle cannot be purchased here yet. <a href="pricing.html">Pricing details</a>.</p>
                 <p id="packetFeeExplanation" style="font-size:13px; line-height:1.5; color:#526780; margin:12px 0 0;">Court fees, any waiver, and the accepted filing/payment method must be verified before an actual charge.</p>
                 <p style="font-size:13px; line-height:1.5; color:#526780; margin:8px 0 0;">Filing fee funds are separate from RecordPathAI revenue. A check and attached documents may be mailed through Lob after authorization, or the court fee may be paid online where the court permits. Neither payment method is activated here.</p>
               </div>
@@ -2757,7 +2758,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             ["Ohio court-law validation is unavailable; no payment will be collected."],"checkout");
           const review=pilot.review(data);
           return showPrerequisiteErrors(
-            ["Stripe checkout has not opened because Ohio cases are review-only. No payment was taken. The Wood County conviction quote is $150 ($50 preparation + $100 court deposit), subject to verification. Required before payment: official docket, final discharge, exclusions and approved filing instructions. "+
+            ["Stripe checkout has not opened because Ohio cases are review-only. No payment was taken. The Wood County conviction quote is $150 ($50 preparation + $100 court deposit), or $189 including a separate $39 RecordWatch Premium purchase, subject to verification. Packet fulfillment is not live. Required before payment: official docket, final discharge, exclusions and approved filing instructions. "+
              review.issues.slice(0,3).join(" ")],"checkout");
         }
         if(!["wave1","pilot","preparatory"].includes(base.scope))
