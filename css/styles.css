@@ -3141,3 +3141,38 @@ body.home-page .cta .btn {
     flex-basis: auto;
   }
 }
+
+
+/* Public pricing / live RecordWatch launch */
+.recordwatch-pricing-head { max-width: 810px; margin-bottom: 24px; }
+.recordwatch-pricing-head h2 { font-size: clamp(30px, 3.2vw, 42px); margin: 8px 0 14px; line-height: 1.12; }
+.recordwatch-pricing-head p { margin: 0; line-height: 1.65; color: #5d6d89; }
+.recordwatch-pricing-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.recordwatch-pricing-step { display: flex; flex-direction: column; min-width: 0; padding: clamp(20px, 2vw, 28px); background: #fff; border: 1px solid #d6e3f8; border-radius: 24px; box-shadow: 0 8px 24px rgba(27, 61, 122, .065); }
+.recordwatch-pricing-step h3 { font-size: 20px; line-height: 1.25; color: #18396f; margin: 4px 0 10px; }
+.recordwatch-pricing-step p:not(.recordwatch-pricing-amount) { color: #5c6c87; line-height: 1.6; font-size: 15px; margin: 0 0 18px; }
+.recordwatch-pricing-step a { margin-top: auto; font-weight: 800; color: #164b9d; text-decoration: underline; text-underline-offset: 3px; }
+.recordwatch-pricing-state { width: fit-content; display: inline-flex; font-size: 12px; font-weight: 850; padding: 6px 10px; border-radius: 999px; background: #ecf2fa; color: #25487b; }
+.recordwatch-pricing-state.live { background: #e9f7ee; color: #17683c; }
+.recordwatch-pricing-state.upcoming { background: #fff3de; color: #8e5b14; }
+.recordwatch-pricing-state.court { background: #eaf0ff; color: #244c90; }
+.recordwatch-pricing-amount { font-size: clamp(35px, 4.2vw, 52px); font-weight: 900; color: #12396f; letter-spacing: -.05em; line-height: 1.1; margin: 18px 0 8px; }
+.recordwatch-pricing-total { display: flex; align-items: center; justify-content: space-between; gap: 18px; background: #143e86; color: #fff; padding: 25px clamp(20px, 3vw, 36px); border-radius: 22px; margin-top: 18px; }
+.recordwatch-pricing-total span { font-size: 13px; font-weight: 800; letter-spacing: .035em; text-transform: uppercase; color: #d7e8ff; display: block; }
+.recordwatch-pricing-total strong { display: block; font-size: 19px; margin-top: 8px; }
+.recordwatch-pricing-total p { font-size: 13px; color: #e6efff; margin: 8px 0 0; line-height: 1.5; }
+.recordwatch-pricing-total-amount { font-size: clamp(44px, 5.5vw, 72px); font-weight: 900; letter-spacing: -.05em; white-space: nowrap; }
+.recordwatch-pricing-note { line-height: 1.65; margin: 16px 0 0; color: #566e90; }
+.recordwatch-pricing-note a { text-decoration: underline; text-underline-offset: 3px; }
+.recordwatch-pricing-page .section-card h2 { font-size: clamp(28px, 3vw, 38px); }
+.recordwatch-pricing-page .section-card h3 { color: #1e3b6c; }
+.recordwatch-pricing-page .section-card > p { max-width: 930px; line-height: 1.68; }
+.recordwatch-pricing-page .recordwatch-grid-2 { gap: 22px; }
+.recordwatch-pricing-page .recordwatch-grid-2 p { line-height: 1.65; color: #5c6c87; }
+@media (max-width: 860px) {
+  .recordwatch-pricing-grid { grid-template-columns: 1fr; }
+  .recordwatch-pricing-step { padding: 20px; }
+}
+@media (max-width: 560px) {
+  .recordwatch-pricing-total { flex-direction: column; align-items: flex-start; }
+}
