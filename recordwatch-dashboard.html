@@ -133,7 +133,7 @@
       var recordwatchPreferencesPanel = document.getElementById("recordwatchPreferencesPanel");
       var recordwatchReminderSchedule = document.getElementById("recordwatchReminderSchedule");
       var recordwatchHistoryPanel = document.getElementById("recordwatchHistoryPanel");
-      var premiumState = { subscription: null, preferences: null, error: '', stepOnePhone: '', stepOnePhoneSource: false, justPurchased: false };
+      var premiumState = { subscription: null, preferences: null, error: '', justPurchased: false };
       var preferenceSaveNotice = '';
 
       function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
@@ -252,6 +252,11 @@
         var caseId=selectedSavedCaseId();
         var lifetime=Boolean(premium && subscription && subscription.plan === "lifetime_case");
         var legacy=Boolean(premium && !lifetime);
+        // A separate, optional notification-only destination is collected
+        // before checkout; it never comes from the free eligibility intake.
+        var checkoutFields=window.RecordWatchSmsOptIn
+          ? RecordWatchSmsOptIn.fields({phone:'',email:'',emailChecked:false,
+              smsConsentChecked:false,smsEnabledChecked:false}) : '';
         recordwatchPremiumPanel.innerHTML = '<div class="case-header"><div><p class="eyebrow-mini">Premium RecordWatch</p><h2>' +
           (lifetime ? 'Lifetime Premium active <span class="status-badge eligible-now">Paid</span>' :
            legacy ? 'Existing Premium subscription active' : 'Free case tracking') +
@@ -263,23 +268,25 @@
           '<div class="recordwatch-actions">' +
           (lifetime ? '<span class="meta-note">This case is paid. No further payment or cancellation is required.</span>' :
            legacy ? '<button class="btn secondary" type="button" data-premium-action="portal">Manage existing subscription</button><button class="btn danger" type="button" data-premium-action="cancel">Cancel existing renewal</button>' :
-           caseId ? '<button class="btn" type="button" data-premium-action="lifetime_case">Unlock this case — $39 once</button>' :
+           caseId ? '<form id="recordwatchPreCheckoutForm" class="recordwatch-enrollment-form">' +
+             '<h3>Choose your RecordWatch notification destinations</h3>' +
+             '<p class="muted">These email and SMS details are independent of Step 1. Email and SMS are optional; your case tracking remains available even if you do not consent to messages.</p>' +
+             checkoutFields +
+             '<p class="meta-note">You may purchase Premium without opting into either channel. No notification will be sent before a verified payment and any required email confirmation or Twilio approval.</p>' +
+             '<label class="toggle-row"><input id="recordwatchPurchaseTerms" type="checkbox" required> <span>I have reviewed the <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a>, <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>, and the $39 one-time lifetime-per-saved-case price. I understand court and packet charges are separate and there is no automatic renewal.</span></label>' +
+             '<p id="recordwatchCheckoutStatus" role="status" aria-live="polite" class="meta-note"></p>' +
+             '<button class="btn" type="submit">Accept terms &amp; continue to Stripe — $39</button>' +
+             '</form>' :
            '<a class="btn" href="eligibility.html">Save a case to unlock Premium</a>') +
           '</div><p class="meta-note">Lifetime access is currently linked to the selected saved case. If several cases may be sealed on one application, contact us before buying duplicate case upgrades; grouped filing checkout is still being developed. Court filing fees and the planned $50 packet service are separate. Pre-existing subscriptions follow their original terms.</p>' +
           '<p id="premiumActionStatus" class="muted">' + esc(premiumState.error || '') + '</p>';
 
-        // Prefer paid-case saved consent, then the authenticated profile, then Step 1
-        // contact details for the same signed-in account and selected case.
-        // Only the server can actually enroll a phone after explicit consent.
-        var phone = preferences.phone_number || (user && user.phone) || premiumState.stepOnePhone || '';
-        var phoneSource = preferences.phone_number ? 'SMS number saved for this case' :
-          (user && user.phone) ? 'Saved account contact number' :
-          premiumState.stepOnePhoneSource ? 'Phone from your Step 1 eligibility intake' : '';
-        var accountEmail = user && user.email ? user.email : '';
+        var phone = preferences.phone_number || '';
+        var notificationEmail=preferences.notification_email || '';
         var consentChecked = Boolean(preferences.sms_enabled && preferences.sms_consent_at && !preferences.sms_opted_out_at);
         var smsFields = window.RecordWatchSmsOptIn
           ? RecordWatchSmsOptIn.fields({
-              phone: phone,
+              phone: phone,email:notificationEmail,
               emailChecked: preferences.email_enabled === true && Boolean(preferences.email_opted_in_at),
               smsConsentChecked: consentChecked,
               smsEnabledChecked: preferences.sms_enabled === true && consentChecked
@@ -296,11 +303,12 @@
             (premiumState.justPurchased
               ? '<p class="recordwatch-sms-disclosure" id="recordwatchPremiumActivationNotice" role="status"><strong>Payment verified — $39 Premium activated.</strong> Choose optional notification methods below. No second purchase is necessary.</p>'
               : '') +
-            '<p class="muted">Choose the alerts you want. There are no marketing texts. Voluntary consent; not required to purchase Premium.</p>' +
-            '<p class="meta-note"><strong>Email from your verified account:</strong> ' + esc(accountEmail || 'Sign in to confirm your account email') +
-              '. We do not ask you to enter it again. SMS uses your saved Step 1 number when available.</p>' +
-            (phoneSource ? '<p class="meta-note"><strong>Phone on file:</strong> ' + esc(phoneSource) +
-              '. Confirm that this is the number you want to receive SMS on, or correct it below.</p>' : '') +
+            '<p class="muted">Enter or change the email address and mobile number you want Premium messages sent to. These are separate from Step 1 and your login/billing contacts.</p>' +
+            (preferences.email_enabled && preferences.notification_email
+              ? '<p class="meta-note"><strong>Email verification:</strong> ' +
+                (preferences.notification_email_verified_at
+                  ? 'Verified for Premium alerts' : 'Pending — check the inbox you selected for a confirmation link') + '</p>'
+              : '') +
             smsFields +
             '<p id="premiumDeliveryReadiness" class="meta-note">Checking email and SMS provider readiness…</p>' +
             '<p id="premiumSmsReason" class="meta-note">' +
@@ -477,31 +485,7 @@
           premiumState.subscription = results[0].subscription || null;
           premiumState.preferences = results[1].preferences || null;
           premiumState.error = results[0].error || '';
-          premiumState.stepOnePhone = '';
-          premiumState.stepOnePhoneSource = false;
-          var user = activeUser();
-          var caseId = selectedSavedCaseId();
-          var needsPhone = !premiumState.preferences?.phone_number && !user?.phone;
-          if (!needsPhone || !caseId || !user?.email ||
-              !window.RecordPathUserStore?.getCurrentCaseDraft) {
-            renderPremiumPanels([]);
-            return;
-          }
-          // No broad localStorage lookup: only the active case draft linked to
-          // the same authenticated account email and saved-case UUID can prefill.
-          return RecordPathUserStore.getCurrentCaseDraft().then(function (draft) {
-            var draftCaseId = String(draft?.savedCaseId || draft?.case?.case_id || '');
-            var draftEmail = String(draft?.person?.email || '').trim().toLowerCase();
-            var signedInEmail = String(user.email || '').trim().toLowerCase();
-            if (draftCaseId === caseId && draftEmail === signedInEmail) {
-              premiumState.stepOnePhone = draft?.person?.phone || '';
-              premiumState.stepOnePhoneSource = Boolean(premiumState.stepOnePhone);
-            }
-          }).catch(function () {
-            // We never invent a number if an existing Step 1 value is unavailable.
-          }).finally(function () {
-            renderPremiumPanels([]);
-          });
+          renderPremiumPanels([]);
         });
       }
 
