@@ -1,46 +1,56 @@
-# RecordPathAI partner referral program (v1, approval only)
+# RecordPathAI affiliates — production activation and payout operations (2026-11-09)
 
-## Launch posture
-The code and public informational page may be deployed, but the live program is **OFF by default**. Do not set `AFFILIATE_PROGRAM_ENABLED=true` until the migration is applied, partner compliance is reviewed, first-touch attribution has been tested, and appropriate Stripe refunds/disputes are configured. There are **no automatic transfers or payouts** in v1. The public page is `/partners.html`.
+## Business terms and controls
 
-## Terms proposed for initial partners
-- 20% of collected RecordPathAI **service fees**: USD $7.80 on a $39 one-time RecordWatch purchase; USD $10 on the planned $50 packet-preparation charge **only if and when packet checkout launches**.
-- Zero commission on **court fees, government deposits, attorney services, third-party charges, shipping costs, taxes, and reversed payments**. For a Wood County $189 total illustration, only $89 is eligible as platform-fee revenue; total potential commission is $17.80.
-- A visitor who arrives through an approved partner's `?ref=RPAI...` link stores a first-touch code in their browser for up to 30 days; a verified login binds that referral permanently to one user account, if there was no prior referred account or prior lifetime purchase. Qualified paid purchases must occur within 30 days of that binding.
-- One commission per verified Stripe Checkout Session; 30-day hold; minimum $50 threshold. Refunded/disputed transactions void unpaid earnings. The dashboard never reveals customers' names, case histories or charges.
-- Payouts require operations review, tax onboarding, identity verification, compliance approval and a separately logged manual payout decision. No automatic payout integration has been implemented.
-- Where filing rules allow multiple cases on one application, the intended paid service is **per application**, not per charge. Current $39 RecordWatch checkout remains per saved case until grouped-case entitlements are implemented. Do not credit multiple duplicate purchases as intended pricing.
+- Approval-only independent affiliates; 20% of collected RecordPathAI **service fees**.
+- $7.80 per eligible paid $39 RecordWatch purchase; $10 for an eligible paid $50 packet-preparation service.
+- Court filing deposits, taxes, shipping and third-party costs are **never** commissionable. Do not award duplicate commissions per charge when cases share a filing.
+- First-touch 30-day attribution, single commission per unique Stripe Checkout Session, 30-day refund/dispute hold, $50 minimum payout.
+- No judicial, clerical, jail, probation/parole, or other public official paid referrals in the course of their official duties. No attorney/firm fee-splitting without separate documented ethics review.
+- All public affiliates must clearly disclose paid promotions and must not promise eligibility or court outcomes. No bulk outreach using criminal-record personal data.
+- Private Supabase service role only; partners never see customer court records, names or payout bank details.
+- **Owner-reviewed payouts. Automatic payouts stay OFF.** Every Stripe Global Payouts PayoutIntent is created with \`confirmation_method:"manual"\` and requires a separate explicit owner confirmation, after which the ledger is reconciled.
 
-## Compliance and allowed partners
-- Start with approved independent creators, publishers, community businesses and nonprofits. Prohibit commissions to court staff, judges, probation/parole officers and public officials acting in their official duties, or for soliciting supervised populations.
-- Attorney/firm/legal-client referrals need attorney-ethics review before any approval. RecordPathAI is informational software, not a law firm, and must not share legal fees. Never represent the program as court-sponsored or as legal advice.
-- FTC clear and conspicuous disclosure at the point of recommendation, e.g. **“I may earn a commission if you purchase through my link.”** Monitor advertising for misleading eligibility, timing or outcome claims.
-- No bulk publication of criminal-record personal data, spam, misleading endorsements, or direct solicitation of vulnerable individuals. All partners approved individually.
-- Review federal/state/local affiliate marketing, tax-reporting, data privacy, FTC, attorney ethics, and relevant outreach policies with qualified counsel before launch.
+## Existing components
 
-## Activation steps
-1. Keep existing live RecordWatch Stripe checkout as-is. Deploy the partner code with `AFFILIATE_PROGRAM_ENABLED` unset or `false`; confirm `/api/affiliates/readiness` returns `applications_open:false` and `automatic_payouts_enabled:false`.
-2. In the correct RecordPathAI **Supabase SQL editor**, apply **only** `supabase/migrations/20261108030000_affiliate_referrals.sql`. Do **not** rerun the core/bootstrap migrations or paste live payment secrets into the SQL editor.
-3. Confirm `select id from public.affiliate_program_migrations where id='20261108030000_affiliate_referrals';` returns exactly one row and that the four tables exist with RLS enabled.
-4. In Cloud Run **recordpathai** service `recordpathai-production` in `us-west1`, add plain environment variable `AFFILIATE_PROGRAM_ENABLED=true`, retain all existing Stripe and Supabase secrets, and deploy with production guards. This is **not** a Stripe secret.
-5. Check `https://recordpathai.com/api/affiliates/readiness` returns `applications_open:true`, `referral_tracking_enabled:true`, `automatic_payouts_enabled:false`. Enroll a test publisher from a dedicated test account. Applications default to `pending`.
-6. After compliance review, manually approve an applicant **in a secure admin-only SQL session** (not a public API), for example:
-   ```sql
-   update public.affiliate_partners
-   set status='approved', compliance_approved_at=now(), updated_at=now()
-   where user_id='<verified-affiliate-user-uuid>' and status='pending';
-   ```
-   Replace the placeholder with a **verified** UUID from an actual application. Do not approve a test applicant with an invented ID. Their partner dashboard then shows `https://recordpathai.com/?ref=RPAI...`.
-7. On a separate eligible non-partner customer account, visit that link, sign in, and verify the referral row was added. Never put court or criminal-charge information in link parameters or Stripe metadata.
-8. For a true end-to-end payout test, use a controlled live charge only with explicit authorization. Confirm one unique commission per session ($7.80 RecordWatch) and 30-day hold. Refund it and confirm the unpaid commission becomes `void` with reason `refund`. Existing $39 checkout and refund behavior must not regress.
-9. To recognize packet-preparation commissions later, wait until `/api/stripe/webhook` safely processes verified packet payments and listens to `charge.refunded` and `charge.dispute.created`. Court fees must remain separate from service fees.
-10. Before paying partners, set up a verified payout method/Stripe Connect or manual payroll route, required tax reporting, ledger review, payout reconciliation, clawbacks, and legal approval. No payout can currently be issued from the website.
+- \`/partners.html\`: application, referral link, earnings summary, Stripe-hosted recipient onboarding for approved partners.
+- \`/partners-admin.html\`: private operations screen. Requires logged-in owner AND separate operations secret (entered per browser session; not stored).
+- \`server.js\`: verified Stripe Checkout commissions on successful platform fees, refunds and disputes invalidate unpaid commissions; payout module is separate from both RecordWatch and packet-checkout flows.
+- \`src/affiliate-payout-service.js\`: recipient onboarding, payment-by-payment commission review, atomic payout batch reservation, manual confirmation and reconciliation.
+- \`src/affiliate-payouts.js\`: payout guardrails and validation.
+- \`tests/affiliate-payouts.test.mjs\`: funds movement and eligibility regression tests.
 
-## Manual commission review and payout safety
-Only service-role/admin SQL access can update `affiliate_commissions`. A pending commission may become `approved` after its `available_after` date and refund/dispute checks. No automated job performs this transition. Actual transfer and marking `paid` require an independent reconciled action, and should not be implemented by editing partner-side forms.
+## Activation requirements (complete these in order)
 
-## Links
-- [FTC endorsement / affiliate disclosure guidance](https://www.ftc.gov/business-guidance/resources/ftcs-endorsement-guides-what-people-are-asking)
-- [Ohio attorney conduct rules (5.4, 7.2)](https://www.supremecourt.ohio.gov/docs/LegalResources/rules/profConduct/profConductRules.pdf)
-- [Stripe Connect onboarding and payout overview](https://stripe.com/connect/marketplaces)
-- [Wood County posted criminal sealing fees](https://clerkofcourt.co.wood.oh.us/189/Criminal-Division-of-the-Clerk-of-Courts)
+**Do not mark payouts live until the entire checklist passes.** The deployed source, database migrations, Cloud Run configuration, and Stripe account must agree.
+
+1. Apply \`supabase/migrations/20261108030000_affiliate_referrals.sql\` to the correct private RecordPathAI Supabase database if not previously applied. Do not rerun the original full bootstrap.
+2. Apply \`supabase/migrations/20261109030000_affiliate_payouts.sql\`. Verify exactly one row for each migration in \`public.affiliate_program_migrations\`, that the new payout table exists and has RLS, and that no anon/authenticated permissions were granted.
+3. In the **RecordPathAI live Stripe account** (never Memory Studio), confirm Treasury / Global Payouts is enabled and identify a US USD financial account, which has sufficient *available* funds to cover payout + fees. The financial account had $0 available at initial review; fund it via the verified Stripe flow.
+4. In the Stripe Dashboard's API keys section, create a **new restricted live API key**, not an ordinary \`sk_live_\` key. Stripe's documented minimum permissions: \`Recipient Configuration: Write\`, \`Money Management Financial Accounts: Read\`, \`Money Management Payout Methods: Write\`, \`Money Management Outbound Payments: Write\`, and \`Money Management Payout Intents: Write\`. Store it in Google Cloud Secret Manager, never source code, GitHub issues, logs, screenshots or ChatGPT.
+5. Cloud Run existing service \`recordpathai\`, project \`recordpathai-production\`, region \`us-west1\`: configure \`AFFILIATE_PROGRAM_ENABLED=true\`; \`AFFILIATE_PAYOUTS_LIVE_ENABLED=true\`; \`STRIPE_AFFILIATE_PAYOUT_KEY\` (Secret Manager reference to the restricted key); \`STRIPE_AFFILIATE_FINANCIAL_ACCOUNT_ID\` (verified Treasury ID); \`AFFILIATE_OWNER_USER_ID\` (exact UUID of the authenticated owner from Supabase Auth), and preserve \`RECORDPATH_OPERATIONS_KEY\` (existing >=32-character secret). Never copy secret values into a public repo or a SQL migration.
+6. Deploy the tested \`main\` branch via the protected GitHub workflow. Verify \`/api/affiliates/readiness\` reports applications and referral tracking true. No automatic payouts should be enabled.
+7. From \`/partners.html\`, use two **separate verified user accounts** for an approved test affiliate and referred customer. The partner applies and remains pending. In \`/partners-admin.html\`, owner reviews marketing/conflicts/disclosures and approves; the partner then receives a unique tracking link.
+8. Partner selects individual or organization, starts Stripe-hosted payout onboarding, and enters sensitive details **directly in Stripe**. Account ownership stays bound to the authenticated partner; Stripe ACH capability must become active. No bank account number is collected by RecordPathAI.
+9. In the admin screen, owner verifies partner identity/tax compliance and clears payout hold. Test actual live purchases only when explicitly authorized and using real approved credentials. Confirm 20% of service-only net qualifying revenue, one unique commission per paid session, and no commission on the court filing fee.
+10. After the 30-day hold, owner clicks **Verify matured customer payments**. The server retrieves each source Stripe Checkout session, succeeded PaymentIntent and charge from the correct existing Stripe account, rejects refunds/disputes, and marks only eligible payments approved.
+11. At >=$50 approved eligible earnings, the owner clicks **Prepare payout**. The server verifies Stripe recipient and live Treasury available balance, and atomically reserves approved commission rows. Stripe creates a **manual confirmation** PayoutIntent.
+12. Owner checks the recipient and exact amount, types the amount in cents, and confirms the real transfer. The server re-verifies the source commission ledger and payout-intent fields before sending. Never accept the amount or recipient from the public form.
+13. Owner clicks **Reconcile with Stripe** until posted. A posted payout means funds have left Stripe, **not** that a bank has credited the money. Reconcile returns/failures and reopen verified commissions only after Stripe confirms funds returned. Partner dashboard shows pending/eligible/sent amounts without customer information.
+14. Review 1099 reporting, taxes, FTC disclosures, any applicable state consumer-protection and professional ethics rules with qualified counsel before scaling.
+
+## Important release limitations
+
+- This implementation uses owner-confirmed disbursement; it does not create an unattended daily payout job.
+- Missing migrations, identity, operations key, restricted Stripe key, active recipient, tax clearance, 30-day hold, $50 floor or funding cause a **fail-closed** response.
+- Do not publish "automatic affiliate payouts enabled" while \`automatic_payouts_enabled:false\`.
+- The live global-payouts secret cannot be enabled by a GitHub code commit; it requires an actual Secret Manager / Cloud Run configuration change.
+- No recipient, payout or live transfer should be fabricated for smoke testing. Stripe sandbox may be used separately to validate the mechanics without moving real funds.
+
+## Source references
+
+- [Stripe Global Payouts](https://docs.stripe.com/global-payouts)
+- [Send payouts and required restricted key permissions](https://docs.stripe.com/global-payouts/send-money)
+- [Recipient account onboarding](https://docs.stripe.com/global-payouts/recipient-creation)
+- [Payout status, returns and reconciliation](https://docs.stripe.com/global-payouts/manage-payouts)
+- [FTC endorsements and affiliate disclosures](https://www.ftc.gov/business-guidance/resources/ftcs-endorsement-guides-what-people-are-asking)
