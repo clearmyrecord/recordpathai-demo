@@ -10,6 +10,8 @@ import { quotePacketPricing } from "./src/packet-pricing.js";
 import { projectPacketFulfillment } from "./src/packet-fulfillment-tracking.js";
 import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
 import { AFFILIATE_COMMISSION_BPS, AFFILIATE_ATTRIBUTION_DAYS, AFFILIATE_HOLD_DAYS, normalizeAffiliateCode, newAffiliateCode, eligibleAffiliatePurchase, affiliateCommissionCents, commissionAvailableAfter } from "./src/affiliate-program.js";
+import { affiliatePayoutAmount } from "./src/affiliate-payouts.js";
+import { registerAffiliatePayoutRoutes } from "./src/affiliate-payout-service.js";
 import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neutralAlertContent, isPremiumAlertAllowed, validTwilioWebhookSignature, STOP_WORDS } from "./src/recordwatch-alerts.js";
 import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
 import { timingSafeEqual, createHash } from "node:crypto";
@@ -2216,14 +2218,15 @@ app.get("/api/affiliates/me",affiliateApi(async(req,res)=>{
     query:"?user_id=eq."+encodeURIComponent(user.id)+"&limit=1"
   });
   const partner=Array.isArray(partners)?partners[0]:null;
-  let totals={pending_cents:0,approved_cents:0,paid_cents:0,void_cents:0,referrals:0};
+  let totals={pending_cents:0,approved_cents:0,paid_cents:0,void_cents:0,referrals:0,eligible_cents:0};
   if(partner){
     const [commissions,referrals]=await Promise.all([
       supabaseRest("affiliate_commissions",{query:"?partner_id=eq."+encodeURIComponent(partner.id)+
-        "&select=commission_cents,status"}),
+        "&select=commission_cents,status,available_after,payout_batch_id"}),
       supabaseRest("affiliate_referrals",{query:"?partner_id=eq."+encodeURIComponent(partner.id)+"&select=id"})
     ]);
     totals.referrals=Array.isArray(referrals)?referrals.length:0;
+    totals.eligible_cents=affiliatePayoutAmount(commissions);
     for(const row of Array.isArray(commissions)?commissions:[]){
       const key=({pending:"pending_cents",approved:"approved_cents",paid:"paid_cents",void:"void_cents"})[row.status];
       if(key)totals[key]+=Number(row.commission_cents)||0;
@@ -2233,6 +2236,8 @@ app.get("/api/affiliates/me",affiliateApi(async(req,res)=>{
   return res.json({ok:true,partner:partner?{
     display_name:partner.display_name,code:partner.status==="approved"?partner.code:null,
     status:partner.status,commission_percent:partner.commission_bps/100,
+    payout_onboarding_started:Boolean(partner.stripe_recipient_account_id),
+    payouts_paused:partner.payouts_paused!==false,
     referral_link:partner.status==="approved"?
       "https://recordpathai.com/?ref="+encodeURIComponent(partner.code):null
   }:null,totals});
@@ -2283,6 +2288,11 @@ app.post("/api/affiliates/claim",affiliateApi(async(req,res)=>{
   const result=await claimAffiliateReferral(user.id,req.body?.referral_code);
   return res.status(result.claimed?200:409).json({ok:result.claimed,...result});
 }));
+// Secure affiliate recipient onboarding and owner-reviewed payouts.
+registerAffiliatePayoutRoutes(app,{
+  requireApiUser,requireOperationsKey,supabaseRest,
+  affiliateApi,affiliateProgramMigrationReady,packetDatabaseReady,isUuid
+});
 app.get("/api/recordwatch/database-readiness",async(req,res)=>{
   const migration_verified=await recordwatchBillingMigrationVerified();
   res.setHeader("Cache-Control","no-store");
