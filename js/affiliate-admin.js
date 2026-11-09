@@ -54,7 +54,7 @@
     for(const p of items){
       const card=elem("article",undefined,"ops-item");
       card.append(elem("h3",p.display_name+" — "+p.status));
-      card.append(elem("p","Category: "+p.partner_type+" · Eligible commissions: "+money(p.eligible_cents)));
+      card.append(elem("p","Category: "+p.partner_type+" · Eligible commissions: "+money(p.eligible_cents)+" · Matured pending review: "+money(p.matured_pending_cents)));
       if(p.website)card.append(elem("p","Website: "+p.website));
       if(p.audience_description)card.append(elem("p","Audience: "+p.audience_description,"ops-small"));
       card.append(elem("p","Stripe recipient: "+(p.has_recipient?"Registered":"Not registered")+
@@ -66,6 +66,15 @@
         controls.append(button("Reject",()=>partnerAction(p,"reject")));
       }
       if(p.status==="approved"){
+        if(Number(p.matured_pending_count||0)>0)
+          controls.append(button("Verify matured customer payments",async()=>{
+            if(!window.confirm("Verify "+p.matured_pending_count+" matured referral payments with Stripe? Only successful, nonrefunded payments will be approved."))return;
+            const r=await api("/api/affiliates/ops/review-commissions",{
+              method:"POST",body:{partner_id:p.id,reviewed_payments:true}
+            });
+            status("Verified: "+r.approved+" approved, "+r.voided+
+              " voided, "+r.manual_review+" need investigation.");
+          }));
         if(p.has_recipient&&!p.tax_reviewed_at)
           controls.append(button("Clear identity and tax review",()=>partnerAction(p,"tax_clear")));
         if(p.payout_ready)
