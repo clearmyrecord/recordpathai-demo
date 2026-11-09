@@ -299,7 +299,12 @@
 
   function checkoutPremium(plan, context) {
     // The previous monthly/annual selectors are retired. Only one-time case purchases.
-    return premiumApiPost("/api/recordwatch/checkout", Object.assign({}, context || {}, { plan: "lifetime_case" }));
+    // A referral code is a claim request only. The server checks approval,
+    // first-touch attribution and verified payment before any commission.
+    var referral = window.RecordPathAuth?.getReferralCode?.() || "";
+    return premiumApiPost("/api/recordwatch/checkout",
+      Object.assign({}, context || {}, { plan: "lifetime_case" },
+        referral ? { referral_code: referral } : {}));
   }
 
   function verifyPremiumCheckout(sessionId, savedCaseId) {
