@@ -191,8 +191,61 @@
     });
   }
 
+  // First-touch partner referral, retained for 30 days across sign-in and intake.
+  // The browser never awards commissions; the authenticated server checks
+  // partner approval, first attribution, ownership and Stripe payment.
+  const AFFILIATE_REF_STORAGE = "recordpathaiFirstAffiliateRef";
+  function getReferralCode() {
+    try {
+      const item = JSON.parse(localStorage.getItem(AFFILIATE_REF_STORAGE) || "null");
+      if (!item || !/^[A-Z0-9]{6,24}$/.test(item.code) ||
+          !Number.isFinite(item.timestamp) ||
+          item.timestamp > Date.now() ||
+          Date.now() - item.timestamp > 30 * 86400000) {
+        localStorage.removeItem(AFFILIATE_REF_STORAGE);
+        return "";
+      }
+      return item.code;
+    } catch { return ""; }
+  }
+  function captureReferralLink() {
+    try {
+      if (getReferralCode()) return;
+      const params = new URLSearchParams(location.search);
+      const code = String(params.get("ref") || "").trim().toUpperCase();
+      if (/^[A-Z0-9]{6,24}$/.test(code))
+        localStorage.setItem(AFFILIATE_REF_STORAGE,
+          JSON.stringify({code, timestamp:Date.now()}));
+    } catch {}
+  }
+  async function claimReferralAfterSignIn() {
+    const code=getReferralCode();
+    if (!code || !window.RecordPathSupabase) return;
+    try {
+      const client=await RecordPathSupabase.getClient();
+      const result=await client.auth.getSession();
+      const access=result?.data?.session?.access_token;
+      if (!access) return;
+      const response=await fetch("/api/affiliates/claim",{
+        method:"POST",
+        headers:{"Authorization":"Bearer "+access,"Content-Type":"application/json"},
+        body:JSON.stringify({referral_code:code})
+      });
+      if(response.ok){
+        localStorage.removeItem(AFFILIATE_REF_STORAGE);
+      }else if(response.status===409){
+        const data=await response.json().catch(()=>({}));
+        if(["existing_customer","already_attributed","not_eligible"].includes(data.reason))
+          localStorage.removeItem(AFFILIATE_REF_STORAGE);
+      }
+      // Disabled/unmigrated program leaves a bounded first-touch code only;
+      // never block customer sign-in or purchasing.
+    } catch {}
+  }
+
   window.RecordPathAuth = {
     currentPageUrl,
+    getReferralCode,
     signupUrl,
     loginUrl,
     sanitizeReturnUrl,
@@ -210,6 +263,7 @@
   };
 
   document.addEventListener("DOMContentLoaded", function () {
+    captureReferralLink();
     wireHeaderMenus();
     renderHeaderLinks();
     wireAuthActionGuards(document);
@@ -219,6 +273,10 @@
       renderHeaderLinks();
       showLegacyImportPrompt();
       logAuthDiagnostics();
+      claimReferralAfterSignIn();
+    });
+    document.addEventListener("recordpath:auth-change", function (event) {
+      if(event.detail?.event==="SIGNED_IN")claimReferralAfterSignIn();
     });
   });
 }());
