@@ -69,6 +69,7 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
         body:{status:dispute?"disputed":"refunded",revoked_at:new Date().toISOString(),updated_at:new Date().toISOString()},
         prefer:"return=representation"
       });
+      await voidAffiliateCommission(piId,dispute?"dispute":"refund");
       return res.json({received:true,product:"premium_recordwatch_lifetime",revoked:true});
     }
     if(["customer.subscription.created","customer.subscription.updated","customer.subscription.deleted"].includes(event.type)){
@@ -95,8 +96,10 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
       const verified=await verifiedRecordwatchLifetimeSession(session.id,
         session.metadata.user_id,session.metadata.saved_case_id);
       const entitlement=await upsertRecordwatchLifetimeCase(verified);
-      if(entitlement.stripe_checkout_session_id===verified.id && lifetimeCaseEntitled(entitlement,entitlement.saved_case_id))
+      if(entitlement.stripe_checkout_session_id===verified.id && lifetimeCaseEntitled(entitlement,entitlement.saved_case_id)){
         await createRecordwatchLedgerEntryFromSession(verified.metadata.user_id,verified,"lifetime_case");
+        await recordAffiliateCommission(verified,"recordwatch_lifetime",verified.metadata.user_id,RECORDWATCH_LIFETIME_CENTS);
+      }
       return res.json({received:true,product:"premium_recordwatch_lifetime",case_id:entitlement.saved_case_id});
     }
     if(session?.metadata?.product!=="premium_recordwatch")return res.json({received:true});
@@ -126,6 +129,13 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
   try{
     event=stripe.webhooks.constructEvent(req.body,req.get("stripe-signature"),secret);
   }catch{return res.status(400).json({ok:false,error:"Invalid Stripe signature."});}
+  if(["charge.refunded","charge.dispute.created"].includes(event.type)){
+    const raw=event.data?.object||{};
+    const pi=typeof raw.payment_intent==="string" ? raw.payment_intent : raw.payment_intent?.id;
+    try { await voidAffiliateCommission(pi,event.type==="charge.refunded"?"refund":"dispute"); }
+    catch { return res.status(503).json({received:false,error:"Affiliate refund reconciliation will retry."}); }
+    return res.json({received:true});
+  }
   if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
     return res.json({received:true});
   const session=event.data?.object;
@@ -145,6 +155,8 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
       body:{user_id:owner,case_id:caseId,stripe_session_id:session.id,
         status:"paid_hold",court_fee_cents:fee,payment_method:method}
     });
+    // The court deposit is not RecordPathAI revenue and earns no commission.
+    await recordAffiliateCommission(session,"packet_preparation",owner,PACKET_PRICE_CENTS);
     return res.json({received:true,status:"paid_hold"});
   }catch(error){
     console.warn("Stripe webhook store unavailable",error?.name||"unknown");
@@ -2227,6 +2239,8 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
       return res.status(409).json({ok:false,error:"Lifetime RecordWatch is already paid for this case. No additional purchase needed.",alreadyPurchased:true});
     const legacy=await getActiveRecordwatchSubscription(user.id);
     if(legacy)return res.status(409).json({ok:false,error:"Your existing RecordWatch subscription is still active. Manage that subscription before buying lifetime monitoring.",manageBilling:true});
+    if(affiliateProgramEnabled() && normalizeAffiliateCode(req.body?.referral_code))
+      await claimAffiliateReferral(user.id,req.body.referral_code);
     const priceId=process.env[RECORDWATCH_LIFETIME_PRICE_ENV];
     assertRecordwatchLifetimePrice(await recordwatchStripe.prices.retrieve(priceId));
     const base=getBaseUrl(req);
@@ -2266,6 +2280,7 @@ app.post("/api/recordwatch/verify-checkout", async (req, res) => {
     const matchingPayment=result.stripe_checkout_session_id===session.id && lifetimeCaseEntitled(result,caseId);
     const ledgerEntry=matchingPayment
       ? await createRecordwatchLedgerEntryFromSession(user.id,session,"lifetime_case") : null;
+    if(matchingPayment)await recordAffiliateCommission(session,"recordwatch_lifetime",user.id,RECORDWATCH_LIFETIME_CENTS);
     return res.json({ok:true,subscription:lifetimeAsSubscription(result),
       premium:lifetimeCaseEntitled(result,caseId),ledgerEntry,duplicate:ledgerEntry?.duplicate===true});
   }catch(error){
