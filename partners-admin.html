@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Affiliate Operations | RecordPathAI</title>
+<link rel="stylesheet" href="css/styles.css">
+<style>
+main{max-width:1100px;margin:3rem auto;padding:0 1.25rem}
+.ops-shell{padding:1.5rem;border:1px solid #d8dfe9;border-radius:14px;margin:1rem 0}
+.ops-shell label{display:block;margin:.65rem 0}
+.ops-shell button{margin:.25rem}
+.ops-item{border:1px solid #d4dce5;border-radius:10px;padding:1rem;margin:.85rem 0}
+.ops-small{font-size:.88rem;opacity:.85}
+.ops-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+.ops-status{min-height:1.7rem}
+input[type=password]{width:100%;max-width:500px}
+</style></head><body>
+<main>
+  <p><a href="partners.html">Partner program</a></p>
+  <h1>Affiliate operations</h1>
+  <p>Private controls for independent affiliate approval and Stripe payout reconciliation. No court or customer case information is displayed. Every money transfer requires a separate confirmed owner action.</p>
+  <section class="ops-shell" aria-labelledby="ops-auth-title">
+    <h2 id="ops-auth-title">Owner authorization</h2>
+    <p>Sign into the authorized RecordPathAI owner account. Enter the separate operations key for this session; it is never stored by this page.</p>
+    <label>Operations key <input type="password" id="opsKey" autocomplete="off" placeholder="Existing operations key"></label>
+    <button class="btn" type="button" id="opsLoad">Load partner queue</button>
+    <p id="opsStatus" class="ops-status" role="status" aria-live="polite"></p>
+  </section>
+  <section class="ops-shell" id="opsPartnersPanel" hidden aria-labelledby="ops-partners-title">
+    <h2 id="ops-partners-title">Partner applications and approved balances</h2>
+    <p class="ops-small">Review affiliation, marketing practices, and restricted professional relationships. Approving a partner does not authorize a payout.</p>
+    <div id="opsPartners"></div>
+  </section>
+  <section class="ops-shell" id="opsBatchesPanel" hidden aria-labelledby="ops-batches-title">
+    <h2 id="ops-batches-title">Stripe payout batches</h2>
+    <p class="ops-small">Preparation creates a Stripe payout intent requiring confirmation. Confirm only after checking recipient, amount, available balance and approved commission entries. A posted payout means the money left Stripe, not necessarily that the bank received it.</p>
+    <div id="opsBatches"></div>
+  </section>
+</main>
+<script src="js/supabase-client.js"></script>
+<script src="js/recordwatch-message-provider.js"></script>
+<script src="js/affiliate-admin.js"></script>
+</body></html>
