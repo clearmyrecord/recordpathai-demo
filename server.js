@@ -2570,6 +2570,42 @@ app.post("/api/operator/recordwatch/run-alerts",async(req,res)=>{
   }
 });
 
+// Account-owner-initiated delivery test. Uses only their verified account
+// email or expressly consented phone; never accepts arbitrary destinations.
+app.post("/api/recordwatch/alerts/test",async(req,res)=>{
+  const user=await requireApiUser(req,res);
+  if(!user)return;
+  const caseId=safe(req.body?.case_id);
+  const channel=safe(req.body?.channel);
+  if(!isUuid(caseId)||!["email","sms"].includes(channel))
+    return res.status(400).json({ok:false,error:"Select a saved case and email or SMS."});
+  const config=providerReadiness(process.env);
+  if(!await recordwatchAlertMigrationReady()||
+     !(channel==="email"?config.email_ready:config.sms_ready))
+    return res.status(503).json({ok:false,
+      error:"This alert provider is not approved and activated yet."});
+  try{
+    const owner=await supabaseRest("saved_cases",{query:"?id=eq."+
+      encodeURIComponent(caseId)+"&user_id=eq."+encodeURIComponent(user.id)+
+      "&select=id,eligibility_date&limit=1"});
+    if(!Array.isArray(owner)||!owner[0])
+      return res.status(404).json({ok:false,error:"Saved case not found."});
+    const today=new Date().toISOString().slice(0,10);
+    const date=String(owner[0].eligibility_date||today).slice(0,10);
+    const result=await sendCasePremiumAlert({userId:user.id,caseId,
+      kind:"test",date,channel,today});
+    res.setHeader("Cache-Control","no-store, private");
+    return res.status(result.status==="provider_accepted"?200:409)
+      .json({ok:result.status==="provider_accepted",
+        status:result.status,message:result.status==="provider_accepted"
+          ?"Provider accepted a test message. Check the destination; this is not confirmed delivery."
+          :"No message was sent. Confirm paid case, consent and provider status."});
+  }catch(error){
+    console.warn("Premium test alert unavailable",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Test delivery could not be verified."});
+  }
+});
+
 app.get("/api/recordwatch/premium-preferences", async (req, res) => {
   try {
     const user = await recordwatchAuthToken(req, res);
