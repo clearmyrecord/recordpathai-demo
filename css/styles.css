@@ -3237,3 +3237,35 @@ body.home-page .cta .btn {
 .affiliate-page .recordwatch-enrollment-form .toggle-row input { width: 18px; height: 18px; flex: none; margin-top: 3px; }
 .affiliate-page .recordwatch-enrollment-form a.btn { width: fit-content; }
 .affiliate-page .recordwatch-enrollment-form .recordwatch-countdown-panel { margin: 0; }
+
+
+/* Read-only real filing milestones in RecordWatch */
+.recordwatch-dashboard-page .recordwatch-fulfillment-stage {
+  position: relative;
+  border-left: 4px solid #9eb5db;
+}
+.recordwatch-dashboard-page .recordwatch-fulfillment-stage.complete {
+  border-left-color: #287e51;
+  background: #f1faf5;
+}
+.recordwatch-dashboard-page .recordwatch-fulfillment-stage.attention {
+  border-left-color: #c37b23;
+  background: #fff9ed;
+}
+.recordwatch-dashboard-page .recordwatch-fulfillment-stage.pending {
+  border-left-color: #9eb5db;
+  background: #fff;
+}
+.recordwatch-dashboard-page .recordwatch-filing-roadmap .recordwatch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+.recordwatch-dashboard-page #recordwatchFilingStatus {
+  margin-bottom: 17px;
+  line-height: 1.5;
+}
+.recordwatch-dashboard-page #recordwatchFilingReference {
+  overflow-wrap: anywhere;
+}
