@@ -56,7 +56,7 @@ test("No affiliate access to customer criminal records or auto-disbursal",()=>{
   assert.match(server,/\/api\/affiliates\/me/);
   assert.doesNotMatch(server,/affiliate_commissions[\s\S]{0,220}stripe\.transfers\.create/);
   assert.match(page,/Court fees and third-party costs/);
-  assert.match(page,/court filing deposit belongs to the court/);
+  assert.match(page,/conviction filing deposit belongs to the court/);
   assert.match(page,/No payments to judges, clerks, court employees/);
   assert.match(page,/Paid promotion must clearly disclose/);
   assert.match(page,/Payouts are reviewed manually/);
