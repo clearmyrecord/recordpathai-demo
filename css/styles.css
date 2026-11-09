@@ -3176,3 +3176,22 @@ body.home-page .cta .btn {
 @media (max-width: 560px) {
   .recordwatch-pricing-total { flex-direction: column; align-items: flex-start; }
 }
+
+
+/* Shared status ribbon: live RecordWatch vs unfinished packet fulfillment */
+.recordwatch-live-banner { padding: 12px 0 0; }
+.recordwatch-live-banner-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; background: #f8fbff;
+  border: 1px solid #d5e3f8; border-left: 4px solid #2b68bb;
+  border-radius: 14px; padding: 12px 17px;
+}
+.recordwatch-live-banner-copy { min-width: 0; flex: 1 1 320px; font-size: 13px; line-height: 1.55; color: #566c8c; }
+.recordwatch-live-banner-copy strong { color: #163d78; }
+.recordwatch-live-banner-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.recordwatch-live-banner-actions a { color: #16519b; font-size: 13px; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+.recordwatch-live-banner .container { max-width: var(--container, 1180px); }
+@media (max-width: 590px) {
+  .recordwatch-live-banner-inner { align-items: flex-start; }
+  .recordwatch-live-banner-actions { width: 100%; }
+}
