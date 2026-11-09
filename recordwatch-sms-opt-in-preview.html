@@ -28,6 +28,7 @@
     <div class="eyebrow">RecordPathAI · RecordWatch Premium</div>
     <h1>Notification preferences and SMS consent — checkout preview</h1>
     <p class="note"><strong>Public compliance illustration — not an active enrollment.</strong> This page shows the planned pre-checkout form and confirmation for the $39 one-time RecordWatch Premium upgrade. It does not collect contact information, store consent, charge a card, or send messages. Actual account and payment activity is in the <a href="https://recordpathai.com/recordwatch-dashboard.html">RecordWatch dashboard</a>; pre-checkout preference integration is not yet live.</p>
+    <p class="muted">This is not a live sign-up. No phone number or consent is collected here.</p>
   </header>
   <section class="card" aria-label="Illustration of pre-checkout opt-in">
     <span class="eyebrow">Step A · Before Stripe Checkout</span>
@@ -35,6 +36,7 @@
     <p>No recurring subscription. Choose where you would like optional Premium timeline updates delivered. These notification contacts are separate from the email and phone entered during your eligibility intake.</p>
     <div class="field"><label for="notifyEmail"><strong>Notification email (optional)</strong></label><input id="notifyEmail" type="email" autocomplete="off" placeholder="Email for Premium alerts" disabled><small class="muted">Used for RecordWatch notifications only if you opt in.</small></div>
     <div class="field"><label for="notifyPhone"><strong>Notification mobile number (optional)</strong></label><input id="notifyPhone" type="tel" autocomplete="off" placeholder="US mobile number for Premium texts" disabled><small class="muted">Separate from any phone number provided during eligibility intake.</small></div>
+    <div id="canonicalSmsDisclosure"></div>
     <fieldset>
       <legend>Optional notification choices</legend>
       <label class="toggle"><input type="checkbox"><span>Yes, send non-marketing RecordWatch Premium timeline updates to the notification email address I entered above.</span></label>
@@ -51,10 +53,18 @@
       <span class="eyebrow">Step B · Example after successful payment and preference save</span>
       <h3>Your RecordWatch Premium purchase is confirmed</h3>
       <p>Your selected notification preferences have been saved for this paid case. SMS alerts will be enabled only if you expressly opted in and carrier approval is complete. You can edit destinations or disable notifications in RecordWatch at any time. No message was sent by viewing this confirmation.</p>
-      <p class="muted">Illustration only. This preview did not verify a payment or store any contact details or consent.</p>
+      <p class="muted"><strong>Illustrative confirmation only.</strong> No real preferences were saved. This preview did not verify a payment or store any contact details or consent.</p>
     </div>
   </section>
   <p class="muted">RecordWatch gives estimated eligibility reminders, not legal advice or official court notifications. For help email <a href="mailto:matt@recordpathai.com">matt@recordpathai.com</a>. <a href="https://recordpathai.com/privacy.html">Privacy Policy</a> · <a href="https://recordpathai.com/terms.html">Terms of Service</a>.</p>
 </main>
-<script>document.getElementById("previewButton").addEventListener("click",function(){document.getElementById("confirmation").hidden=false;});</script>
+<script src="js/recordwatch-sms-opt-in.js"></script>
+<script>
+var container=document.getElementById("canonicalSmsDisclosure");
+container.innerHTML=RecordWatchSmsOptIn.fields({});
+var phone=document.getElementById("premiumPhone");
+phone.disabled=true;
+container.querySelectorAll("input").forEach(function(input){input.disabled=true;});
+document.getElementById("previewButton").addEventListener("click",function(){document.getElementById("confirmation").hidden=false;});
+</script>
 </body></html>
