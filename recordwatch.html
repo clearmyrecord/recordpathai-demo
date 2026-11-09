@@ -90,8 +90,8 @@
           <h2>Never Miss Your Eligibility Date</h2>
           <p>RecordWatch tracks your eligibility timeline and reminds you when it may be time to take action.</p>
           <div class="recordwatch-plan-grid">
-            <article class="recordwatch-plan-card"><h3>Free Eligibility Reminders</h3><ul><li>Email reminders</li><li>Countdown dashboard</li><li>Saved eligibility date</li></ul></article>
-            <article class="recordwatch-plan-card premium"><h3>Premium RecordWatch — Lifetime per Case</h3><p class="price-line"><strong>$39 one time</strong><br><span>Lifetime access for one saved case. No monthly or annual renewal.</span></p><ul><li>SMS alerts (with consent and provider availability)</li><li>Filing and missing-information reminders</li><li>Court status updates when available</li><li>Eligibility countdown for this case</li><li>Ongoing dashboard tracking for this case</li></ul><p class="meta-note">One payment covers a single saved case while RecordWatch remains available. Additional cases require separate purchases. The free eligibility check, optional $50 packet preparation service and court filing fees are separate. Updates depend on court and messaging-provider availability.</p><div class="recordwatch-actions"><button class="btn" type="button" data-recordwatch-checkout="lifetime_case">Unlock This Case — $39 Once</button></div></article>
+            <article class="recordwatch-plan-card"><h3>Free Case Tracking</h3><ul><li>Save your case details</li><li>View your eligibility countdown on screen</li><li>No email or SMS notifications</li></ul></article>
+            <article class="recordwatch-plan-card premium"><h3>Premium RecordWatch — Lifetime per Case</h3><p class="price-line"><strong>$39 one time</strong><br><span>Lifetime access for one saved case. No monthly or annual renewal.</span></p><ul><li>Email reminders and updates (when delivery is available)</li><li>SMS alerts (with express consent and provider availability)</li><li>Filing and missing-information reminders</li><li>Court status updates when available</li><li>Eligibility countdown for this case</li><li>Ongoing dashboard tracking for this case</li></ul><p class="meta-note">One payment covers a single saved case while RecordWatch remains available. Additional cases require separate purchases. The free eligibility check, optional $50 packet preparation service and court filing fees are separate. Updates depend on court and messaging-provider availability.</p><div class="recordwatch-actions"><button class="btn" type="button" data-recordwatch-checkout="lifetime_case">Unlock This Case — $39 Once</button></div></article>
           </div>
           <div class="recordwatch-countdown-panel">
             <div><strong id="recordwatchEstimatedDate">Not available yet</strong><span>Estimated eligibility date</span></div>
@@ -102,11 +102,11 @@
         <form id="recordwatchEnrollmentForm" class="recordwatch-enrollment-form">
           <label>Email<input id="recordwatchEmail" type="email" placeholder="you@example.com" /></label>
           <label>Mobile Phone<input id="recordwatchPhone" type="tel" placeholder="(555) 555-5555" /></label>
-          <label class="toggle-row"><input id="recordwatchNotifyEmail" type="checkbox" checked /> <span>Email Notifications</span></label>
-          <label class="toggle-row"><input id="recordwatchNotifySms" type="checkbox" /> <span>SMS Notifications</span></label>
-          <p id="recordwatchSmsNotice" class="meta-note" hidden>SMS alerts are part of Premium RecordWatch.</p>
-          <button class="btn" type="submit">Activate RecordWatch</button>
-          <p class="meta-note">A free account is required to save reminders. <a href="signup.html?returnUrl=recordwatch.html">Create an account</a> or <a href="login.html?returnUrl=recordwatch.html">sign in</a>. Both email/password and Google are available.</p>
+          <label class="toggle-row"><input id="recordwatchNotifyEmail" type="checkbox" disabled /> <span>Email notifications — Premium only</span></label>
+          <label class="toggle-row"><input id="recordwatchNotifySms" type="checkbox" disabled /> <span>SMS notifications — Premium only (consent required)</span></label>
+          <p id="recordwatchSmsNotice" class="meta-note">Email and SMS notifications are available only after purchasing $39 lifetime Premium for this saved case. Set delivery preferences after purchase.</p>
+          <button class="btn" type="submit">Save free case tracking</button>
+          <p class="meta-note">A free account is required to save your case and view its countdown; automatic email and SMS notifications require Premium. <a href="signup.html?returnUrl=recordwatch.html">Create an account</a> or <a href="login.html?returnUrl=recordwatch.html">sign in</a>. Both email/password and Google are available.</p>
           <p id="recordwatchEnrollmentStatus" class="muted"></p>
         </form>
       </div>
@@ -216,8 +216,8 @@
       var prefs = currentDraft && currentDraft.recordwatch || pendingEnrollment;
       document.getElementById("recordwatchEmail").value = prefs.email || profile.email || localStorage.getItem("email") || "";
       document.getElementById("recordwatchPhone").value = prefs.phone || profile.phone || localStorage.getItem("phone") || "";
-      document.getElementById("recordwatchNotifyEmail").checked = prefs.emailNotifications !== false;
-      document.getElementById("recordwatchNotifySms").checked = Boolean(prefs.smsNotifications);
+      document.getElementById("recordwatchNotifyEmail").checked = false;
+      document.getElementById("recordwatchNotifySms").checked = false;
       document.getElementById("recordwatchEstimatedDate").textContent = window.RecordWatchRules ? RecordWatchRules.formatDate(date) : "Not available yet";
       document.getElementById("recordwatchCountdown").textContent = days === null ? "—" : (days <= 0 ? "Eligible now" : String(days));
       var summary = document.getElementById("recordwatchCaseSummary");
@@ -251,15 +251,15 @@
       });
       var smsToggle = document.getElementById("recordwatchNotifySms");
       var smsNotice = document.getElementById("recordwatchSmsNotice");
-      smsToggle.addEventListener("change", function () { smsNotice.hidden = !smsToggle.checked; });
+      smsToggle.addEventListener("change", function () { smsNotice.hidden = false; });
       document.getElementById("recordwatchEnrollmentForm").addEventListener("submit", async function (event) {
         event.preventDefault();
         var wantsSms = document.getElementById("recordwatchNotifySms").checked;
         var recordwatchPrefs = {
           email: document.getElementById("recordwatchEmail").value,
           phone: document.getElementById("recordwatchPhone").value,
-          emailNotifications: document.getElementById("recordwatchNotifyEmail").checked,
-          smsNotifications: wantsSms,
+          emailNotifications: false,
+          smsNotifications: false,
           plan: "free",
           status: "active",
           updatedAt: new Date().toISOString(),
@@ -269,9 +269,9 @@
         localStorage.setItem("recordpathai_pending_recordwatch_enrollment", JSON.stringify(Object.assign({ caseId: active && active.id }, recordwatchPrefs)));
         // An unauthenticated browser must never be told reminders are active.
         // Persist only the pending draft and resume after genuine Supabase login.
-        if (!window.RecordPathAuth || !(await RecordPathAuth.requireAuthAsync("activate RecordWatch reminders", "recordwatch.html"))) {
+        if (!window.RecordPathAuth || !(await RecordPathAuth.requireAuthAsync("save RecordWatch case tracking", "recordwatch.html"))) {
           document.getElementById("recordwatchEnrollmentStatus").textContent =
-            "Create an account or sign in to activate your saved reminders.";
+            "Create an account or sign in to save your case and countdown.";
           return;
         }
         if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) {
@@ -294,7 +294,7 @@
           RecordPathUserStore.updateCase(active.id, { recordWatchStatus: "active", eligibilityDate: date, estimatedEligibleDate: date }).catch(function (error) { console.warn("RecordWatch status sync skipped:", error); });
         }
         localStorage.removeItem("recordpathai_pending_recordwatch_enrollment");
-        document.getElementById("recordwatchEnrollmentStatus").textContent = wantsSms ? "Free RecordWatch is active with email reminders. SMS alerts require Premium RecordWatch." : "Free RecordWatch is active with email reminders and dashboard countdown.";
+        document.getElementById("recordwatchEnrollmentStatus").textContent = "Saved case tracking is active. Email and SMS notifications require $39 lifetime Premium for this case.";
       });
     });
   </script>
