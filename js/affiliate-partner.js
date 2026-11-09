@@ -18,6 +18,36 @@
     byId("affiliateReferralCount").textContent = String(response.totals?.referrals || 0);
     byId("affiliatePending").textContent = money(response.totals?.pending_cents);
     byId("affiliatePaid").textContent = money(response.totals?.paid_cents);
+    byId("affiliateEligible").textContent = money(response.totals?.eligible_cents);
+    const setup = byId("affiliatePayoutSetup");
+    const recipientType = byId("affiliatePayoutEntityType");
+    const payoutStatus = byId("affiliatePayoutStatus");
+    setup.disabled = partner.status !== "approved";
+    recipientType.disabled = partner.status !== "approved";
+    if (partner.status !== "approved") {
+      payoutStatus.textContent = "Only approved partners may set up Stripe payouts.";
+    } else {
+      try {
+        const payout = await RecordWatchMessageProvider.apiFetch("/api/affiliates/payout-status");
+        setup.disabled = !payout.payout_processing_enabled;
+        recipientType.disabled = !payout.payout_processing_enabled || payout.onboarding_started;
+        setup.textContent = payout.onboarding_started ? "Update Stripe payout details" : "Set up secure Stripe payouts";
+        if (!payout.payout_processing_enabled) {
+          payoutStatus.textContent = "Stripe payout onboarding is being activated.";
+        } else if (!payout.onboarding_started) {
+          payoutStatus.textContent = "Stripe needs your identity and payment details before payout approval.";
+        } else if (!payout.recipient_ready) {
+          payoutStatus.textContent = "Stripe recipient verification is incomplete. Continue onboarding.";
+        } else if (!payout.tax_reviewed || payout.payouts_paused) {
+          payoutStatus.textContent = "Stripe setup verified. Awaiting RecordPathAI tax and compliance clearance.";
+        } else {
+          payoutStatus.textContent = "Payout account approved. Eligible earnings are released after owner review.";
+        }
+      } catch {
+        payoutStatus.textContent = "Stripe payout status cannot be checked right now.";
+        setup.disabled = true;
+      }
+    }
   }
 
   document.addEventListener("DOMContentLoaded", async function () {
@@ -67,6 +97,22 @@
         state.textContent = error.message || "Could not save application. No partner account was activated.";
       } finally {
         submit.disabled = false;
+      }
+    });
+    byId("affiliatePayoutSetup").addEventListener("click", async function () {
+      this.disabled = true;
+      const payoutStatus = byId("affiliatePayoutStatus");
+      payoutStatus.textContent = "Opening Stripe's secure payout verification…";
+      try {
+        const result = await RecordWatchMessageProvider.apiFetch("/api/affiliates/payout-onboard",{
+          method:"POST",
+          body:{entity_type:byId("affiliatePayoutEntityType").value}
+        });
+        if (!result.url) throw new Error("Stripe onboarding link not available.");
+        window.location.assign(result.url);
+      } catch (error) {
+        payoutStatus.textContent = error.message || "Could not start Stripe payout enrollment.";
+        this.disabled = false;
       }
     });
     byId("affiliateCopyLink").addEventListener("click", async function () {
