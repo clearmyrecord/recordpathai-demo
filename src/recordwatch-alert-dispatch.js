@@ -2,16 +2,19 @@
 import {validSmsPhone,validAlertEmail} from "./recordwatch-alerts.js";
 export function providerReadiness(env={}){
   const enabled=env.RECORDWATCH_ALERTS_LIVE_ENABLED==="true";
+  const testEnabled=env.RECORDWATCH_ALERTS_TEST_ENABLED==="true";
   const emailConfigured=Boolean(env.RESEND_API_KEY && validAlertEmail(env.RECORDWATCH_EMAIL_FROM||""));
   const smsConfigured=Boolean(/^AC[a-f0-9]{32}$/i.test(env.TWILIO_ACCOUNT_SID||"") &&
     env.TWILIO_AUTH_TOKEN && /^MG[a-f0-9]{32}$/i.test(env.TWILIO_MESSAGING_SERVICE_SID||"") &&
     env.RECORDWATCH_SMS_CAMPAIGN_APPROVED==="true");
   return {enabled,email_configured:emailConfigured,sms_configured:smsConfigured,
-    email_ready:enabled && emailConfigured,sms_ready:enabled && smsConfigured};
+    email_ready:enabled && emailConfigured,sms_ready:enabled && smsConfigured,
+    test_enabled:testEnabled,test_email_ready:testEnabled && emailConfigured,
+    test_sms_ready:testEnabled && smsConfigured};
 }
-export async function sendPremiumEmail({to,subject,message,env=process.env,fetchFn=fetch}){
+export async function sendPremiumEmail({to,subject,message,env=process.env,fetchFn=fetch,testOnly=false}){
   const r=providerReadiness(env);
-  if(!r.email_ready||!validAlertEmail(to))throw new Error("Premium email sending is disabled or recipient invalid");
+  if(!(testOnly?r.test_email_ready:r.email_ready)||!validAlertEmail(to))throw new Error("Premium email sending is disabled or recipient invalid");
   const response=await fetchFn("https://api.resend.com/emails",{
     method:"POST",headers:{Authorization:"Bearer "+env.RESEND_API_KEY,"Content-Type":"application/json"},
     body:JSON.stringify({from:"RecordPathAI <"+env.RECORDWATCH_EMAIL_FROM+">",
@@ -26,9 +29,9 @@ export async function sendPremiumEmail({to,subject,message,env=process.env,fetch
   if(!/^[-a-z0-9]{16,}$/i.test(receipt.id||""))throw new Error("Resend receipt missing");
   return {provider:"resend",id:receipt.id,status:"provider_accepted"};
 }
-export async function sendPremiumSms({to,message,env=process.env,fetchFn=fetch}){
+export async function sendPremiumSms({to,message,env=process.env,fetchFn=fetch,testOnly=false}){
   const r=providerReadiness(env);
-  if(!r.sms_ready || !validSmsPhone(to))throw new Error("Premium SMS sending disabled or phone invalid");
+  if(!(testOnly?r.test_sms_ready:r.sms_ready) || !validSmsPhone(to))throw new Error("Premium SMS sending disabled or phone invalid");
   const url="https://api.twilio.com/2010-04-01/Accounts/"+env.TWILIO_ACCOUNT_SID+"/Messages.json";
   const payload=new URLSearchParams({To:to,MessagingServiceSid:env.TWILIO_MESSAGING_SERVICE_SID,Body:message});
   const response=await fetchFn(url,{
