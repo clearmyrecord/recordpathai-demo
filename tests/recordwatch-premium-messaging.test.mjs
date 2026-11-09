@@ -31,8 +31,8 @@ test("Each notification re-checks server-paid entitlement, preference and SMS co
   assert.match(body, /casePremiumPreferences\?\.sms_consent_at/);
   assert.match(body, /casePremiumPreferences\?\.sms_opted_out_at/);
   assert.match(body, /const caseEmailOptIn=Boolean\(authorizedPremium/);
-  assert.match(body, /if \(authorizedPremium && paidCaseSubscription\.notify_email/);
-  assert.match(body, /if \(authorizedPremium && paidCaseSubscription\.notify_sms/);
+  assert.match(body, /if \(externalAllowed && authorizedPremium && paidCaseSubscription\.notify_email/);
+  assert.match(body, /if \(externalAllowed && authorizedPremium && paidCaseSubscription\.notify_sms/);
   assert.match(body, /shouldSendChannel\(/);
 });
 
