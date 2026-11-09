@@ -555,6 +555,80 @@
         });
       }
 
+      async function saveCheckoutNotificationChoices() {
+        var raw;
+        try {raw=sessionStorage.getItem('recordwatchPendingCheckoutConsent');}catch(error){}
+        if(!raw)return false;
+        var pending;
+        try{pending=JSON.parse(raw);}catch(error){return false;}
+        var user=activeUser(),caseId=selectedSavedCaseId();
+        if (!user?.id || !caseId || !pending ||
+            pending.userId!==user.id || pending.caseId!==caseId ||
+            Date.now()-pending.createdAt>7200000 ||
+            pending.disclosure_version!==RecordWatchSmsOptIn.DISCLOSURE_VERSION) {
+          preferenceSaveNotice='Your Stripe payment is verified. Select your preferred notification email or phone below; no further payment is necessary.';
+          renderPremiumPanels([]);
+          return false;
+        }
+        if(!window.RecordWatchMessageProvider?.isPremium(premiumState.subscription))return false;
+        // This is a paid-case-only server request, not consent capture in Stripe.
+        // The stored choice is bound to the same user/case and expires in 2h.
+        var payload={
+          saved_case_id:caseId,
+          notification_email:pending.notification_email||'',
+          phone_number:pending.phone_number||'',
+          email_enabled:pending.email_enabled===true,
+          sms_enabled:pending.sms_enabled===true,
+          sms_consent:pending.sms_consent===true,
+          sms_terms_acknowledged:pending.sms_terms_acknowledged===true,
+          sms_consent_reconfirmed:pending.sms_consent===true,
+          sms_consent_disclosure_version:pending.disclosure_version
+        };
+        try {
+          var response=await RecordWatchNotifications.savePremiumPreferences(payload);
+          premiumState.preferences=response.preferences;
+          sessionStorage.removeItem('recordwatchPendingCheckoutConsent');
+          preferenceSaveNotice='Payment verified. Premium notifications saved for this case. '+
+            (response.preferences?.sms_enabled
+              ? 'SMS consent recorded; sending still requires approved Twilio service. '
+              : 'SMS remains off. ')+
+            (response.preferences?.email_enabled
+              ? (response.preferences?.notification_email_verified_at
+                  ? 'Selected email verified.'
+                  : (response.preferences?.email_verification_sent
+                      ? 'Confirm the email sent to your chosen notification inbox.'
+                      : 'Your chosen email requires verification before alerts can be sent.'))
+              : 'Email alerts remain off.');
+          renderPremiumPanels([]);
+          return true;
+        }catch(error){
+          preferenceSaveNotice='Payment verified, but notification preferences need attention: '+
+            (error.message||'Unable to save preferences')+
+            '. No new payment is necessary; use the form below.';
+          renderPremiumPanels([]);
+          return false;
+        }
+      }
+
+      async function confirmRecordwatchEmailToken(token) {
+        if(!token)return;
+        try {
+          var client=window.RecordPathUserStore;
+          if(client?.refreshCurrentUser)await client.refreshCurrentUser();
+          var response=await RecordWatchMessageProvider.apiFetch(
+            '/api/recordwatch/verify-notification-email',{
+              method:'POST',body:{saved_case_id:selectedSavedCaseId(),token:token}
+            });
+          if(response.verified) {
+            preferenceSaveNotice='Your chosen RecordWatch notification email was verified successfully.';
+            await loadPremiumState();
+          }
+        }catch(error){
+          recordwatchDataNotice.textContent='Email verification could not be completed: '+
+            (error.message||'Sign in and open the verification link again.');
+        }
+      }
+
       function statCard(label, value, small, note, wide) { return '<article class="recordwatch-stat-card' + (wide ? ' wide' : '') + '"><span class="recordwatch-stat-label">' + esc(label) + '</span><strong class="recordwatch-stat-value' + (small ? ' small' : '') + '">' + esc(value || "Not entered") + '</strong>' + (note ? '<p class="recordwatch-stat-note">' + esc(note) + '</p>' : '') + '</article>'; }
       function confidenceText(value) { return String(value || "medium").replace(/_/g, " ").replace(/\b\w/g, function (letter) { return letter.toUpperCase(); }); }
       function confidenceLabel(caseData) { var result = RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available details." }; return confidenceText(result.level) + " — " + result.reason; }
@@ -589,7 +663,16 @@
         RecordWatchBridge.syncExistingRecordPathData();
       }
       render();
-      loadPremiumState();
+      var verifyToken = new URLSearchParams(window.location.search).get("verify_recordwatch_email") || '';
+      if(verifyToken){
+        // Remove the sensitive token from browser history before any network call.
+        var cleanUrl=new URL(window.location.href);
+        cleanUrl.searchParams.delete("verify_recordwatch_email");
+        window.history.replaceState({}, "", cleanUrl.pathname+cleanUrl.search+cleanUrl.hash);
+      }
+      loadPremiumState().then(function(){
+        if(verifyToken) return confirmRecordwatchEmailToken(verifyToken);
+      });
       var successSessionId = new URLSearchParams(window.location.search).get("session_id");
       if (new URLSearchParams(window.location.search).get("recordwatch") === "success" &&
           successSessionId && RecordWatchNotifications.verifyPremiumCheckout) {
@@ -600,7 +683,8 @@
           u.searchParams.delete("recordwatch");
           u.searchParams.delete("session_id");
           window.history.replaceState({}, "", u.pathname + u.search + "#recordwatchPreferencesPanel");
-          return loadPremiumState().then(function () {
+          return loadPremiumState().then(async function () {
+            await saveCheckoutNotificationChoices();
             var panel = document.getElementById("recordwatchPreferencesPanel");
             if (panel) panel.scrollIntoView({block:"start"});
           });
