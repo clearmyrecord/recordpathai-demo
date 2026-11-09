@@ -7,6 +7,7 @@ import { RECORDWATCH_BILLING, recordwatchPlan, assertRecordwatchStripePrice, bil
 import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect, assertFixedPacketAmount, PACKET_PRICE_CENTS } from "./src/payment-security.js";
 import { RECORDWATCH_LIFETIME_CENTS, RECORDWATCH_LIFETIME_PRICE_ENV, assertRecordwatchLifetimePrice, paidRecordwatchLifetimeCheckout, lifetimeCaseEntitled } from "./src/recordwatch-lifetime.js";
 import { quotePacketPricing } from "./src/packet-pricing.js";
+import { projectPacketFulfillment } from "./src/packet-fulfillment-tracking.js";
 import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
 import { AFFILIATE_COMMISSION_BPS, AFFILIATE_ATTRIBUTION_DAYS, AFFILIATE_HOLD_DAYS, normalizeAffiliateCode, newAffiliateCode, eligibleAffiliatePurchase, affiliateCommissionCents, commissionAvailableAfter } from "./src/affiliate-program.js";
 import { timingSafeEqual, createHash } from "node:crypto";
@@ -236,6 +237,49 @@ app.get("/api/packet/quote", (req, res) => {
   return res.json({ ok: true, quote });
 });
 
+
+// Case-owner only. Connects the real, server-verified packet/Stripe/Lob
+// workflow to RecordWatch without disclosing applicant or charge details.
+// GET only; NEVER issues a Stripe charge, check or mailing.
+app.get("/api/packet/filing-status",async(req,res)=>{
+  const user=await requireApiUser(req,res);
+  if(!user)return;
+  const caseId=safe(req.query?.case_id);
+  if(!validCaseId(caseId))
+    return res.status(400).json({ok:false,error:"Select a saved case to view filing progress."});
+  if(!packetDatabaseReady())
+    return res.status(503).json({ok:false,error:"Private filing status is temporarily unavailable."});
+  try{
+    await getSavedCaseReviewFacts(user.id,caseId);
+    const identity="case_id=eq."+encodeURIComponent(caseId)+
+      "&user_id=eq."+encodeURIComponent(user.id);
+    const [drafts,reviews,jobs]=await Promise.all([
+      supabaseRest("packet_drafts",{
+        query:"?"+identity+"&select=signed_pdf_sha256,signed_pdf_private_path&limit=1"
+      }),
+      supabaseRest("packet_releases",{
+        query:"?"+identity+"&select=status,signed_pdf_sha256,signed_pdf_private_path&limit=1"
+      }),
+      supabaseRest("packet_fulfillment_jobs",{
+        query:"?"+identity+
+        "&select=status,created_at,updated_at,court_fee_cents,payment_method,lob_check_id,mailed_at"+
+        "&order=created_at.desc&limit=1"
+      })
+    ]);
+    const latest=(rows)=>Array.isArray(rows)?rows[0]||null:null;
+    const timeline=projectPacketFulfillment({
+      draft:latest(drafts),review:latest(reviews),job:latest(jobs)
+    });
+    res.setHeader("Cache-Control","no-store, private");
+    res.setHeader("X-Content-Type-Options","nosniff");
+    return res.json({ok:true,case_id:caseId,source:"verified_private_records",
+      ...timeline,note:"Lob mail delivery is not proof of court filing or sealing approval."});
+  }catch(error){
+    console.warn("Private packet filing status unavailable",error?.name||"unknown");
+    return res.status(503).json({ok:false,
+      error:"Filing status cannot be verified. No charge or mailing was created by this request."});
+  }
+});
 
 app.get("/api/packet/checkout-readiness",async(req,res)=>{
   const user=await requireApiUser(req,res);
@@ -2037,14 +2081,17 @@ async function recordwatchBillingMigrationVerified() {
 function affiliateProgramEnabled() {
   return process.env.AFFILIATE_PROGRAM_ENABLED === "true";
 }
-async function affiliateProgramMigrationReady() {
-  if (!affiliateProgramEnabled() || !packetDatabaseReady()) return false;
+async function affiliateMigrationReceiptVerified() {
+  if (!packetDatabaseReady()) return false;
   try {
     const rows=await supabaseRest("affiliate_program_migrations",{
       query:"?id=eq.20261108030000_affiliate_referrals&select=id&limit=1"
     });
     return Array.isArray(rows) && rows.length===1;
   }catch{return false;}
+}
+async function affiliateProgramMigrationReady() {
+  return affiliateProgramEnabled() && await affiliateMigrationReceiptVerified();
 }
 async function affiliatePartnerForCode(raw) {
   const code=normalizeAffiliateCode(raw);
@@ -2132,11 +2179,16 @@ function affiliateApi(handler){
   });
 }
 app.get("/api/affiliates/readiness",affiliateApi(async(req,res)=>{
-  const ready=await affiliateProgramMigrationReady();
+  const configured=affiliateProgramEnabled();
+  const migrationVerified=await affiliateMigrationReceiptVerified();
+  const ready=configured && migrationVerified;
   res.setHeader("Cache-Control","no-store");
   return res.json({applications_open:ready,referral_tracking_enabled:ready,
     automatic_payouts_enabled:false,commission_percent:20,
-    paid_service_only:true,requires_partner_approval:true});
+    paid_service_only:true,requires_partner_approval:true,
+    configuration_enabled:configured,migration_verified:migrationVerified,
+    blocker:ready?null:!configured?"Cloud Run flag AFFILIATE_PROGRAM_ENABLED is not true":
+      "Private affiliate migration receipt is not accessible"});
 }));
 app.get("/api/affiliates/me",affiliateApi(async(req,res)=>{
   const user=await requireApiUser(req,res);
