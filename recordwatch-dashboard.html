@@ -67,6 +67,19 @@
       <section class="recordwatch-widget recordwatch-preferences-panel" id="recordwatchPreferencesPanel"></section>
       <section class="recordwatch-widget recordwatch-reminder-schedule" id="recordwatchReminderSchedule"></section>
       <section class="recordwatch-widget recordwatch-history-panel" id="recordwatchHistoryPanel"></section>
+       <section class="recordwatch-widget recordwatch-filing-roadmap" aria-label="Upcoming filing fulfillment tracker">
+         <div class="recordwatch-section-heading"><p class="eyebrow-mini">Next integration · Filing and delivery</p><h2>Packet and mailing tracker — coming next</h2>
+           <p class="muted">RecordWatch will keep the full filing timeline in one place after signed packet checkout and Lob mailing are connected. These stages are a preview, not current shipment statuses.</p>
+         </div>
+         <div class="recordwatch-fulfillment-steps">
+           <div><strong>1. Signed packet</strong><span>PDF generation and signature review</span></div>
+           <div><strong>2. Payment verified</strong><span>$50 service + applicable court fee</span></div>
+           <div><strong>3. Printed &amp; mailed</strong><span>Planned Lob production and mailing</span></div>
+           <div><strong>4. Delivery tracked</strong><span>Tracking number and delivery history</span></div>
+           <div><strong>5. Court progress</strong><span>Filing/receipt status when verified</span></div>
+         </div>
+         <p class="recordwatch-schedule-note">These five fulfillment stages are not yet linked to live Lob events or court docket status. The independent $39 RecordWatch Premium checkout is live and was payment-tested. <a href="pricing.html">See the full $189 Wood County example</a>.</p>
+       </section>
       <div class="recordwatch-actions"><button class="btn secondary" id="exportJson" type="button">Export RecordWatch Data JSON</button><button class="btn danger" id="clearData" type="button">Clear Demo Data</button></div>
       <div id="casesContainer" class="recordwatch-stack"></div>
       <div class="disclaimer-box"><strong>Disclaimer:</strong> RecordWatch provides organization, estimated eligibility calculations, document preparation, and tracking tools. It is not legal advice. Eligibility rules vary by state, county, court, charge type, disposition, and personal history. Calculations must be verified before filing. RecordWatch does not guarantee record sealing, expungement, correction, deletion, removal, employment, housing approval, or background-check results.</div>
@@ -237,7 +250,7 @@
            legacy ? '<button class="btn secondary" type="button" data-premium-action="portal">Manage existing subscription</button><button class="btn danger" type="button" data-premium-action="cancel">Cancel existing renewal</button>' :
            caseId ? '<button class="btn" type="button" data-premium-action="lifetime_case">Unlock this case — $39 once</button>' :
            '<a class="btn" href="eligibility.html">Save a case to unlock Premium</a>') +
-          '</div><p class="meta-note">Lifetime applies only to the selected case, for as long as RecordWatch is operated. Additional cases require separate purchases. Court filing fees and the optional $50 packet service are separate. Pre-existing subscriptions remain governed by their original terms until cancelled.</p>' +
+          '</div><p class="meta-note">Lifetime access is currently linked to the selected saved case. If several cases may be sealed on one application, contact us before buying duplicate case upgrades; grouped filing checkout is still being developed. Court filing fees and the planned $50 packet service are separate. Pre-existing subscriptions follow their original terms.</p>' +
           '<p id="premiumActionStatus" class="muted">' + esc(premiumState.error || '') + '</p>';
         var consentText = window.RecordWatchMessageProvider ? RecordWatchMessageProvider.SMS_CONSENT_TEXT : 'By enabling SMS notifications, you agree to receive RecordWatch reminders from RecordPathAI. Message and data rates may apply. Reply STOP to opt out.';
         var phone = preferences.phone_number || (user && user.phone) || '';
