@@ -69,8 +69,24 @@ case "$url" in
     esac
     if [[ "$failed" == recordwatch-billing ]]; then
       printf '%s\n' '{"mode":"unconfigured","prices_configured":false,"webhook_configured":false,"secure_database_configured":false,"live_enabled":false,"ready":false}' > "$output"
+    elif [[ "${MOCK_RECORDWATCH_MODE:-sandbox}" == live ]]; then
+      printf '%s\n' '{"mode":"live","prices_configured":true,"webhook_configured":true,"secure_database_configured":true,"live_enabled":true,"ready":true}' > "$output"
     else
       printf '%s\n' '{"mode":"sandbox","prices_configured":true,"webhook_configured":true,"secure_database_configured":true,"live_enabled":false,"ready":true}' > "$output"
+    fi
+    exit 0 ;;
+  */api/recordwatch/database-readiness)
+    case "$url" in
+      https://recordpathai-preview---recordpathai-abc-uw.a.run.app/*)
+        failed="${MOCK_FAIL_STAGE:-}" ;;
+      https://recordpathai-abc-uw.a.run.app/*)
+        failed="${MOCK_FAIL_PRODUCTION:-}" ;;
+      *) echo "Unexpected lifetime migration URL" >&2; exit 82 ;;
+    esac
+    if [[ "$failed" == recordwatch-database ]]; then
+      printf '%s\n' '{"migration_verified":false,"ready":false}' > "$output"
+    else
+      printf '%s\n' '{"migration_verified":true,"ready":true}' > "$output"
     fi
     exit 0 ;;
   */self-search.html)marker="Find your own court records";page="self-search.html";;
@@ -149,6 +165,32 @@ rc=$?
 set -e
 [[ "$rc" == 5 ]] || { echo "Unconfigured public RecordWatch endpoint must roll back (got $rc)" >&2;cat "$TMP/billing-production-broken.log" >&2;exit 1; }
 grep -qF 'recordpathai-new=100' "$MOCK_ACTIONS"
+grep -qF 'recordpathai-old=100' "$MOCK_ACTIONS"
+[[ "$(cat "$MOCK_STATE")" == rolledback ]]
+
+setup_case
+MOCK_RECORDWATCH_MODE=live bash scripts/deploy-existing-cloudrun.sh > "$TMP/live-healthy.log" 2>&1 || {
+  cat "$TMP/live-healthy.log" >&2
+  echo "Valid live Stripe setup should deploy successfully" >&2
+  exit 1
+}
+grep -qF "recordpathai-new=100" "$MOCK_ACTIONS"
+grep -qF "RecordWatch live billing and lifetime entitlement storage verified" "$TMP/live-healthy.log"
+
+setup_case
+set +e
+MOCK_FAIL_STAGE=recordwatch-database bash scripts/deploy-existing-cloudrun.sh > "$TMP/database-candidate-broken.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" == 5 ]] || { echo "Unmigrated case-entitlement candidate must fail safely (got $rc)" >&2;cat "$TMP/database-candidate-broken.log" >&2;exit 1; }
+[[ ! -s "$MOCK_ACTIONS" ]] || { echo "Never send traffic to an unmigrated RecordWatch database" >&2;exit 1; }
+
+setup_case
+set +e
+MOCK_FAIL_PRODUCTION=recordwatch-database bash scripts/deploy-existing-cloudrun.sh > "$TMP/database-production-broken.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" == 5 ]] || { echo "Unmigrated production case entitlement must trigger rollback (got $rc)" >&2;cat "$TMP/database-production-broken.log" >&2;exit 1; }
 grep -qF 'recordpathai-old=100' "$MOCK_ACTIONS"
 [[ "$(cat "$MOCK_STATE")" == rolledback ]]
 
