@@ -2002,6 +2002,12 @@ async function saveRecordwatchPreferences(userId,payload={}){
   const smsRequested=payload.sms_enabled===true||payload.smsEnabled===true;
   const smsConsent=payload.sms_consent===true||payload.smsConsent===true;
   const changedPhone=Boolean(previous?.phone_number && phone!==previous.phone_number);
+  const newSmsEnrollment=smsRequested && (!previous?.sms_enabled ||
+    !previous?.sms_consent_at || changedPhone);
+  if(newSmsEnrollment && payload.sms_terms_acknowledged!==true)
+    throw Object.assign(new Error("A separate Terms and Privacy acknowledgment is required to enroll in SMS."),{status:400});
+  if(newSmsEnrollment && payload.sms_consent_disclosure_version!=="2026-11-web-form-v2")
+    throw Object.assign(new Error("Please refresh the SMS consent form to review the current disclosure."),{status:400});
   const suppressed=phone?await supabaseRest("recordwatch_sms_suppressions",{
     query:"?phone_number=eq."+encodeURIComponent(phone)+"&select=phone_number&limit=1"
   }):[];
@@ -2019,9 +2025,9 @@ async function saveRecordwatchPreferences(userId,payload={}){
     email_opted_in_at:emailEnabled?(previous?.email_opted_in_at||now):null,
     sms_enabled:smsRequested,
     phone_number:phone||null,
-    sms_consent_at:smsRequested?(changedPhone?now:previous?.sms_consent_at||now):null,
+    sms_consent_at:smsRequested?(newSmsEnrollment?now:previous?.sms_consent_at||now):null,
     sms_consent_source:smsRequested?"explicit_case_dashboard":previous?.sms_consent_source||null,
-    sms_consent_disclosure_version:smsRequested?"2026-11":previous?.sms_consent_disclosure_version||null,
+    sms_consent_disclosure_version:smsRequested?(newSmsEnrollment?"2026-11-web-form-v2":previous?.sms_consent_disclosure_version||"2026-11-web-form-v2"):previous?.sms_consent_disclosure_version||null,
     sms_opted_out_at:previous?.sms_opted_out_at||null,
     reminder_180_enabled:payload.reminder_180_enabled!==false,
     reminder_90_enabled:payload.reminder_90_enabled!==false,
