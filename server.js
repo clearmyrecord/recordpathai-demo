@@ -2448,28 +2448,58 @@ app.post("/api/recordwatch/premium-preferences", async (req, res) => {
   }
 });
 
-app.post("/api/recordwatch/inbound-sms", async (req, res) => {
-  try {
-    const payload = req.body || {};
-    const body = safe(payload.Body || payload.body).toUpperCase();
-    const from = safe(payload.From || payload.from || payload.phone_number || payload.phoneNumber);
-    if (!from || body !== "STOP") return res.json({ ok: true, ignored: true });
-    recordwatchMemory.preferences.forEach((pref) => {
-      if (safe(pref.phone_number || pref.notification_phone) === from) {
-        pref.sms_enabled = false;
-        pref.eligibility_sms = false;
-        pref.sms_opted_out_at = new Date().toISOString();
-        pref.updated_at = new Date().toISOString();
-      }
-    });
-    try {
-      await supabaseRest("recordwatch_notification_preferences", { method: "PATCH", query: `?phone_number=eq.${encodeURIComponent(from)}`, body: { sms_enabled: false, sms_opted_out_at: new Date().toISOString(), updated_at: new Date().toISOString() }, prefer: "return=representation" });
-    } catch (error) {
-      console.warn("RecordWatch SMS opt-out Supabase fallback:", error.message);
+// Twilio's inbound opt-out webhooks MUST be signed. The public endpoint cannot
+// let arbitrary callers disable someone's SMS alerts.
+app.post("/api/recordwatch/inbound-sms",
+  express.urlencoded({extended:false,limit:"16kb"}),async(req,res)=>{
+  const token=process.env.TWILIO_AUTH_TOKEN||"";
+  const canonical=process.env.TWILIO_WEBHOOK_URL||
+    "https://recordpathai.com/api/recordwatch/inbound-sms";
+  const signature=req.get("X-Twilio-Signature")||"";
+  if(!token||!validTwilioWebhookSignature({
+    url:canonical,params:req.body,signature,authToken:token
+  }))return res.status(403).json({ok:false,error:"Invalid provider signature."});
+  const payload=req.body||{};
+  if(payload.AccountSid!==process.env.TWILIO_ACCOUNT_SID)
+    return res.status(403).json({ok:false,error:"Wrong provider account."});
+  const phone=canonicalSmsPhone(payload.From);
+  const body=safe(payload.Body).trim().toUpperCase();
+  if(!phone || (!STOP_WORDS.has(body) && body!=="START" && body!=="UNSTOP"))
+    return res.status(200).type("text/xml").send("<Response/>");
+  if(!packetDatabaseReady())return res.status(503).send("Messaging preference database unavailable.");
+  const now=new Date().toISOString();
+  try{
+    if(STOP_WORDS.has(body)){
+      await supabaseRest("recordwatch_sms_suppressions",{
+        method:"POST",query:"?on_conflict=phone_number",
+        prefer:"resolution=merge-duplicates,return=representation",
+        body:{phone_number:phone,opted_out_at:now,source:"twilio_signed_stop"}
+      });
+      await supabaseRest("recordwatch_notification_preferences",{
+        method:"PATCH",query:"?phone_number=eq."+encodeURIComponent(phone),
+        body:{sms_enabled:false,sms_opted_out_at:now,sms_consent_at:null,updated_at:now}
+      });
+    }else{
+      // Replying START removes the global provider-level block. Preferences
+      // remain OFF until the customer actively reconsents on the dashboard.
+      await supabaseRest("recordwatch_sms_suppressions",{
+        method:"DELETE",query:"?phone_number=eq."+encodeURIComponent(phone)
+      });
+      await supabaseRest("recordwatch_notification_preferences",{
+        method:"PATCH",query:"?phone_number=eq."+encodeURIComponent(phone),
+        body:{sms_enabled:false,sms_opted_out_at:null,sms_consent_at:null,updated_at:now}
+      });
     }
-    res.json({ ok: true, optedOut: true });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
+    for(const pref of recordwatchMemory.preferences){
+      if(canonicalSmsPhone(pref.phone_number||pref.notification_phone)===phone){
+        pref.sms_enabled=false;pref.sms_consent_at=null;
+        pref.sms_opted_out_at=STOP_WORDS.has(body)?now:null;
+      }
+    }
+    return res.status(200).type("text/xml").send("<Response/>");
+  }catch(error){
+    console.warn("Signed Twilio opt-out persistence unavailable",error?.name||"unknown");
+    return res.status(503).send("Preference update could not be confirmed.");
   }
 });
 
