@@ -415,6 +415,34 @@ app.post("/api/operator/lob-test-check",async(req,res)=>{
   if(!validTestAttachment)
     return res.status(503).json({ok:false,error:
       "A verified public two-form-page sandbox PDF URL is required. Do not attach the four-page eligibility guide."});
+  try {
+    const fixture=await fetch(testAttachment,{signal:AbortSignal.timeout(15000),redirect:"error"});
+    const length=Number(fixture.headers.get("content-length")||0);
+    if(!fixture.ok||length>4194304)
+      return res.status(502).json({ok:false,error:"The test form-only PDF fixture is not accessible."});
+    const bytes=new Uint8Array(await fixture.arrayBuffer());
+    if(bytes.length<500||bytes.length>4194304||
+       new TextDecoder().decode(bytes.subarray(0,5))!=="%PDF-")
+      return res.status(400).json({ok:false,error:"Invalid two-page sandbox fixture."});
+    const {getDocument}=await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const pdf=await getDocument({data:bytes,useSystemFonts:true}).promise;
+    const count=pdf.numPages;
+    const labels=[];
+    if(count===2)for(let i=1;i<=2;i++){
+      const page=await pdf.getPage(i);
+      const content=await page.getTextContent();
+      labels.push(content.items.map(item=>String(item.str||"")).join("")
+        .replace(/[^A-Za-z]/g,"").toUpperCase());
+    }
+    await pdf.destroy();
+    if(count!==2||!labels[0]?.includes("ADDRESSVERIFICATION")||
+       !labels[1]?.includes("APPLICATIONTOSEALRECORD"))
+      return res.status(400).json({ok:false,error:
+        "Sandbox fixture must contain address verification and application only, in that order."});
+  }catch(error){
+    console.warn("Lob two-page sandbox PDF preflight unavailable",error?.name||"unknown");
+    return res.status(502).json({ok:false,error:"Unable to validate the two-page Lob sandbox PDF."});
+  }
   const payload={
     bank_account:bank,amount:100,
     to:{name:"Test Court Recipient",address_line1:"One Courthouse Square",
