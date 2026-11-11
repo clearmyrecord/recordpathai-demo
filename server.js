@@ -147,6 +147,11 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
   if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
     return res.json({received:true});
   const session=event.data?.object;
+  // This account also sells RecordWatch subscriptions/lifetime access. Its
+  // checkout events belong to the separate RecordWatch webhook and must not
+  // create a packet job or cause infinite 400/retry loops here.
+  if(session?.metadata?.productType!=="record-sealing-packet")
+    return res.json({received:true,ignored:true});
   const owner=session?.metadata?.userId,caseId=session?.metadata?.saved_case_id;
   if(!validCaseId(owner)||!validCaseId(caseId)||
      !verifiedPacketSession(session,owner,caseId))
