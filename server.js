@@ -960,7 +960,8 @@ async function packetReleaseStatus(userId,caseId) {
     const runtime={
       stripeLiveEnabled:process.env.RECORDPATH_LIVE_PACKET_CHECKOUT==="true" &&
         (process.env.STRIPE_SECRET_KEY||"").startsWith("sk_live_"),
-      lobLiveEnabled:process.env.LOB_LIVE_CHECKS_ENABLED==="true",
+      lobLiveEnabled:process.env.LOB_LIVE_CHECKS_ENABLED==="true" &&
+        process.env.LOB_CHECK_ATTACHMENTS_APPROVED==="true",
       lobVerifiedBank:await lobBankVerified(),
       onlineCourtPaymentVerified:false
     };
