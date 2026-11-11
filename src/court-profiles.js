@@ -36,7 +36,8 @@ const woodCommon = Object.freeze({
   payeeSource:"https://clerkofcourt.co.wood.oh.us/166/Make-a-Payment",
   lobChecksAuthorized:false, // Keep disabled pending successful sandbox proof, court filing workflow and operator authorization.
   mappedApprovedFormTypes:["sealing-conviction"],
-  maxAttachmentPages:6, // conservative Lob attachment limit
+  maxAttachmentPages:2, // only address verification + signed application
+  requiredAttachmentPages:2, // reject old four-page PDFs including eligibility rules
   trackingGuarantee:false
 });
 

@@ -14,8 +14,9 @@ export function buildCourtCheckRequest({profileInput,review,from,bankAccount,att
   if(!BANK.test(bankAccount||""))throw new Error("Verified Lob bank account ID required.");
   if(!HTTPS.test(attachmentUrl||"")||new URL(attachmentUrl).username||new URL(attachmentUrl).password)
     throw new Error("Private signed court PDF needs a temporary HTTPS attachment URL.");
-  if(!Number.isInteger(attachmentPages)||attachmentPages<1||attachmentPages>profile.maxAttachmentPages)
-    throw new Error("Lob check attachments cannot exceed the verified PDF page limit.");
+  if(!Number.isInteger(attachmentPages)||attachmentPages<1||attachmentPages>profile.maxAttachmentPages ||
+     (profile.requiredAttachmentPages && attachmentPages!==profile.requiredAttachmentPages))
+    throw new Error("Lob check attachment must contain exactly the approved court form pages, excluding eligibility guidance.");
   const fields=["name","address_line1","address_city","address_state","address_zip"];
   if(!from || fields.some(k=>!String(from[k]||"").trim()))
     throw new Error("Verified RecordPathAI return mailing address is required.");

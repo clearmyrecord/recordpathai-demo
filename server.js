@@ -16,6 +16,7 @@ import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neu
 import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
 import { timingSafeEqual, createHash } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
+import { findCourtProfile } from "./src/court-profiles.js";
 import { verifyLivePacketPaymentForLob } from "./src/lob-dispatch-payment-guard.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
@@ -188,10 +189,35 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
     const parser=getDocument({data:new Uint8Array(bytes),useSystemFonts:true});
     const document=await parser.promise;
     const pdfPages=document.numPages;
-    await document.destroy();
-    if(!Number.isInteger(pdfPages)||pdfPages<1||pdfPages>6)
+    if(!Number.isInteger(pdfPages)||pdfPages<1||pdfPages>6) {
+      await document.destroy();
       return res.status(400).json({ok:false,error:"Signed court PDF must contain 1 to 6 pages for check attachment."});
+    }
     const facts=await getSavedCaseReviewFacts(user.id,caseId);
+    const woodCourt=findCourtProfile({state:facts.savedCase.case_state,
+      county:facts.savedCase.county,courtType:facts.savedCase.court_type});
+    if(woodCourt?.id==="oh-wood-common-pleas") {
+      // The clerk's published PDF contains two eligibility-guide pages followed
+      // by TWO required filing forms. Only the two forms may enter private review.
+      if(pdfPages!==2) {
+        await document.destroy();
+        return res.status(400).json({ok:false,error:
+          "Wood County filing PDF must contain exactly two completed form pages, without eligibility rules."});
+      }
+      const pageText=[];
+      for(let i=1;i<=2;i++){
+        const page=await document.getPage(i);
+        const content=await page.getTextContent();
+        pageText.push(content.items.map(item=>String(item.str||"")).join("")
+          .replace(/[^A-Za-z]/g,"").toUpperCase());
+      }
+      await document.destroy();
+      if(!pageText[0].includes("ADDRESSVERIFICATION") ||
+         !pageText[1].includes("APPLICATIONTOSEALRECORD")) {
+        return res.status(400).json({ok:false,error:
+          "Wood County packet must contain address verification first and the signed sealing application second."});
+      }
+    } else await document.destroy();
     const sha=createHash("sha256").update(bytes).digest("hex");
     const objectPath="private/packets/"+caseId+"/"+sha+".pdf";
     const config=supabaseRestConfig();
@@ -376,6 +402,47 @@ app.post("/api/operator/lob-test-check",async(req,res)=>{
   const bank=process.env.LOB_TEST_BANK_ACCOUNT_ID||"";
   if(!key.startsWith("test_")||!/^bank_[A-Za-z0-9]+$/.test(bank))
     return res.status(503).json({ok:false,error:"Lob test API key and test bank are required."});
+  // The clerk's original 4-page download includes 2 pages of eligibility
+  // guidance. Only a reviewed 2-page form-only fixture may be attached here.
+  // No fallback to the 4-page clerk URL, even in Lob sandbox.
+  const testAttachment=process.env.LOB_TEST_2PAGE_FORM_URL||"";
+  let validTestAttachment=false;
+  try {
+    const parsed=new URL(testAttachment);
+    validTestAttachment=parsed.protocol==="https:" &&
+      !parsed.username && !parsed.password && !parsed.hash;
+  } catch {}
+  if(!validTestAttachment)
+    return res.status(503).json({ok:false,error:
+      "A verified public two-form-page sandbox PDF URL is required. Do not attach the four-page eligibility guide."});
+  try {
+    const fixture=await fetch(testAttachment,{signal:AbortSignal.timeout(15000),redirect:"error"});
+    const length=Number(fixture.headers.get("content-length")||0);
+    if(!fixture.ok||length>4194304)
+      return res.status(502).json({ok:false,error:"The test form-only PDF fixture is not accessible."});
+    const bytes=new Uint8Array(await fixture.arrayBuffer());
+    if(bytes.length<500||bytes.length>4194304||
+       new TextDecoder().decode(bytes.subarray(0,5))!=="%PDF-")
+      return res.status(400).json({ok:false,error:"Invalid two-page sandbox fixture."});
+    const {getDocument}=await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const pdf=await getDocument({data:bytes,useSystemFonts:true}).promise;
+    const count=pdf.numPages;
+    const labels=[];
+    if(count===2)for(let i=1;i<=2;i++){
+      const page=await pdf.getPage(i);
+      const content=await page.getTextContent();
+      labels.push(content.items.map(item=>String(item.str||"")).join("")
+        .replace(/[^A-Za-z]/g,"").toUpperCase());
+    }
+    await pdf.destroy();
+    if(count!==2||!labels[0]?.includes("ADDRESSVERIFICATION")||
+       !labels[1]?.includes("APPLICATIONTOSEALRECORD"))
+      return res.status(400).json({ok:false,error:
+        "Sandbox fixture must contain address verification and application only, in that order."});
+  }catch(error){
+    console.warn("Lob two-page sandbox PDF preflight unavailable",error?.name||"unknown");
+    return res.status(502).json({ok:false,error:"Unable to validate the two-page Lob sandbox PDF."});
+  }
   const payload={
     bank_account:bank,amount:100,
     to:{name:"Test Court Recipient",address_line1:"One Courthouse Square",
@@ -384,7 +451,7 @@ app.post("/api/operator/lob-test-check",async(req,res)=>{
       address_city:"San Francisco",address_state:"CA",address_zip:"94107"},
     message:"TEST ONLY - not a real court filing deposit",
     memo:"TEST ONLY",mail_type:"usps_first_class",use_type:"operational",
-    attachment:"https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/142/Application-for-Sealing-295332-Conviction-PDF"
+    attachment:testAttachment
   };
   try{
     const response=await fetch("https://api.lob.com/v1/checks",{
