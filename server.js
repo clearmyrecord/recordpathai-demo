@@ -188,10 +188,35 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
     const parser=getDocument({data:new Uint8Array(bytes),useSystemFonts:true});
     const document=await parser.promise;
     const pdfPages=document.numPages;
-    await document.destroy();
-    if(!Number.isInteger(pdfPages)||pdfPages<1||pdfPages>6)
+    if(!Number.isInteger(pdfPages)||pdfPages<1||pdfPages>6) {
+      await document.destroy();
       return res.status(400).json({ok:false,error:"Signed court PDF must contain 1 to 6 pages for check attachment."});
+    }
     const facts=await getSavedCaseReviewFacts(user.id,caseId);
+    const woodCourt=findCourtProfile({state:facts.savedCase.case_state,
+      county:facts.savedCase.county,courtType:facts.savedCase.court_type});
+    if(woodCourt?.id==="oh-wood-common-pleas") {
+      // The clerk's published PDF contains two eligibility-guide pages followed
+      // by TWO required filing forms. Only the two forms may enter private review.
+      if(pdfPages!==2) {
+        await document.destroy();
+        return res.status(400).json({ok:false,error:
+          "Wood County filing PDF must contain exactly two completed form pages, without eligibility rules."});
+      }
+      const pageText=[];
+      for(let i=1;i<=2;i++){
+        const page=await document.getPage(i);
+        const content=await page.getTextContent();
+        pageText.push(content.items.map(item=>String(item.str||"")).join("")
+          .replace(/[^A-Za-z]/g,"").toUpperCase());
+      }
+      await document.destroy();
+      if(!pageText[0].includes("ADDRESSVERIFICATION") ||
+         !pageText[1].includes("APPLICATIONTOSEALRECORD")) {
+        return res.status(400).json({ok:false,error:
+          "Wood County packet must contain address verification first and the signed sealing application second."});
+      }
+    } else await document.destroy();
     const sha=createHash("sha256").update(bytes).digest("hex");
     const objectPath="private/packets/"+caseId+"/"+sha+".pdf";
     const config=supabaseRestConfig();
