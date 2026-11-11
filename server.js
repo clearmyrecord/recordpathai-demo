@@ -474,6 +474,72 @@ app.post("/api/operator/lob-test-check",async(req,res)=>{
   }
 });
 
+// Operator-only sandbox attachment upload. Does not accept a customer case,
+// change a payment, use live Lob credentials, or mail a real check.
+// Use an official blank 2-page fixture in application/pdf; no public URL needed.
+app.post("/api/operator/lob-test-check-pdf",
+  express.raw({type:"application/pdf",limit:"4mb"}),async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  const key=process.env.LOB_TEST_API_KEY||"";
+  const bank=process.env.LOB_TEST_BANK_ACCOUNT_ID||"";
+  if(!key.startsWith("test_")||!/^bank_[A-Za-z0-9]+$/.test(bank))
+    return res.status(503).json({ok:false,error:"Sandbox Lob credentials not configured."});
+  const bytes=req.body;
+  if(!Buffer.isBuffer(bytes)||bytes.length<500||bytes.length>4194304||
+     bytes.subarray(0,5).toString("ascii")!=="%PDF-")
+    return res.status(400).json({ok:false,error:"Upload a valid blank PDF below 4 MB."});
+  try {
+    const {getDocument}=await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const pdf=await getDocument({data:new Uint8Array(bytes),useSystemFonts:true}).promise;
+    const texts=[];
+    if(pdf.numPages===2)for(let i=1;i<=2;i++){
+      const page=await pdf.getPage(i);
+      const content=await page.getTextContent();
+      texts.push(content.items.map(item=>String(item.str||"")).join(""));
+    }
+    const pages=pdf.numPages;
+    await pdf.destroy();
+    if(pages!==2||!isWoodTwoFormPacket(texts))
+      return res.status(400).json({ok:false,
+        error:"Sandbox requires only the Wood County address-verification and conviction-application pages in that order."});
+
+    const fields=new FormData();
+    const values={
+      bank_account:bank,amount:"100",message:"TEST ONLY - NO REAL PAYMENT",
+      memo:"TEST ONLY",mail_type:"usps_first_class",use_type:"operational",
+      "to[name]":"TEST COURT RECIPIENT",
+      "to[address_line1]":"One Courthouse Square",
+      "to[address_city]":"Bowling Green","to[address_state]":"OH","to[address_zip]":"43402",
+      "from[name]":"RecordPathAI TEST","from[address_line1]":"210 King St",
+      "from[address_city]":"San Francisco","from[address_state]":"CA","from[address_zip]":"94107"
+    };
+    for(const [name,value] of Object.entries(values))fields.append(name,value);
+    fields.append("attachment",new Blob([bytes],{type:"application/pdf"}),"wood-forms-only-TEST.pdf");
+    // Repeating the same fixture must not create duplicate sandbox checks.
+    const idempotency="recordpathai-wood-two-pages-"+createHash("sha256")
+      .update(bytes).digest("hex").slice(0,32);
+    const lob=await fetch("https://api.lob.com/v1/checks",{
+      method:"POST",headers:{
+        Authorization:"Basic "+Buffer.from(key+":").toString("base64"),
+        "Idempotency-Key":idempotency
+      },body:fields,signal:AbortSignal.timeout(30000)
+    });
+    const result=await lob.json().catch(()=>({}));
+    if(!lob.ok)return res.status(502).json({ok:false,
+      lobStatus:lob.status,code:result?.error?.code||null,
+      error:"Lob sandbox rejected the two-form-page PDF."});
+    if(!/^chk_[A-Za-z0-9]+$/.test(result.id||""))
+      throw new Error("Lob did not confirm a sandbox check ID");
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,environment:"test",testCheckId:result.id,
+      renderStatus:result.status||"processing",proofPdfUrl:result.url||null,
+      formPages:2,note:"Synthetic $100 test check and blank forms only; no bank debit, mail, filing or checkout."});
+  } catch(error) {
+    console.warn("Lob two-page sandbox upload unavailable",error?.name||"unknown");
+    return res.status(502).json({ok:false,error:"Unable to validate or submit blank two-page Lob sandbox PDF."});
+  }
+});
+
 // Authorized test-only proof polling. Read only; never uses live credentials,
 // applicant records, customer charges, or Lob creation endpoints.
 app.get("/api/operator/lob-test-check-status",async(req,res)=>{
