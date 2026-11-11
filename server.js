@@ -16,6 +16,7 @@ import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neu
 import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
 import { timingSafeEqual, createHash } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
+import { verifyLivePacketPaymentForLob } from "./src/lob-dispatch-payment-guard.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
 
@@ -409,6 +410,39 @@ app.post("/api/operator/lob-test-check",async(req,res)=>{
   }
 });
 
+// Authorized test-only proof polling. Read only; never uses live credentials,
+// applicant records, customer charges, or Lob creation endpoints.
+app.get("/api/operator/lob-test-check-status",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  const key=process.env.LOB_TEST_API_KEY||"";
+  if(!key.startsWith("test_"))
+    return res.status(503).json({ok:false,error:"Lob sandbox key not configured."});
+  const id=safe(req.query?.check_id);
+  if(!/^chk_[A-Za-z0-9]+$/.test(id))
+    return res.status(400).json({ok:false,error:"Valid test check ID required."});
+  try {
+    const response=await fetch("https://api.lob.com/v1/checks/"+id,{
+      headers:{Authorization:"Basic "+Buffer.from(key+":").toString("base64")},
+      signal:AbortSignal.timeout(20000)
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)return res.status(502).json({ok:false,
+      lobStatus:response.status,
+      code:result?.error?.code||null,
+      error:"Lob sandbox could not retrieve this check proof."});
+    if(result.id!==id)throw new Error("Mismatch in retrieved check ID");
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,environment:"test",testCheckId:result.id,
+      renderStatus:result.status||"processing",
+      proofPdfUrl:result.url||null,
+      note:"Sandbox proof only; no check is mailed, cashed or filed."});
+  }catch(error){
+    console.warn("Lob sandbox proof retrieval failed",error?.name||"unknown");
+    return res.status(502).json({ok:false,
+      error:"Lob sandbox proof retrieval unavailable."});
+  }
+});
+
 app.post("/api/operator/stripe-test-checkout",async(req,res)=>{
   if(!requireOperationsKey(req,res))return;
   const key=process.env.STRIPE_TEST_SECRET_KEY||"";
@@ -570,6 +604,23 @@ app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
       caseReference:facts.savedCase.case_number,
       approvedCourtFeeCents:job.court_fee_cents
     });
+    // A paid_hold row is not enough: reread the charge directly from Stripe
+    // after reviewer, fee and PDF validation but before any bank-funded check.
+    const liveSession=await stripe.checkout.sessions.retrieve(sessionId,{
+      expand:["payment_intent.latest_charge"]
+    });
+    if(!verifyLivePacketPaymentForLob(liveSession,job).ok)
+      return res.status(409).json({ok:false,error:
+        "The live Stripe payment is not safely confirmed (or was refunded/disputed). No check was issued."});
+    // Database claim occurs immediately before the irreversible provider call.
+    // A network failure intentionally leaves ready_for_dispatch/attempted_at
+    // set, blocking resends until the operator reconciles Lob.
+    const claimed=await supabaseRest("rpc/reserve_packet_lob_dispatch",{
+      method:"POST",body:{p_stripe_session_id:sessionId,p_case_id:job.case_id}
+    });
+    if(!Array.isArray(claimed)||claimed.length!==1)
+      return res.status(409).json({ok:false,error:
+        "Dispatch is already claimed or another order exists for this case. Check Lob before retrying."});
     const lob=await fetch("https://api.lob.com/v1/checks",{
       method:"POST",
       headers:{
@@ -585,10 +636,12 @@ app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
     const result=await lob.json();
     if(!/^chk_[A-Za-z0-9]+$/.test(result.id||""))
       throw new Error("Lob did not confirm a check ID");
-    await supabaseRest("packet_fulfillment_jobs",{
-      method:"PATCH",query:"?stripe_session_id=eq."+encodeURIComponent(sessionId),
-      body:{status:"submitted_to_lob",lob_check_id:result.id,attempted_at:new Date().toISOString()}
+    const saved=await supabaseRest("packet_fulfillment_jobs",{
+      method:"PATCH",query:"?stripe_session_id=eq."+encodeURIComponent(sessionId)+"&status=eq.ready_for_dispatch",
+      body:{status:"submitted_to_lob",lob_check_id:result.id}
     });
+    if(!Array.isArray(saved)||saved.length!==1||saved[0].lob_check_id!==result.id)
+      throw new Error("Lob order accepted but durable fulfillment confirmation failed");
     res.setHeader("Cache-Control","no-store, private");
     return res.json({ok:true,status:"submitted_to_lob",lobCheckId:result.id,
       note:"Accepted by Lob for processing; this does not prove USPS mailing or court filing."});
@@ -940,7 +993,8 @@ async function packetReleaseStatus(userId,caseId) {
     const runtime={
       stripeLiveEnabled:process.env.RECORDPATH_LIVE_PACKET_CHECKOUT==="true" &&
         (process.env.STRIPE_SECRET_KEY||"").startsWith("sk_live_"),
-      lobLiveEnabled:process.env.LOB_LIVE_CHECKS_ENABLED==="true",
+      lobLiveEnabled:process.env.LOB_LIVE_CHECKS_ENABLED==="true" &&
+        process.env.LOB_CHECK_ATTACHMENTS_APPROVED==="true",
       lobVerifiedBank:await lobBankVerified(),
       onlineCourtPaymentVerified:false
     };

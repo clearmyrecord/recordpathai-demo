@@ -37,6 +37,7 @@ export function buildCourtCheckRequest({profileInput,review,from,bankAccount,att
 export function requireLobLiveDispatch(env={}){
   return env.RECORDPATH_ENABLE_LIVE_DISPATCH==="true" &&
     env.LOB_LIVE_CHECKS_ENABLED==="true" &&
+    env.LOB_CHECK_ATTACHMENTS_APPROVED==="true" &&
     String(env.LOB_LIVE_API_KEY||"").startsWith("live_") &&
     BANK.test(String(env.LOB_VERIFIED_BANK_ID||""));
 }
