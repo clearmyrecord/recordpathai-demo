@@ -603,10 +603,12 @@ app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
     const result=await lob.json();
     if(!/^chk_[A-Za-z0-9]+$/.test(result.id||""))
       throw new Error("Lob did not confirm a check ID");
-    await supabaseRest("packet_fulfillment_jobs",{
+    const saved=await supabaseRest("packet_fulfillment_jobs",{
       method:"PATCH",query:"?stripe_session_id=eq."+encodeURIComponent(sessionId)+"&status=eq.ready_for_dispatch",
       body:{status:"submitted_to_lob",lob_check_id:result.id}
     });
+    if(!Array.isArray(saved)||saved.length!==1||saved[0].lob_check_id!==result.id)
+      throw new Error("Lob order accepted but durable fulfillment confirmation failed");
     res.setHeader("Cache-Control","no-store, private");
     return res.json({ok:true,status:"submitted_to_lob",lobCheckId:result.id,
       note:"Accepted by Lob for processing; this does not prove USPS mailing or court filing."});
