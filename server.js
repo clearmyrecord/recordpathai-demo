@@ -402,6 +402,19 @@ app.post("/api/operator/lob-test-check",async(req,res)=>{
   const bank=process.env.LOB_TEST_BANK_ACCOUNT_ID||"";
   if(!key.startsWith("test_")||!/^bank_[A-Za-z0-9]+$/.test(bank))
     return res.status(503).json({ok:false,error:"Lob test API key and test bank are required."});
+  // The clerk's original 4-page download includes 2 pages of eligibility
+  // guidance. Only a reviewed 2-page form-only fixture may be attached here.
+  // No fallback to the 4-page clerk URL, even in Lob sandbox.
+  const testAttachment=process.env.LOB_TEST_2PAGE_FORM_URL||"";
+  let validTestAttachment=false;
+  try {
+    const parsed=new URL(testAttachment);
+    validTestAttachment=parsed.protocol==="https:" &&
+      !parsed.username && !parsed.password && !parsed.hash;
+  } catch {}
+  if(!validTestAttachment)
+    return res.status(503).json({ok:false,error:
+      "A verified public two-form-page sandbox PDF URL is required. Do not attach the four-page eligibility guide."});
   const payload={
     bank_account:bank,amount:100,
     to:{name:"Test Court Recipient",address_line1:"One Courthouse Square",
@@ -410,7 +423,7 @@ app.post("/api/operator/lob-test-check",async(req,res)=>{
       address_city:"San Francisco",address_state:"CA",address_zip:"94107"},
     message:"TEST ONLY - not a real court filing deposit",
     memo:"TEST ONLY",mail_type:"usps_first_class",use_type:"operational",
-    attachment:"https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/142/Application-for-Sealing-295332-Conviction-PDF"
+    attachment:testAttachment
   };
   try{
     const response=await fetch("https://api.lob.com/v1/checks",{
