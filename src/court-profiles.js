@@ -32,8 +32,9 @@ const woodCommon = Object.freeze({
   officialForm:"https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/142/Application-for-Sealing-295332-Conviction-PDF",
   electronicSealingAccepted:false,
   submissionMethod:"physical-only-pending-clerk-confirmation",
-  courtFeePayee:null, // Never guess whom an actual check should be made payable to.
-  lobChecksAuthorized:false, // Lob's current 403 and bank/funding verification not resolved.
+  courtFeePayee:"Wood County Clerk of Courts", // Official Clerk payment page, verified 2026-11-11.
+  payeeSource:"https://clerkofcourt.co.wood.oh.us/166/Make-a-Payment",
+  lobChecksAuthorized:false, // Keep disabled pending successful sandbox proof, court filing workflow and operator authorization.
   mappedApprovedFormTypes:["sealing-conviction"],
   maxAttachmentPages:6, // conservative Lob attachment limit
   trackingGuarantee:false
