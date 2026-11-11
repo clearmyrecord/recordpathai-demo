@@ -2203,6 +2203,32 @@ document.addEventListener("DOMContentLoaded", async function () {
         return response.arrayBuffer();
       }
 
+      // The official Wood County conviction PDF is FOUR pages: two informational
+      // pages followed by address verification (p3) and signed application (p4).
+      // Fill/sign the original page coordinates first, THEN remove the guide.
+      // Fail closed if the reviewed template or mapping changes.
+      function trimWoodConvictionGuidance(pdfDoc, selected, mapping) {
+        const wood=String(selected?.state||"").toUpperCase()==="OH" &&
+          String(selected?.county||"").toLowerCase()==="wood" &&
+          selected?.courtType==="court-of-common-pleas" &&
+          selected?.formType==="sealing-conviction";
+        if (!wood) return;
+        const expectedPdf="assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-32-conviction.pdf";
+        const fields=normalizeFields(mapping);
+        if (selected.pdfPath!==expectedPdf ||
+            pdfDoc.getPageCount()!==4 || Number(mapping?.pageCount)!==4 ||
+            !fields.some(f=>Number(f.page)===3) ||
+            !fields.some(f=>f.type==="signature" && Number(f.page)===4) ||
+            fields.some(f=>![3,4].includes(Number(f.page)))) {
+          throw new Error("Wood County two-form-page template needs remapping review. No packet was created.");
+        }
+        // Descending indices preserve the original third/fourth pages.
+        pdfDoc.removePage(1);
+        pdfDoc.removePage(0);
+        if (pdfDoc.getPageCount()!==2)
+          throw new Error("Wood County filing packet must contain exactly two form pages.");
+      }
+
       function fieldPath(field) {
         const rawPath = field.dataPath || field.name || "";
         if (rawPath === "charge.judge_name") return "charges.0.judge_name";
@@ -2674,6 +2700,7 @@ document.addEventListener("DOMContentLoaded", async function () {
               font: boldFont, color: rgb(.70,.11,.14)
             });
           });
+          trimWoodConvictionGuidance(pdfDoc, selected, mapping);
           const bytes = await pdfDoc.save();
           const blob = new Blob([bytes], { type: "application/pdf" });
           const url = URL.createObjectURL(blob);
@@ -2684,7 +2711,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           anchor.click();
           anchor.remove();
           setTimeout(function () { URL.revokeObjectURL(url); }, 2500);
-          setStatus("Signed PDF test passed: " + pages.length + " pages, " + mapped + " sample fields and " + signatureMappings + " signature field(s). Check the downloaded PDF. No payment or mail was sent.");
+          setStatus("Signed PDF test passed: " + pdfDoc.getPageCount() + " filing pages, " + mapped + " sample fields and " + signatureMappings + " signature field(s). Check the downloaded PDF. No payment or mail was sent.");
         } catch (error) {
           const message = "Sample PDF test failed: " + (error?.message || "Unable to render the reviewed PDF template.");
           setCheckoutError(message);
@@ -2925,6 +2952,9 @@ document.addEventListener("DOMContentLoaded", async function () {
             );
           });
 
+          // Exclude eligibility guidance from the exact reviewed PDF sent
+          // through private upload, Stripe-approved download, and Lob.
+          trimWoodConvictionGuidance(pdfDoc, selected, templateMapping);
           const finalBytes = await pdfDoc.save();
         return finalBytes;
       }
