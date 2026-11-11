@@ -27,7 +27,7 @@ test("two exact filing form pages are required in correct order",()=>{
 test("private upload and Lob test both invoke same normalized form validator",()=>{
   const server=fs.readFileSync(new URL("../server.js",import.meta.url),"utf8");
   assert.match(server,/import \{ isWoodTwoFormPacket \} from "\.\/src\/wood-form-text\.js"/);
-  assert.equal(server.match(/isWoodTwoFormPacket\(/g)?.length,2);
+  assert.equal(server.match(/isWoodTwoFormPacket\(/g)?.length,3);
   assert.match(server,/pdfPages!==2/);
   assert.match(server,/count!==2\|\|!isWoodTwoFormPacket\(labels\)/);
 });
