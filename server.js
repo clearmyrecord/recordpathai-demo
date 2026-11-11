@@ -410,6 +410,39 @@ app.post("/api/operator/lob-test-check",async(req,res)=>{
   }
 });
 
+// Authorized test-only proof polling. Read only; never uses live credentials,
+// applicant records, customer charges, or Lob creation endpoints.
+app.get("/api/operator/lob-test-check-status",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  const key=process.env.LOB_TEST_API_KEY||"";
+  if(!key.startsWith("test_"))
+    return res.status(503).json({ok:false,error:"Lob sandbox key not configured."});
+  const id=safe(req.query?.check_id);
+  if(!/^chk_[A-Za-z0-9]+$/.test(id))
+    return res.status(400).json({ok:false,error:"Valid test check ID required."});
+  try {
+    const response=await fetch("https://api.lob.com/v1/checks/"+id,{
+      headers:{Authorization:"Basic "+Buffer.from(key+":").toString("base64")},
+      signal:AbortSignal.timeout(20000)
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)return res.status(502).json({ok:false,
+      lobStatus:response.status,
+      code:result?.error?.code||null,
+      error:"Lob sandbox could not retrieve this check proof."});
+    if(result.id!==id)throw new Error("Mismatch in retrieved check ID");
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,environment:"test",testCheckId:result.id,
+      renderStatus:result.status||"processing",
+      proofPdfUrl:result.url||null,
+      note:"Sandbox proof only; no check is mailed, cashed or filed."});
+  }catch(error){
+    console.warn("Lob sandbox proof retrieval failed",error?.name||"unknown");
+    return res.status(502).json({ok:false,
+      error:"Lob sandbox proof retrieval unavailable."});
+  }
+});
+
 app.post("/api/operator/stripe-test-checkout",async(req,res)=>{
   if(!requireOperationsKey(req,res))return;
   const key=process.env.STRIPE_TEST_SECRET_KEY||"";
