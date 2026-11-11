@@ -16,6 +16,7 @@ import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neu
 import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
 import { timingSafeEqual, createHash } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
+import { verifyLivePacketPaymentForLob } from "./src/lob-dispatch-payment-guard.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
 
@@ -570,6 +571,23 @@ app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
       caseReference:facts.savedCase.case_number,
       approvedCourtFeeCents:job.court_fee_cents
     });
+    // A paid_hold row is not enough: reread the charge directly from Stripe
+    // after reviewer, fee and PDF validation but before any bank-funded check.
+    const liveSession=await stripe.checkout.sessions.retrieve(sessionId,{
+      expand:["payment_intent.latest_charge"]
+    });
+    if(!verifyLivePacketPaymentForLob(liveSession,job).ok)
+      return res.status(409).json({ok:false,error:
+        "The live Stripe payment is not safely confirmed (or was refunded/disputed). No check was issued."});
+    // Database claim occurs immediately before the irreversible provider call.
+    // A network failure intentionally leaves ready_for_dispatch/attempted_at
+    // set, blocking resends until the operator reconciles Lob.
+    const claimed=await supabaseRest("rpc/reserve_packet_lob_dispatch",{
+      method:"POST",body:{p_stripe_session_id:sessionId,p_case_id:job.case_id}
+    });
+    if(!Array.isArray(claimed)||claimed.length!==1)
+      return res.status(409).json({ok:false,error:
+        "Dispatch is already claimed or another order exists for this case. Check Lob before retrying."});
     const lob=await fetch("https://api.lob.com/v1/checks",{
       method:"POST",
       headers:{
@@ -586,8 +604,8 @@ app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
     if(!/^chk_[A-Za-z0-9]+$/.test(result.id||""))
       throw new Error("Lob did not confirm a check ID");
     await supabaseRest("packet_fulfillment_jobs",{
-      method:"PATCH",query:"?stripe_session_id=eq."+encodeURIComponent(sessionId),
-      body:{status:"submitted_to_lob",lob_check_id:result.id,attempted_at:new Date().toISOString()}
+      method:"PATCH",query:"?stripe_session_id=eq."+encodeURIComponent(sessionId)+"&status=eq.ready_for_dispatch",
+      body:{status:"submitted_to_lob",lob_check_id:result.id}
     });
     res.setHeader("Cache-Control","no-store, private");
     return res.json({ok:true,status:"submitted_to_lob",lobCheckId:result.id,
