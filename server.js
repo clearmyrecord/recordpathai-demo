@@ -404,7 +404,10 @@ app.post("/api/operator/lob-test-check",async(req,res)=>{
   // The clerk's original 4-page download includes 2 pages of eligibility
   // guidance. Only a reviewed 2-page form-only fixture may be attached here.
   // No fallback to the 4-page clerk URL, even in Lob sandbox.
-  const testAttachment=process.env.LOB_TEST_2PAGE_FORM_URL||"";
+  // Public synthetic two-page fixture only. This fallback creates TEST-mode
+  // proofs, never live checks, and is independently validated below.
+  const testAttachment=process.env.LOB_TEST_2PAGE_FORM_URL||
+    "https://recordpathai.com/assets/lob-wood-two-form-TEST-ONLY.pdf";
   let validTestAttachment=false;
   try {
     const parsed=new URL(testAttachment);
