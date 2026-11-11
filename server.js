@@ -16,6 +16,7 @@ import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neu
 import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
 import { timingSafeEqual, createHash } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
+import { findCourtProfile } from "./src/court-profiles.js";
 import { verifyLivePacketPaymentForLob } from "./src/lob-dispatch-payment-guard.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
