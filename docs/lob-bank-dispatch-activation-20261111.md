@@ -31,3 +31,6 @@ Keep `RECORDPATH_ENABLE_LIVE_DISPATCH=false` until all checks below pass.
 - Once a dispatch has been claimed, never retry it automatically after any Lob network error or 403. Reconcile Lob dashboard and Stripe first; only a documented manual recovery may reset the job.
 
 **No payments, real checks, mail, bank edits or deployment are performed by this code change.**
+
+## November 11 sandbox fixture activation
+The publicly reachable synthetic PDF is https://recordpathai.com/assets/lob-wood-two-form-TEST-ONLY.pdf (not an official court form). The operator-only TEST endpoint uses this URL as its fail-closed default when no `LOB_TEST_2PAGE_FORM_URL` override is set. It validates that the remote PDF contains exactly two pages with address verification first and sealing application second before creating any test check. Never replace the fixture with customer information or enable live dispatch based solely on the sandbox proof.

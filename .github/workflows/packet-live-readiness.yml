@@ -62,7 +62,7 @@ jobs:
           # Read-only access probe. Credentials are never printed or persisted.
           import os,subprocess
           for var in ('STRIPE_SECRET_KEY','RECORDPATH_OPERATIONS_KEY','LOB_TEST_API_KEY'):
-              source=e.get(var,{}).get('valueSource',{}).get('secretKeyRef',{})
+              source=(e.get(var,{}).get('valueFrom') or e.get(var,{}).get('valueSource') or {}).get('secretKeyRef',{})
               secret=source.get('name'); version=source.get('key','latest')
               if not secret:
                   print('ACCESS',var,'no-secret-reference')
