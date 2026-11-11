@@ -1,0 +1,80 @@
+name: RecordPathAI filing readiness (read-only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/packet-live-readiness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'recordpathai-production' }}
+      CLOUD_RUN_REGION: ${{ vars.CLOUD_RUN_REGION || 'us-west1' }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'recordpathai' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate using deployment identity
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Inspect active Cloud Run configuration without values
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          gcloud run services describe "$CLOUD_RUN_SERVICE" --project "$GCP_PROJECT_ID" --region "$CLOUD_RUN_REGION" --format=json > /tmp/recordpathai-service.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('/tmp/recordpathai-service.json'))
+          e={}
+          for sec in (p.get('spec',{}).get('template',{}).get('spec',{}).get('containers',[]),
+                      p.get('template',{}).get('containers',[])):
+              for c in sec:
+                  for x in c.get('env',[]):
+                      e[x.get('name','')]=x
+          flags=['RECORDPATH_LIVE_PACKET_CHECKOUT','LOB_LIVE_CHECKS_ENABLED',
+                 'LOB_CHECK_ATTACHMENTS_APPROVED','RECORDPATH_ENABLE_LIVE_DISPATCH']
+          envs=['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','STRIPE_TEST_SECRET_KEY',
+                'SUPABASE_SERVICE_ROLE_KEY','SUPABASE_URL','PUBLIC_SUPABASE_URL',
+                'RECORDPATH_OPERATIONS_KEY','LOB_LIVE_API_KEY','LOB_VERIFIED_BANK_ID',
+                'LOB_FROM_ADDRESS_JSON','LOB_TEST_API_KEY','LOB_TEST_BANK_ACCOUNT_ID',
+                'LOB_TEST_2PAGE_FORM_URL']
+          print('READ-ONLY integration audit. Values and secret identifiers are never printed.')
+          for k in flags:
+              x=e.get(k)
+              v=x.get('value') if x else None
+              print('FLAG',k, 'enabled' if v=='true' else 'disabled' if v is not None else 'secret-backed/unresolved' if x else 'absent')
+          for k in envs:
+              x=e.get(k)
+              print('CONFIG',k,'secret-backed' if x and ('valueSource' in x or 'valueFrom' in x) else 'set' if x and x.get('value') else 'unset')
+          if e.get('LOB_TEST_2PAGE_FORM_URL',{}).get('value','') == 'https://recordpathai.com/assets/tests/lob-wood-county-two-form-sandbox-TEST-ONLY.pdf':
+              print('FIXTURE configured as expected')
+          else:
+              print('FIXTURE not configured to approved synthetic test asset')
+          t=p.get('status',{}).get('traffic',[])
+          print('SERVICE active_revisions',len([x for x in t if x.get('percent',0)>0]),'total_percent',sum(x.get('percent',0) for x in t))
+          PY
+          rm -f /tmp/recordpathai-service.json
+      - name: Verify public read-only endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 20 https://recordpathai.com/health >/dev/null
+          curl -fsS --max-time 20 https://recordpathai.com/assets/tests/lob-wood-county-two-form-sandbox-TEST-ONLY.pdf -o /tmp/lob-form-fixture.pdf
+          python3 - <<'PY'
+          from pathlib import Path
+          b=Path('/tmp/lob-form-fixture.pdf').read_bytes()
+          assert 500<len(b)<4_194_304 and b.startswith(b'%PDF-')
+          assert b'ADDRESS VERIFICATION' in b
+          assert b'APPLICATION TO SEAL RECORD OF CONVICTION' in b
+          assert b'SANDBOX TEST ONLY' in b
+          print('Public synthetic two-page Lob sandbox fixture: reachable and marked TEST ONLY')
+          PY
