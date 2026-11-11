@@ -49,8 +49,12 @@ test("server only stores verified two-page Wood filings",()=>{
   assert.ok(start>0 && end>start);
   const route=server.slice(start,end);
   assert.match(route,/pdfPages!==2/);
-  assert.match(route,/ADDRESSVERIFICATION/);
-  assert.match(route,/APPLICATIONTOSEALRECORD/);
+  // The route intentionally delegates legacy-PDF heading decoding to the
+  // shared helper (tested separately in wood-form-pages.test.mjs).
+  assert.match(route,/isWoodConvictionFormPair\(pageText\)/);
+  const formHelper=fs.readFileSync(new URL("../src/wood-form-pages.js",import.meta.url),"utf8");
+  assert.match(formHelper,/ADDRESSVERIFICATION/);
+  assert.match(formHelper,/APPLICATIONTOSEALRECORD/);
   assert.match(route,/signed_pdf_sha256:sha/);
 });
 test("customer's reviewed signed PDF is saved only after guide pages removed",()=>{
