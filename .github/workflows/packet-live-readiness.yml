@@ -59,6 +59,21 @@ jobs:
               print('FIXTURE configured as expected')
           else:
               print('FIXTURE not configured to approved synthetic test asset')
+          # Read-only access probe. Credentials are never printed or persisted.
+          import os,subprocess
+          for var in ('STRIPE_SECRET_KEY','RECORDPATH_OPERATIONS_KEY','LOB_TEST_API_KEY'):
+              source=e.get(var,{}).get('valueSource',{}).get('secretKeyRef',{})
+              secret=source.get('name'); version=source.get('key','latest')
+              if not secret:
+                  print('ACCESS',var,'no-secret-reference')
+                  continue
+              try:
+                  check=subprocess.run(['gcloud','secrets','versions','access',version,
+                      '--secret',secret,'--project',os.environ['GCP_PROJECT_ID']],
+                      stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=18)
+                  print('ACCESS',var,'available' if check.returncode==0 else 'unavailable')
+              except Exception:
+                  print('ACCESS',var,'unavailable')
           t=p.get('status',{}).get('traffic',[])
           print('SERVICE active_revisions',len([x for x in t if x.get('percent',0)>0]),'total_percent',sum(x.get('percent',0) for x in t))
           PY
