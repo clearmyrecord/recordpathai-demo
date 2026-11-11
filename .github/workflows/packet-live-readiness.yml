@@ -1,15 +1,15 @@
 name: RecordPathAI filing readiness (read-only)
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/packet-live-readiness.yml'
+  workflow_run:
+    workflows: ['Deploy RecordPathAI to Google Cloud Run']
+    types: [completed]
   workflow_dispatch:
 permissions:
   contents: read
   id-token: write
 jobs:
   inspect:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
