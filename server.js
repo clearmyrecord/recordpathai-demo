@@ -17,6 +17,7 @@ import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recor
 import { timingSafeEqual, createHash } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { findCourtProfile } from "./src/court-profiles.js";
+import { isWoodConvictionFormPair } from "./src/wood-form-pages.js";
 import { verifyLivePacketPaymentForLob } from "./src/lob-dispatch-payment-guard.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
@@ -208,12 +209,10 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
       for(let i=1;i<=2;i++){
         const page=await document.getPage(i);
         const content=await page.getTextContent();
-        pageText.push(content.items.map(item=>String(item.str||"")).join("")
-          .replace(/[^A-Za-z]/g,"").toUpperCase());
+        pageText.push(content.items.map(item=>String(item.str||"")).join(""));
       }
       await document.destroy();
-      if(!pageText[0].includes("ADDRESSVERIFICATION") ||
-         !pageText[1].includes("APPLICATIONTOSEALRECORD")) {
+      if(!isWoodConvictionFormPair(pageText)) {
         return res.status(400).json({ok:false,error:
           "Wood County packet must contain address verification first and the signed sealing application second."});
       }
@@ -431,12 +430,10 @@ app.post("/api/operator/lob-test-check",async(req,res)=>{
     if(count===2)for(let i=1;i<=2;i++){
       const page=await pdf.getPage(i);
       const content=await page.getTextContent();
-      labels.push(content.items.map(item=>String(item.str||"")).join("")
-        .replace(/[^A-Za-z]/g,"").toUpperCase());
+      labels.push(content.items.map(item=>String(item.str||"")).join(""));
     }
     await pdf.destroy();
-    if(count!==2||!labels[0]?.includes("ADDRESSVERIFICATION")||
-       !labels[1]?.includes("APPLICATIONTOSEALRECORD"))
+    if(count!==2||!isWoodConvictionFormPair(labels))
       return res.status(400).json({ok:false,error:
         "Sandbox fixture must contain address verification and application only, in that order."});
   }catch(error){
