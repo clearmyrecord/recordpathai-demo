@@ -55,7 +55,7 @@ jobs:
           for k in envs:
               x=e.get(k)
               print('CONFIG',k,'secret-backed' if x and ('valueSource' in x or 'valueFrom' in x) else 'set' if x and x.get('value') else 'unset')
-          if e.get('LOB_TEST_2PAGE_FORM_URL',{}).get('value','') == 'https://recordpathai.com/assets/tests/lob-wood-county-two-form-sandbox-TEST-ONLY.pdf':
+          if e.get('LOB_TEST_2PAGE_FORM_URL',{}).get('value','') == 'https://recordpathai.com/assets/lob-wood-two-form-TEST-ONLY.pdf':
               print('FIXTURE configured as expected')
           else:
               print('FIXTURE not configured to approved synthetic test asset')
@@ -75,7 +75,7 @@ jobs:
               'https://recordpathai.com') label='custom_domain';;
               *) label='cloud_run_direct';;
             esac
-            status="$(curl -sS -L --max-time 20 -o /tmp/lob-form-fixture.pdf -w '%{http_code}' "$base/assets/tests/lob-wood-county-two-form-sandbox-TEST-ONLY.pdf")"
+            status="$(curl -sS -L --max-time 20 -o /tmp/lob-form-fixture.pdf -w '%{http_code}' "$base/assets/lob-wood-two-form-TEST-ONLY.pdf")"
             if [ "$status" = 200 ]; then
               python3 - <<'PY'
           from pathlib import Path
