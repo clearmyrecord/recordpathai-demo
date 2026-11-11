@@ -623,6 +623,41 @@ app.get("/api/operator/packet/fulfillment-status",async(req,res)=>{
   }catch{return res.status(503).json({ok:false,error:"Private fulfillment queue unavailable."});}
 });
 
+// Read-only operator preflight for the private packet database schema.
+// The RPC existence test supplies a test-prefixed session that the SQL function
+// explicitly refuses before acquiring a lock or updating any fulfillment row.
+// No personal records or database credentials are returned.
+app.get("/api/operator/packet/database-readiness",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  if(!packetDatabaseReady())
+    return res.status(503).json({ok:false,error:"Private packet database credentials not configured."});
+  const tables={packet_releases:false,packet_drafts:false,packet_fulfillment_jobs:false};
+  for(const name of Object.keys(tables)){
+    try {
+      await supabaseRest(name,{query:"?select=id&limit=0"});
+      tables[name]=true;
+    } catch {}
+  }
+  let atomicDispatchFunction=false;
+  if(Object.values(tables).every(Boolean)){
+    try{
+      const checked=await supabaseRest("rpc/reserve_packet_lob_dispatch",{
+        method:"POST",body:{
+          p_stripe_session_id:"cs_test_schema_preflight_NEVER_CHARGE",
+          p_case_id:"11111111-1111-4111-8111-111111111111"
+        }
+      });
+      atomicDispatchFunction=Array.isArray(checked)&&checked.length===0;
+    }catch{}
+  }
+  const ready=Object.values(tables).every(Boolean)&&atomicDispatchFunction;
+  res.setHeader("Cache-Control","no-store, private");
+  return res.status(ready?200:503).json({ok:ready,tables,atomicDispatchFunction,
+    note:ready
+      ?"The packet migrations exist; no payment or mail has been made."
+      :"Packet schema or atomic dispatch migration is missing or inaccessible. Do not enable live checkout."});
+});
+
 // Explicit operator action only. Webhooks NEVER send mail. Stripe paid session,
 // unchanged case, approved private PDF and verified Lob bank are required.
 
