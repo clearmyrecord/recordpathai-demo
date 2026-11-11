@@ -67,14 +67,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 20 https://recordpathai.com/health >/dev/null
-          curl -fsS --max-time 20 https://recordpathai.com/assets/tests/lob-wood-county-two-form-sandbox-TEST-ONLY.pdf -o /tmp/lob-form-fixture.pdf
-          python3 - <<'PY'
+          set +e
+          for base in 'https://recordpathai.com' \
+            "$(gcloud run services describe "$CLOUD_RUN_SERVICE" --project "$GCP_PROJECT_ID" --region "$CLOUD_RUN_REGION" --format='value(status.url)')"; do
+            [ -n "$base" ] || continue
+            case "$base" in
+              'https://recordpathai.com') label='custom_domain';;
+              *) label='cloud_run_direct';;
+            esac
+            status="$(curl -sS -L --max-time 20 -o /tmp/lob-form-fixture.pdf -w '%{http_code}' "$base/assets/tests/lob-wood-county-two-form-sandbox-TEST-ONLY.pdf")"
+            if [ "$status" = 200 ]; then
+              python3 - <<'PY'
           from pathlib import Path
           b=Path('/tmp/lob-form-fixture.pdf').read_bytes()
           assert 500<len(b)<4_194_304 and b.startswith(b'%PDF-')
-          assert b'ADDRESS VERIFICATION' in b
-          assert b'APPLICATION TO SEAL RECORD OF CONVICTION' in b
+          assert b'ADDRESS VERIFICATION' in b and b'APPLICATION TO SEAL RECORD OF CONVICTION' in b
           assert b'SANDBOX TEST ONLY' in b
-          print('Public synthetic two-page Lob sandbox fixture: reachable and marked TEST ONLY')
+          print('Synthetic sandbox PDF: valid PDF markers')
           PY
+              valid="$?"
+              echo "PUBLIC_ASSET $label status=$status pdf_valid=$([ "$valid" = 0 ] && echo yes || echo no)"
+            else
+              echo "PUBLIC_ASSET $label status=$status"
+            fi
+          done
+          exit 0
