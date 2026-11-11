@@ -71,12 +71,19 @@ test("Lob check builder uses verified court, exact amount and private HTTPS atta
     review,from:{name:"RecordPathAI",address_line1:"123 Sender Lane",
       address_city:"Test City",address_state:"OH",address_zip:"43000"},
     bankAccount:"bank_TEST123",attachmentUrl:"https://example.supabase.co/storage/v1/object/sign/sample?token=synthetic",
-    attachmentPages:4,caseReference:"TEST-001",approvedCourtFeeCents:10000
+    attachmentPages:2,caseReference:"TEST-001",approvedCourtFeeCents:10000
   });
   assert.equal(check.amount,100);
   assert.equal(check.to.address_city,"Bowling Green");
   assert.equal(check.mail_type,"usps_first_class");
   assert.equal(check.attachment.includes("supabase.co"),true);
+  // Explicitly reject the original 4-page PDF: its first two pages are
+  // informational eligibility guidance, not filing forms.
+  assert.throws(()=>buildCourtCheckRequest({
+    profileInput:{state:"OH",county:"Wood",courtType:"court-of-common-pleas"},
+    review,from:check.from,bankAccount:"bank_TEST123",
+    attachmentUrl:check.attachment,attachmentPages:4,approvedCourtFeeCents:10000
+  }),/exactly the approved court form pages/);
   assert.equal(check.message.includes("court"),false);
   assert.throws(()=>buildCourtCheckRequest({
     profileInput:{state:"OH",county:"Wood",courtType:"court-of-common-pleas"},
