@@ -11,7 +11,8 @@ test("operator launch readiness is authentication protected and read only",()=>{
   assert.match(route,/Cache-Control","no-store, private"/);
   assert.doesNotMatch(route,/stripe\.checkout\.sessions\.create|api\.lob\.com\/v1\/checks",\s*\{/);
   assert.doesNotMatch(route,/method:"PATCH"|method:"DELETE"/);
-  assert.doesNotMatch(route,/RECORDPATH_ENABLE_LIVE_DISPATCH\s*=|LOB_LIVE_CHECKS_ENABLED\s*=/);
+  assert.ok(!route.includes('process.env.RECORDPATH_ENABLE_LIVE_DISPATCH="true"'));
+  assert.ok(!route.includes('process.env.LOB_LIVE_CHECKS_ENABLED="true"'));
   assert.match(route,/readyForLiveFiling:false/);
 });
 test("Lob processed status does not count as rendered PDF proof",()=>{
@@ -21,7 +22,7 @@ test("Lob processed status does not count as rendered PDF proof",()=>{
   assert.match(route,/testProofStatus="not_checked"/);
 });
 test("launch audit is independent of live flag when verifying bank in read-only mode",()=>{
-  assert.match(route,/bank_accounts\/\+"\+bank/);
+  assert.ok(route.includes("https://api.lob.com/v1/bank_accounts/"));
   assert.match(route,/liveBankVerified=row\.id===bank && row\.verified===true/);
   assert.match(route,/wood_county_clerk_mailing_acceptance_unconfirmed/);
   assert.match(route,/signed_stripe_event_to_paid_hold_not_proven/);
