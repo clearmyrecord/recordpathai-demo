@@ -16,6 +16,13 @@ test("packet migration readiness requires operator key and private DB",()=>{
   assert.match(route,/packet_fulfillment_jobs:false/);
   assert.match(route,/Cache-Control/);
 });
+test("packet readiness probes real primary key columns",()=>{
+  assert.match(route,/packet_releases:"case_id"/);
+  assert.match(route,/packet_drafts:"case_id"/);
+  assert.match(route,/packet_fulfillment_jobs:"id"/);
+  assert.ok(route.includes('query:"?select="+probeColumns[name]+"&limit=0"'));
+  assert.doesNotMatch(route,/\?select=id&limit=0/);
+});
 test("atomic SQL preflight can never match a chargeable live checkout session",()=>{
   assert.match(route,/rpc\/reserve_packet_lob_dispatch/);
   assert.match(route,/p_stripe_session_id:"cs_test_schema_preflight_NEVER_CHARGE"/);

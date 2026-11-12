@@ -78,6 +78,39 @@ jobs:
           print('SERVICE active_revisions',len([x for x in t if x.get('percent',0)>0]),'total_percent',sum(x.get('percent',0) for x in t))
           PY
           rm -f /tmp/recordpathai-service.json
+      - name: Verify packet database through protected read-only API
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          project="$GCP_PROJECT_ID"
+          url="$(gcloud run services describe "$CLOUD_RUN_SERVICE" --project "$project" --region "$CLOUD_RUN_REGION" --format='value(status.url)')"
+          if [[ "$url" != https://*.run.app ]]; then
+            echo "Packet database check: Cloud Run URL unavailable."
+            exit 1
+          fi
+          ops="$(gcloud secrets versions access latest --secret=recordpath-operations-key --project "$project")"
+          if [ "${#ops}" -lt 32 ]; then
+            echo "Packet database check: operations key unavailable."
+            exit 1
+          fi
+          status="$(curl --silent --show-error --max-time 30 --output "$RUNNER_TEMP/packet-readiness.json" --write-out '%{http_code}' -H "x-recordpath-operations-key: $ops" "$url/api/operator/packet/database-readiness")"
+          unset ops
+          python3 - "$status" "$RUNNER_TEMP/packet-readiness.json" <<'PY'
+          import json,sys
+          try: result=json.load(open(sys.argv[2]))
+          except (OSError,ValueError): result={}
+          tables=result.get("tables") or {}
+          for name in ("packet_releases","packet_drafts","packet_fulfillment_jobs"):
+              print("TABLE",name,"ready" if tables.get(name) is True else "not-ready")
+          print("ATOMIC_DISPATCH","ready" if result.get("atomicDispatchFunction") is True else "not-ready")
+          verified=(sys.argv[1]=="200" and result.get("ok") is True and
+              all(tables.get(name) is True for name in
+              ("packet_releases","packet_drafts","packet_fulfillment_jobs")) and
+              result.get("atomicDispatchFunction") is True)
+          print("PACKET_DATABASE", "PASS" if verified else "FAIL", "HTTP",sys.argv[1])
+          if not verified: raise SystemExit(1)
+          PY
       - name: Verify public read-only endpoints
         shell: bash
         run: |

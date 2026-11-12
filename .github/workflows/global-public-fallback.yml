@@ -21,7 +21,7 @@ jobs:
           const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict"),vm=require("node:vm");
           const dir="global-public-build";
           const expected=[
-            "assets/styles.css","assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf","assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf","index.html","js/form-pipeline-core.js","js/pdf-auto-map.js","js/pilot-demo.js","js/recordpath-home.js","js/wood-county-record-prefill.js","launch.html","pdf-mapper-v6.html","pdf-mapper-v7.html","pilot-demo.html","resources/entrepreneurship.html","resources/resources.js","robots.txt","self-search.html","start.html"
+            "assets/styles.css","assets/home-modern.css","assets/legacy-header.css","assets/images/logo/RecordPathAI_Logo_Transparent.png","css/styles.css","js/legacy-header.js","assets/forms/ga/statewide/arrest-agency/restrict-arrest-record-prior-2013.pdf","assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf","index.html","js/form-pipeline-core.js","js/pdf-auto-map.js","js/pilot-demo.js","js/recordpath-home.js","js/wood-county-record-prefill.js","launch.html","pdf-mapper-v6.html","pdf-mapper-v7.html","pilot-demo.html","resources/entrepreneurship.html","resources/resources.js","robots.txt","self-search.html","start.html"
           ].sort();
           function walk(root,pre=""){return fs.readdirSync(root,{withFileTypes:true}).flatMap(f=>f.isDirectory()?walk(path.join(root,f.name),pre+f.name+"/"):[pre+f.name]);}
           assert.deepEqual(walk(dir).sort(),expected);
@@ -36,7 +36,9 @@ jobs:
           assert(planner.includes('No names or case numbers collected'));
           assert(planner.includes('name="robots" content="noindex'));
           assert(!home.includes('id="query"'));
-          assert(home.includes('href="start.html"'));
+          assert(home.includes('href="https://recordpathai.com/eligibility.html"'));
+          assert(home.includes('href="https://recordpathai.com/pricing.html"'));
+          assert(!home.includes('src="js/auth.js"'));
           const plannerScript=planner.split("<script>")[1]?.split("</script>")[0];
           assert(plannerScript);
           new vm.Script(plannerScript);
@@ -45,12 +47,12 @@ jobs:
           assert(pilot.includes('Synthetic') || pilot.includes('fictional'));
           assert(pilot.includes('js/pilot-demo.js'));
           assert(!home.includes('href="https://recordpathai.com/pilot-demo.html"'));
-          assert(home.includes('href="pilot-demo.html"'));
+          assert(home.includes('Find out if your record'));
           new vm.Script(fs.readFileSync(path.join(dir,"js/pilot-demo.js"),"utf8"));
           const launch=fs.readFileSync(path.join(dir,"launch.html"),"utf8");
           assert(launch.includes("PUBLIC BETA"));
           assert(launch.includes('name="robots" content="noindex'));
-          assert(launch.includes("does not currently operate a nationwide criminal-record database"));
+          assert(launch.includes("does not operate a nationwide criminal-record database"));
           assert(home.includes('https://recordpathai.com/eligibility.html'));
           assert(search.includes('https://recordpathai-private-search-backend.onrender.com'));
           assert(search.includes('method:"POST"'));

@@ -10,6 +10,11 @@ const files=[
   "launch.html",
   "self-search.html",
   "assets/styles.css",
+  "css/styles.css",
+  "assets/home-modern.css",
+  "assets/legacy-header.css",
+  "assets/images/logo/RecordPathAI_Logo_Transparent.png",
+  "js/legacy-header.js",
   "js/recordpath-home.js",
   "js/pilot-demo.js",
   "resources/entrepreneurship.html",
@@ -82,6 +87,19 @@ for(const file of files){
   }
   if(file==="js/recordpath-home.js"){
     content=content.replaceAll("'eligibility.html'","'https://recordpathai.com/eligibility.html'");
+  }
+  if(file.endsWith(".html")){
+    // The public fallback is read-only: never load the canonical app's
+    // authentication or account scripts under a different origin.
+    content=content.replace(/<script\s+src="(?:\.\.\/)*js\/(?:supabase-client|user-store|i18n|auth)\.js"><\/script>\s*/g,"");
+    // Only approved documents are in this mirror. Other pages should
+    // open on the canonical website, never lead to a fallback-site 404.
+    content=content.replace(/href="((?:\.\.\/)*[^"#:?]+\.html(?:#[^"]*)?)"/g,(original,relative)=>{
+      const [target,fragment]=relative.split("#");
+      const resolved=path.posix.normalize(path.posix.join(path.posix.dirname(file),target));
+      if(resolved.startsWith("../")||resolved.startsWith("/")||files.includes(resolved))return original;
+      return 'href="https://recordpathai.com/'+resolved+(fragment?"#"+fragment:"")+'"';
+    });
   }
   fs.writeFileSync(destination,content);
 }
