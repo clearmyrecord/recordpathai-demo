@@ -640,9 +640,11 @@ app.get("/api/operator/packet/database-readiness",async(req,res)=>{
   if(!packetDatabaseReady())
     return res.status(503).json({ok:false,error:"Private packet database credentials not configured."});
   const tables={packet_releases:false,packet_drafts:false,packet_fulfillment_jobs:false};
+  // Packet releases and drafts are keyed by case_id, not id.
+  const probeColumns={packet_releases:"case_id",packet_drafts:"case_id",packet_fulfillment_jobs:"id"};
   for(const name of Object.keys(tables)){
     try {
-      await supabaseRest(name,{query:"?select=id&limit=0"});
+      await supabaseRest(name,{query:"?select="+probeColumns[name]+"&limit=0"});
       tables[name]=true;
     } catch {}
   }
