@@ -36,7 +36,9 @@ jobs:
           assert(planner.includes('No names or case numbers collected'));
           assert(planner.includes('name="robots" content="noindex'));
           assert(!home.includes('id="query"'));
-          assert(home.includes('href="https://recordpathai.com/eligibility.html"'));\n          assert(home.includes('href="https://recordpathai.com/pricing.html"'));\n          assert(!home.includes('src="js/auth.js"'));
+          assert(home.includes('href="https://recordpathai.com/eligibility.html"'));
+          assert(home.includes('href="https://recordpathai.com/pricing.html"'));
+          assert(!home.includes('src="js/auth.js"'));
           const plannerScript=planner.split("<script>")[1]?.split("</script>")[0];
           assert(plannerScript);
           new vm.Script(plannerScript);
