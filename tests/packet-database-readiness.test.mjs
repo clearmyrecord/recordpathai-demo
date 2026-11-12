@@ -20,7 +20,7 @@ test("packet readiness probes real primary key columns",()=>{
   assert.match(route,/packet_releases:"case_id"/);
   assert.match(route,/packet_drafts:"case_id"/);
   assert.match(route,/packet_fulfillment_jobs:"id"/);
-  assert.match(route,/\?select="+probeColumns\[name\]+"&limit=0"/);
+  assert.ok(route.includes('query:"?select="+probeColumns[name]+"&limit=0"'));
   assert.doesNotMatch(route,/\?select=id&limit=0/);
 });
 test("atomic SQL preflight can never match a chargeable live checkout session",()=>{
