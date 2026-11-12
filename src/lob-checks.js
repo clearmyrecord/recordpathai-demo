@@ -5,6 +5,10 @@ const BANK=/^bank_[a-zA-Z0-9]+$/;
 export function buildCourtCheckRequest({profileInput,review,from,bankAccount,attachmentUrl,attachmentPages,caseReference,approvedCourtFeeCents}={}){
   const profile=findCourtProfile(profileInput);
   if(!profile)throw new Error("Exact court shipping profile is not verified.");
+  // Defense in depth: no caller can create a live court check from a
+  // profile that still awaits clerk confirmation, even with valid banking.
+  if(profile.lobChecksAuthorized!==true)
+    throw new Error("Court mailing and combined filing-check acceptance is not authorized.");
   if(review?.status!=="approved"||review?.fee_payment_method!=="lob_check"||
      !review?.verified_check_payee || !review?.verified_filing_address)
     throw new Error("Human-verified filing check payee and address are required.");
