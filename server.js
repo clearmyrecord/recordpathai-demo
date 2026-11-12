@@ -45,6 +45,49 @@ app.use(cors({
 
 // Private applicant PDF submission; store only to the server's non-public
 // Supabase Storage bucket. This does not collect payment, file, or mail.
+// Both RecordPathAI Stripe webhook destinations can receive packet checkout events.
+// The already-configured RecordWatch destination has its own signing secret;
+// both paths must independently verify the signature before calling this routine.
+// A completed payment creates paid_hold only. Never dispatch a Lob check here.
+async function reconcilePaidPacketCheckout(session,res){
+  if(session?.metadata?.productType!=="record-sealing-packet")
+    return res.json({received:true,ignored:true});
+  if(!stripe||!packetDatabaseReady())
+    return res.status(503).json({ok:false,error:"Packet payment verification or private queue unavailable."});
+  if(session?.status==="complete" && session?.payment_status!=="paid")
+    return res.json({received:true,pending_payment:true});
+  if(typeof session?.id!=="string" || !/^cs_live_[A-Za-z0-9]+$/.test(session.id) ||
+     session.livemode!==true)
+    return res.status(400).json({ok:false,error:"Live packet checkout session required."});
+  try{
+    // Verify current Stripe state, rather than trusting only the webhook snapshot.
+    const current=await stripe.checkout.sessions.retrieve(session.id);
+    const owner=current?.metadata?.userId,caseId=current?.metadata?.saved_case_id;
+    if(current?.livemode!==true || !validCaseId(owner)||!validCaseId(caseId) ||
+       !verifiedPacketSession(current,owner,caseId))
+      return res.status(400).json({ok:false,error:"Session is not a verified paid court packet."});
+    const fee=Number(current.metadata.courtFeeCents||0);
+    const method=current.metadata.fulfillmentMode||"";
+    if(!Number.isSafeInteger(fee)||fee<0||
+       !["lob_check","court_online","no_fee"].includes(method) ||
+       (method==="lob_check" && fee===0) ||
+       (method==="no_fee" && fee!==0))
+      return res.status(400).json({ok:false,error:"Court-fee settlement metadata missing."});
+    await supabaseRest("packet_fulfillment_jobs",{
+      method:"POST",query:"?on_conflict=stripe_session_id",
+      prefer:"resolution=ignore-duplicates,return=representation",
+      body:{user_id:owner,case_id:caseId,stripe_session_id:current.id,
+        status:"paid_hold",court_fee_cents:fee,payment_method:method}
+    });
+    // Court deposit is passed to the court, not an affiliate commission base.
+    await recordAffiliateCommission(current,"packet_preparation",owner,PACKET_PRICE_CENTS);
+    return res.json({received:true,product:"record-sealing-packet",status:"paid_hold"});
+  }catch(error){
+    console.warn("Stripe packet reconciliation unavailable",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Stripe payment or private fulfillment queue unavailable; delivery will retry."});
+  }
+}
+
 // Stripe requires the original raw body for signature verification.
 // Payment completion creates a persistent paid-but-NOT-mailed job only.
 // Dedicated RecordWatch Stripe Billing webhook. Sandbox and live endpoints
@@ -71,7 +114,12 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
       const rows=await supabaseRest("recordwatch_lifetime_cases",{
         query:"?stripe_payment_intent_id=eq."+encodeURIComponent(piId)+"&limit=1"
       });
-      if(!Array.isArray(rows)||!rows[0])return res.json({received:true});
+      // Packet purchases use the same signed endpoint; reverse any packet
+      // affiliate commission even if this payment has no RecordWatch row.
+      if(!Array.isArray(rows)||!rows[0]){
+        await voidAffiliateCommission(piId,dispute?"dispute":"refund");
+        return res.json({received:true});
+      }
       await supabaseRest("recordwatch_lifetime_cases",{
         method:"PATCH",query:"?id=eq."+encodeURIComponent(rows[0].id),
         body:{status:dispute?"disputed":"refunded",revoked_at:new Date().toISOString(),updated_at:new Date().toISOString()},
@@ -100,6 +148,8 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
     if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
       return res.json({received:true});
     const session=event.data?.object;
+    if(session?.metadata?.productType==="record-sealing-packet")
+      return await reconcilePaidPacketCheckout(session,res);
     if(session?.metadata?.product==="premium_recordwatch_lifetime"){
       const verified=await verifiedRecordwatchLifetimeSession(session.id,
         session.metadata.user_id,session.metadata.saved_case_id);
@@ -147,34 +197,7 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
   if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
     return res.json({received:true});
   const session=event.data?.object;
-  // This account also sells RecordWatch subscriptions/lifetime access. Its
-  // checkout events belong to the separate RecordWatch webhook and must not
-  // create a packet job or cause infinite 400/retry loops here.
-  if(session?.metadata?.productType!=="record-sealing-packet")
-    return res.json({received:true,ignored:true});
-  const owner=session?.metadata?.userId,caseId=session?.metadata?.saved_case_id;
-  if(!validCaseId(owner)||!validCaseId(caseId)||
-     !verifiedPacketSession(session,owner,caseId))
-    return res.status(400).json({ok:false,error:"Session is not a verified paid court packet."});
-  const fee=Number(session.metadata.courtFeeCents||0);
-  const method=session.metadata.fulfillmentMode||"";
-  if(!Number.isSafeInteger(fee)||fee<0||
-     !["lob_check","court_online","no_fee"].includes(method))
-    return res.status(400).json({ok:false,error:"Court-fee settlement metadata missing."});
-  try{
-    await supabaseRest("packet_fulfillment_jobs",{
-      method:"POST",query:"?on_conflict=stripe_session_id",
-      prefer:"resolution=ignore-duplicates,return=representation",
-      body:{user_id:owner,case_id:caseId,stripe_session_id:session.id,
-        status:"paid_hold",court_fee_cents:fee,payment_method:method}
-    });
-    // The court deposit is not RecordPathAI revenue and earns no commission.
-    await recordAffiliateCommission(session,"packet_preparation",owner,PACKET_PRICE_CENTS);
-    return res.json({received:true,status:"paid_hold"});
-  }catch(error){
-    console.warn("Stripe webhook store unavailable",error?.name||"unknown");
-    return res.status(503).json({ok:false,error:"Payment recorded by Stripe, fulfillment queue unavailable. Retry requested."});
-  }
+  return await reconcilePaidPacketCheckout(session,res);
 });
 
 app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:"8mb"}),async(req,res)=>{
