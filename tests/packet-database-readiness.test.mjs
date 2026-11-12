@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 const server=fs.readFileSync(new URL("../server.js",import.meta.url),"utf8");
 const start=server.indexOf('app.get("/api/operator/packet/database-readiness"');
-const end=server.indexOf("// Explicit operator action only.",start);
+const end=server.indexOf('app.get("/api/operator/packet/launch-readiness"',start);
 assert.ok(start>0&&end>start);
 const route=server.slice(start,end);
 const migration=fs.readFileSync(new URL("../supabase/migrations/20261111000000_atomic_packet_lob_dispatch.sql",import.meta.url),"utf8");
