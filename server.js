@@ -114,7 +114,12 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
       const rows=await supabaseRest("recordwatch_lifetime_cases",{
         query:"?stripe_payment_intent_id=eq."+encodeURIComponent(piId)+"&limit=1"
       });
-      if(!Array.isArray(rows)||!rows[0])return res.json({received:true});
+      // Packet purchases use the same signed endpoint; reverse any packet
+      // affiliate commission even if this payment has no RecordWatch row.
+      if(!Array.isArray(rows)||!rows[0]){
+        await voidAffiliateCommission(piId,dispute?"dispute":"refund");
+        return res.json({received:true});
+      }
       await supabaseRest("recordwatch_lifetime_cases",{
         method:"PATCH",query:"?id=eq."+encodeURIComponent(rows[0].id),
         body:{status:dispute?"disputed":"refunded",revoked_at:new Date().toISOString(),updated_at:new Date().toISOString()},
