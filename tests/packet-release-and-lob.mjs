@@ -35,11 +35,12 @@ const review={
 };
 const runtime={stripeLiveEnabled:true,lobLiveEnabled:true,lobVerifiedBank:true,
   onlineCourtPaymentVerified:false};
-test("verified unchanged case and manually signed PDF release can quote exact $150",()=>{
+test("court with unconfirmed combined mailed packet and check cannot collect $150",()=>{
   const result=evaluatePacketRelease({userId,caseId,savedCase,charges,review,runtime});
-  assert.equal(result.ready,true,JSON.stringify(result.missing));
+  assert.equal(result.ready,false);
   assert.equal(result.quote.totalCents,15000);
   assert.equal(result.fulfillmentMode,"lob_check");
+  assert.match(result.missing.join(" "),/clerk has not confirmed acceptance/i);
 });
 test("unverified cases and any change to charge/date are blocked",()=>{
   for(const [reason,opts] of [
@@ -65,31 +66,18 @@ test("unmapped dismissal cannot charge despite nonconviction $0 fee",()=>{
     review:{...review,form_type:"sealing-dismissal",approved_court_fee_cents:0,fee_payment_method:"no_fee"},runtime});
   assert.equal(result.ready,false);
 });
-test("Lob check builder uses verified court, exact amount and private HTTPS attachment",()=>{
-  const check=buildCourtCheckRequest({
+test("Lob check builder blocks Wood County until clerk accepts combined mailing",()=>{
+  const from={name:"RecordPathAI",address_line1:"123 Sender Lane",
+    address_city:"Test City",address_state:"OH",address_zip:"43000"};
+  const payload={
     profileInput:{state:"OH",county:"Wood",courtType:"court-of-common-pleas"},
-    review,from:{name:"RecordPathAI",address_line1:"123 Sender Lane",
-      address_city:"Test City",address_state:"OH",address_zip:"43000"},
-    bankAccount:"bank_TEST123",attachmentUrl:"https://example.supabase.co/storage/v1/object/sign/sample?token=synthetic",
+    review,from,bankAccount:"bank_TEST123",
+    attachmentUrl:"https://example.supabase.co/storage/v1/object/sign/sample?token=synthetic",
     attachmentPages:2,caseReference:"TEST-001",approvedCourtFeeCents:10000
-  });
-  assert.equal(check.amount,100);
-  assert.equal(check.to.address_city,"Bowling Green");
-  assert.equal(check.mail_type,"usps_first_class");
-  assert.equal(check.attachment.includes("supabase.co"),true);
-  // Explicitly reject the original 4-page PDF: its first two pages are
-  // informational eligibility guidance, not filing forms.
-  assert.throws(()=>buildCourtCheckRequest({
-    profileInput:{state:"OH",county:"Wood",courtType:"court-of-common-pleas"},
-    review,from:check.from,bankAccount:"bank_TEST123",
-    attachmentUrl:check.attachment,attachmentPages:4,approvedCourtFeeCents:10000
-  }),/exactly the approved court form pages/);
-  assert.equal(check.message.includes("court"),false);
-  assert.throws(()=>buildCourtCheckRequest({
-    profileInput:{state:"OH",county:"Wood",courtType:"court-of-common-pleas"},
-    review,from:check.from,bankAccount:"bank_TEST123",
-    attachmentUrl:check.attachment,attachmentPages:7,approvedCourtFeeCents:10000
-  }));
+  };
+  assert.throws(()=>buildCourtCheckRequest(payload),/not authorized/i);
+  assert.throws(()=>buildCourtCheckRequest({...payload,attachmentPages:4}),/not authorized/i);
+  assert.throws(()=>buildCourtCheckRequest({...payload,approvedCourtFeeCents:0}),/not authorized/i);
 });
 test("live Lob dispatch is explicitly disabled by default",()=>{
   assert.equal(requireLobLiveDispatch({}),false);
