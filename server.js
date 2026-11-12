@@ -16,7 +16,7 @@ import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neu
 import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
 import { timingSafeEqual, createHash } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
-import { findCourtProfile } from "./src/court-profiles.js";
+import { findCourtProfile, courtFilingPlan } from "./src/court-profiles.js";
 import { isWoodConvictionFormPair } from "./src/wood-form-pages.js";
 import { verifyLivePacketPaymentForLob } from "./src/lob-dispatch-payment-guard.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
@@ -689,6 +689,129 @@ app.get("/api/operator/packet/database-readiness",async(req,res)=>{
     note:ready
       ?"The packet migrations exist; no payment or mail has been made."
       :"Packet schema or atomic dispatch migration is missing or inaccessible. Do not enable live checkout."});
+});
+
+// Operator-only launch gate inspection. Does not create Stripe sessions,
+// bank transactions, Lob checks, mail pieces, or customer records.
+// Deliberately differentiates a provider-accepted Lob TEST check ("processed")
+// from its successfully rendered final PDF proof ("rendered").
+app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  res.setHeader("Cache-Control","no-store, private");
+  const checkId=safe(req.query?.test_check_id);
+  if(checkId && !/^chk_[A-Za-z0-9]+$/.test(checkId))
+    return res.status(400).json({ok:false,error:"A valid Lob test check ID is required."});
+  const flags={
+    packetCheckoutEnabled:process.env.RECORDPATH_LIVE_PACKET_CHECKOUT==="true",
+    lobLiveChecksEnabled:process.env.LOB_LIVE_CHECKS_ENABLED==="true",
+    lobAttachmentsApproved:process.env.LOB_CHECK_ATTACHMENTS_APPROVED==="true",
+    liveDispatchEnabled:process.env.RECORDPATH_ENABLE_LIVE_DISPATCH==="true"
+  };
+  const stripeLiveKeyConfigured=Boolean(stripe) &&
+    (process.env.STRIPE_SECRET_KEY||"").startsWith("sk_live_");
+  const stripePacketSigningSecretConfigured=(process.env.STRIPE_WEBHOOK_SECRET||"").startsWith("whsec_");
+  const tables={packet_releases:false,packet_drafts:false,packet_fulfillment_jobs:false};
+  if(packetDatabaseReady()){
+    for(const [name,column] of Object.entries({
+      packet_releases:"case_id",packet_drafts:"case_id",packet_fulfillment_jobs:"id"
+    })){
+      try{await supabaseRest(name,{query:"?select="+column+"&limit=0"});tables[name]=true;}
+      catch{}
+    }
+  }
+  let atomicDispatchFunction=false;
+  if(Object.values(tables).every(Boolean)){
+    try{
+      const rows=await supabaseRest("rpc/reserve_packet_lob_dispatch",{
+        method:"POST",body:{
+          p_stripe_session_id:"cs_test_launch_preflight_NEVER_CHARGE",
+          p_case_id:"11111111-1111-4111-8111-111111111111"
+        }
+      });
+      atomicDispatchFunction=Array.isArray(rows)&&rows.length===0;
+    }catch{}
+  }
+  const dbReady=Object.values(tables).every(Boolean)&&atomicDispatchFunction;
+  const lobTestKey=process.env.LOB_TEST_API_KEY||"";
+  const lobTestBank=process.env.LOB_TEST_BANK_ACCOUNT_ID||"";
+  const sandboxConfigured=lobTestKey.startsWith("test_")&&
+    /^bank_[A-Za-z0-9]+$/.test(lobTestBank);
+  let testProofStatus="not_checked",testProofRendered=false,proofUrlAvailable=false;
+  if(checkId){
+    testProofStatus=sandboxConfigured?"unavailable":"test_credentials_unavailable";
+    if(sandboxConfigured){
+      try{
+        const check=await fetch("https://api.lob.com/v1/checks/"+checkId,{
+          headers:{Authorization:"Basic "+Buffer.from(lobTestKey+":").toString("base64")},
+          signal:AbortSignal.timeout(12000)
+        });
+        if(check.ok){
+          const checkData=await check.json();
+          if(checkData.id===checkId){
+            testProofStatus=String(checkData.status||"unknown");
+            testProofRendered=testProofStatus==="rendered";
+            proofUrlAvailable=testProofRendered && /^https:\/\//.test(checkData.url||"");
+          }
+        }
+      }catch{}
+    }
+  }
+  const bank=process.env.LOB_VERIFIED_BANK_ID||"";
+  const liveKey=process.env.LOB_LIVE_API_KEY||"";
+  const lobLiveCredentialsConfigured=liveKey.startsWith("live_")&&
+    /^bank_[A-Za-z0-9]+$/.test(bank);
+  // The bank API GET is read-only and is allowed even while live dispatch is off.
+  let liveBankVerified=false;
+  if(lobLiveCredentialsConfigured){
+    try{
+      const bankResponse=await fetch("https://api.lob.com/v1/bank_accounts/"+bank,{
+        headers:{Authorization:"Basic "+Buffer.from(liveKey+":").toString("base64")},
+        signal:AbortSignal.timeout(12000)
+      });
+      if(bankResponse.ok){
+        const row=await bankResponse.json();
+        liveBankVerified=row.id===bank && row.verified===true;
+      }
+    }catch{}
+  }
+  let returnAddressConfigured=false;
+  try{
+    const from=JSON.parse(process.env.LOB_FROM_ADDRESS_JSON||"null");
+    returnAddressConfigured=Boolean(from &&
+      ["name","address_line1","address_city","address_state","address_zip"]
+        .every(field=>typeof from[field]==="string"&&from[field].trim()));
+  }catch{}
+  const court=courtFilingPlan({state:"OH",county:"Wood",
+    courtType:"court-of-common-pleas",formType:"sealing-conviction"});
+  const blockers=[];
+  if(!dbReady)blockers.push("private_packet_database_unavailable");
+  if(!stripeLiveKeyConfigured||!stripePacketSigningSecretConfigured)
+    blockers.push("stripe_webhook_credential_missing");
+  if(!sandboxConfigured)blockers.push("lob_sandbox_credentials_missing");
+  if(checkId&&!testProofRendered)blockers.push("lob_test_proof_not_yet_rendered");
+  if(!checkId)blockers.push("lob_test_proof_not_specified");
+  if(!lobLiveCredentialsConfigured||!liveBankVerified||!returnAddressConfigured)
+    blockers.push("lob_live_funding_configuration_unverified");
+  if(!court.mailReady)blockers.push("wood_county_clerk_mailing_acceptance_unconfirmed");
+  // A valid signed Stripe event->database paid_hold trial is not established
+  // by testing that a forged signature returns 400.
+  blockers.push("signed_stripe_event_to_paid_hold_not_proven");
+  if(!Object.values(flags).every(Boolean))blockers.push("live_activation_switches_disabled");
+  return res.json({
+    ok:true,readyForLiveFiling:false,
+    flags,
+    stripe:{liveKeyConfigured:stripeLiveKeyConfigured,
+      packetWebhookSecretConfigured:stripePacketSigningSecretConfigured,
+      signedEventDeliveryProven:false},
+    database:{ready:dbReady,tables,atomicDispatchFunction},
+    lob:{sandboxConfigured,testCheckId:checkId||null,
+      testProofStatus,testProofRendered,proofUrlAvailable,
+      liveCredentialsConfigured:lobLiveCredentialsConfigured,
+      liveBankVerified,returnAddressConfigured},
+    woodCounty:{profileId:court.profileId,mailingAcceptedByClerk:court.mailReady},
+    blockers,
+    note:"Read-only operator assessment. No customer payment, Lob check, filing or mailing is created."
+  });
 });
 
 // Explicit operator action only. Webhooks NEVER send mail. Stripe paid session,
