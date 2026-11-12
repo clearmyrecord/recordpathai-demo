@@ -52,7 +52,7 @@ jobs:
           const launch=fs.readFileSync(path.join(dir,"launch.html"),"utf8");
           assert(launch.includes("PUBLIC BETA"));
           assert(launch.includes('name="robots" content="noindex'));
-          assert(launch.includes("does not currently operate a nationwide criminal-record database"));
+          assert(launch.includes("does not operate a nationwide criminal-record database"));
           assert(home.includes('https://recordpathai.com/eligibility.html'));
           assert(search.includes('https://recordpathai-private-search-backend.onrender.com'));
           assert(search.includes('method:"POST"'));
