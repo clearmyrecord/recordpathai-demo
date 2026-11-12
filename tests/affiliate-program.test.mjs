@@ -49,7 +49,7 @@ test("Affiliate tables are private, partner-approved and payout-disabled by defa
   assert.match(server,/status:"pending",earned_at:paidAt/);
   assert.match(server,/voidAffiliateCommission\(piId,dispute\?"dispute":"refund"\)/);
   assert.match(server,/recordAffiliateCommission\(verified,"recordwatch_lifetime",verified\.metadata\.user_id,RECORDWATCH_LIFETIME_CENTS\)/);
-  assert.match(server,/recordAffiliateCommission\(session,"packet_preparation",owner,PACKET_PRICE_CENTS\)/);
+  assert.match(server,/recordAffiliateCommission\(current,"packet_preparation",owner,PACKET_PRICE_CENTS\)/);
 });
 
 test("No affiliate access to customer criminal records or auto-disbursal",()=>{
