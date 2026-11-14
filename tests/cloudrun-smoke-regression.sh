@@ -27,7 +27,11 @@ case "$1 $2 $3" in
         printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","traffic":[{"revisionName":"recordpathai-old","percent":100}]}}'
       fi
     elif [[ "$state" == deployed ]]; then
-      printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","latestCreatedRevisionName":"recordpathai-new","latestReadyRevisionName":"recordpathai-new","traffic":[{"revisionName":"recordpathai-old","percent":100},{"revisionName":"recordpathai-new","percent":0,"tag":"recordpathai-preview","url":"https://recordpathai-preview---recordpathai-abc-uw.a.run.app"}]}}'
+      if [[ "${MOCK_OTHER_REVISION_READY:-}" == true ]]; then
+        printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","latestCreatedRevisionName":"recordpathai-other","latestReadyRevisionName":"recordpathai-other","traffic":[{"revisionName":"recordpathai-old","percent":100},{"revisionName":"recordpathai-new","percent":0,"tag":"recordpathai-preview","url":"https://recordpathai-preview---recordpathai-abc-uw.a.run.app"}]}}'
+      else
+        printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","latestCreatedRevisionName":"recordpathai-new","latestReadyRevisionName":"recordpathai-new","traffic":[{"revisionName":"recordpathai-old","percent":100},{"revisionName":"recordpathai-new","percent":0,"tag":"recordpathai-preview","url":"https://recordpathai-preview---recordpathai-abc-uw.a.run.app"}]}}'
+      fi
     elif [[ "$state" == promoted ]]; then
       printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","latestCreatedRevisionName":"recordpathai-new","latestReadyRevisionName":"recordpathai-new","traffic":[{"revisionName":"recordpathai-new","percent":100},{"revisionName":"recordpathai-new","percent":0,"tag":"recordpathai-preview","url":"https://recordpathai-preview---recordpathai-abc-uw.a.run.app"}]}}'
     else
@@ -123,6 +127,8 @@ chmod +x "$TMP/bin/gcloud" "$TMP/bin/curl"
 cd "$ROOT"
 export PATH="$TMP/bin:$PATH"
 export MOCK_STATE="$TMP/state"
+# Keep offline mock tags deterministic even when GitHub Actions sets RUN_ID.
+export RECORDPATH_CANDIDATE_TAG=recordpathai-preview
 export MOCK_ACTIONS="$TMP/traffic-actions"
 export MOCK_DEPLOY_ARGS="$TMP/deploy-args"
 
@@ -226,5 +232,16 @@ if grep -qF 'LOB_LIVE_API_KEY' "$MOCK_DEPLOY_ARGS"; then
   echo "Active Lob credentials must never be silently removed" >&2
   exit 1
 fi
+
+setup_case
+MOCK_OTHER_REVISION_READY=true bash scripts/deploy-existing-cloudrun.sh > "$TMP/concurrent-revision.log" 2>&1 || {
+  cat "$TMP/concurrent-revision.log" >&2
+  echo "A competing zero-traffic revision must not defeat our unique tag" >&2
+  exit 1
+}
+grep -qF "recordpathai-new=100" "$MOCK_ACTIONS" || {
+  echo "Must promote only our own uniquely tagged revision" >&2
+  exit 1
+}
 
 echo "PASS: tagged candidate tested with zero traffic, healthy revision promoted, and errors roll back."
