@@ -617,7 +617,7 @@ app.post("/api/operator/stripe-test-checkout",async(req,res)=>{
     const session=await testStripe.checkout.sessions.create({
       mode:"payment",
       payment_method_types:["card"],
-      ui_mode:"hosted",
+      // Stripe selects its version-compatible hosted Checkout mode by default.
       success_url:base+"/stripe-test-success.html?session_id={CHECKOUT_SESSION_ID}",
       cancel_url:base+"/stripe-test-success.html?cancelled=1",
       line_items:[
@@ -2709,7 +2709,7 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
     const metadata={product:"premium_recordwatch_lifetime",plan:"lifetime_case",
       user_id:user.id,saved_case_id:savedCaseId,price_id:priceId};
     const checkout={
-      mode:"payment",ui_mode:"hosted",
+      mode:"payment", // Omit ui_mode; Stripe defaults to its supported hosted page.
       client_reference_id:user.id,
       success_url:base+"/recordwatch-dashboard.html?caseId="+encodeURIComponent(savedCaseId)+"&recordwatch=success&session_id={CHECKOUT_SESSION_ID}",
       cancel_url:base+"/recordwatch-dashboard.html?caseId="+encodeURIComponent(savedCaseId)+"&recordwatch=cancelled",
