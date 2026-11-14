@@ -1037,6 +1037,11 @@
                 <button type="button" class="sig-small-btn" id="clearPadBtn" data-i18n="packet.clearPad">Clear Pad</button>
               </div>
             </div>
+            <label for="authorizeSignedReview" style="display:flex; gap:10px; align-items:flex-start; margin:12px 0; line-height:1.45; color:#33486b; font-size:14px;">
+              <input type="checkbox" id="authorizeSignedReview" style="margin-top:3px; flex-shrink:0;">
+              <span>I authorize RecordPathAI to place the signature I draw above on my court application and store the completed PDF privately for case review. This is not authorization to charge me, file with a court, or mail a check.</span>
+            </label>
+            <p style="font-size:12px; color:#5a6884; margin:5px 0 10px; line-height:1.45;">Wood County email/fax filings require a physically signed source document retained by the filer. Drawing here does not automatically satisfy that separate requirement. Court submission and mailing remain subject to individual review.</p>
 
   <p style="font-size:14px; color:#6a7894; margin:18px 0 0; line-height:1.5;" data-i18n="packet.disclaimerPurchase">
   By purchasing, you agree that RecordPathAI provides document preparation services only
@@ -2672,7 +2677,11 @@ document.addEventListener("DOMContentLoaded", async function () {
               const width = Math.max(20, Number(field.width || 180) * sx);
               const height = Math.max(12, Number(field.height || 18) * sy);
               const y = page.getHeight() - Number(field.y || 0) * sy - height;
-              page.drawImage(signature, { x, y, width, height });
+              const scale = Math.min(width/signature.width,height/signature.height);
+              if(!Number.isFinite(scale)||scale<=0)throw new Error("Sample signature cannot fit the mapped field.");
+              page.drawImage(signature, { x:x+(width-signature.width*scale)/2,
+                y:y+(height-signature.height*scale)/2,
+                width:signature.width*scale,height:signature.height*scale });
               signatureMappings++;
               return;
             }
@@ -2931,11 +2940,16 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
 
             if (field.type === "signature") {
+              // Preserve the applicant's stroke proportions rather than
+              // stretching a wide signature into a short court signature box.
+              const sigScale=Math.min(width/sigImage.width,height/sigImage.height);
+              if(!Number.isFinite(sigScale)||sigScale<=0)
+                throw new Error("The drawn signature could not be fitted in the court form.");
               page.drawImage(sigImage, {
-                x,
-                y: pdfY,
-                width,
-                height
+                x:x+(width-sigImage.width*sigScale)/2,
+                y:pdfY+(height-sigImage.height*sigScale)/2,
+                width:sigImage.width*sigScale,
+                height:sigImage.height*sigScale
               });
               embeddedSignatures++;
               return;
@@ -2985,6 +2999,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         try {
           if(!window.PDFLib)throw new Error("PDF rendering library unavailable.");
           if(!requireSavedDrawnSignature())return;
+          if(document.getElementById("authorizeSignedReview")?.checked!==true)
+            throw new Error("Please authorize private preparation of this signed PDF before uploading it for review.");
           if(window.RecordPathAuth && !window.RecordPathAuth.requireAuth(
             "prepare your private signed court packet", "packet.html"))return;
           const raw=readPacketData(),data=buildNormalizedPacketData(raw);
@@ -3012,7 +3028,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           const response=await fetch(endpoint,{
             method:"POST",
             headers:{"Content-Type":"application/pdf",
-              "Authorization":"Bearer "+token,"x-recordpath-case-id":caseId},
+              "Authorization":"Bearer "+token,"x-recordpath-case-id":caseId,
+              "x-recordpath-private-review-consent":"yes",
+              "x-recordpath-signature-mode":"drawn"},
             body:bytes
           });
           const result=await response.json().catch(()=>({}));
