@@ -1056,10 +1056,11 @@
                 <h3 style="margin:0 0 10px; font-size:18px; color:#233d70;">Filing preparation quote — fulfillment pending</h3>
                 <div style="display:flex; justify-content:space-between; gap:16px; margin:5px 0;"><span>Planned RecordPathAI signed packet preparation</span><strong id="packetServiceFee">$50.00</strong></div>
                 <div style="display:flex; justify-content:space-between; gap:16px; margin:5px 0;"><span>Court filing fee / deposit</span><strong id="packetCourtFee">Checking court...</strong></div>
-                <div style="display:flex; justify-content:space-between; gap:16px; padding-top:12px; margin-top:10px; border-top:1px solid #cfddf3; font-size:18px;"><strong>Estimated packet + court cost (excludes RecordWatch)</strong><strong id="packetEstimatedTotal">Pending verification</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:16px; padding-top:12px; margin-top:10px; border-top:1px solid #cfddf3; font-size:18px;"><strong>Illustrative packet + court cost (court paid separately)</strong><strong id="packetEstimatedTotal">Pending verification</strong></div>
                  <p style="font-size:13px; line-height:1.55; color:#40577e; margin:10px 0 0;"><strong>RecordWatch Premium:</strong> $39 one time per saved case is available separately today. A qualifying Wood County Common Pleas conviction filing would total <strong>$189</strong> for $39 Premium + $50 packet + the clerk's $100 court fee/deposit when the full workflow launches. This $189 bundle cannot be purchased here yet. <a href="pricing.html">Pricing details</a>.</p>
+                <p style="font-size:13px; line-height:1.5; color:#40577e; margin:10px 0 0;"><strong>Digital packet checkout: $50.</strong> After independent case and signed-form review, purchase and download the approved PDF without Lob mailing. Any applicable court deposit is paid separately to the Clerk; this checkout does not pay it or file the application.</p>
                 <p id="packetFeeExplanation" style="font-size:13px; line-height:1.5; color:#526780; margin:12px 0 0;">Court fees, any waiver, and the accepted filing/payment method must be verified before an actual charge.</p>
-                <p style="font-size:13px; line-height:1.5; color:#526780; margin:8px 0 0;">Wood County's published Rule 3.03 allows e-mailing a searchable PDF sealing application after the required court deposit is paid <strong>directly to the Clerk first</strong>. The $100 court deposit must not be collected a second time for a Lob check. A physically signed source must be retained. This email route and Lob filing are <strong>not automatic</strong>; packet payment and submission remain locked until authorization and receipt checks pass.</p>
+                <p style="font-size:13px; line-height:1.5; color:#526780; margin:8px 0 0;">Wood County's published Rule 3.03 allows e-mailing a searchable PDF sealing application after the required court deposit is paid <strong>directly to the Clerk first</strong>. The $100 court deposit must not be collected a second time for a Lob check. A physically signed source must be retained. This email route and Lob filing are <strong>not automatic</strong>. Physical submission remains locked until the Clerk and funding requirements are verified.</p>
               </div>
               <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
               <div class="sample-pdf-tools" style="margin-top:12px; padding:16px; border:1px solid #d2def3; border-radius:14px; background:#f7faff;">
@@ -3578,7 +3579,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       function serverReadinessUrl(caseId) {
         return getCheckoutEndpoint().replace(/\/api\/create-checkout-session$/, "/api/packet/checkout-readiness")+
-          "?case_id="+encodeURIComponent(caseId);
+          "?case_id="+encodeURIComponent(caseId)+"&delivery=digital";
       }
       async function checkServerPacketReadiness(caseId) {
         if(!isInternalUuid(caseId))throw new Error("Save the case to your account before payment.");
@@ -3711,16 +3712,17 @@ document.addEventListener("DOMContentLoaded", async function () {
             return;
           }
 
-          setStatus("Verifying court approval and exact filing fees...");
+          setStatus("Verifying independent approval for the $50 digital packet...");
           const verifiedCaseId=checkoutCase.saved_case_id||checkoutCase.case_id;
           const packetRelease=await checkServerPacketReadiness(verifiedCaseId);
           const priceCents=packetRelease?.quote?.totalCents;
           if(!Number.isSafeInteger(priceCents) || priceCents<5000)
-            throw new Error("Court filing fees have not been approved. No charge was made.");
+            throw new Error("Digital packet review is not approved. No charge was made.");
           setStatus("Opening secure checkout for $"+(priceCents/100).toFixed(2)+"...");
 
           const currentUser = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser ? RecordPathUserStore.getCurrentUser() : null;
           const payload = {
+            fulfillment_mode: "digital_only",
             userId: currentUser && currentUser.id,
             user_id: currentUser && currentUser.id,
             saved_case_id: safe(checkoutCase.saved_case_id || checkoutCase.case_id),
