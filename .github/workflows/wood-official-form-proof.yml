@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'tools/wood-official-form-sample.mjs'
+      - 'tools/wood-signed-review-proof.mjs'
+      - 'packet.html'
       - 'src/wood-form-pages.js'
       - 'templates/ohio/wood-county/sealing-conviction.json'
       - 'assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-32-conviction.pdf'
@@ -20,8 +22,11 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm install --no-save --ignore-scripts --package-lock=false pdf-lib@1.17.1
       - run: node tools/wood-official-form-sample.mjs
+      - run: node tools/wood-signed-review-proof.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: wood-county-official-two-form-page-sample
-          path: artifacts/wood-county-official-form-SAMPLE-NOT-FOR-FILING.pdf
+          path: |
+            artifacts/wood-county-official-form-SAMPLE-NOT-FOR-FILING.pdf
+            artifacts/wood-county-synthetic-drawn-signature-NOT-FOR-FILING.pdf
           retention-days: 7
