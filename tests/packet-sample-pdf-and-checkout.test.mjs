@@ -51,7 +51,7 @@ test("actual packet payment still requires checkout verification", () => {
   assert.match(server, /const checkoutUser = await requireApiUser\(req, res\)/);
   assert.match(server, /client_reference_id: internalOrderId/);
   assert.match(server, /quotePacketPricing\(/);
-  assert.match(server, /packetReleaseStatus\(checkoutUser\.id,savedCaseId\)/);
+  assert.match(server, /packetReleaseStatus\(checkoutUser\.id,savedCaseId,deliveryMode\)/);
   assert.match(server, /Court filing deposit/);
 });
 
