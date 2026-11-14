@@ -16,6 +16,11 @@ a genuine Stripe-delivered event. Do not set signedEventDeliveryProven from CI.
    recordpathai_packet_sandbox, with no production tables, no production Supabase
    connection, and no permissions to Lob. Apply
    sql/packet-sandbox-isolated-postgres.sql to this isolated database.
+   Its table has RLS enabled and public/anon/authenticated access revoked.
+   Provision a dedicated staging DB role permitted only SELECT and INSERT
+   on `packet_sandbox_paid_holds` and grant it a narrowly scoped RLS policy
+   (or use a dedicated table owner in this isolated database). Do not reuse
+   the production Supabase service role or expose an admin URL to a browser.
 2. Build the dedicated `Dockerfile.packet-sandbox` (never the production `Dockerfile`), and deploy it **on a distinct staging service**.
    Runtime requires RPAI_PACKET_SANDBOX_ONLY=true,
    STRIPE_TEST_SECRET_KEY=sk_test_..., STRIPE_TEST_PACKET_WEBHOOK_SECRET=whsec_...,
