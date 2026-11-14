@@ -30,8 +30,25 @@ const woodCommon = Object.freeze({
   sourceFees:"https://clerkofcourt.co.wood.oh.us/189/Criminal-Division-of-the-Clerk-of-Courts",
   sourceRules:"https://www.co.wood.oh.us/lawlibrary/Common_Plea_CH3.html",
   officialForm:"https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/142/Application-for-Sealing-295332-Conviction-PDF",
-  electronicSealingAccepted:false,
-  submissionMethod:"physical-only-pending-clerk-confirmation",
+  electronicSealingAccepted:false, // No general self-represented/criminal portal e-filing.
+  // Rule 3.03(A)(4)(p)*: sealing applications MAY be e-mailed/faxed
+  // ONLY after the court deposit was paid to the Clerk in advance.
+  preferredFilingRoute:"email-searchable-pdf-after-court-prepayment",
+  submissionMethod:"paper-mail-or-prepaid-email-fax",
+  emailFiling:Object.freeze({
+    allowedAfterCourtPrepayment:true,
+    address:"clerkofcourts@woodcountyohio.gov",
+    fax:"419-354-9241",
+    maxPdfBytes:25*1024*1024,
+    searchableUneditablePdfRequired:true,
+    physicallySignedSourceRequired:true,
+    originalSourceRetainedUntilCaseClosed:true,
+    officialReceiptRequired:true, // RecordPathAI requires proof as a conservative release gate.
+    fileStampOrDocketConfirmationRequired:true,
+    ruleCitation:"Wood County Common Pleas Local Rule 3.03(A)(4)(p), (B), (D), (F), (H)",
+    ruleSource:"https://www.woodcountyohio.gov/DocumentCenter/View/2790/Wood-County-Rules-of-Practice-General-Division-of-the-Common-Pleas-of-Wood-County-Ohio-PDF",
+    paymentSource:"https://clerkofcourt.co.wood.oh.us/166/Make-a-Payment"
+  }),
   courtFeePayee:"Wood County Clerk of Courts", // Official Clerk payment page, verified 2026-11-11.
   payeeSource:"https://clerkofcourt.co.wood.oh.us/166/Make-a-Payment",
   lobChecksAuthorized:false, // Keep disabled pending successful sandbox proof, court filing workflow and operator authorization.
@@ -62,6 +79,10 @@ export function courtFilingPlan(input={}) {
     courtName:profile.courtName, address:profile.postalAddress,
     courtFeeCents, courtFeePayee:profile.courtFeePayee,
     filingMethod:profile.submissionMethod,
+    preferredFilingRoute:profile.preferredFilingRoute||null,
+    emailFiling:profile.emailFiling||null,
+    // Lob check + attached application in one envelope remains an
+    // independently controlled product path; no automatic mail authorization.
     mailReady:profile.lobChecksAuthorized && Boolean(profile.courtFeePayee),
     onlineFeePaymentReady:false, postalTrackingGuaranteed:profile.trackingGuarantee,
     sourceFees:profile.sourceFees, sourceRules:profile.sourceRules,

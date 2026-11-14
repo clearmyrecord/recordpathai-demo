@@ -22,7 +22,7 @@ export function quotePacketPricing(input = {}) {
     if(type==="sealing-conviction") return {
       ...core,scope:"wood-common-pleas-conviction",
       courtName:plan.courtName,
-      message:"Standard Wood County Common Pleas conviction sealing (no approved fee waiver): $50 RecordPathAI preparation plus the court's $100 deposit, total $150. Check, filing and mailing are on hold pending verification and customer authorization."
+      message:"Wood County Common Pleas conviction sealing: $50 for RecordPathAI preparation plus a separate $100 court deposit (estimated combined $150, absent an accepted fee waiver). Local Rule 3.03 permits filing a searchable PDF by e-mail AFTER direct court prepayment; that $100 must not also be collected for a Lob check. Filing and packet checkout remain gated until the signed original, proof of prepayment and applicant authorization are verified."
     };
     if(type==="sealing-dismissal") return {
       ...core,scope:"wood-common-pleas-nonconviction",
