@@ -1,0 +1,50 @@
+name: Activate protected RecordWatch daily alerts after production release
+on:
+  workflow_run:
+    workflows: ["Deploy RecordPathAI to Google Cloud Run"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: recordpathai-existing-production
+  cancel-in-progress: false
+jobs:
+  activate:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'recordpathai-production' }}
+      CLOUD_RUN_REGION: ${{ vars.CLOUD_RUN_REGION || 'us-west1' }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'recordpathai' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Skip if another main deployment overtook this one
+        id: current
+        shell: bash
+        run: |
+          set -euo pipefail
+          live="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+          if [ "$live" != "${{ github.event.workflow_run.head_sha }}" ]; then
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo 'Newer release exists; scheduler setup skipped.'
+          else
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: google-github-actions/auth@v2
+        if: steps.current.outputs.current == 'true'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.current.outputs.current == 'true'
+      - name: Set up daily paid-case messaging without storing API keys in Scheduler
+        if: steps.current.outputs.current == 'true'
+        run: bash ops/activate-recordwatch-daily-scheduler.sh
