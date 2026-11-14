@@ -38,6 +38,6 @@ test("Quote endpoint is read-only and does not collect identity or return paymen
   const source = await fs.readFile(new URL("../server.js", import.meta.url),"utf8");
   assert.match(source,/app\.get\("\/api\/packet\/quote"/);
   assert.match(source,/courtType: req\.query\.courtType/);
-  assert.match(source,/packetReleaseStatus\(checkoutUser\.id,savedCaseId\)/);
+  assert.match(source,/packetReleaseStatus\(checkoutUser\.id,savedCaseId,deliveryMode\)/);
   assert.match(source,/return res\.status\(409\)/);
 });
