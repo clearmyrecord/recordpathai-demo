@@ -2865,8 +2865,13 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (!hasUsableDrawnSignature() || !signatureImageBytes)
             throw new Error(SIGNATURE_REQUIRED_MESSAGE);
           const signatureFields=fields.filter(field=>field.type==="signature");
-          if (signatureFields.length!==1 ||
-              Number(signatureFields[0].page)!==4)
+          const isWoodConviction=String(selected?.state||"").toUpperCase()==="OH" &&
+            String(selected?.county||"").toLowerCase()==="wood" &&
+            selected?.courtType==="court-of-common-pleas" &&
+            selected?.formType==="sealing-conviction";
+          if (!signatureFields.length ||
+              (isWoodConviction &&
+                (signatureFields.length!==1 || Number(signatureFields[0].page)!==4)))
             throw new Error("The court-issued form's signature mapping requires review.");
           const sigImage = await pdfDoc.embedPng(signatureImageBytes);
           let embeddedSignatures=0;
@@ -2961,8 +2966,8 @@ document.addEventListener("DOMContentLoaded", async function () {
             );
           });
 
-          if (embeddedSignatures!==1)
-            throw new Error("The applicant's drawn signature was not embedded in the court form.");
+          if (embeddedSignatures!==signatureFields.length)
+            throw new Error("The applicant's drawn signature was not embedded in every mapped signature field.");
 
           // Exclude eligibility guidance from the exact reviewed PDF sent
           // through private upload, Stripe-approved download, and Lob.
