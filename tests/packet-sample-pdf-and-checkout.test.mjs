@@ -82,3 +82,20 @@ test("real signed Wood packet refuses a stale or absent drawn signature",()=>{
   assert.doesNotMatch(actual,/drawFit\(page, value, x, textY, width, fontSize, 7, helveticaBold\)/);
   assert.match(actual,/trimWoodConvictionGuidance\(pdfDoc, selected, templateMapping\)/);
 });
+
+test("signed two-page court PDF requires the applicant's separate private-review authorization",()=>{
+  assert.match(html,/id="authorizeSignedReview"/);
+  const section=html.split("async function prepareSignedReviewPdf()")[1]?.split("async function generateSealingPdf()",1)[0];
+  assert.ok(section);
+  assert.match(section,/authorizeSignedReview"\)\?\.checked!==true/);
+  assert.match(section,/"x-recordpath-private-review-consent":"yes"/);
+  assert.match(section,/"x-recordpath-signature-mode":"drawn"/);
+  const upload=server.split('app.post("/api/packet/private-upload"')[1]?.split('app.use(express.json())',1)[0];
+  assert.ok(upload);
+  assert.match(upload,/x-recordpath-private-review-consent/);
+  assert.match(upload,/x-recordpath-signature-mode/);
+  assert.match(upload,/private_review_authorized_at/);
+  assert.match(upload,/private_review_signature_mode:"drawn"/);
+  const render=html.split("async function renderSignedCourtPdfBytes(data,selected)")[1]?.split("async function prepareSignedReviewPdf()",1)[0];
+  assert.match(render,/Math\.min\(width\/sigImage\.width,height\/sigImage\.height\)/);
+});
