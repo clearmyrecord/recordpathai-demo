@@ -101,3 +101,14 @@ test("Stripe webhook never automatically mails and must verify signed paid sessi
   assert.match(s,/packet-sandbox-simulation/);
   assert.match(s,/requireOperationsKey\(req,res\)/);
 });
+
+test("Email-first route never accidentally authorizes old $150 Stripe/Lob checkout",()=>{
+  const emailReview={...review,fee_payment_method:"court_online"};
+  const result=evaluatePacketRelease({
+    userId,caseId,savedCase,charges,review:emailReview,
+    runtime:{...runtime,onlineCourtPaymentVerified:true}
+  });
+  assert.equal(result.ready,false);
+  assert.match(result.missing.join(" "),/prepaid e-mail filing is permitted/i);
+  assert.equal(result.quote.totalCents,15000);
+});
