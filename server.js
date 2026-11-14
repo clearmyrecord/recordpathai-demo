@@ -18,6 +18,7 @@ import { timingSafeEqual, createHash, randomBytes } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { findCourtProfile, courtFilingPlan } from "./src/court-profiles.js";
 import { isWoodConvictionFormPair, isOfficialWoodConvictionFormPair } from "./src/wood-form-pages.js";
+import { trustedLobProofUrl, assessLobSandboxProof } from "./src/lob-sandbox-proof-audit.js";
 import { verifyLivePacketPaymentForLob } from "./src/lob-dispatch-payment-guard.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
@@ -612,6 +613,45 @@ app.post("/api/operator/lob-test-check-pdf",
   }
 });
 
+// Read a Lob TEST proof from a trusted signed Lob URL. Validate page count,
+// ordered form headings and test check amount. No mail, charge or filing occurs.
+async function auditLobSandboxCheckProof(result,id){
+  const unverified={proofContentsVerified:false,proofPages:0,
+    checkAmountVerified:Number(result?.amount)===100,
+    exactFourPageProof:false,twoFormPagesConfirmed:false,
+    officialFormStructureConfirmed:false};
+  if(result?.id!==id || result?.status!=="rendered" ||
+     !trustedLobProofUrl(result?.url,id))
+    return unverified;
+  try{
+    const response=await fetch(result.url,{
+      redirect:"error",signal:AbortSignal.timeout(18000)
+    });
+    if(!response.ok || Number(response.headers.get("content-length")||0)>12000000)
+      return unverified;
+    const bytes=new Uint8Array(await response.arrayBuffer());
+    if(bytes.length<500 || bytes.length>12000000 ||
+       new TextDecoder().decode(bytes.subarray(0,5))!=="%PDF-")
+      return unverified;
+    const {getDocument}=await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const document=await getDocument({data:bytes,useSystemFonts:true}).promise;
+    let pageTexts=[];
+    try{
+      if(document.numPages===4)for(let i=1;i<=4;i++){
+        const page=await document.getPage(i);
+        const content=await page.getTextContent();
+        pageTexts.push(content.items.map(item=>String(item.str||"")).join(""));
+      }
+    }finally{await document.destroy();}
+    return assessLobSandboxProof({
+      checkId:id,check:result,proofPageTexts:pageTexts
+    });
+  }catch(error){
+    console.warn("Lob test proof PDF content verification unavailable",error?.name||"unknown");
+    return unverified;
+  }
+}
+
 // Authorized test-only proof polling. Read only; never uses live credentials,
 // applicant records, customer charges, or Lob creation endpoints.
 app.get("/api/operator/lob-test-check-status",async(req,res)=>{
@@ -633,11 +673,13 @@ app.get("/api/operator/lob-test-check-status",async(req,res)=>{
       code:result?.error?.code||null,
       error:"Lob sandbox could not retrieve this check proof."});
     if(result.id!==id)throw new Error("Mismatch in retrieved check ID");
+    const proofAudit=await auditLobSandboxCheckProof(result,id);
     res.setHeader("Cache-Control","no-store, private");
     return res.json({ok:true,environment:"test",testCheckId:result.id,
       renderStatus:result.status||"processing",
       proofPdfUrl:result.url||null,
-      note:"Sandbox proof only; no check is mailed, cashed or filed."});
+      ...proofAudit,
+      note:"Read-only TEST proof audit. Structural verification does not replace visual inspection. No check is mailed, cashed or filed."});
   }catch(error){
     console.warn("Lob sandbox proof retrieval failed",error?.name||"unknown");
     return res.status(502).json({ok:false,
@@ -777,6 +819,7 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
   const sandboxConfigured=lobTestKey.startsWith("test_")&&
     /^bank_[A-Za-z0-9]+$/.test(lobTestBank);
   let testProofStatus="not_checked",testProofRendered=false,proofUrlAvailable=false;
+  let testProofContentsVerified=false,testProofPages=0,officialFormStructureConfirmed=false;
   if(checkId){
     testProofStatus=sandboxConfigured?"unavailable":"test_credentials_unavailable";
     if(sandboxConfigured){
@@ -790,7 +833,13 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
           if(checkData.id===checkId){
             testProofStatus=String(checkData.status||"unknown");
             testProofRendered=testProofStatus==="rendered";
-            proofUrlAvailable=testProofRendered && /^https:\/\//.test(checkData.url||"");
+            proofUrlAvailable=testProofRendered && trustedLobProofUrl(checkData.url,checkId);
+            if(testProofRendered && proofUrlAvailable){
+              const proofAudit=await auditLobSandboxCheckProof(checkData,checkId);
+              testProofContentsVerified=proofAudit.proofContentsVerified;
+              testProofPages=proofAudit.proofPages;
+              officialFormStructureConfirmed=proofAudit.officialFormStructureConfirmed;
+            }
           }
         }
       }catch{}
@@ -863,6 +912,8 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
     blockers.push("stripe_webhook_credential_missing");
   if(!sandboxConfigured)blockers.push("lob_sandbox_credentials_missing");
   if(checkId&&!testProofRendered)blockers.push("lob_test_proof_not_yet_rendered");
+  if(checkId&&testProofRendered&&!testProofContentsVerified)
+    blockers.push("lob_test_proof_content_not_verified");
   if(!checkId)blockers.push("lob_test_proof_not_specified");
   if(!lobLiveCredentialsConfigured||!liveBankVerified||!returnAddressConfigured)
     blockers.push("lob_live_funding_configuration_unverified");
@@ -880,6 +931,7 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
     database:{ready:dbReady,tables,atomicDispatchFunction},
     lob:{sandboxConfigured,testCheckId:checkId||null,
       testProofStatus,testProofRendered,proofUrlAvailable,
+      testProofContentsVerified,testProofPages,officialFormStructureConfirmed,
       liveCredentialsConfigured:lobLiveCredentialsConfigured,
       liveBankVerified,returnAddressConfigured},
     woodCounty:{profileId:court.profileId,mailingAcceptedByClerk:court.mailReady},
