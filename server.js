@@ -2946,7 +2946,8 @@ async function runPaidRecordwatchAlerts(){
   return totals;
 }
 app.post("/api/operator/recordwatch/run-alerts",async(req,res)=>{
-  const expected=process.env.RECORDWATCH_ALERTS_SCHEDULER_KEY||"";
+  // Secret Manager preserves trailing newlines from CLI input; normalize once before comparing.
+  const expected=(process.env.RECORDWATCH_ALERTS_SCHEDULER_KEY||"").trim();
   const supplied=req.get("x-recordwatch-alerts-key")||"";
   const a=Buffer.from(expected),b=Buffer.from(supplied);
   if(expected.length<32||a.length!==b.length||!timingSafeEqual(a,b))
