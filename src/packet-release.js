@@ -88,9 +88,13 @@ export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,no
        !runtime.onlineCourtPaymentVerified)
       missing.push("The court's online payment route has not been verified.");
   }
-  if(filing.filingMethod==="physical-only-pending-clerk-confirmation" &&
-     review?.fee_payment_method==="court_online")
-    missing.push("This court's sealing filings are not approved for electronic submission.");
+  // Published Local Rule 3.03 allows an e-mailed sealing application only
+  // AFTER the Clerk receives payment, with a physically signed source held by
+  // the applicant. The current $150 Stripe/Lob checkout CANNOT be reused for
+  // this route: $100 goes directly to the Clerk, not into a second Lob check.
+  // A separate receipt-backed $50-only packet/payment workflow is needed.
+  if(review?.fee_payment_method==="court_online")
+    missing.push("Prepaid e-mail filing is permitted by the published rule, but this checkout does not yet verify the Clerk's prepayment receipt, a physically signed source, an approved searchable PDF and applicant-authorized filing. Do not collect or send twice.");
   if(runtime.stripeLiveEnabled!==true)
     missing.push("Live Stripe checkout has not been explicitly enabled.");
   return {
