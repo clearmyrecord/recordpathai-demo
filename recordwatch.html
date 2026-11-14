@@ -248,13 +248,12 @@
           if (!window.RecordPathAuth || !(await RecordPathAuth.requireAuthAsync("purchase lifetime Premium RecordWatch for a saved case", "recordwatch.html"))) return;
           button.disabled = true;
           const status = document.getElementById("recordwatchEnrollmentStatus");
-          status.textContent = "Opening secure Stripe checkout…";
+          status.textContent = "Opening Premium notification consent and checkout details…";
           try {
             const plan = button.getAttribute("data-recordwatch-checkout");
             const caseId = window.RecordPathUserStore?.getActiveCaseId?.() || active && active.id;
-            const data = await RecordWatchNotifications.checkoutPremium("lifetime_case", { saved_case_id: caseId });
-            if (!data.url) throw new Error("Stripe checkout did not return a URL.");
-            window.location.assign(data.url);
+            if (!caseId) throw new Error("Select a saved case to review Premium notifications and pricing.");
+            window.location.assign("recordwatch-dashboard.html?caseId="+encodeURIComponent(caseId)+"#recordwatchPremiumPanel");
           } catch (error) {
             status.textContent = error.message || "Could not start checkout.";
             button.disabled = false;

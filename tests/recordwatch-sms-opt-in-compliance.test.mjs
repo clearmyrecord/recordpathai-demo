@@ -31,7 +31,7 @@ test("The dashboard and public preview use the same consent disclosure renderer"
   assert.match(provider,/Consent is optional/);
   assert.doesNotMatch(provider,/Marketing Messages/);
   assert.match(preview,/not a live sign-up/);
-  assert.match(preview,/No phone number or consent is collected here/);
+  assert.match(preview,/No phone number, email, consent, or payment is collected here/);
 });
 
 test("Consent confirmation is only displayed after server persistence",()=>{

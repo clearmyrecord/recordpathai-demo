@@ -13,16 +13,20 @@
   function fields(options) {
     options = options || {};
     var phone = esc(options.phone || "");
+    var email = esc(options.email || "");
     var emailChecked = options.emailChecked === true ? " checked" : "";
     var smsConsentChecked = options.smsConsentChecked === true ? " checked" : "";
     var smsEnabledChecked = options.smsEnabledChecked === true ? " checked" : "";
     return [
-      '<div class="recordwatch-optin-field"><label for="premiumPhone"><strong>Mobile phone number</strong></label>',
+      '<div class="recordwatch-optin-field"><label for="premiumNotificationEmail"><strong>RecordWatch notification email (separate from Step 1)</strong></label>',
+        '<input id="premiumNotificationEmail" name="recordwatch_notification_email" type="email" autocomplete="off" value="',email,'" placeholder="alerts@example.com" aria-describedby="premiumEmailNote">',
+        '<p class="meta-note" id="premiumEmailNote">Choose the inbox for Premium alerts. You must verify it after payment. Your login and eligibility-contact email stay unchanged.</p></div>',
+      '<div class="recordwatch-optin-field"><label for="premiumPhone"><strong>RecordWatch SMS phone number (separate from Step 1)</strong></label>',
         '<input id="premiumPhone" type="tel" inputmode="tel" autocomplete="tel" value="',phone,'" placeholder="(555) 555-5555" aria-describedby="premiumSmsPhoneNote">',
         '<p class="meta-note" id="premiumSmsPhoneNote">United States mobile numbers only. Your number is used for RecordWatch notifications only if you choose to enroll.</p></div>',
       '<fieldset class="recordwatch-optin-group"><legend>Notification choices</legend>',
         '<label class="toggle-row"><input id="premiumEmailEnabled" type="checkbox"',emailChecked,
-        '> <span>Email: Send RecordWatch Premium timeline updates to my confirmed account email. Optional.</span></label>',
+        '> <span>Email: Send RecordWatch Premium timeline updates to the separate address above, after I verify that inbox. Optional.</span></label>',
         '<label class="toggle-row"><input id="premiumSmsConsent" type="checkbox"',smsConsentChecked,
         '> <span><strong>SMS — optional consent</strong>: ',esc(SMS_CONSENT_LABEL),'</span></label>',
         '<p class="recordwatch-sms-disclosure">',esc(SMS_DETAILS),'</p>',
