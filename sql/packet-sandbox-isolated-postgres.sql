@@ -20,3 +20,20 @@ CREATE TABLE IF NOT EXISTS public.packet_sandbox_paid_holds(
   created_at timestamptz NOT NULL DEFAULT now()
 );
 -- No Lob check ID/dispatch attempt columns exist by design.
+
+-- Defense in depth if the isolated database is hosted on a Supabase project:
+-- never expose these staging rows through anonymous/authenticated Data APIs.
+ALTER TABLE public.packet_sandbox_paid_holds ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.packet_sandbox_paid_holds FROM PUBLIC;
+DO $$
+BEGIN
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='anon') THEN
+    REVOKE ALL ON public.packet_sandbox_paid_holds FROM anon;
+  END IF;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN
+    REVOKE ALL ON public.packet_sandbox_paid_holds FROM authenticated;
+  END IF;
+END;
+$$;
+-- The trusted staging process should connect using a dedicated restricted
+-- database role granted only SELECT and INSERT on this table (not service_role).
