@@ -26,6 +26,9 @@ test("launch audit is independent of live flag when verifying bank in read-only 
   assert.match(route,/liveBankVerified=row\.id===bank && row\.verified===true/);
   assert.match(route,/wood_county_clerk_mailing_acceptance_unconfirmed/);
   assert.match(route,/signed_stripe_event_to_paid_hold_not_proven/);
+  assert.match(route,/packet_payment_webhook_receipts/);
+  assert.match(route,/signedEventDeliveryProven=true/);
+  assert.match(route,/evidenceScope:"production_live_paid_packet_only"/);
   assert.match(route,/reserve_packet_lob_dispatch/);
   assert.match(route,/cs_test_launch_preflight_NEVER_CHARGE/);
 });

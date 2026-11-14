@@ -115,7 +115,7 @@ test("Production webhook handles Stripe renewals, cancellation and payment failu
     assert.ok(server.includes('"' + event + '"'), event);
   assert.ok(server.includes("syncVerifiedRecordwatchStripeSubscription"));
   assert.ok(server.includes("verifiedPacketSession(current,owner,caseId)"));
-  assert.ok(server.includes("return await reconcilePaidPacketCheckout(session,res)"));
+  assert.ok(server.includes("return await reconcilePaidPacketCheckout(session,res,event)"));
   assert.ok(server.includes('app.post("/api/recordwatch/billing-portal"'));
   assert.ok(server.includes("recordwatchStripe.billingPortal.sessions.create"));
   assert.ok(server.includes("getRecordwatchBillingRow(user.id)"));

@@ -11,7 +11,7 @@ import {verifiedPacketSession,PACKET_PRICE_CENTS} from "../src/payment-security.
 import {validCaseId} from "../src/packet-release.js";
 
 const source=readFileSync(new URL("../server.js",import.meta.url),"utf8");
-const reconcilerStart=source.indexOf("async function reconcilePaidPacketCheckout(session,res){");
+const reconcilerStart=source.indexOf("async function reconcilePaidPacketCheckout(session,res,verifiedEvent){");
 const reconcilerEnd=source.indexOf("// Stripe requires the original raw body",reconcilerStart);
 const routeStart=source.indexOf('app.post("/api/stripe/webhook"');
 const routeEnd=source.indexOf('app.post("/api/packet/private-upload"',routeStart);
@@ -48,6 +48,7 @@ async function harness(t,session=baseSession){
   const app=express();
   const realSdk=new Stripe("sk_test_OFFLINE_ONLY_NO_NETWORK");
   const rows=new Map();
+  const receipts=new Map();
   const writes=[];
   const lookups=[];
   const affiliateCalls=[];
@@ -64,8 +65,18 @@ async function harness(t,session=baseSession){
     }}}
   };
   const supabaseRest=async(table,request)=>{
+    if(table==="packet_payment_webhook_receipts"){
+      assert.equal(request.method,"POST");
+      assert.match(request.query,/on_conflict=event_id/);
+      const body=request.body;
+      if(!receipts.has(body.event_id))receipts.set(body.event_id,body);
+      return [];
+    }
     if(table!=="packet_fulfillment_jobs")throw Error("Unexpected table "+table);
-    assert.equal(request.method,"POST");
+    if(request.method!=="POST"){
+      const session=decodeURIComponent(request.query.match(/stripe_session_id=eq\.([^&]+)/)?.[1]||"");
+      return rows.has(session)?[rows.get(session)]:[];
+    }
     assert.match(request.query,/on_conflict=stripe_session_id/);
     assert.match(request.prefer,/resolution=ignore-duplicates/);
     const body=request.body;
@@ -105,7 +116,7 @@ async function harness(t,session=baseSession){
       body:wire});
     return {status:response.status,body:await response.json()};
   }
-  return {send,rows,writes,lookups,affiliateCalls,setSession:s=>{current=s;},
+  return {send,rows,receipts,writes,lookups,affiliateCalls,setSession:s=>{current=s;},
     failLookup:()=>{failLookup=true;}};
 }
 
@@ -116,6 +127,7 @@ test("cryptographically signed HTTP event creates one paid_hold and zero mail",a
   assert.equal(first.body.status,"paid_hold");
   assert.equal(first.body.product,"record-sealing-packet");
   assert.equal(h.rows.size,1);
+  assert.equal(h.receipts.size,1,"genuine HMAC verification must create one private receipt");
   assert.equal(h.rows.get(sessionId).status,"paid_hold");
   assert.equal(h.rows.get(sessionId).user_id,userId);
   assert.equal(h.rows.get(sessionId).case_id,caseId);
@@ -127,6 +139,7 @@ test("cryptographically signed HTTP event creates one paid_hold and zero mail",a
   assert.equal(replay.status,200);
   assert.equal(replay.body.status,"paid_hold");
   assert.equal(h.rows.size,1,"unique session key prevents duplicate fulfillment");
+  assert.equal(h.receipts.size,1,"event ID deduplicates signed acceptance evidence");
   assert.equal(h.writes.length,2,"duplicate delivery is an upsert-ignore, not dispatch");
 });
 
@@ -136,6 +149,7 @@ test("invalid Stripe signature and modified body cannot create paid_hold",async 
   assert.equal((await h.send(eventFor(),{tamper:true})).status,400);
   assert.equal(h.lookups.length,0);
   assert.equal(h.rows.size,0);
+  assert.equal(h.receipts.size,0);
 });
 
 test("unsigned, unpaid, test-session, and mispriced cases never enqueue",async t=>{
@@ -196,6 +210,7 @@ test("signed $50 digital-only webhook persists a single non-Lob paid packet",asy
   assert.equal(first.status,200);
   assert.equal(first.body.status,"paid_hold");
   assert.equal(h.rows.size,1);
+  assert.equal(h.receipts.size,1);
   const job=h.rows.get(sessionId);
   assert.equal(job.court_fee_cents,0);
   assert.equal(job.payment_method,"digital_only");

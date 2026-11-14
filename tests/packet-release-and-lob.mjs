@@ -92,7 +92,7 @@ test("Stripe webhook never automatically mails and must verify signed paid sessi
   const webhook=s.slice(at,end);
   assert.match(webhook,/stripe\.webhooks\.constructEvent/);
   const shared=s.slice(s.indexOf('async function reconcilePaidPacketCheckout'),at);
-  assert.match(webhook,/reconcilePaidPacketCheckout\(session,res\)/);
+  assert.match(webhook,/reconcilePaidPacketCheckout\(session,res,event\)/);
   assert.match(shared,/verifiedPacketSession\(current,owner,caseId\)/);
   assert.match(shared,/status:"paid_hold"/);
   assert.match(shared,/stripe\.checkout\.sessions\.retrieve\(session\.id\)/);

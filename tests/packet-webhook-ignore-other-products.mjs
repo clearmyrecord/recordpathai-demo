@@ -13,6 +13,6 @@ test("packet Stripe webhook acknowledges RecordWatch and other checkout events",
  assert.ok(shared.includes('return res.json({received:true,ignored:true});'));
  assert.ok(shared.includes('status:"paid_hold"'));
  assert.ok(shared.includes('stripe.checkout.sessions.retrieve(session.id)'));
- assert.ok(route.includes('return await reconcilePaidPacketCheckout(session,res)'));
+ assert.ok(route.includes('return await reconcilePaidPacketCheckout(session,res,event)'));
  assert.ok(route.includes('stripe.webhooks.constructEvent'));
 });
