@@ -11,7 +11,7 @@ test("Wood County Common Pleas conviction quotes $50 service plus $100 court dep
   assert.equal(quote.totalCents,15000);
   assert.equal(quote.currency,"usd");
   assert.equal(quote.canCollect,false);
-  assert.equal(quote.filingMethod,"physical-only-pending-clerk-confirmation");
+  assert.equal(quote.filingMethod,"paper-mail-or-prepaid-email-fax");
 });
 test("Nonconviction does not get a $100 conviction fee", () => {
   const quote = quotePacketPricing({state:"OH", county:"Wood", courtType:"court-of-common-pleas", formType:"sealing-dismissal"});
