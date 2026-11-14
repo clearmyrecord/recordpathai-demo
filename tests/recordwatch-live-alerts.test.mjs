@@ -104,6 +104,7 @@ test("Provider API acceptance is tracked separately from confirmed delivery",asy
 test("Only signed webhook and authenticated operator daily worker can initiate sends",()=>{
   assert.match(server,/app\.post\("\/api\/recordwatch\/inbound-sms"/);
   assert.match(server,/x-recordwatch-alerts-key/);
+  assert.match(server,/const expected=\(process\.env\.RECORDWATCH_ALERTS_SCHEDULER_KEY\|\|""\)\.trim\(\)/);
   assert.match(server,/RECORDWATCH_LEGACY_NIGHTLY_ENABLED !== "true"/);
   assert.match(server,/recordwatch_alert_deliveries/);
   assert.match(server,/resolution=ignore-duplicates/);
