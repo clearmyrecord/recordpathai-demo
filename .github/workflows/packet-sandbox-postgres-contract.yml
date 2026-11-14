@@ -1,0 +1,63 @@
+name: Packet sandbox - signed webhook to isolated Postgres
+on:
+  pull_request:
+    paths:
+      - src/packet-sandbox-webhook.js
+      - src/payment-security.js
+      - tools/run-packet-sandbox-webhook.mjs
+      - sql/packet-sandbox-isolated-postgres.sql
+      - tests/staging/packet-sandbox-postgres.test.mjs
+      - .github/workflows/packet-sandbox-postgres-contract.yml
+      - Dockerfile.packet-sandbox
+  push:
+    branches: [main]
+    paths:
+      - src/packet-sandbox-webhook.js
+      - tools/run-packet-sandbox-webhook.mjs
+      - sql/packet-sandbox-isolated-postgres.sql
+      - tests/staging/packet-sandbox-postgres.test.mjs
+      - .github/workflows/packet-sandbox-postgres-contract.yml
+      - Dockerfile.packet-sandbox
+permissions:
+  contents: read
+jobs:
+  sandbox-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: recordpathai_packet_sandbox
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d recordpathai_packet_sandbox"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      RPAI_SANDBOX_DATABASE_URL: postgres://postgres:local_ci_only@127.0.0.1:5432/recordpathai_packet_sandbox
+      PGPASSWORD: local_ci_only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - name: Build standalone staging image (never production)
+        run: docker build -f Dockerfile.packet-sandbox -t recordpathai-stripe-sandbox:ci .
+      - name: Add staging-only Postgres adapter (not deployed)
+        run: npm install --no-save --package-lock=false --ignore-scripts pg@8
+      - name: Initialize isolated PostgreSQL database
+        run: psql "$RPAI_SANDBOX_DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/packet-sandbox-isolated-postgres.sql
+      - name: Exercise signed HTTP delivery to real isolated Postgres
+        run: node --test tests/staging/packet-sandbox-postgres.test.mjs
+      - name: Confirm exactly zero Lob integrations in test harness
+        run: |
+          if grep -E 'https://api\.lob\.com|import .*lob' src/packet-sandbox-webhook.js tools/run-packet-sandbox-webhook.mjs; then
+            echo "Unexpected Lob integration in sandbox receiver"
+            exit 1
+          fi
