@@ -8,7 +8,8 @@ export function verifiedPacketSession(session, userId, caseId = null) {
     Number.isSafeInteger(serviceFee) && serviceFee === PACKET_PRICE_CENTS;
   return Boolean(session?.id && session.status === "complete" &&
     session.payment_status === "paid" && session.currency === "usd" &&
-    feeValid && Number.isSafeInteger(session.amount_total) &&
+    feeValid && (m.fulfillmentMode !== "digital_only" || courtFee === 0) &&
+    Number.isSafeInteger(session.amount_total) &&
     session.amount_total === serviceFee + courtFee &&
     m.productType === "record-sealing-packet" &&
     m.userId && m.userId === userId &&
