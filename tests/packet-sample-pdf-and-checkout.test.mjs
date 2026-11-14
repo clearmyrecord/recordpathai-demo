@@ -65,3 +65,20 @@ test("sample generator uses a reviewed active template and existing mapped PDF",
     assert.ok(Array.isArray(mapping.mappings) || Array.isArray(mapping.fields));
   }
 });
+
+test("real signed Wood packet refuses a stale or absent drawn signature",()=>{
+  const current=html.split("function hasUsableDrawnSignature()")[1]?.split("function requireSavedDrawnSignature()",1)[0];
+  assert.ok(current);
+  assert.match(current,/signaturePadContainsInk\(\)/);
+  assert.match(current,/signatureImageBytes = null/);
+  assert.match(current,/return false/);
+  assert.doesNotMatch(current,/if \(signatureDataUrl\) return true/);
+  const actual=html.split("async function renderSignedCourtPdfBytes(data,selected)")[1]?.split("async function prepareSignedReviewPdf()",1)[0];
+  assert.ok(actual);
+  assert.match(actual,/if \(!hasUsableDrawnSignature\(\) \|\| !signatureImageBytes\)/);
+  assert.match(actual,/const sigImage = await pdfDoc.embedPng\(signatureImageBytes\)/);
+  assert.match(actual,/embeddedSignatures\+\+/);
+  assert.match(actual,/embeddedSignatures!==signatureFields.length/);
+  assert.doesNotMatch(actual,/drawFit\(page, value, x, textY, width, fontSize, 7, helveticaBold\)/);
+  assert.match(actual,/trimWoodConvictionGuidance\(pdfDoc, selected, templateMapping\)/);
+});
