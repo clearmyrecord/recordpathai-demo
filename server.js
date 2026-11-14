@@ -616,8 +616,7 @@ app.post("/api/operator/stripe-test-checkout",async(req,res)=>{
     const base=getBaseUrl(req);
     const session=await testStripe.checkout.sessions.create({
       mode:"payment",
-      payment_method_types:["card"],
-      // Stripe selects its version-compatible hosted Checkout mode by default.
+      // Stripe Dashboard controls eligible payment methods; use hosted default.
       success_url:base+"/stripe-test-success.html?session_id={CHECKOUT_SESSION_ID}",
       cancel_url:base+"/stripe-test-success.html?cancelled=1",
       line_items:[
