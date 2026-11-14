@@ -80,3 +80,20 @@ test("Tracking API requires case owner and is read-only",()=>{
   assert.match(page,/id="recordwatchFilingStatus"/);
   assert.match(page,/id="recordwatchFilingSteps"/);
 });
+
+
+test("Digital packet purchase is ready to download without implying a Lob check or Clerk filing",()=>{
+  const result=projectPacketFulfillment({draft,review,job:{...base,payment_method:"digital_only",court_fee_cents:0}});
+  assert.equal(result.packet_payment_verified,true);
+  assert.equal(result.digital_packet_available,true);
+  assert.equal(result.fulfillment_method,"digital_only");
+  assert.equal(result.preparation_fee_cents,5000);
+  assert.equal(result.court_fee_cents,0);
+  assert.equal(result.lob_submitted,false);
+  assert.equal(result.mailed_verified,false);
+  assert.equal(result.court_receipt_verified,false);
+  assert.equal(result.steps.length,4);
+  assert.equal(result.steps.some(s=>["submitted","mailed","delivered"].includes(s.id)),false);
+  assert.match(result.summary,/available for download/);
+  assert.match(result.summary,/nothing was mailed/);
+});

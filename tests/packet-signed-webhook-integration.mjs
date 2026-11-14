@@ -185,3 +185,38 @@ test("provider outage returns retryable 503 and no fulfillment record",async t=>
   assert.equal(h.rows.size,0);
   assert.match(result.body.error,/will retry/);
 });
+
+
+test("signed $50 digital-only webhook persists a single non-Lob paid packet",async t=>{
+  const digital={...baseSession,amount_total:5000,metadata:{
+    ...baseSession.metadata,courtFeeCents:"0",fulfillmentMode:"digital_only"
+  }};
+  const h=await harness(t,digital);
+  const first=await h.send(eventFor(digital));
+  assert.equal(first.status,200);
+  assert.equal(first.body.status,"paid_hold");
+  assert.equal(h.rows.size,1);
+  const job=h.rows.get(sessionId);
+  assert.equal(job.court_fee_cents,0);
+  assert.equal(job.payment_method,"digital_only");
+  assert.equal(job.status,"paid_hold");
+  assert.equal((await h.send(eventFor(digital))).status,200);
+  assert.equal(h.rows.size,1,"Stripe duplicate delivery must not duplicate payment order");
+});
+
+test("digital-only $50 webhook rejects disguised court-fee collection and mispricing",async t=>{
+  const digital={...baseSession,amount_total:5000,metadata:{
+    ...baseSession.metadata,courtFeeCents:"0",fulfillmentMode:"digital_only"
+  }};
+  const h=await harness(t,digital);
+  for(const altered of [
+    {...digital,amount_total:15000},
+    {...digital,metadata:{...digital.metadata,courtFeeCents:"10000"}},
+    {...digital,metadata:{...digital.metadata,serviceFeeCents:"4900"}}
+  ]){
+    h.setSession(altered);
+    const result=await h.send(eventFor(altered));
+    assert.equal(result.status,400);
+    assert.equal(h.rows.size,0);
+  }
+});
