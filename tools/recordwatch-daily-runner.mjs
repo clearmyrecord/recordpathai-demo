@@ -1,5 +1,5 @@
 // Cloud Run Job: invoke the server-authorized RecordWatch Premium daily worker.
-const ENDPOINT = "https://recordpathai.com/api/operator/recordwatch/run-alerts";
+const ENDPOINT = "https://recordpathai-rtcqidw3qa-uw.a.run.app/api/operator/recordwatch/run-alerts";
 export async function invokePremiumAlertRun({key=process.env.RECORDWATCH_ALERTS_SCHEDULER_KEY,
   fetchFn=fetch,signal=AbortSignal.timeout(240_000)}={}) {
   if(typeof key!=="string"||key.trim().length<32)throw new Error("Protected RecordWatch scheduler key is missing");
