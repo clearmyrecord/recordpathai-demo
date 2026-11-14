@@ -71,9 +71,10 @@ async function reconcilePaidPacketCheckout(session,res){
     const fee=Number(current.metadata.courtFeeCents||0);
     const method=current.metadata.fulfillmentMode||"";
     if(!Number.isSafeInteger(fee)||fee<0||
-       !["lob_check","court_online","no_fee"].includes(method) ||
+       !["lob_check","court_online","no_fee","digital_only"].includes(method) ||
        (method==="lob_check" && fee===0) ||
-       (method==="no_fee" && fee!==0))
+       (method==="no_fee" && fee!==0) ||
+       (method==="digital_only" && (fee!==0 || current.amount_total!==PACKET_PRICE_CENTS)))
       return res.status(400).json({ok:false,error:"Court-fee settlement metadata missing."});
     await supabaseRest("packet_fulfillment_jobs",{
       method:"POST",query:"?on_conflict=stripe_session_id",
@@ -346,7 +347,8 @@ app.get("/api/packet/checkout-readiness",async(req,res)=>{
   if(!user)return;
   const caseId=safe(req.query.case_id);
   if(!validCaseId(caseId))return res.status(400).json({ok:false,error:"Saved case ID required."});
-  const result=await packetReleaseStatus(user.id,caseId);
+  const deliveryMode=req.query.delivery==="digital"?"digital":"mail";
+  const result=await packetReleaseStatus(user.id,caseId,deliveryMode);
   res.setHeader("Cache-Control","no-store, private");
   return res.status(result.ready?200:409).json({
     ok:result.ready,ready:result.ready,
@@ -401,9 +403,9 @@ app.post("/api/operator/packet/release",async(req,res)=>{
        draft.signed_pdf_private_path!==review.signed_pdf_private_path)
       return res.status(409).json({ok:false,error:"Approved signature must match the actual private applicant PDF and unchanged case snapshot."});
     const result=evaluatePacketRelease({
-      userId,caseId,...facts,review,
-      runtime:{stripeLiveEnabled:true,lobLiveEnabled:true,lobVerifiedBank:true,
-        onlineCourtPaymentVerified:true}
+      userId,caseId,...facts,review,deliveryMode:"digital",
+      runtime:{stripeLiveEnabled:true,lobLiveEnabled:false,lobVerifiedBank:false,
+        onlineCourtPaymentVerified:false}
     });
     if(result.missing.length)return res.status(409).json({ok:false,missing:result.missing});
     await supabaseRest("packet_releases",{
@@ -413,7 +415,7 @@ app.post("/api/operator/packet/release",async(req,res)=>{
     res.setHeader("Cache-Control","no-store, private");
     return res.json({ok:true,status:"review_recorded",
       readyForPayment:false,
-      note:"A recorded review does not enable live checkout until every runtime credential and court fulfillment check passes."});
+      note:"A recorded review does not authorize court filing, court-fee collection, or Lob mailing. Digital-only checkout remains separately gated."});
   }catch(error){
     console.warn("Packet release update failed",error?.name||"unknown");
     return res.status(503).json({ok:false,error:"Unable to store private reviewer release."});
@@ -1301,7 +1303,7 @@ async function lobBankVerified() {
     return result.id===bank && result.verified===true;
   } catch {return false;}
 }
-async function packetReleaseStatus(userId,caseId) {
+async function packetReleaseStatus(userId,caseId,deliveryMode="mail") {
   if(!packetDatabaseReady())return {
     ready:false,missing:["Private approval storage is not configured."],
     quote:null
@@ -1313,14 +1315,16 @@ async function packetReleaseStatus(userId,caseId) {
     });
     const review=Array.isArray(rows)?rows[0]:null;
     const runtime={
-      stripeLiveEnabled:process.env.RECORDPATH_LIVE_PACKET_CHECKOUT==="true" &&
+      stripeLiveEnabled:(deliveryMode==="digital"
+        ? process.env.RECORDPATH_DIGITAL_PACKET_CHECKOUT_ENABLED==="true"
+        : process.env.RECORDPATH_LIVE_PACKET_CHECKOUT==="true") &&
         (process.env.STRIPE_SECRET_KEY||"").startsWith("sk_live_"),
       lobLiveEnabled:process.env.LOB_LIVE_CHECKS_ENABLED==="true" &&
         process.env.LOB_CHECK_ATTACHMENTS_APPROVED==="true",
       lobVerifiedBank:await lobBankVerified(),
       onlineCourtPaymentVerified:false
     };
-    return evaluatePacketRelease({userId,caseId,...facts,review,runtime});
+    return evaluatePacketRelease({userId,caseId,...facts,review,runtime,deliveryMode});
   } catch (error) {
     console.warn("Private packet release preflight unavailable",error?.name||"unknown");
     return {ready:false,missing:["Case approval or private review record is unavailable."],quote:null};
@@ -3279,7 +3283,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
     if (!isUuid(savedCaseId)) {
       return res.status(400).json({ error: "Save your case to your account before checkout" });
     }
-    const release=await packetReleaseStatus(checkoutUser.id,savedCaseId);
+    const deliveryMode=req.body?.fulfillment_mode==="digital_only"?"digital":"mail";
+    const release=await packetReleaseStatus(checkoutUser.id,savedCaseId,deliveryMode);
     if(!release.ready){
       return res.status(409).json({
         error:"Packet checkout is pending verified case review and court-fee setup. No payment has been taken.",
@@ -3304,7 +3309,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     const checkoutBucket=Math.floor(Date.now()/300000);
     const checkoutKey=createHash("sha256").update([
       "packet-checkout",checkoutUser.id,savedCaseId,release.caseFingerprint,
-      quote.totalCents,finalSuccessUrl,finalCancelUrl,checkoutBucket
+      quote.totalCents,release.fulfillmentMode,finalSuccessUrl,finalCancelUrl,checkoutBucket
     ].join(":")).digest("hex");
     const internalOrderId="packet_"+checkoutKey.slice(0,24);
     const checkoutCaseNumber = safe((req.body || {}).case_number || (req.body || {}).caseNumber || caseInfo.case_number || caseInfo.caseNumber);
@@ -3326,7 +3331,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     // Court fee is an earmarked pass-through line item, not preparation revenue.
     // The review-only Ohio guard above prevents collecting the $100 until the
     // actual filing and disbursement workflow is verified and approved.
-    if (quote.courtFeeCents > 0 && quote.canCollect === true) {
+    if (release.fulfillmentMode!=="digital_only" && quote.courtFeeCents > 0 && quote.canCollect === true) {
       lineItems.push({
         quantity: 1,
         price_data: {
@@ -3341,8 +3346,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     }
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card"],
-      ui_mode: "hosted",
+      // Use Stripe-hosted Checkout defaults (compatible with current API versions).
       success_url: finalSuccessUrl,
       cancel_url: finalCancelUrl,
       client_reference_id: internalOrderId,
@@ -3352,9 +3356,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
         productType: "record-sealing-packet",
         orderId: internalOrderId,
         serviceFeeCents: String(PACKET_PRICE_CENTS),
-        courtFeeCents: String(quote.canCollect && quote.courtFeeCents > 0 ? quote.courtFeeCents : 0),
+        courtFeeCents: String(release.fulfillmentMode==="digital_only" ? 0 : (quote.canCollect && quote.courtFeeCents > 0 ? quote.courtFeeCents : 0)),
         courtProfileId:String(release.profileId||""),
-        fulfillmentMode:String(release.fulfillmentMode||"") ,
+        fulfillmentMode:String(release.fulfillmentMode||""),
         userId: checkoutUser.id,
         saved_case_id: isUuid(savedCaseId) ? savedCaseId : "",
         case_id: isUuid(checkoutCaseId) ? checkoutCaseId : ""
@@ -3365,7 +3369,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
     return res.json({
       url: session.url,
-      sessionId: session.id
+      sessionId: session.id,
+      fulfillmentMode:release.fulfillmentMode,
+      totalCents:quote.totalCents
     });
   } catch (error) {
     console.error("Stripe checkout error:", error);
