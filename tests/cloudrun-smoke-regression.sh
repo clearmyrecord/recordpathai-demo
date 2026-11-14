@@ -15,7 +15,17 @@ case "$1 $2 $3" in
   "run services describe")
     [[ " $* " == *" --format=json "* ]] || { echo "Unexpected describe format" >&2;exit 80; }
     if [[ "$state" == initial ]]; then
-      printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","traffic":[{"revisionName":"recordpathai-old","percent":100}]}}'
+      if [[ "${MOCK_STALE_SECRETS:-}" == true ]]; then
+        lob_enabled=false
+        dispatch_enabled=false
+        if [[ "${MOCK_LOB_ACTIVE:-}" == true ]]; then
+          lob_enabled=true
+          dispatch_enabled=true
+        fi
+        printf '%s\n' "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"env\":[{\"name\":\"SUPABASE_ACCESS_TOKEN\",\"valueFrom\":{\"secretKeyRef\":{\"name\":\"SUPABASE_ACCESS_TOKEN\"}}},{\"name\":\"LOB_LIVE_API_KEY\",\"valueFrom\":{\"secretKeyRef\":{\"name\":\"LOB_LIVE_API_KEY\"}}},{\"name\":\"LOB_LIVE_CHECKS_ENABLED\",\"value\":\"$lob_enabled\"},{\"name\":\"RECORDPATH_ENABLE_LIVE_DISPATCH\",\"value\":\"$dispatch_enabled\"}]}]}}},\"status\":{\"url\":\"https://recordpathai-abc-uw.a.run.app\",\"traffic\":[{\"revisionName\":\"recordpathai-old\",\"percent\":100}]}}"
+      else
+        printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","traffic":[{"revisionName":"recordpathai-old","percent":100}]}}'
+      fi
     elif [[ "$state" == deployed ]]; then
       printf '%s\n' '{"status":{"url":"https://recordpathai-abc-uw.a.run.app","latestCreatedRevisionName":"recordpathai-new","latestReadyRevisionName":"recordpathai-new","traffic":[{"revisionName":"recordpathai-old","percent":100},{"revisionName":"recordpathai-new","percent":0,"tag":"recordpathai-preview","url":"https://recordpathai-preview---recordpathai-abc-uw.a.run.app"}]}}'
     elif [[ "$state" == promoted ]]; then
@@ -29,6 +39,7 @@ case "$1 $2 $3" in
     [[ " $* " == *" --no-traffic "* && " $* " == *" --tag recordpathai-preview "* ]] || {
       echo "New revision must deploy tagged at 0% traffic" >&2;exit 82;
     }
+    printf '%s\n' "$*" >> "$MOCK_DEPLOY_ARGS"
     echo deployed > "$MOCK_STATE"
     ;;
   "run services update-traffic")
@@ -113,10 +124,12 @@ cd "$ROOT"
 export PATH="$TMP/bin:$PATH"
 export MOCK_STATE="$TMP/state"
 export MOCK_ACTIONS="$TMP/traffic-actions"
+export MOCK_DEPLOY_ARGS="$TMP/deploy-args"
 
 setup_case() {
  echo initial > "$MOCK_STATE"
  : > "$MOCK_ACTIONS"
+ : > "$MOCK_DEPLOY_ARGS"
 }
 
 setup_case
@@ -193,5 +206,25 @@ set -e
 [[ "$rc" == 5 ]] || { echo "Unmigrated production case entitlement must trigger rollback (got $rc)" >&2;cat "$TMP/database-production-broken.log" >&2;exit 1; }
 grep -qF 'recordpathai-old=100' "$MOCK_ACTIONS"
 [[ "$(cat "$MOCK_STATE")" == rolledback ]]
+
+setup_case
+MOCK_STALE_SECRETS=true bash scripts/deploy-existing-cloudrun.sh > "$TMP/prune-unused-secrets.log" 2>&1 || {
+  cat "$TMP/prune-unused-secrets.log" >&2; exit 1;
+}
+grep -qF -- '--remove-secrets=SUPABASE_ACCESS_TOKEN,LOB_LIVE_API_KEY' "$MOCK_DEPLOY_ARGS" || {
+  echo "Dormant runtime secret references must be excluded" >&2; exit 1;
+}
+
+setup_case
+MOCK_STALE_SECRETS=true MOCK_LOB_ACTIVE=true bash scripts/deploy-existing-cloudrun.sh > "$TMP/preserve-active-lob.log" 2>&1 || {
+  cat "$TMP/preserve-active-lob.log" >&2; exit 1;
+}
+grep -qF -- '--remove-secrets=SUPABASE_ACCESS_TOKEN' "$MOCK_DEPLOY_ARGS" || {
+  echo "Unused Supabase admin token must still be excluded" >&2; exit 1;
+}
+if grep -qF 'LOB_LIVE_API_KEY' "$MOCK_DEPLOY_ARGS"; then
+  echo "Active Lob credentials must never be silently removed" >&2
+  exit 1
+fi
 
 echo "PASS: tagged candidate tested with zero traffic, healthy revision promoted, and errors roll back."

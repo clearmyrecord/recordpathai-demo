@@ -38,9 +38,49 @@ print(traffic[0]["revisionName"])
 PY
 )"
 
+# The service can retain historical secret environment bindings that are
+# unused in this runtime. Cloud Run still checks their IAM access during EVERY
+# revision deployment. Do not grant application identities admin/migration keys
+# merely to make a no-traffic code release work.
+#
+# SUPABASE_ACCESS_TOKEN is not consumed by the running application; migrations
+# occur only through an authorized administrative channel.
+# LOB_LIVE_API_KEY is not needed while both live Lob switches are explicitly
+# false. Preserve it otherwise, including when configuration is unknown.
+# This never deletes a Secret Manager secret; it only omits an env reference
+# from the candidate revision. Re-adding live Lob access requires a deliberate
+# gated production change and least-privilege IAM.
+mapfile -t UNUSED_RUNTIME_SECRET_BINDINGS < <(python3 - "$BEFORE" <<'PY'
+import json,sys
+with open(sys.argv[1]) as f: record=json.load(f)
+containers=(record.get("spec",{}).get("template",{}).get("spec",{}).get("containers") or
+            record.get("template",{}).get("containers") or [])
+env={}
+for container in containers:
+  for item in container.get("env",[]):
+    if item.get("name"): env[item["name"]]=item
+def has_secret(name):
+  row=env.get(name,{})
+  return bool(row.get("valueFrom",{}).get("secretKeyRef") or
+              row.get("valueSource",{}).get("secretKeyRef"))
+if has_secret("SUPABASE_ACCESS_TOKEN"):
+  print("SUPABASE_ACCESS_TOKEN")
+flags=(env.get("LOB_LIVE_CHECKS_ENABLED",{}).get("value"),
+       env.get("RECORDPATH_ENABLE_LIVE_DISPATCH",{}).get("value"))
+if flags==("false","false") and has_secret("LOB_LIVE_API_KEY"):
+  print("LOB_LIVE_API_KEY")
+PY
+)
+DEPLOY_SECRET_ARGS=()
+if (("${#UNUSED_RUNTIME_SECRET_BINDINGS[@]}" > 0)); then
+  joined="$(IFS=,; echo "${UNUSED_RUNTIME_SECRET_BINDINGS[*]}")"
+  DEPLOY_SECRET_ARGS+=("--remove-secrets=$joined")
+  echo "Excluding unused runtime secret references from the candidate: $joined"
+fi
+
 echo "Deploying a tagged new revision at 0% traffic for independent verification..."
 gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" \
-  --no-traffic --tag "$CANDIDATE_TAG" --quiet
+  "${DEPLOY_SECRET_ARGS[@]}" --no-traffic --tag "$CANDIDATE_TAG" --quiet
 # Cloud Run status can lag the successful deploy response. Retry the
 # control-plane read, but NEVER promote unless a single tagged ready revision
 # is proven to be distinct from the currently serving one and at 0% traffic.
