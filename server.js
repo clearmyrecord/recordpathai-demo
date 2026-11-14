@@ -63,7 +63,9 @@ async function reconcilePaidPacketCheckout(session,res){
     // Verify current Stripe state, rather than trusting only the webhook snapshot.
     const current=await stripe.checkout.sessions.retrieve(session.id);
     const owner=current?.metadata?.userId,caseId=current?.metadata?.saved_case_id;
-    if(current?.livemode!==true || !validCaseId(owner)||!validCaseId(caseId) ||
+    if(current?.livemode!==true || current?.id!==session.id ||
+       !/^cs_live_[A-Za-z0-9]+$/.test(current.id) ||
+       !validCaseId(owner)||!validCaseId(caseId) ||
        !verifiedPacketSession(current,owner,caseId))
       return res.status(400).json({ok:false,error:"Session is not a verified paid court packet."});
     const fee=Number(current.metadata.courtFeeCents||0);
