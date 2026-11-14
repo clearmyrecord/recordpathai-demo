@@ -8,6 +8,7 @@ on:
       - sql/packet-sandbox-isolated-postgres.sql
       - tests/staging/packet-sandbox-postgres.test.mjs
       - .github/workflows/packet-sandbox-postgres-contract.yml
+      - Dockerfile.packet-sandbox
   push:
     branches: [main]
     paths:
@@ -16,6 +17,7 @@ on:
       - sql/packet-sandbox-isolated-postgres.sql
       - tests/staging/packet-sandbox-postgres.test.mjs
       - .github/workflows/packet-sandbox-postgres-contract.yml
+      - Dockerfile.packet-sandbox
 permissions:
   contents: read
 jobs:
@@ -45,6 +47,8 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --ignore-scripts
+      - name: Build standalone staging image (never production)
+        run: docker build -f Dockerfile.packet-sandbox -t recordpathai-stripe-sandbox:ci .
       - name: Add staging-only Postgres adapter (not deployed)
         run: npm install --no-save --package-lock=false --ignore-scripts pg@8
       - name: Initialize isolated PostgreSQL database
