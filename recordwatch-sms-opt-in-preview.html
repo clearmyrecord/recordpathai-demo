@@ -27,8 +27,8 @@
   <header>
     <div class="eyebrow">RecordPathAI · RecordWatch Premium</div>
     <h1>Notification preferences and SMS consent — checkout preview</h1>
-    <p class="note"><strong>Public compliance illustration — not an active enrollment.</strong> This page shows the planned pre-checkout form and confirmation for the $39 one-time RecordWatch Premium upgrade. It does not collect contact information, store consent, charge a card, or send messages. Actual account and payment activity is in the <a href="https://recordpathai.com/recordwatch-dashboard.html">RecordWatch dashboard</a>; pre-checkout preference integration is not yet live.</p>
-    <p class="muted">This is not a live sign-up. No phone number or consent is collected here.</p>
+    <p class="note"><strong>Public compliance illustration — not an active enrollment.</strong> This page shows the planned pre-checkout form and confirmation for the $39 one-time RecordWatch Premium upgrade. It does not collect contact information, store consent, charge a card, or send messages. Actual account and payment activity is in the <a href="https://recordpathai.com/recordwatch-dashboard.html">RecordWatch dashboard</a>; Customers can review and set these preferences before the $39 checkout in their authenticated dashboard.</p>
+    <p class="muted">This is not a live sign-up. No phone number, email, consent, or payment is collected here.</p>
   </header>
   <section class="card" aria-label="Illustration of pre-checkout opt-in">
     <span class="eyebrow">Step A · Before Stripe Checkout</span>
@@ -48,6 +48,7 @@
       <label class="toggle"><input type="checkbox"><span>I have read and agree to the <a href="https://recordpathai.com/terms.html">Terms of Service</a> and acknowledge the <a href="https://recordpathai.com/privacy.html">Privacy Policy</a>. This is required to continue to payment. Checking this box does not grant SMS or email notification consent.</span></label>
     </fieldset>
     <p class="muted">In the active checkout implementation, customers may leave SMS and email unchecked and still purchase Premium. The purchase button follows the agreements and routes to secure Stripe Checkout.</p>
+    <button type="button" disabled aria-disabled="true" style="opacity:.65;cursor:not-allowed">Accept terms &amp; continue to Stripe — $39 (demo only)</button>
     <button type="button" id="previewButton">Preview what customers see after consent and purchase</button>
     <div id="confirmation" class="confirmation" hidden role="status" aria-live="polite">
       <span class="eyebrow">Step B · Example after successful payment and preference save</span>
