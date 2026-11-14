@@ -16,3 +16,16 @@ test("Clerk payee verification does not authorize mail or automatic filing",()=>
   assert.equal(filing.mailReady,false);
   assert.equal(filing.onlineFeePaymentReady,false);
 });
+
+test("Published Rule 3.03 permits only prepaid searchable email/fax sealing filings",()=>{
+  const filing=courtFilingPlan({...profile,formType:"conviction"});
+  assert.equal(filing.preferredFilingRoute,"email-searchable-pdf-after-court-prepayment");
+  assert.equal(filing.emailFiling.allowedAfterCourtPrepayment,true);
+  assert.equal(filing.emailFiling.address,"clerkofcourts@woodcountyohio.gov");
+  assert.equal(filing.emailFiling.fax,"419-354-9241");
+  assert.equal(filing.emailFiling.maxPdfBytes,25*1024*1024);
+  assert.equal(filing.emailFiling.physicallySignedSourceRequired,true);
+  assert.equal(filing.emailFiling.fileStampOrDocketConfirmationRequired,true);
+  assert.equal(filing.onlineFeePaymentReady,false);
+  assert.equal(filing.mailReady,false);
+});
