@@ -22,7 +22,12 @@ BEFORE="$(mktemp)"
 SMOKE_DIR="$(mktemp -d)"
 AFTER="$SMOKE_DIR/after.json"
 PROMOTED="$SMOKE_DIR/promoted.json"
-CANDIDATE_TAG="recordpathai-preview"
+# Unique per build: external Cloud Run deployments cannot overwrite this preview tag.
+CANDIDATE_TAG="${RECORDPATH_CANDIDATE_TAG:-recordpathai-preview-${GITHUB_RUN_ID:-$(date +%s)}-${GITHUB_RUN_ATTEMPT:-$}}"
+if [[ ! "$CANDIDATE_TAG" =~ ^[a-z][a-z0-9-]{4,62}$ ]]; then
+  echo "Invalid candidate revision tag. Refusing deployment." >&2
+  exit 2
+fi
 trap 'rm -f "$BEFORE"; rm -rf "$SMOKE_DIR"' EXIT
 echo "Checking existing service $SERVICE in $PROJECT/$REGION..."
 gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format=json > "$BEFORE" || {
@@ -94,13 +99,18 @@ import json,sys
 with open(sys.argv[1]) as f: record=json.load(f)
 status=record.get("status",{})
 tag=sys.argv[2];old=sys.argv[3]
-new=status.get("latestReadyRevisionName") or ""
-created=status.get("latestCreatedRevisionName") or ""
-matches=[t for t in status.get("traffic",[]) if t.get("tag")==tag]
-if not new or created!=new or new==old or len(matches)!=1 or matches[0].get("revisionName")!=new:
-  # Log only revision metadata. Never expose environment, credentials or service config.
-  tags=[(t.get("tag"),t.get("revisionName"),t.get("percent",0)) for t in status.get("traffic",[]) if t.get("tag")==tag]
-  raise SystemExit("Preflight revision metadata mismatch: created=%r ready=%r old=%r preview_tags=%r" % (created,new,old,tags))
+traffic=status.get("traffic",[])
+active=[t for t in traffic if t.get("percent",0)>0]
+matches=[t for t in traffic if t.get("tag")==tag]
+if len(active)!=1 or active[0].get("revisionName")!=old or active[0].get("percent")!=100:
+  raise SystemExit("Serving revision changed during candidate deploy; refusing promotion")
+if len(matches)!=1:
+  raise SystemExit("Unique candidate tag unavailable or ambiguous; refusing promotion")
+new=matches[0].get("revisionName") or ""
+if not new or new==old:
+  raise SystemExit("Unique candidate is missing or equals current serving revision")
+# Other deployers may change global latestCreated/latestReady pointers. Since
+# this tag is unique to the current release, only its bound revision qualifies.
 if matches[0].get("percent",0)!=0:
   raise SystemExit("Refusing a candidate already receiving customer traffic")
 url=matches[0].get("url","")
@@ -225,6 +235,19 @@ smoke_check "js/pilot-demo.js" "DEMO-2006-001" "Fictional pilot script" || \
 report_auth_readiness
 check_recordwatch_readiness "zero-traffic candidate" || { echo "Candidate lacks RecordWatch configuration. Existing traffic is unchanged." >&2; exit 5; }
 
+# Recheck the original serving revision immediately before promotion. If a
+# separate deploy changed traffic, abort instead of overriding its release.
+gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format=json > "$SMOKE_DIR/promotion-preflight.json"
+python3 - "$SMOKE_DIR/promotion-preflight.json" "$OLD_REV" "$NEW_REV" "$CANDIDATE_TAG" <<'PY'
+import json,sys
+with open(sys.argv[1]) as f: status=json.load(f).get("status",{})
+active=[t for t in status.get("traffic",[]) if t.get("percent",0)>0]
+candidate=[t for t in status.get("traffic",[]) if t.get("tag")==sys.argv[4]]
+if len(active)!=1 or active[0].get("revisionName")!=sys.argv[2] or active[0].get("percent")!=100:
+  raise SystemExit("Production traffic changed during validation. Refusing promotion.")
+if len(candidate)!=1 or candidate[0].get("revisionName")!=sys.argv[3] or candidate[0].get("percent",0)!=0:
+  raise SystemExit("Candidate tag no longer targets the validated zero-traffic revision.")
+PY
 echo "Promoting validated revision $NEW_REV to 100% customer traffic..."
 gcloud run services update-traffic "$SERVICE" --project "$PROJECT" --region "$REGION" \
   --to-revisions "$NEW_REV=100" --quiet
