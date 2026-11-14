@@ -236,6 +236,13 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
   if(!user)return;
   const caseId=safe(req.get("x-recordpath-case-id"));
   if(!validCaseId(caseId))return res.status(400).json({ok:false,error:"Saved case ID required."});
+  // Only the signed-in case owner can upload, and only after explicitly
+  // authorizing preparation/private review of their drawn signature.
+  // This consent never authorizes a Stripe charge or a court filing.
+  if(req.get("x-recordpath-private-review-consent")!=="yes" ||
+     req.get("x-recordpath-signature-mode")!=="drawn")
+    return res.status(400).json({ok:false,error:
+      "Explicit authorization to prepare and privately review this drawn-signature PDF is required."});
   if(!packetDatabaseReady())return res.status(503).json({ok:false,error:"Private packet storage has not been configured."});
   const bytes=req.body;
   if(!Buffer.isBuffer(bytes)||bytes.length<500 || bytes.length>8388608 ||
@@ -291,7 +298,9 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
       method:"POST",query:"?on_conflict=case_id",
       prefer:"resolution=merge-duplicates,return=representation",
       body:{case_id:caseId,user_id:user.id,case_snapshot_sha256:snapshot,
-        signed_pdf_sha256:sha,signed_pdf_private_path:objectPath,pdf_pages:pdfPages}
+        signed_pdf_sha256:sha,signed_pdf_private_path:objectPath,pdf_pages:pdfPages,
+        private_review_authorized_at:new Date().toISOString(),
+        private_review_signature_mode:"drawn"}
     });
     res.setHeader("Cache-Control","no-store, private");
     return res.json({ok:true,storedFor:"private_review",case_id:caseId,
