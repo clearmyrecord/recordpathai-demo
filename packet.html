@@ -2343,12 +2343,18 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       function hasUsableDrawnSignature() {
-        if (window.signaturePadContainsInk && window.signaturePadContainsInk()) {
-          signaturePadHasInk = true;
-          return setDrawnSignature({ silent: true });
+        // Never trust a cached image after the canvas has been cleared or resized.
+        // The applicant must have visible ink on the CURRENT signature pad.
+        if (!window.signaturePadContainsInk || !window.signaturePadContainsInk()) {
+          signatureImageBytes = null;
+          signatureDataUrl = "";
+          signaturePadHasInk = false;
+          selectedSignatureType = "";
+          drawnSignatureSelected = false;
+          return false;
         }
-        if (signatureDataUrl) return true;
-        return selectedSignatureType === "drawn" && Boolean(signatureImageBytes);
+        signaturePadHasInk = true;
+        return setDrawnSignature({ silent: true }) && Boolean(signatureImageBytes);
       }
 
       function requireSavedDrawnSignature() {
@@ -2854,10 +2860,21 @@ document.addEventListener("DOMContentLoaded", async function () {
           const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
           const black = rgb(0, 0, 0);
 
-          let sigImage = null;
-          if (signatureImageBytes) {
-            sigImage = await pdfDoc.embedPng(signatureImageBytes);
-          }
+          // Rendering an applicant packet is forbidden without a current
+          // hand-drawn signature; a typed name is never a signature substitute.
+          if (!hasUsableDrawnSignature() || !signatureImageBytes)
+            throw new Error(SIGNATURE_REQUIRED_MESSAGE);
+          const signatureFields=fields.filter(field=>field.type==="signature");
+          const isWoodConviction=String(selected?.state||"").toUpperCase()==="OH" &&
+            String(selected?.county||"").toLowerCase()==="wood" &&
+            selected?.courtType==="court-of-common-pleas" &&
+            selected?.formType==="sealing-conviction";
+          if (!signatureFields.length ||
+              (isWoodConviction &&
+                (signatureFields.length!==1 || Number(signatureFields[0].page)!==4)))
+            throw new Error("The court-issued form's signature mapping requires review.");
+          const sigImage = await pdfDoc.embedPng(signatureImageBytes);
+          let embeddedSignatures=0;
 
           function drawFit(page, text, x, y, maxWidth, size = 10, minSize = 7, font = helvetica) {
             const content = String(text || "");
@@ -2911,17 +2928,14 @@ document.addEventListener("DOMContentLoaded", async function () {
               value = formatDateForCourt(value);
             }
 
-                         if (field.type === "signature") {
-              if (sigImage) {
-                page.drawImage(sigImage, {
-                  x,
-                  y: pdfY,
-                  width,
-                  height
-                });
-              } else {
-                drawFit(page, value, x, textY, width, fontSize, 7, helveticaBold);
-              }
+            if (field.type === "signature") {
+              page.drawImage(sigImage, {
+                x,
+                y: pdfY,
+                width,
+                height
+              });
+              embeddedSignatures++;
               return;
             }
 
@@ -2951,6 +2965,9 @@ document.addEventListener("DOMContentLoaded", async function () {
               field.bold ? helveticaBold : helvetica
             );
           });
+
+          if (embeddedSignatures!==signatureFields.length)
+            throw new Error("The applicant's drawn signature was not embedded in every mapped signature field.");
 
           // Exclude eligibility guidance from the exact reviewed PDF sent
           // through private upload, Stripe-approved download, and Lob.
