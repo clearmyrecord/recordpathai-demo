@@ -11,7 +11,7 @@ import {verifiedPacketSession,PACKET_PRICE_CENTS} from "../src/payment-security.
 import {validCaseId} from "../src/packet-release.js";
 
 const source=readFileSync(new URL("../server.js",import.meta.url),"utf8");
-const reconcilerStart=source.indexOf("async function reconcilePaidPacketCheckout(session,res){");
+const reconcilerStart=source.indexOf("async function reconcilePaidPacketCheckout(session,res,verifiedEvent){");
 const reconcilerEnd=source.indexOf("// Stripe requires the original raw body",reconcilerStart);
 const routeStart=source.indexOf('app.post("/api/stripe/webhook"');
 const routeEnd=source.indexOf('app.post("/api/packet/private-upload"',routeStart);
