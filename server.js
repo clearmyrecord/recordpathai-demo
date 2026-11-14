@@ -14,7 +14,7 @@ import { affiliatePayoutAmount } from "./src/affiliate-payouts.js";
 import { registerAffiliatePayoutRoutes } from "./src/affiliate-payout-service.js";
 import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neutralAlertContent, isPremiumAlertAllowed, validTwilioWebhookSignature, STOP_WORDS } from "./src/recordwatch-alerts.js";
 import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
-import { timingSafeEqual, createHash } from "node:crypto";
+import { timingSafeEqual, createHash, randomBytes } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { findCourtProfile, courtFilingPlan } from "./src/court-profiles.js";
 import { isWoodConvictionFormPair, isOfficialWoodConvictionFormPair } from "./src/wood-form-pages.js";
@@ -1392,7 +1392,11 @@ async function createRecordwatchNotification(subscription, type, context = {}) {
     casePremiumPreferences.email_enabled===true &&
     casePremiumPreferences.email_opted_in_at);
   if(casePremiumPreferences)preferences.eligibility_email=caseEmailOptIn;
-  const confirmedEmail=caseEmailOptIn ? await alertRecipientEmail(subscription.user_id) : "";
+  const confirmedEmail=caseEmailOptIn
+    ? (casePremiumPreferences?.notification_email
+       ? (casePremiumPreferences.notification_email_verified_at
+         ?casePremiumPreferences.notification_email:"")
+       : await alertRecipientEmail(subscription.user_id)) : "";
   const paidCaseSubscription={...subscription,premium_active:authorizedPremium,
     notify_email:caseEmailOptIn,
     notification_email:confirmedEmail||null,
@@ -2361,6 +2365,32 @@ async function getRecordwatchPreferences(userId,caseId="") {
   return recordwatchMemory.preferences.find((item) => item.user_id === userId && (isUuid(caseId)?item.saved_case_id===caseId:!item.saved_case_id)) || null;
 }
 
+// Email verification challenges are never returned by authenticated preference reads.
+function publicRecordwatchPreferences(row){
+  if(!row)return row;
+  const {notification_email_token_sha256,notification_email_token_expires_at,
+    notification_email_token_sent_at,...fields}=row;
+  return fields;
+}
+async function sendRecordwatchVerificationEmail(recipient,caseId,token){
+  const from=process.env.RECORDWATCH_EMAIL_FROM||"";
+  const key=process.env.RESEND_API_KEY||"";
+  if(!key||!validAlertEmail(from)||!validAlertEmail(recipient))
+    throw new Error("Notification email verification sender unavailable");
+  const url=new URL("https://recordpathai.com/recordwatch-dashboard.html");
+  url.searchParams.set("caseId",caseId);
+  url.searchParams.set("verify_recordwatch_email",token);
+  const message="Confirm your chosen RecordWatch Premium notification email. This does not change your sign-in or billing email. The link expires in 24 hours. If you did not request this, ignore this message.\n\n"+url.toString();
+  const response=await fetch("https://api.resend.com/emails",{
+    method:"POST",
+    headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},
+    body:JSON.stringify({from:"RecordPathAI <"+from+">",to:[recipient],
+      subject:"Confirm your RecordWatch notification email",text:message}),
+    signal:AbortSignal.timeout(12000)
+  });
+  if(!response.ok)throw new Error("Verification email provider rejected the request");
+  return true;
+}
 async function saveRecordwatchPreferences(userId,payload={}){
   const caseId=safe(payload.saved_case_id||payload.savedCaseId);
   if(!isUuid(caseId))throw Object.assign(new Error("Select an owned saved case to manage Premium alerts."),{status:400});
@@ -2400,11 +2430,33 @@ async function saveRecordwatchPreferences(userId,payload={}){
   if(smsRequested && (previous?.sms_opted_out_at||Array.isArray(suppressed)&&suppressed.length))
     throw Object.assign(new Error("SMS remains opted out. Reply START to the sender and contact support before re-enabling."),{status:409});
   const emailEnabled=payload.email_enabled===true||payload.emailEnabled===true;
+  const notificationEmail=String(payload.notification_email||"").trim().toLowerCase();
+  if((emailEnabled||notificationEmail) && !validAlertEmail(notificationEmail))
+    throw Object.assign(new Error("Enter a valid separate notification email address."),{status:400});
+  const oldEmail=String(previous?.notification_email||"").trim().toLowerCase();
+  const emailChanged=Boolean(emailEnabled && notificationEmail!==oldEmail);
   const now=new Date().toISOString();
+  const verified=Boolean(!emailChanged && previous?.notification_email_verified_at);
+  const pending=Boolean(!emailChanged && previous?.notification_email_token_sha256 &&
+    Date.parse(previous.notification_email_token_expires_at||"")>Date.now());
+  const verifyNeeded=emailEnabled && !verified &&
+    (!pending || payload.resend_email_verification===true);
+  if(verifyNeeded && previous?.notification_email_token_sent_at &&
+     Date.now()-Date.parse(previous.notification_email_token_sent_at)<600000)
+    throw Object.assign(new Error("Check for your recent verification email or retry in 10 minutes."),{status:429});
+  const token=verifyNeeded?randomBytes(32).toString("hex"):"";
   const row={
     user_id:userId,saved_case_id:caseId,case_id:null,
     email_enabled:emailEnabled,
-    email_opted_in_at:emailEnabled?(previous?.email_opted_in_at||now):null,
+    email_opted_in_at:emailEnabled?(emailChanged?now:previous?.email_opted_in_at||now):null,
+    notification_email:notificationEmail||oldEmail||null,
+    notification_email_verified_at:emailChanged?null:previous?.notification_email_verified_at||null,
+    notification_email_token_sha256:verifyNeeded?createHash("sha256").update(token).digest("hex"):
+      (emailChanged?null:previous?.notification_email_token_sha256||null),
+    notification_email_token_expires_at:verifyNeeded?new Date(Date.now()+86400000).toISOString():
+      (emailChanged?null:previous?.notification_email_token_expires_at||null),
+    notification_email_token_sent_at:verifyNeeded?now:
+      (emailChanged?null:previous?.notification_email_token_sent_at||null),
     sms_enabled:smsRequested,
     phone_number:phone||null,
     sms_consent_at:smsRequested?(newSmsEnrollment?now:previous?.sms_consent_at||now):null,
@@ -2429,7 +2481,12 @@ async function saveRecordwatchPreferences(userId,payload={}){
   });
   if(!Array.isArray(result)||!result[0])
     throw Object.assign(new Error("Preferences could not be stored."),{status:503});
-  return result[0];
+  let verificationSent=false;
+  if(verifyNeeded){
+    try{verificationSent=await sendRecordwatchVerificationEmail(notificationEmail,caseId,token);}
+    catch(error){console.warn("RecordWatch verification email unavailable",error?.name||"unknown");}
+  }
+  return {...publicRecordwatchPreferences(result[0]),email_verification_sent:verificationSent};
 }
 
 async function recordwatchAuthToken(req, res) {
@@ -2696,6 +2753,10 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
       return res.status(503).json({ok:false,error:"RecordWatch lifetime checkout is not configured. No charge was created."});
     if(req.body?.plan && req.body.plan!=="lifetime_case")
       return res.status(400).json({ok:false,error:"RecordWatch Premium is $39 once per saved case; subscriptions are no longer sold."});
+    if(req.body?.purchase_terms_acknowledged!==true ||
+       req.body?.sms_consent_disclosure_version!=="2026-11-web-form-v2")
+      return res.status(400).json({ok:false,
+        error:"Review and accept the RecordWatch purchase terms and notification disclosures before checkout."});
     const savedCaseId=safe(req.body?.saved_case_id||req.body?.savedCaseId);
     if(!isUuid(savedCaseId))return res.status(400).json({ok:false,error:"Save and select a case before purchasing lifetime RecordWatch."});
     await getSavedCaseReviewFacts(user.id,savedCaseId);
@@ -2881,7 +2942,11 @@ async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today}){
       phoneSuppressed:Array.isArray(suppressed)&&suppressed.length>0}))
     return {status:"not_consented_or_not_paid"};
   if(!await verifyPremiumAlertPayment(lifetime))return {status:"payment_not_verified"};
-  const recipient=channel==="email"?await alertRecipientEmail(userId):prefs.phone_number;
+  const recipient=channel==="email"
+    ? (prefs?.notification_email
+       ? (prefs.notification_email_verified_at?prefs.notification_email:"")
+       : await alertRecipientEmail(userId))
+    : prefs.phone_number;
   if(!(channel==="email"?validAlertEmail(recipient):validSmsPhone(recipient)))
     return {status:"recipient_unverified"};
   const reservation=await supabaseRest("recordwatch_alert_deliveries",{
@@ -3009,7 +3074,8 @@ app.get("/api/recordwatch/premium-preferences", async (req, res) => {
     const user = await recordwatchAuthToken(req, res);
     if (!user) return;
     const preferences = await getRecordwatchPreferences(user.id,safe(req.query?.saved_case_id));
-    res.json({ ok: true, preferences });
+    res.setHeader("Cache-Control","no-store, private");
+    res.json({ ok: true, preferences:publicRecordwatchPreferences(preferences) });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
@@ -3026,6 +3092,44 @@ app.post("/api/recordwatch/premium-preferences", async (req, res) => {
     res.json({ ok: true, preferences });
   } catch (error) {
     res.status(error?.status||503).json({ ok: false, error: error.message });
+  }
+});
+
+// Verify possession of a separate notification inbox. Requires signed-in
+// ownership and a Stripe-verified active Premium case, not a URL alone.
+app.post("/api/recordwatch/verify-notification-email",async(req,res)=>{
+  const user=await recordwatchAuthToken(req,res);
+  if(!user)return;
+  const caseId=safe(req.body?.saved_case_id),token=safe(req.body?.token);
+  if(!isUuid(caseId)||!(/^[0-9a-f]{64}$/i).test(token))
+    return res.status(400).json({ok:false,error:"Invalid verification request."});
+  try{
+    const paid=await getRecordwatchLifetimeCase(user.id,caseId);
+    if(!lifetimeCaseEntitled(paid,caseId))
+      return res.status(403).json({ok:false,error:"Paid RecordWatch Premium is required."});
+    const preferences=await getRecordwatchPreferences(user.id,caseId);
+    const digest=createHash("sha256").update(token).digest("hex");
+    const a=Buffer.from(preferences?.notification_email_token_sha256||"","hex");
+    const b=Buffer.from(digest,"hex");
+    if(!preferences?.email_enabled || !validAlertEmail(preferences?.notification_email) ||
+       !preferences?.notification_email_token_expires_at ||
+       Date.now()>Date.parse(preferences.notification_email_token_expires_at) ||
+       a.length!==32 || b.length!==32 || !timingSafeEqual(a,b))
+      return res.status(400).json({ok:false,error:"Verification link is invalid or expired."});
+    const updated=await supabaseRest("recordwatch_notification_preferences",{
+      method:"PATCH",query:"?id=eq."+encodeURIComponent(preferences.id)+
+        "&user_id=eq."+encodeURIComponent(user.id),prefer:"return=representation",
+      body:{notification_email_verified_at:new Date().toISOString(),
+        notification_email_token_sha256:null,
+        notification_email_token_expires_at:null,
+        updated_at:new Date().toISOString()}
+    });
+    if(!Array.isArray(updated)||!updated[0])throw new Error("Verification update unavailable");
+    res.setHeader("Cache-Control","no-store, private");
+    return res.json({ok:true,verified:true});
+  }catch(error){
+    console.warn("RecordWatch verification unavailable",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Email verification is temporarily unavailable."});
   }
 });
 
