@@ -192,6 +192,8 @@ test("Only verified lifetime case purchases can be persisted; packet checkout ca
   const dashboard=read("recordwatch-dashboard.html");
   assert.ok(server.includes('mode:"payment", // Omit ui_mode; Stripe defaults to its supported hosted page.'));
   assert.ok(!server.includes('ui_mode:"hosted"'));
+  assert.ok(!server.includes('payment_method_types:["card"]'));
+  assert.match(server,/mode:"payment", \/\/ Omit ui_mode/);
   assert.ok(server.includes("paidRecordwatchLifetimeCheckout"));
   assert.ok(server.includes("getSavedCaseReviewFacts(userId,caseId)"));
   assert.ok(server.includes('app.post("/api/recordwatch/stripe-webhook"'));
