@@ -67,7 +67,7 @@ PY
 
 # Generate a random 256-bit key directly into Secret Manager; never print/read it.
 if ! gcloud secrets describe "$SECRET" --project="$PROJECT" >/dev/null 2>&1; then
-  openssl rand -hex 32 | gcloud secrets create "$SECRET" --project="$PROJECT" --replication-policy=automatic --data-file=- --quiet >/dev/null
+  openssl rand -hex 32 | tr -d '\n' | gcloud secrets create "$SECRET" --project="$PROJECT" --replication-policy=automatic --data-file=- --quiet >/dev/null
 fi
 [[ -n "$(gcloud secrets versions list "$SECRET" --project="$PROJECT" --filter='state:ENABLED' --format='value(name)' --limit=1)" ]] || exit 3
 for NAME in recordwatch-alert-runner recordwatch-scheduler; do
