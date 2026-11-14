@@ -63,14 +63,16 @@ jobs:
           if ! STATE="$(gcloud scheduler jobs describe "$JOB" \
               --project="$PROJECT" --location="$REGION" \
               --format='value(state)' 2>/dev/null)"; then
-            echo "::warning::Deploy identity cannot inspect Cloud Scheduler; owner must verify state in Cloud Shell."
-            exit 0
-          fi
-          if [[ "$STATE" != "ENABLED" ]]; then
+            echo "::warning::Deploy identity cannot inspect Cloud Scheduler state; owner must confirm ENABLED in Cloud Shell."
+          elif [[ "$STATE" != "ENABLED" ]]; then
             echo "::error::RecordWatch daily schedule is $STATE; owner activation required."
             exit 1
+          else
+            echo "PASS: Cloud Scheduler reports ENABLED"
           fi
+          # Verify billing-independent email, SMS, database and scheduler-key readiness
+          # on the canonical Cloud Run endpoint; never call dispatch routes from CI.
           curl -fsS --max-time 30 \
-            https://recordpathai.com/api/recordwatch/alerts/readiness \
+            https://recordpathai-rtcqidw3qa-uw.a.run.app/api/recordwatch/alerts/readiness \
             | python3 -c 'import json,sys; r=json.load(sys.stdin); expected=("ready","email_ready","sms_ready","migration_verified","daily_scheduler_configured"); missing=[k for k in expected if r.get(k) is not True]; print("RecordWatch readiness:", "PASS" if not missing else "MISSING "+",".join(missing)); sys.exit(bool(missing))'
-          echo "PASS: Existing authenticated daily job and enabled schedule preserved; no production resources mutated."
+          echo "PASS: Read-only verification completed; no production resources mutated."
