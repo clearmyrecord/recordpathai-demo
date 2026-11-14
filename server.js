@@ -17,7 +17,7 @@ import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recor
 import { timingSafeEqual, createHash } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { findCourtProfile, courtFilingPlan } from "./src/court-profiles.js";
-import { isWoodConvictionFormPair } from "./src/wood-form-pages.js";
+import { isWoodConvictionFormPair, isOfficialWoodConvictionFormPair } from "./src/wood-form-pages.js";
 import { verifyLivePacketPaymentForLob } from "./src/lob-dispatch-payment-guard.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
@@ -240,9 +240,9 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
         pageText.push(content.items.map(item=>String(item.str||"")).join(""));
       }
       await document.destroy();
-      if(!isWoodConvictionFormPair(pageText)) {
+      if(!isOfficialWoodConvictionFormPair(pageText)) {
         return res.status(400).json({ok:false,error:
-          "Wood County packet must contain address verification first and the signed sealing application second."});
+          "Wood County packet must use the official Clerk address-verification and conviction-application pages, not a synthetic test form."});
       }
     } else await document.destroy();
     const sha=createHash("sha256").update(bytes).digest("hex");
