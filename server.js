@@ -3041,12 +3041,17 @@ app.post("/api/recordwatch/inbound-sms",
     return res.status(403).json({ok:false,error:"Wrong provider account."});
   const phone=canonicalSmsPhone(payload.From);
   const body=safe(payload.Body).trim().toUpperCase();
-  if(!phone || (!STOP_WORDS.has(body) && body!=="START" && body!=="UNSTOP"))
+  // When Messaging Service Advanced Opt-Out is enabled Twilio may pass
+  // OptOutType=STOP/START independently of the literal Body text.
+  const optOutType=safe(payload.OptOutType).trim().toUpperCase();
+  const isStop=STOP_WORDS.has(body)||optOutType==="STOP";
+  const isStart=!isStop && (body==="START"||body==="UNSTOP"||optOutType==="START");
+  if(!phone || (!isStop && !isStart))
     return res.status(200).type("text/xml").send("<Response/>");
   if(!packetDatabaseReady())return res.status(503).send("Messaging preference database unavailable.");
   const now=new Date().toISOString();
   try{
-    if(STOP_WORDS.has(body)){
+    if(isStop){
       await supabaseRest("recordwatch_sms_suppressions",{
         method:"POST",query:"?on_conflict=phone_number",
         prefer:"resolution=merge-duplicates,return=representation",
@@ -3070,7 +3075,7 @@ app.post("/api/recordwatch/inbound-sms",
     for(const pref of recordwatchMemory.preferences){
       if(canonicalSmsPhone(pref.phone_number||pref.notification_phone)===phone){
         pref.sms_enabled=false;pref.sms_consent_at=null;
-        pref.sms_opted_out_at=STOP_WORDS.has(body)?now:null;
+        pref.sms_opted_out_at=isStop?now:null;
       }
     }
     return res.status(200).type("text/xml").send("<Response/>");
