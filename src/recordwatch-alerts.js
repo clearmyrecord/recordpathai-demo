@@ -3,7 +3,11 @@ import {createHmac,timingSafeEqual} from "node:crypto";
 export const REMINDER_WINDOWS = Object.freeze([180,90,30,7,0]);
 const US_E164=/^\+1[2-9][0-9]{9}$/;
 const EMAIL=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export const STOP_WORDS = new Set(["STOP","STOPALL","UNSUBSCRIBE","CANCEL","END","QUIT"]);
+// Match Twilio's standard US long-code opt-out keywords. Carrier/provider
+// blocks alone are not enough: also suppress paid-case sends in our DB.
+export const STOP_WORDS = new Set([
+  "STOP","STOPALL","UNSUBSCRIBE","CANCEL","END","QUIT","REVOKE","OPTOUT"
+]);
 export function validSmsPhone(phone){return US_E164.test(String(phone||""));}
 export function validAlertEmail(email){return EMAIL.test(String(email||"").trim()) && String(email).length<=254;}
 export function canonicalSmsPhone(raw){

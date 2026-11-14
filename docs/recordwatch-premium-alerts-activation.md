@@ -47,6 +47,41 @@ Expect 1, 3, 3 respectively. Fail closed if absent.
    `RECORDWATCH_SMS_CAMPAIGN_APPROVED=true` **only after verified approval**.
 4. Test signed inbound STOP, suppression table update and provider's own STOP block. Test START using a consented owner-controlled device; START must NOT automatically turn on Premium preferences.
 
+## Screenshot-based Twilio setup checklist (November 14, 2026)
+
+The Twilio Console screen says **"A2P Registration has been submitted"**
+and shows each onboarding form step marked Complete. That is NOT proof that
+the carrier Campaign status is VERIFIED or that the phone number is registered.
+
+**Next safe steps in the Twilio Console (no live customer sends):**
+
+1. Open **Configure your number**. Find the purchased SMS-capable number
+   under Phone Numbers → Manage / Numbers and Senders.
+2. Open Messaging → Services. Select the Messaging Service associated with
+   the A2P campaign. Add the number to its Sender Pool if missing; do not move
+   the number to a different unrelated service. Copy the service **MG... SID**.
+3. In Trust Hub → Registrations → A2P Campaigns, check the campaign status.
+   Do not set `RECORDWATCH_SMS_CAMPAIGN_APPROVED=true` until campaign **VERIFIED**
+   and number registration in that Messaging Service is complete.
+4. In the service's inbound-message configuration, route HTTP **POST** to:
+   `https://recordpathai.com/api/recordwatch/inbound-sms`
+   and ensure webhook signatures are passed through. Existing application
+   validates Twilio's signature and suppresses opt-outs.
+5. Store Twilio **Auth Token only in Google Secret Manager**. Provide Cloud
+   Run with `TWILIO_ACCOUNT_SID=AC...`, `TWILIO_MESSAGING_SERVICE_SID=MG...`,
+   and `TWILIO_WEBHOOK_URL` matching the exact endpoint above. Never paste
+   the Auth Token into support chat, a GitHub issue, frontend code or logs.
+6. Keep outbound alerts OFF until status and account-scoped opt-ins are proven.
+   Test on one **voluntarily consented, Premium-paid, owner-controlled number**.
+   Confirm provider accepted versus actual device delivery; test STOP, REVOKE,
+   START and ensure the user must consent again after START.
+
+**Live checklist status:** UI onboarding complete / registration submitted.
+Messaging Service sender association, campaign **VERIFIED** status, Twilio
+credentials in runtime, and first consensual end-to-end delivery are *not*
+verified by the screenshot. The production Supabase Premium alerts migration
+was verified separately; no Twilio delivery rows were present at inspection.
+
 ## Phase D — activate and test
 1. Provision a random 32+ byte `RECORDWATCH_ALERTS_SCHEDULER_KEY` in Secret Manager and attach it to the Cloud Run environment. Never put this secret in source, deployment logs, public HTTP calls or screenshots.
 2. Set `RECORDWATCH_ALERTS_LIVE_ENABLED=true` **only after** phases A-C are approved. The in-memory old nightly runner is disabled by default; do not enable `RECORDWATCH_LEGACY_NIGHTLY_ENABLED`.

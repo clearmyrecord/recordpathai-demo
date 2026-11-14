@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {createHmac} from "node:crypto";
 import {canonicalSmsPhone,validAlertEmail,reminderForDate,neutralAlertContent,
-  isPremiumAlertAllowed,validTwilioWebhookSignature} from "../src/recordwatch-alerts.js";
+  isPremiumAlertAllowed,validTwilioWebhookSignature,STOP_WORDS} from "../src/recordwatch-alerts.js";
 import {providerReadiness,sendPremiumEmail,sendPremiumSms} from "../src/recordwatch-alert-dispatch.js";
 const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const server=read("server.js"),page=read("recordwatch-dashboard.html");
@@ -47,6 +47,19 @@ test("US phone canonicalization, SMS signature and consent are fail-closed",()=>
   assert.match(server,/validTwilioWebhookSignature\(/);
   assert.match(server,/recordwatch_sms_suppressions/);
 });
+test("All standard Twilio STOP aliases and signed Advanced Opt-Out are persisted",()=>{
+  for(const keyword of ["STOP","STOPALL","UNSUBSCRIBE","CANCEL","END","QUIT","REVOKE","OPTOUT"])
+    assert.equal(STOP_WORDS.has(keyword),true,keyword);
+  const handler=server.slice(server.indexOf('app.post("/api/recordwatch/inbound-sms"'),
+    server.indexOf('app.post("/api/recordwatch/subscribe"'));
+  assert.match(handler,/const optOutType=safe\(payload\.OptOutType\)/);
+  assert.match(handler,/const isStop=STOP_WORDS\.has\(body\)\|\|optOutType==="STOP"/);
+  assert.match(handler,/if\(isStop\)/);
+  assert.match(handler,/sms_enabled:false,sms_opted_out_at:now,sms_consent_at:null/);
+  assert.match(handler,/sms_enabled:false,sms_opted_out_at:null,sms_consent_at:null/);
+  assert.match(handler,/pref\.sms_opted_out_at=isStop\?now:null/);
+});
+
 test("Date schedule is exact, no catch-up spam and no case details in outbound copy",()=>{
   for(const d of [180,90,30,7,0]){
     const from=new Date("2026-11-08T00:00:00Z");
