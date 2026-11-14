@@ -35,8 +35,10 @@ export function caseReviewFingerprint(savedCase,charges=[]) {
   })).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
   return createHash("sha256").update(JSON.stringify(stable({case:row,charges:counts}))).digest("hex");
 }
-export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,now=new Date(),runtime={}}={}) {
+export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,now=new Date(),runtime={},deliveryMode="mail"}={}) {
   const missing=[];
+  if(!["mail","digital"].includes(deliveryMode))missing.push("Unknown packet delivery mode.");
+  const mailing=deliveryMode==="mail";
   if(!validCaseId(caseId)||!validCaseId(userId)||!savedCase||
     savedCase.id!==caseId||savedCase.user_id!==userId)missing.push("Case must belong to the authenticated account.");
   if(!Array.isArray(charges)||!charges.length)missing.push("A reviewed charge inventory is required.");
@@ -70,7 +72,7 @@ export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,no
   if(!Number.isSafeInteger(courtFeeCents)||courtFeeCents<0 ||
     review?.approved_court_fee_cents!==courtFeeCents)
     missing.push("The court filing amount has not been independently approved.");
-  if(courtFeeCents>0){
+  if(courtFeeCents>0 && mailing){
     if(review?.fee_payment_method!=="lob_check" && review?.fee_payment_method!=="court_online")
       missing.push("A permitted court-fee payment method must be selected.");
     if(review?.fee_payment_method==="lob_check"){
@@ -93,16 +95,19 @@ export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,no
   // the applicant. The current $150 Stripe/Lob checkout CANNOT be reused for
   // this route: $100 goes directly to the Clerk, not into a second Lob check.
   // A separate receipt-backed $50-only packet/payment workflow is needed.
-  if(review?.fee_payment_method==="court_online")
+  if(mailing && review?.fee_payment_method==="court_online")
     missing.push("Prepaid e-mail filing is permitted by the published rule, but this checkout does not yet verify the Clerk's prepayment receipt, a physically signed source, an approved searchable PDF and applicant-authorized filing. Do not collect or send twice.");
   if(runtime.stripeLiveEnabled!==true)
     missing.push("Live Stripe checkout has not been explicitly enabled.");
   return {
     ready:missing.length===0,missing,
-    quote:{...quote,courtFeeCents,totalCents:Number.isSafeInteger(courtFeeCents)?5000+courtFeeCents:null},
+    quote:{...quote,courtFeeCents,
+      courtFeeCollectedCents:mailing?courtFeeCents:0,
+      totalCents:Number.isSafeInteger(courtFeeCents)?5000+(mailing?courtFeeCents:0):null,
+      directCourtPaymentRequired:!mailing && courtFeeCents>0},
     profileId:filing.profileId,
     caseFingerprint:fingerprint,
     // The applicant's signature and private PDF never appear in this result.
-    fulfillmentMode:review?.fee_payment_method||"not_approved"
+    fulfillmentMode:mailing?(review?.fee_payment_method||"not_approved"):"digital_only"
   };
 }
