@@ -16,11 +16,11 @@ a genuine Stripe-delivered event. Do not set signedEventDeliveryProven from CI.
    recordpathai_packet_sandbox, with no production tables, no production Supabase
    connection, and no permissions to Lob. Apply
    sql/packet-sandbox-isolated-postgres.sql to this isolated database.
-2. Deploy tools/run-packet-sandbox-webhook.mjs **on a distinct staging service**.
+2. Build the dedicated `Dockerfile.packet-sandbox` (never the production `Dockerfile`), and deploy it **on a distinct staging service**.
    Runtime requires RPAI_PACKET_SANDBOX_ONLY=true,
    STRIPE_TEST_SECRET_KEY=sk_test_..., STRIPE_TEST_PACKET_WEBHOOK_SECRET=whsec_...,
    RPAI_SANDBOX_DATABASE_URL=postgres://.../recordpathai_packet_sandbox.
-   The service checks database identity and refuses live activation flags.
+   The service checks database identity and refuses live activation flags. Only the staging container contains `pg`; the existing production application, image, routes, and dependencies remain unchanged. Store Stripe API and webhook signing keys in the staging service's secret store; never send them in chat or commit them.
    Never bind production SUPABASE_SERVICE_ROLE_KEY, Stripe live keys, or Lob keys.
 3. In the **RecordPathAI Stripe sandbox account**, create a distinct webhook endpoint
    to https://<staging-service>/stripe/packet-sandbox-webhook, subscribing to
