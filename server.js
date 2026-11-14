@@ -49,7 +49,15 @@ app.use(cors({
 // The already-configured RecordWatch destination has its own signing secret;
 // both paths must independently verify the signature before calling this routine.
 // A completed payment creates paid_hold only. Never dispatch a Lob check here.
-async function reconcilePaidPacketCheckout(session,res){
+async function reconcilePaidPacketCheckout(session,res,verifiedEvent){
+  // This receipt is created exclusively after Stripe SDK HMAC verification
+  // in either webhook route. A fabricated or sandbox event never qualifies.
+  if(session?.metadata?.productType==="record-sealing-packet" &&
+     (!verifiedEvent || !/^evt_[A-Za-z0-9_]{1,200}$/.test(String(verifiedEvent.id||"")) ||
+      verifiedEvent.livemode!==true ||
+      !["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(verifiedEvent.type) ||
+      verifiedEvent.data?.object?.id!==session?.id))
+    return res.status(400).json({ok:false,error:"Verified live Stripe event required."});
   if(session?.metadata?.productType!=="record-sealing-packet")
     return res.json({received:true,ignored:true});
   if(!stripe||!packetDatabaseReady())
@@ -81,6 +89,26 @@ async function reconcilePaidPacketCheckout(session,res){
       prefer:"resolution=ignore-duplicates,return=representation",
       body:{user_id:owner,case_id:caseId,stripe_session_id:current.id,
         status:"paid_hold",court_fee_cents:fee,payment_method:method}
+    });
+    // Read back the actual persisted queue row before storing event evidence.
+    // This is distinct from a simulated Stripe checkout or an offline mock.
+    const matched=await supabaseRest("packet_fulfillment_jobs",{
+      query:"?select=stripe_session_id,user_id,case_id,status,court_fee_cents,payment_method"+
+        "&stripe_session_id=eq."+encodeURIComponent(current.id)+"&limit=1"
+    });
+    const hold=Array.isArray(matched)?matched[0]:null;
+    if(!hold || hold.stripe_session_id!==current.id ||
+       hold.user_id!==owner || hold.case_id!==caseId ||
+       !String(hold.status||"") || Number(hold.court_fee_cents)!==fee ||
+       hold.payment_method!==method)
+      throw new Error("Paid packet fulfillment write was not confirmed.");
+    // Idempotent private audit. The unique Stripe event ID ensures webhook
+    // redelivery cannot create duplicate acceptance evidence or mail.
+    await supabaseRest("packet_payment_webhook_receipts",{
+      method:"POST",query:"?on_conflict=event_id",
+      prefer:"resolution=ignore-duplicates,return=representation",
+      body:{event_id:verifiedEvent.id,stripe_session_id:current.id,
+        event_type:verifiedEvent.type}
     });
     // Court deposit is passed to the court, not an affiliate commission base.
     await recordAffiliateCommission(current,"packet_preparation",owner,PACKET_PRICE_CENTS);
@@ -152,7 +180,7 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
       return res.json({received:true});
     const session=event.data?.object;
     if(session?.metadata?.productType==="record-sealing-packet")
-      return await reconcilePaidPacketCheckout(session,res);
+      return await reconcilePaidPacketCheckout(session,res,event);
     if(session?.metadata?.product==="premium_recordwatch_lifetime"){
       const verified=await verifiedRecordwatchLifetimeSession(session.id,
         session.metadata.user_id,session.metadata.saved_case_id);
@@ -200,7 +228,7 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
   if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
     return res.json({received:true});
   const session=event.data?.object;
-  return await reconcilePaidPacketCheckout(session,res);
+  return await reconcilePaidPacketCheckout(session,res,event);
 });
 
 app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:"8mb"}),async(req,res)=>{
@@ -786,6 +814,40 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
   }catch{}
   const court=courtFilingPlan({state:"OH",county:"Wood",
     courtType:"court-of-common-pleas",formType:"sealing-conviction"});
+  // An actual signed LIVE Stripe event must leave a service-only receipt,
+  // a matching private paid packet job, and an independently paid live session.
+  // Offline tests and real *sandbox* events are tracked separately and must
+  // never be mistaken for successful production payment acceptance.
+  let signedEventDeliveryProven=false;
+  let signedEventEvidenceAt=null;
+  if(dbReady && stripeLiveKeyConfigured){
+    try{
+      const receipts=await supabaseRest("packet_payment_webhook_receipts",{
+        query:"?select=stripe_session_id,received_at&order=received_at.desc&limit=3"
+      });
+      for(const receipt of Array.isArray(receipts)?receipts:[]){
+        if(!/^cs_live_[A-Za-z0-9]+$/.test(receipt.stripe_session_id||""))continue;
+        const jobs=await supabaseRest("packet_fulfillment_jobs",{
+          query:"?select=stripe_session_id,user_id,case_id,status,court_fee_cents,payment_method"+
+            "&stripe_session_id=eq."+encodeURIComponent(receipt.stripe_session_id)+"&limit=1"
+        });
+        const job=Array.isArray(jobs)?jobs[0]:null;
+        if(!job || job.stripe_session_id!==receipt.stripe_session_id ||
+           !String(job.status||""))continue;
+        const paid=await stripe.checkout.sessions.retrieve(receipt.stripe_session_id);
+        if(paid?.livemode===true && paid.payment_status==="paid" &&
+           verifiedPacketSession(paid,job.user_id,job.case_id) &&
+           Number(job.court_fee_cents)===Number(paid.metadata?.courtFeeCents||0) &&
+           job.payment_method===paid.metadata?.fulfillmentMode){
+          signedEventDeliveryProven=true;
+          signedEventEvidenceAt=receipt.received_at||null;
+          break;
+        }
+      }
+    }catch{
+      // Unavailable evidence means not proven, never "ready".
+    }
+  }
   const blockers=[];
   if(!dbReady)blockers.push("private_packet_database_unavailable");
   if(!stripeLiveKeyConfigured||!stripePacketSigningSecretConfigured)
@@ -798,14 +860,14 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
   if(!court.mailReady)blockers.push("wood_county_clerk_mailing_acceptance_unconfirmed");
   // A valid signed Stripe event->database paid_hold trial is not established
   // by testing that a forged signature returns 400.
-  blockers.push("signed_stripe_event_to_paid_hold_not_proven");
+  if(!signedEventDeliveryProven)blockers.push("signed_stripe_event_to_paid_hold_not_proven");
   if(!Object.values(flags).every(Boolean))blockers.push("live_activation_switches_disabled");
   return res.json({
     ok:true,readyForLiveFiling:false,
     flags,
     stripe:{liveKeyConfigured:stripeLiveKeyConfigured,
       packetWebhookSecretConfigured:stripePacketSigningSecretConfigured,
-      signedEventDeliveryProven:false},
+      signedEventDeliveryProven,signedEventEvidenceAt,evidenceScope:"production_live_paid_packet_only"},
     database:{ready:dbReady,tables,atomicDispatchFunction},
     lob:{sandboxConfigured,testCheckId:checkId||null,
       testProofStatus,testProofRendered,proofUrlAvailable,
