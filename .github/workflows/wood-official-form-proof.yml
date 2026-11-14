@@ -1,0 +1,27 @@
+name: Wood County official form synthetic proof
+on:
+  pull_request:
+    paths:
+      - 'tools/wood-official-form-sample.mjs'
+      - 'src/wood-form-pages.js'
+      - 'templates/ohio/wood-county/sealing-conviction.json'
+      - 'assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-32-conviction.pdf'
+      - '.github/workflows/wood-official-form-proof.yml'
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npm install --no-save --ignore-scripts --package-lock=false pdf-lib@1.17.1
+      - run: node tools/wood-official-form-sample.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wood-county-official-two-form-page-sample
+          path: artifacts/wood-county-official-form-SAMPLE-NOT-FOR-FILING.pdf
+          retention-days: 7
