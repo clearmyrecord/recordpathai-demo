@@ -1,4 +1,4 @@
-name: Activate protected RecordWatch daily alerts after production release
+name: Verify protected RecordWatch daily alerts after production release
 on:
   workflow_run:
     workflows: ["Deploy RecordPathAI to Google Cloud Run"]
@@ -10,10 +10,10 @@ concurrency:
   group: recordpathai-existing-production
   cancel-in-progress: false
 jobs:
-  activate:
+  verify:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     environment: production
     permissions:
       contents: read
@@ -34,7 +34,7 @@ jobs:
           live="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
           if [ "$live" != "${{ github.event.workflow_run.head_sha }}" ]; then
             echo "current=false" >> "$GITHUB_OUTPUT"
-            echo 'Newer release exists; scheduler setup skipped.'
+            echo 'Newer release exists; scheduler verification skipped.'
           else
             echo "current=true" >> "$GITHUB_OUTPUT"
           fi
@@ -45,6 +45,32 @@ jobs:
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
         if: steps.current.outputs.current == 'true'
-      - name: Set up daily paid-case messaging without storing API keys in Scheduler
+      - name: Verify existing daily job without mutating production
         if: steps.current.outputs.current == 'true'
-        run: bash ops/activate-recordwatch-daily-scheduler.sh
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This deployment identity is intentionally NOT a Secret Manager
+          # administrator and must never try to create or rotate scheduler keys.
+          # In particular, do not run the owner-only activation script here:
+          # its rollback could pause a working schedule after a permission error.
+          PROJECT="$GCP_PROJECT_ID"
+          REGION="$CLOUD_RUN_REGION"
+          JOB="recordwatch-daily-alerts"
+          [[ "$PROJECT" == "recordpathai-production" && "$REGION" == "us-west1" ]] || exit 2
+          gcloud run jobs describe "$JOB" --project="$PROJECT" --region="$REGION" \
+            --format='value(metadata.name)' >/dev/null
+          if ! STATE="$(gcloud scheduler jobs describe "$JOB" \
+              --project="$PROJECT" --location="$REGION" \
+              --format='value(state)' 2>/dev/null)"; then
+            echo "::warning::Deploy identity cannot inspect Cloud Scheduler; owner must verify state in Cloud Shell."
+            exit 0
+          fi
+          if [[ "$STATE" != "ENABLED" ]]; then
+            echo "::error::RecordWatch daily schedule is $STATE; owner activation required."
+            exit 1
+          fi
+          curl -fsS --max-time 30 \
+            https://recordpathai.com/api/recordwatch/alerts/readiness \
+            | python3 -c 'import json,sys; r=json.load(sys.stdin); expected=("ready","email_ready","sms_ready","migration_verified","daily_scheduler_configured"); missing=[k for k in expected if r.get(k) is not True]; print("RecordWatch readiness:", "PASS" if not missing else "MISSING "+",".join(missing)); sys.exit(bool(missing))'
+          echo "PASS: Existing authenticated daily job and enabled schedule preserved; no production resources mutated."
