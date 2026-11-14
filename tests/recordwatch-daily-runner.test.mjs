@@ -8,7 +8,7 @@ test("short or missing scheduler keys never touch network",async()=>{await asser
 test("fixed HTTPS endpoint and secret header only, no arbitrary recipients",async()=>{
  let calls=0;
  const out=await invokePremiumAlertRun({key:KEY,signal:null,fetchFn:async(url,opts)=>{
-  calls++;assert.equal(url,"https://recordpathai.com/api/operator/recordwatch/run-alerts");
+  calls++;assert.equal(url,"https://recordpathai-rtcqidw3qa-uw.a.run.app/api/operator/recordwatch/run-alerts");
   assert.equal(opts.method,"POST");assert.equal(opts.headers["x-recordwatch-alerts-key"],KEY);
   assert.equal(opts.body,"{}");return {ok:true,json:async()=>OK};}});
  assert.equal(calls,1);assert.equal(out.cases_checked,0);assert.equal(out.provider_accepted,0);});
