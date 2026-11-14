@@ -13,8 +13,7 @@ test("fixed HTTPS endpoint and secret header only, no arbitrary recipients",asyn
   assert.equal(opts.body,"{}");return {ok:true,json:async()=>OK};}});
  assert.equal(calls,1);assert.equal(out.cases_checked,0);assert.equal(out.provider_accepted,0);});
 test("trims a trailing newline from a Secret Manager key before sending the HTTP header",async()=>{
- const keyWithNewline=KEY+"\
-";
+ const keyWithNewline=KEY+"\n";
  let seen="";
  await invokePremiumAlertRun({key:keyWithNewline,signal:null,fetchFn:async(url,opts)=>{
   seen=opts.headers["x-recordwatch-alerts-key"];return {ok:true,json:async()=>OK};
