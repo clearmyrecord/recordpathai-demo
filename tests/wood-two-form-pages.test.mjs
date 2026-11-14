@@ -51,7 +51,7 @@ test("server only stores verified two-page Wood filings",()=>{
   assert.match(route,/pdfPages!==2/);
   // The route intentionally delegates legacy-PDF heading decoding to the
   // shared helper (tested separately in wood-form-pages.test.mjs).
-  assert.match(route,/isWoodConvictionFormPair\(pageText\)/);
+  assert.match(route,/isOfficialWoodConvictionFormPair\(pageText\)/);
   const formHelper=fs.readFileSync(new URL("../src/wood-form-pages.js",import.meta.url),"utf8");
   assert.match(formHelper,/ADDRESSVERIFICATION/);
   assert.match(formHelper,/APPLICATIONTOSEALRECORD/);
