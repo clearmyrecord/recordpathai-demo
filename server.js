@@ -19,6 +19,7 @@ import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks
 import { findCourtProfile, courtFilingPlan } from "./src/court-profiles.js";
 import { isWoodConvictionFormPair, isOfficialWoodConvictionFormPair } from "./src/wood-form-pages.js";
 import { trustedLobProofUrl, assessLobSandboxProof } from "./src/lob-sandbox-proof-audit.js";
+import { renderWatermarkedPreviewPage, confirmedPreviewMatches, MAX_PREVIEW_PAGES } from "./src/packet-preview.js";
 import { verifyLivePacketPaymentForLob } from "./src/lob-dispatch-payment-guard.js";
 import { validateOfficialPdfSource, readBoundedPdfResponse } from "./src/pdf-source-security.js";
 import { runJurisdictionSearch } from "./tools/court-search-core.js";
@@ -387,13 +388,83 @@ app.get("/api/packet/checkout-readiness",async(req,res)=>{
   if(!validCaseId(caseId))return res.status(400).json({ok:false,error:"Saved case ID required."});
   const deliveryMode=req.query.delivery==="digital"?"digital":"mail";
   const result=await packetReleaseStatus(user.id,caseId,deliveryMode);
+  let confirmed=false;
+  if(result.ready){
+    try{confirmed=await previewHasConfirmation(user.id,caseId);}
+    catch{confirmed=false;}
+  }
+  const ready=result.ready && confirmed;
+  const missing=[...(result.missing||[])];
+  if(result.ready&&!confirmed)missing.push("Review and confirm the exact watermarked approved packet before paying.");
   res.setHeader("Cache-Control","no-store, private");
-  return res.status(result.ready?200:409).json({
-    ok:result.ready,ready:result.ready,
-    missing:result.missing,quote:result.quote,
+  return res.status(ready?200:409).json({
+    ok:ready,ready,
+    missing,quote:result.quote,
+    previewConfirmed:confirmed,
     profileId:result.profileId||null
   });
 });
+// No unwatermarked PDF and no public or signed object URL is ever sent here.
+// The only prepayment visual is a visibly watermarked, flattened PNG.
+app.get("/api/packet/preview-manifest",async(req,res)=>{
+  const user=await requireApiUser(req,res);if(!user)return;
+  const caseId=safe(req.query.case_id);
+  if(!validCaseId(caseId))
+    return res.status(400).json({ok:false,error:"Select a saved case first."});
+  try{
+    const source=await approvedPreviewForCase(user.id,caseId);
+    const confirmed=await previewHasConfirmation(user.id,caseId,source);
+    res.setHeader("Cache-Control","private, no-store, max-age=0");
+    res.setHeader("X-Content-Type-Options","nosniff");
+    return res.json({ok:true,pageCount:source.pageCount,
+      pdfSha256:source.signedPdfSha,confirmed,
+      note:"Image-only watermarked preview. The original approved PDF is downloadable only after verified payment."});
+  }catch(error){return previewResponseError(res,error);}
+});
+app.get("/api/packet/preview-page",async(req,res)=>{
+  const user=await requireApiUser(req,res);if(!user)return;
+  const caseId=safe(req.query.case_id);
+  const page=Number(req.query.page);
+  if(!validCaseId(caseId)||!Number.isInteger(page)||page<1||page>MAX_PREVIEW_PAGES)
+    return res.status(400).json({ok:false,error:"Invalid preview request."});
+  try{
+    const source=await approvedPreviewForCase(user.id,caseId);
+    if(page>source.pageCount)
+      return res.status(400).json({ok:false,error:"Preview page is out of range."});
+    const original=await fetchExactApprovedPreviewPdf(source);
+    const png=await renderWatermarkedPreviewPage(original,page,source.pageCount);
+    res.setHeader("Cache-Control","private, no-store, max-age=0");
+    res.setHeader("Pragma","no-cache");
+    res.setHeader("Content-Type","image/png");
+    res.setHeader("Content-Disposition","inline");
+    res.setHeader("X-Content-Type-Options","nosniff");
+    res.setHeader("Content-Security-Policy","default-src 'none'; sandbox");
+    return res.status(200).send(png);
+  }catch(error){return previewResponseError(res,error);}
+});
+app.post("/api/packet/confirm-preview",async(req,res)=>{
+  const user=await requireApiUser(req,res);if(!user)return;
+  const caseId=safe(req.body?.case_id);
+  if(!validCaseId(caseId)||req.body?.confirmed!==true ||
+     !/^[a-f0-9]{64}$/.test(safe(req.body?.pdf_sha256)))
+    return res.status(400).json({ok:false,error:"Review both watermarked pages and explicitly confirm the document."});
+  try{
+    const source=await approvedPreviewForCase(user.id,caseId);
+    if(source.signedPdfSha!==req.body.pdf_sha256)
+      return res.status(409).json({ok:false,error:"The reviewed packet changed. Please reopen the preview."});
+    await supabaseRest("packet_preview_confirmations",{
+      method:"POST",query:"?on_conflict=user_id,case_id",
+      prefer:"resolution=merge-duplicates,return=representation",
+      body:{user_id:user.id,case_id:caseId,
+        signed_pdf_sha256:source.signedPdfSha,
+        case_snapshot_sha256:source.caseSnapshotSha,
+        confirmed_at:new Date().toISOString()}
+    });
+    res.setHeader("Cache-Control","private, no-store");
+    return res.json({ok:true,confirmed:true,note:"Exact approved packet reviewed. Checkout still requires separate payment authorization."});
+  }catch(error){return previewResponseError(res,error);}
+});
+
 // This endpoint never returns applicant data and never creates a release.
 // Operations key is server-only; it must not be placed in the browser.
 app.get("/api/operator/packet/fingerprint",async(req,res)=>{
@@ -1452,6 +1523,72 @@ async function packetReleaseStatus(userId,caseId,deliveryMode="mail") {
     console.warn("Private packet release preflight unavailable",error?.name||"unknown");
     return {ready:false,missing:["Case approval or private review record is unavailable."],quote:null};
   }
+}
+
+// PREPAYMENT PREVIEW: Never send original PDF bytes, a signed storage URL,
+// or a downloadable PDF until Stripe verifies the customer's payment.
+function previewFailure(message,status=409){
+  const e=new Error(message);e.httpStatus=status;return e;
+}
+async function approvedPreviewForCase(userId,caseId){
+  if(!packetDatabaseReady())throw previewFailure("Private document preview is unavailable.",503);
+  const facts=await getSavedCaseReviewFacts(userId,caseId);
+  const scope="?user_id=eq."+encodeURIComponent(userId)+"&case_id=eq."+encodeURIComponent(caseId)+"&limit=1";
+  const [releases,drafts]=await Promise.all([
+    supabaseRest("packet_releases",{query:scope}),
+    supabaseRest("packet_drafts",{query:scope})
+  ]);
+  const review=Array.isArray(releases)?releases[0]:null;
+  const draft=Array.isArray(drafts)?drafts[0]:null;
+  // The preview is independent from the live Stripe enablement switch,
+  // but NOT from reviewer signoff, statutory review, signing, or form approval.
+  const verdict=evaluatePacketRelease({
+    userId,caseId,...facts,review,deliveryMode:"digital",
+    runtime:{stripeLiveEnabled:true,lobLiveEnabled:false,
+      lobVerifiedBank:false,onlineCourtPaymentVerified:false}
+  });
+  if(!verdict.ready)throw previewFailure(
+    "The signed packet must pass independent case and form review before it can be previewed for payment.");
+  if(!draft || draft.user_id!==userId || draft.case_id!==caseId ||
+     draft.signed_pdf_sha256!==review.signed_pdf_sha256 ||
+     draft.signed_pdf_private_path!==review.signed_pdf_private_path ||
+     draft.case_snapshot_sha256!==verdict.caseFingerprint ||
+     !Number.isInteger(draft.pdf_pages)||draft.pdf_pages<1 ||
+     draft.pdf_pages>MAX_PREVIEW_PAGES)
+    throw previewFailure("The signed PDF has changed or is not ready for customer review.");
+  return {userId,caseId,signedPdfSha:draft.signed_pdf_sha256,
+    caseSnapshotSha:verdict.caseFingerprint,pageCount:draft.pdf_pages,
+    path:draft.signed_pdf_private_path};
+}
+async function previewHasConfirmation(userId,caseId,source=null){
+  const data=source||await approvedPreviewForCase(userId,caseId);
+  const rows=await supabaseRest("packet_preview_confirmations",{
+    query:"?user_id=eq."+encodeURIComponent(userId)+"&case_id=eq."+
+      encodeURIComponent(caseId)+"&limit=1"
+  });
+  return confirmedPreviewMatches(Array.isArray(rows)?rows[0]:null,data);
+}
+async function fetchExactApprovedPreviewPdf(source){
+  const conf=supabaseRestConfig();
+  if(!conf)throw previewFailure("Private packet storage is unavailable.",503);
+  const response=await fetch(conf.url+"/storage/v1/object/packet-documents/"+source.path,{
+    headers:{apikey:conf.key,Authorization:"Bearer "+conf.key},
+    signal:AbortSignal.timeout(20000),redirect:"error"
+  });
+  if(!response.ok || Number(response.headers.get("content-length")||0)>8388608)
+    throw previewFailure("Private approved packet could not be loaded.",503);
+  const bytes=Buffer.from(await response.arrayBuffer());
+  if(bytes.length<500||bytes.length>8388608 ||
+     bytes.subarray(0,5).toString("ascii")!=="%PDF-" ||
+     createHash("sha256").update(bytes).digest("hex")!==source.signedPdfSha)
+    throw previewFailure("Private approved packet integrity verification failed.",409);
+  return bytes;
+}
+function previewResponseError(res,error){
+  console.warn("Private packet preview unavailable",error?.name||"unknown");
+  return res.status(error?.httpStatus||503).json({ok:false,error:
+    error?.httpStatus===409 ? error.message :
+    "Private packet preview is temporarily unavailable. No charge was taken."});
 }
 
 function supabaseSafeCaseId(caseId) {
@@ -3518,6 +3655,15 @@ app.post("/api/create-checkout-session", async (req, res) => {
         missing:release.missing,
         quote:release.quote||quote
       });
+    }
+    // Server-side mandatory customer preview acknowledgment. A browser flag,
+    // client-supplied digest, or hidden checkout button cannot bypass this.
+    let previewConfirmed=false;
+    try{previewConfirmed=await previewHasConfirmation(checkoutUser.id,savedCaseId);}
+    catch{previewConfirmed=false;}
+    if(!previewConfirmed){
+      return res.status(409).json({ok:false,
+        error:"Review and confirm the watermarked approved packet before payment. No charge was made."});
     }
     quote={...release.quote,canCollect:true};
     // A paid filing already held or sent for the same saved case must not be
