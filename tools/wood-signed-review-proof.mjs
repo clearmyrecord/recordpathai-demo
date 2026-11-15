@@ -8,6 +8,7 @@ import {deflateSync} from "node:zlib";
 import {PDFDocument,StandardFonts,rgb,degrees} from "pdf-lib";
 import {getDocument,OPS} from "pdfjs-dist/legacy/build/pdf.mjs";
 import {isOfficialWoodConvictionFormPair} from "../src/wood-form-pages.js";
+import {renderWatermarkedPreviewPage} from "../src/packet-preview.js";
 
 const html=readFileSync(new URL("../packet.html",import.meta.url),"utf8");
 const mapping=JSON.parse(readFileSync(new URL("../templates/ohio/wood-county/sealing-conviction.json",import.meta.url),"utf8"));
@@ -148,4 +149,7 @@ try {
 }finally{await samplePdf.destroy();}
 mkdirSync("artifacts",{recursive:true});
 writeFileSync("artifacts/wood-county-synthetic-drawn-signature-NOT-FOR-FILING.pdf",sample);
+const proofPng=await renderWatermarkedPreviewPage(Buffer.from(signed),2,2);
+writeFileSync("artifacts/wood-county-real-preview-p2-TEST-ONLY.png",proofPng);
+console.log("PASS: actual production preview renderer returned a watermarked PNG with",proofPng.length,"bytes");
 console.log("PASS: sample watermarked, production upload would reject it; no charge, filing or mail.");
