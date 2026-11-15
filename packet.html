@@ -2114,6 +2114,10 @@ document.addEventListener("DOMContentLoaded", async function () {
           },
 
           case: {
+            // Case-level form-routing answers must survive normalization.
+            // They are supplied by the account-owned saved case at private upload.
+            all_charges_confirmed: raw.case?.all_charges_confirmed || "unconfirmed",
+            proceedings_status: raw.case?.proceedings_status || "unknown",
             filing_date: today.toLocaleDateString("en-US"),
             hearing_date: "",
             incident_count: normalizedCharges.length || 1,
@@ -3051,13 +3055,20 @@ document.addEventListener("DOMContentLoaded", async function () {
           // silently mix another case's local browser charge data into a PDF.
           const raw=readPacketData();
           const reviewData={...raw,court:{...(raw.court||{}),...mapped.court},
-            charges:mapped.charges};
+            // Never borrow a legal confirmation from another case's browser draft.
+            case:mapped.case || {},charges:mapped.charges};
           const data=buildNormalizedPacketData(reviewData);
           if(/^(sample|synthetic) applicant$/i.test(String(data?.petitioner?.full_name||"").trim()) ||
              /@example\.invalid$/i.test(String(data?.petitioner?.email||"").trim()))
             throw new Error("Sample applicant information cannot be used for a real packet. Complete Step 1 with your own details.");
           const selected=await loadActiveTemplateForPacket(data);
-          if(!selected)throw new Error("No verified form matches the saved case's court and charge outcomes. Review Record Details; the sample PDF does not establish eligibility.");
+          if(!selected){
+            const check=window.RecordPathFormRequirements?.classify?.(data);
+            const missing=Array.isArray(check?.reviewReasons) ? check.reviewReasons.filter(Boolean) : [];
+            throw new Error(missing.length
+              ? "Saved-case form review needed: "+missing.join(" ")+" Return to Record Details, verify these answers, and save to your account."
+              : "No active reviewed form matches this saved case's state, county, court type, and charge outcomes. Verify the exact filing court in Record Details. No payment or upload occurred.");
+          }
           const schema=await loadFormSchema(selected,data);
           if(schema?.notaryRequired)throw new Error("This form requires signing before a notary. Do not submit this browser signature as a filing signature.");
           const missing=getMissingRequiredFields(data,schema);

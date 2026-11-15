@@ -1523,6 +1523,12 @@
             });
           }),
           metadata: {
+            // Persist the applicant's case-level answers with THIS saved case,
+            // not only in a browser draft shared across cases.
+            recordPathCaseReview: {
+              all_charges_confirmed: value("allChargesConfirmed") || "unconfirmed",
+              proceedings_status: value("proceedingsStatus") || "unknown"
+            },
             judge_name: shared.judge_name,
             prosecutor_agency: shared.prosecutor_agency,
             defense_attorney: shared.defense_attorney,
@@ -1539,19 +1545,27 @@
       }
 
       function persistCurrentCaseDraft(payload, syncAccount) {
-        if (!window.RecordPathUserStore || !RecordPathUserStore.saveCurrentCaseDraft) return Promise.resolve(null);
-        const authenticated = RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn();
-        return RecordPathUserStore.saveCurrentCaseDraft(payload, { localOnly: !syncAccount, network: Boolean(syncAccount) }).then(function (saved) {
-          // The account's normalized case summary may not contain original
-          // allegations, individual judgment dates or unverified notes. Re-save
-          // the live form's full fields after it updates the active case.
+        if (!window.RecordPathUserStore || !RecordPathUserStore.saveCurrentCaseDraft)
+          return Promise.reject(new Error("Case saving is unavailable. Your browser draft remains intact."));
+        const authenticated = !!RecordPathUserStore.isLoggedIn?.();
+        // Save Progress and Continue must sync to Supabase for signed-in users.
+        // RecordWatch opt-in is separate and never gates case persistence.
+        return RecordPathUserStore.saveCurrentCaseDraft(payload, {
+          localOnly: !authenticated, network: authenticated
+        }).then(function (saved) {
+          if (authenticated && !saved?.savedCaseId)
+            throw new Error("Account save could not be verified. Remain on Record Details and try again.");
+          // Keep the on-screen unsubmitted fields in the browser draft as well.
           saveDraft(false, { quiet: true });
-          setSaveStatus(syncAccount && authenticated ? "RecordWatch save requested" : "Saved in this browser");
+          setSaveStatus(authenticated ? "Saved to your account" : "Saved in this browser");
           return saved;
         }).catch(function (error) {
-          console.warn("Current case draft save skipped:", error);
+          console.warn("Current case account save failed:", error);
           saveDraft(false, { quiet: true });
-          setSaveStatus("Saved in this browser; account sync unavailable");
+          setSaveStatus(authenticated
+            ? "Account save failed. Browser draft retained; do not continue until synced."
+            : "Unable to save account draft. Browser draft retained.");
+          if (authenticated) throw error;
           return null;
         });
       }
@@ -1720,8 +1734,11 @@
           saveProgressBtn.addEventListener("click", async function () {
             const result = saveDraft(false);
             if (result.error) return;
-            await persistCurrentCaseDraft(result.casePayload, false);
-            setSaveStatus("Progress saved on this device. You can refresh or return later.");
+            try {
+              await persistCurrentCaseDraft(result.casePayload, false);
+            } catch (error) {
+              console.warn("Save Progress account synchronization failed:", error);
+            }
           });
         }
 
@@ -1757,7 +1774,12 @@
           // Missing court evidence can be reviewed on the packet page.
           // Never erase the saved draft or demand duplicate questions here.
           if (isRecordWatchEnabled()) syncRecordWatchFromDraft();
-          await persistCurrentCaseDraft(result.casePayload, false);
+          try {
+            await persistCurrentCaseDraft(result.casePayload, false);
+          } catch (error) {
+            // Do not pretend a browser-only draft is a saved Supabase case.
+            return;
+          }
           window.location.href = "packet.html";
         });
 
