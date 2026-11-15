@@ -1071,6 +1071,25 @@
               <section id="packetSubmitStep" class="sample-pdf-tools" style="margin-top:18px; padding:18px; border:1px solid #d2def3; border-radius:14px; background:#f7faff;">
                 <h3 style="margin:0 0 8px;color:#17396d;">Step 1 — Prepare and Submit Your Real Signed Packet</h3>
                 <p style="margin:0 0 12px;color:#526780;line-height:1.55;">Select your saved case, complete all required form fields, draw your signature, and authorize private review. This securely stores your real two-page application. It does not charge you or file anything with the court.</p>
+                <fieldset id="packetContactPanel" style="margin:10px 0 18px;border:1px solid #c2d2ed;border-radius:12px;background:#fff;padding:14px 16px;">
+                  <legend style="color:#193f7b;font-weight:800;padding:0 5px;">Verify contact and mailing details on both court forms</legend>
+                  <p style="color:#526780;margin:4px 0 12px;">Your account name, phone and email are reused when available. The mailing address must be confirmed; never substitute the courthouse address. These details are stored with your signed-in account for future packets.</p>
+                  <div class="missing-info-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:13px;">
+                    <label class="missing-info-field" for="packetContactfullName"><strong>Full legal name</strong><input id="packetContactfullName" data-packet-contact="fullName" type="text" autocomplete="name" maxlength="160" required aria-required="true" style="display:block;width:100%;max-width:100%;box-sizing:border-box;padding:10px 12px;margin-top:6px;border:1px solid #b7c9e5;border-radius:8px;font-size:16px;" /></label>
+                    <label class="missing-info-field" for="packetContactstreet"><strong>Mailing street address</strong><input id="packetContactstreet" data-packet-contact="street" type="text" autocomplete="street-address" maxlength="200" required aria-required="true" style="display:block;width:100%;max-width:100%;box-sizing:border-box;padding:10px 12px;margin-top:6px;border:1px solid #b7c9e5;border-radius:8px;font-size:16px;" /></label>
+                    <label class="missing-info-field" for="packetContactunit"><strong>Apartment / P.O. box (optional)</strong><input id="packetContactunit" data-packet-contact="unit" type="text" autocomplete="address-line2" maxlength="120"  style="display:block;width:100%;max-width:100%;box-sizing:border-box;padding:10px 12px;margin-top:6px;border:1px solid #b7c9e5;border-radius:8px;font-size:16px;" /></label>
+                    <label class="missing-info-field" for="packetContactcity"><strong>City</strong><input id="packetContactcity" data-packet-contact="city" type="text" autocomplete="address-level2" maxlength="120" required aria-required="true" style="display:block;width:100%;max-width:100%;box-sizing:border-box;padding:10px 12px;margin-top:6px;border:1px solid #b7c9e5;border-radius:8px;font-size:16px;" /></label>
+                    <label class="missing-info-field" for="packetContactstate"><strong>State</strong><input id="packetContactstate" data-packet-contact="state" type="text" autocomplete="address-level1" maxlength="40" required aria-required="true" style="display:block;width:100%;max-width:100%;box-sizing:border-box;padding:10px 12px;margin-top:6px;border:1px solid #b7c9e5;border-radius:8px;font-size:16px;" /></label>
+                    <label class="missing-info-field" for="packetContactzip"><strong>ZIP / postal code</strong><input id="packetContactzip" data-packet-contact="zip" type="text" autocomplete="postal-code" maxlength="24" required aria-required="true" style="display:block;width:100%;max-width:100%;box-sizing:border-box;padding:10px 12px;margin-top:6px;border:1px solid #b7c9e5;border-radius:8px;font-size:16px;" /></label>
+                    <label class="missing-info-field" for="packetContactphone"><strong>Telephone number</strong><input id="packetContactphone" data-packet-contact="phone" type="tel" autocomplete="tel" maxlength="40" required aria-required="true" style="display:block;width:100%;max-width:100%;box-sizing:border-box;padding:10px 12px;margin-top:6px;border:1px solid #b7c9e5;border-radius:8px;font-size:16px;" /></label>
+                    <label class="missing-info-field" for="packetContactemail"><strong>Email address</strong><input id="packetContactemail" data-packet-contact="email" type="email" autocomplete="email" maxlength="254" required aria-required="true" style="display:block;width:100%;max-width:100%;box-sizing:border-box;padding:10px 12px;margin-top:6px;border:1px solid #b7c9e5;border-radius:8px;font-size:16px;" /></label>
+                  </div>
+                  <label style="display:flex;gap:9px;align-items:flex-start;margin:13px 0 0;">
+                    <input id="packetContactConfirmed" type="checkbox" style="margin-top:4px;" />
+                    <span>I reviewed my full legal name, mailing address, telephone and email, and confirm that these are the contact details to appear on both signed court forms.</span>
+                  </label>
+                  <p id="packetContactStatus" role="status" aria-live="polite" style="color:#40577e;margin:10px 0 0;">Loading your saved account contact information…</p>
+                </fieldset>
                 <div id="missingInfoPanel" class="missing-info-panel" style="display:none; margin:12px 0 18px;" tabindex="-1" role="group" aria-labelledby="missingInfoTitle">
                   <h4 id="missingInfoTitle" style="margin:0 0 8px;">Required information for this packet</h4>
                   <p id="missingInfoSummary" style="margin:0 0 10px;color:#40577e;" role="status" aria-live="polite">Complete these fields before submitting your signed PDF for private review.</p>
@@ -1081,7 +1100,7 @@
               </section>
               <section id="approvedPreviewPanel" aria-label="Watermarked signed packet preview" style="margin-top:18px;padding:18px;border:1px solid #b8c9e8;border-radius:14px;background:#f5f8ff;">
                 <h3 style="margin:0 0 8px;color:#17396d;">Step 2 — Preview Your Actual Application (View Only)</h3>
-                <p style="margin:0 0 14px;line-height:1.5;">After Step 1, view each page of your submitted <strong>draft</strong> with a permanent <strong>PREVIEW ONLY — NOT FOR FILING</strong> watermark. Once an independent reviewer approves the exact signed PDF, you'll be able to confirm it for checkout. <strong>No unwatermarked PDF download is available until Stripe verifies payment.</strong> Court checks and filings remain separate.</p>
+                <p style="margin:0 0 14px;line-height:1.5;">This preview shows the <strong>last submitted signed draft</strong>. If you correct or add contact details in Step 1, you must submit a <strong>new signed packet</strong> before the preview will change. After Step 1, view each page of your submitted <strong>draft</strong> with a permanent <strong>PREVIEW ONLY — NOT FOR FILING</strong> watermark. Once an independent reviewer approves the exact signed PDF, you'll be able to confirm it for checkout. <strong>No unwatermarked PDF download is available until Stripe verifies payment.</strong> Court checks and filings remain separate.</p>
                 <button type="button" id="openApprovedPreviewBtn" class="sig-small-btn" style="background:#1b4b9a;color:white;">Preview My Signed Application (View Only)</button>
                 <p id="approvedPreviewStatus" role="status" aria-live="polite" style="margin:12px 0;color:#344c74;">First prepare your real signed packet in Step 1; then preview it here.</p>
                 <div id="approvedPreviewPages" hidden style="max-height:520px;overflow:auto;background:#e7edf6;padding:10px;border-radius:9px;" aria-label="Watermarked signed packet pages"></div>
@@ -1147,6 +1166,7 @@
 </footer>
 
   <script src="js/packet-data-bridge.js"></script>
+  <script src="js/packet-contact.js"></script>
   <script src="js/ohio-case-review.js"></script>
   <script src="js/wave1-form-requirements.js"></script>
   <script src="js/rules.js"></script>
@@ -1886,11 +1906,18 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
         return null;
       }
-      function getMissingRequiredFields(data, schema) {
+      const WOOD_CONTACT_REQUIRED_FIELDS=[
+        "petitioner.full_name","petitioner.address.line1","petitioner.address.city",
+        "petitioner.address.state","petitioner.address.zip","petitioner.email","petitioner.phone"
+      ];
+      function getMissingRequiredFields(data, schema, selected) {
         const requiredFields = Array.isArray(schema?.requiredFields) && schema.requiredFields.length
-          ? schema.requiredFields
-          : DEFAULT_REQUIRED_FIELDS;
-        return requiredFields.filter((path) => safe(getByPath(data, path)) === "");
+          ? schema.requiredFields : DEFAULT_REQUIRED_FIELDS;
+        const wood = String(selected?.state || "").toUpperCase()==="OH" &&
+          String(selected?.county || "").toLowerCase()==="wood" &&
+          selected?.courtType==="court-of-common-pleas" && selected?.formType==="sealing-conviction";
+        const complete = wood ? [...new Set([...requiredFields,...WOOD_CONTACT_REQUIRED_FIELDS])] : requiredFields;
+        return complete.filter((path) => safe(getByPath(data, path)) === "");
       }
       const PRIVATE_REVIEW_FIELD_LABELS = {
         "petitioner.full_name": "Applicant's full legal name",
@@ -1901,6 +1928,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         "petitioner.address.city": "Applicant's city",
         "petitioner.address.state": "Applicant's state",
         "petitioner.address.zip": "Applicant's ZIP code",
+        "petitioner.phone": "Applicant's telephone number",
+        "petitioner.email": "Applicant's email address",
         "court.state": "Filing court state",
         "court.county": "Filing court county",
         "court.name": "Filing court name",
@@ -1965,6 +1994,83 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (!panel) return;
         panel.scrollIntoView?.({behavior:"smooth",block:"center"});
         (panel.querySelector('input[data-path]') || panel).focus?.({preventScroll:true});
+      }
+
+      // Contact fields always appear in Step 1. A remote profile belongs to
+      // the authenticated account; the old browser draft is never authority
+      // for another account's legal address.
+      let packetContactProfileLoaded=false;
+      async function loadPacketContactProfile(){
+        const status=document.getElementById("packetContactStatus");
+        const store=window.RecordPathUserStore;
+        if(store?.ready)await store.ready;
+        const user=store?.getCurrentUser?.();
+        if(!user?.id){
+          if(status)status.textContent="Sign in to load your court contact information.";
+          return;
+        }
+        let profile=null;
+        try{
+          const client=await window.RecordPathSupabase.getClient();
+          const result=await client.from("profiles").select(
+            "id,full_name,email,phone,filing_full_name,filing_email,filing_phone,mailing_line1,mailing_line2,mailing_city,mailing_state,mailing_zip"
+          ).eq("id",user.id).maybeSingle();
+          if(result.error)throw result.error;
+          if(!result.data)throw new Error("The account profile could not be loaded.");
+          profile=result.data;
+          packetContactProfileLoaded=true;
+        }catch(error){
+          packetContactProfileLoaded=false;
+          console.warn("Packet contact profile loading failed",error?.name||"unknown");
+        }
+        const values=RecordPathPacketContact.mergeForAccount(readPacketData(),profile,user);
+        RecordPathPacketContact.fields.forEach(field=>{
+          const input=document.querySelector('[data-packet-contact="'+field.key+'"]');
+          if(input)input.value=values[field.key]||"";
+        });
+        if(status)status.textContent=packetContactProfileLoaded
+          ? "Review these saved account details. Any missing address fields must be entered before private review."
+          : "Contact details are unavailable from your account. Reconnect or sign in before submitting a new signed packet.";
+      }
+      async function persistPacketContactForReview(){
+        const status=document.getElementById("packetContactStatus");
+        const confirmed=document.getElementById("packetContactConfirmed");
+        const client=await window.RecordPathSupabase.getClient();
+        const session=await client.auth.getSession();
+        const user=session?.data?.session?.user;
+        if(!user?.id)throw new Error("Sign in before saving contact details for your court application.");
+        const inputs={};
+        RecordPathPacketContact.fields.forEach(field=>{
+          const input=document.querySelector('[data-packet-contact="'+field.key+'"]');
+          inputs[field.key]=input?.value||"";
+        });
+        const errors=RecordPathPacketContact.validate(inputs);
+        if(errors.length){
+          const field=RecordPathPacketContact.fields.find(f=>errors.includes(f.key));
+          const input=document.querySelector('[data-packet-contact="'+(field?.key||"fullName")+'"]');
+          input?.focus();
+          const message="Complete or correct your "+errors.map(key=>
+            RecordPathPacketContact.fields.find(f=>f.key===key)?.label||"contact information"
+          ).join(", ")+" before private review. Nothing was uploaded.";
+          if(status)status.textContent=message;
+          throw new Error(message);
+        }
+        if(confirmed?.checked!==true){
+          confirmed?.focus();
+          throw new Error("Review your contact information and check the confirmation box before submitting a signed packet.");
+        }
+        // This update is owner-scoped under Supabase profiles RLS. Do not
+        // change the authentication email or overwrite the login profile name.
+        const result=await client.from("profiles")
+          .update(RecordPathPacketContact.profileUpdate(inputs))
+          .eq("id",user.id).select("id").single();
+        if(result.error || result.data?.id!==user.id){
+          if(status)status.textContent="Account contact information could not be saved; no PDF was uploaded.";
+          throw new Error("Contact details could not be saved securely to your account. Sign in again and retry.");
+        }
+        const raw=RecordPathPacketContact.applyToDraft(readPacketData(),inputs,user.id);
+        persistPacketData(raw);
+        if(status)status.textContent="Confirmed contact details were saved securely and will appear on both forms.";
       }
 
       function readPacketData() {
@@ -3097,9 +3203,14 @@ document.addEventListener("DOMContentLoaded", async function () {
           if(!mapped?.court?.case_number || !mapped?.court?.court_type ||
              !Array.isArray(mapped.charges)||!mapped.charges.length)
             throw new Error("The selected saved case is missing a court, case number, or charge inventory. Complete Record Details first.");
-          // Reuse the applicant's Step 1 contact and mailing fields, but take
-          // the court, outcomes, charges and dates from the saved case. Never
-          // silently mix another case's local browser charge data into a PDF.
+          // Save explicitly confirmed contact details against the authenticated
+          // owner before rendering any new signed PDF. The existing private
+          // draft is immutable and must be replaced with a newly signed copy.
+          if(String(mapped.court.state||"").toUpperCase()==="OH" &&
+             String(mapped.court.county||"").toLowerCase()==="wood")
+            await persistPacketContactForReview();
+          // Reuse the verified applicant's contact and mailing fields, but
+          // always get court details and charges from the account-owned case.
           const raw=readPacketData();
           const reviewData={...raw,court:{...(raw.court||{}),...mapped.court},
             // Never borrow a legal confirmation from another case's browser draft.
@@ -3122,7 +3233,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
           const schema=await loadFormSchema(selected,data);
           if(schema?.notaryRequired)throw new Error("This form requires signing before a notary. Do not submit this browser signature as a filing signature.");
-          const missing=getMissingRequiredFields(data,schema);
+          const missing=getMissingRequiredFields(data,schema,selected);
           renderMissingInfoPanel(missing,raw,data,schema);
           if(missing.length){
             focusMissingPrivateReviewFields();
@@ -3148,7 +3259,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           });
           const result=await response.json().catch(()=>({}));
           if(!response.ok||result.ok!==true)throw new Error(result.error||"Private PDF upload failed.");
-          setStatus("Signed PDF saved privately. Next, select Step 2 — Preview My Signed Application. Reviewer approval and payment are still pending.");
+          clearApprovedPreviewImages();
+          setStatus("Updated signed PDF saved privately. Select Step 2 to review both pages, including your contact details. Independent approval and payment are pending.");
           const previewStatus=document.getElementById("approvedPreviewStatus");
           if(previewStatus)previewStatus.textContent="Your signed packet was received. Select Preview My Signed Application to view the watermarked draft.";
         }catch(error){
@@ -4116,6 +4228,13 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       await syncPaymentCompletionFromUrl();
+      await loadPacketContactProfile();
+      document.querySelectorAll("[data-packet-contact]").forEach(input=>{
+        input.addEventListener("input",()=>{
+          const checkbox=document.getElementById("packetContactConfirmed");
+          if(checkbox)checkbox.checked=false;
+        });
+      });
 
       const raw = readPacketData();
       const normalizedData = buildNormalizedPacketData(raw);
