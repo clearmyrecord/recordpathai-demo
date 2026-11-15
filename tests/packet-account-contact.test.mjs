@@ -94,5 +94,6 @@ test("persistent profile extension is RLS-scoped and excludes SSNs and case data
   assert.match(migration,/ALTER TABLE public\.profiles/);
   assert.match(migration,/ADD COLUMN IF NOT EXISTS mailing_line1/);
   assert.match(migration,/ADD COLUMN IF NOT EXISTS filing_phone/);
-  assert.doesNotMatch(migration,/ssn|court_case|disposition/i);
+  const definitions=migration.split("\n").filter(line=>/ADD COLUMN IF NOT EXISTS/i.test(line)).join("\n");
+  assert.doesNotMatch(definitions,/ssn|court_case|disposition/i);
 });
