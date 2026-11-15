@@ -31,26 +31,17 @@ ALTER TABLE public.recordwatch_alert_deliveries
 DROP INDEX IF EXISTS public.recordwatch_alert_deliveries_court_event_idx;
 ALTER TABLE public.recordwatch_alert_deliveries
   DROP CONSTRAINT IF EXISTS recordwatch_alert_source_event_key_format;
-DO $
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint
-    WHERE conrelid='public.recordwatch_alert_deliveries'::regclass
-    AND conname='recordwatch_alert_deliveries_dedup_v2_key') THEN
-    ALTER TABLE public.recordwatch_alert_deliveries
-      ADD CONSTRAINT recordwatch_alert_deliveries_dedup_v2_key
-      UNIQUE(saved_case_id,kind,channel,eligibility_date,reminder_on,source_event_key);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint
-    WHERE conrelid='public.recordwatch_alert_deliveries'::regclass
-    AND conname='recordwatch_alert_source_event_key_format') THEN
-    ALTER TABLE public.recordwatch_alert_deliveries
-      ADD CONSTRAINT recordwatch_alert_source_event_key_format CHECK(
-        source_event_key='' OR
-        (length(source_event_key) BETWEEN 8 AND 160 AND
-         source_event_key ~ '^[a-zA-Z0-9_:.\\-]+$')
-      );
-  END IF;
-END $$;
+ALTER TABLE public.recordwatch_alert_deliveries
+  DROP CONSTRAINT IF EXISTS recordwatch_alert_deliveries_dedup_v2_key;
+ALTER TABLE public.recordwatch_alert_deliveries
+  ADD CONSTRAINT recordwatch_alert_deliveries_dedup_v2_key
+  UNIQUE(saved_case_id,kind,channel,eligibility_date,reminder_on,source_event_key);
+ALTER TABLE public.recordwatch_alert_deliveries
+  ADD CONSTRAINT recordwatch_alert_source_event_key_format CHECK(
+    source_event_key='' OR
+    (length(source_event_key) BETWEEN 8 AND 160 AND
+     source_event_key ~ '^[a-zA-Z0-9_:.-]+$')
+  );
 
 CREATE TABLE IF NOT EXISTS public.recordwatch_verified_court_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
