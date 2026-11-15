@@ -136,6 +136,16 @@
       var premiumState = { subscription: null, preferences: null, error: '',
         justPurchased: false, previousPurchaseStatus: null, canPurchase: false };
       var preferenceSaveNotice = '';
+      var reminderPreferenceRows=[
+          {id:"premiumReminder180",field:"reminder_180_enabled",label:"180-day eligibility reminder"},
+          {id:"premiumReminder90",field:"reminder_90_enabled",label:"90-day eligibility reminder"},
+          {id:"premiumReminder30",field:"reminder_30_enabled",label:"30-day eligibility reminder"},
+          {id:"premiumReminder7",field:"reminder_7_enabled",label:"7-day eligibility reminder"},
+          {id:"premiumReminderDay",field:"reminder_day_enabled",label:"Eligibility-day reminder"},
+          {id:"premiumPacketProgress",field:"packet_progress_enabled",label:"Packet progress follow-ups (days 3, 7, and 14)"},
+          {id:"premiumMissingDetails",field:"missing_details_enabled",label:"Missing case-details follow-ups (days 3, 7, and 14)"},
+          {id:"premiumCourtStatus",field:"court_status_enabled",label:"Verified court-status updates (only with an approved source)"}
+        ];
       // Only account-owned, currently active Supabase rows qualify for checkout.
       // Browser drafts and cached rows are allowed for viewing, not billing.
       var verifiedSavedCases = [];
@@ -344,16 +354,6 @@
               smsEnabledChecked: preferences.sms_enabled === true && consentChecked
             })
           : '';
-        var reminderPreferenceRows=[
-          {id:"premiumReminder180",field:"reminder_180_enabled",label:"180-day eligibility reminder"},
-          {id:"premiumReminder90",field:"reminder_90_enabled",label:"90-day eligibility reminder"},
-          {id:"premiumReminder30",field:"reminder_30_enabled",label:"30-day eligibility reminder"},
-          {id:"premiumReminder7",field:"reminder_7_enabled",label:"7-day eligibility reminder"},
-          {id:"premiumReminderDay",field:"reminder_day_enabled",label:"Eligibility-day reminder"},
-          {id:"premiumPacketProgress",field:"packet_progress_enabled",label:"Packet progress follow-ups (days 3, 7, and 14)"},
-          {id:"premiumMissingDetails",field:"missing_details_enabled",label:"Missing case-details follow-ups (days 3, 7, and 14)"},
-          {id:"premiumCourtStatus",field:"court_status_enabled",label:"Verified court-status updates (only with an approved source)"}
-        ];
         var reminderPreferenceFields='<fieldset class="recordwatch-optin-group"><legend>Premium reminder categories</legend>'+
           '<p class="meta-note">Choose which paid reminders to receive. These do not grant consent to email or SMS; those channels remain optional above.</p>'+
           reminderPreferenceRows.map(function(option){
