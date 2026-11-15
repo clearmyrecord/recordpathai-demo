@@ -3061,9 +3061,13 @@ document.addEventListener("DOMContentLoaded", async function () {
           if(/^(sample|synthetic) applicant$/i.test(String(data?.petitioner?.full_name||"").trim()) ||
              /@example\.invalid$/i.test(String(data?.petitioner?.email||"").trim()))
             throw new Error("Sample applicant information cannot be used for a real packet. Complete Step 1 with your own details.");
-          const selected=await loadActiveTemplateForPacket(data);
+          // Select the official form using the unformatted, account-owned
+          // saved-case dates (ISO YYYY-MM-DD). Only the PDF renderer receives
+          // the MM/DD/YYYY presentation copy. Validating that presentation
+          // copy would incorrectly reject every correctly saved disposition.
+          const selected=await loadActiveTemplateForPacket(reviewData);
           if(!selected){
-            const check=window.RecordPathFormRequirements?.classify?.(data);
+            const check=window.RecordPathFormRequirements?.classify?.(reviewData);
             const missing=Array.isArray(check?.reviewReasons) ? check.reviewReasons.filter(Boolean) : [];
             throw new Error(missing.length
               ? "Saved-case form review needed: "+missing.join(" ")+" Return to Record Details, verify these answers, and save to your account."
