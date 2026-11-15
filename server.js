@@ -14,6 +14,7 @@ import { affiliatePayoutAmount } from "./src/affiliate-payouts.js";
 import { registerAffiliatePayoutRoutes } from "./src/affiliate-payout-service.js";
 import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neutralAlertContent, isPremiumAlertAllowed, validTwilioWebhookSignature, STOP_WORDS } from "./src/recordwatch-alerts.js";
 import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
+import { alertKindEnabled, packetFollowupsForCase, recentVerifiedCourtEvent } from "./src/recordwatch-supplemental-alerts.js";
 import { timingSafeEqual, createHash, randomBytes } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { findCourtProfile, courtFilingPlan } from "./src/court-profiles.js";
@@ -2792,12 +2793,14 @@ async function saveRecordwatchPreferences(userId,payload={}){
     sms_consent_source:smsRequested?"explicit_case_dashboard":previous?.sms_consent_source||null,
     sms_consent_disclosure_version:smsRequested?(newSmsEnrollment?"2026-11-web-form-v2":previous?.sms_consent_disclosure_version||"2026-11-web-form-v2"):previous?.sms_consent_disclosure_version||null,
     sms_opted_out_at:previous?.sms_opted_out_at||null,
-    reminder_180_enabled:payload.reminder_180_enabled!==false,
-    reminder_90_enabled:payload.reminder_90_enabled!==false,
-    reminder_30_enabled:payload.reminder_30_enabled!==false,
-    reminder_7_enabled:payload.reminder_7_enabled!==false,
-    reminder_day_enabled:payload.reminder_day_enabled!==false,
-    court_status_enabled:payload.court_status_enabled!==false,
+    reminder_180_enabled:payload.reminder_180_enabled===undefined ? previous?.reminder_180_enabled!==false : payload.reminder_180_enabled===true,
+    reminder_90_enabled:payload.reminder_90_enabled===undefined ? previous?.reminder_90_enabled!==false : payload.reminder_90_enabled===true,
+    reminder_30_enabled:payload.reminder_30_enabled===undefined ? previous?.reminder_30_enabled!==false : payload.reminder_30_enabled===true,
+    reminder_7_enabled:payload.reminder_7_enabled===undefined ? previous?.reminder_7_enabled!==false : payload.reminder_7_enabled===true,
+    reminder_day_enabled:payload.reminder_day_enabled===undefined ? previous?.reminder_day_enabled!==false : payload.reminder_day_enabled===true,
+    court_status_enabled:payload.court_status_enabled===undefined ? previous?.court_status_enabled!==false : payload.court_status_enabled===true,
+    packet_progress_enabled:payload.packet_progress_enabled===undefined ? previous?.packet_progress_enabled!==false : payload.packet_progress_enabled===true,
+    missing_details_enabled:payload.missing_details_enabled===undefined ? previous?.missing_details_enabled!==false : payload.missing_details_enabled===true,
     updated_at:now
   };
   let result;
@@ -3235,12 +3238,24 @@ async function recordwatchAlertMigrationReady(){
 function alertsLiveReady(r,db){
   return Boolean(r.enabled && db && (r.email_ready||r.sms_ready));
 }
+// Separate receipt prevents new alert kinds being used until the schema is
+// deployed and verified. Existing eligibility reminders continue unaffected.
+async function recordwatchSupplementalMigrationReady(){
+  if(!packetDatabaseReady())return false;
+  try {
+    const rows=await supabaseRest("recordwatch_alert_migration_receipts",{
+      query:"?id=eq.20261115010000_recordwatch_supplemental_alerts&select=id&limit=1"
+    });
+    return Array.isArray(rows)&&rows.length===1;
+  } catch {return false;}
+}
 app.get("/api/recordwatch/alerts/readiness",async(req,res)=>{
   const providers=providerReadiness(process.env);
   const migration_verified=await recordwatchAlertMigrationReady();
   res.setHeader("Cache-Control","no-store");
   return res.json({...providers,migration_verified,
     ready:alertsLiveReady(providers,migration_verified),
+    supplemental_schedule_ready:await recordwatchSupplementalMigrationReady(),
     daily_scheduler_configured:Boolean((process.env.RECORDWATCH_ALERTS_SCHEDULER_KEY||"").length>=32),
     preview_only:!alertsLiveReady(providers,migration_verified)});
 });
@@ -3274,7 +3289,7 @@ async function verifyPremiumAlertPayment(row){
     return false;
   }
 }
-async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today}){
+async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today,sourceEventKey=null}){
   const r=providerReadiness(process.env);
   if(!(await recordwatchAlertMigrationReady())||
     !(channel==="email"?r.email_ready:r.sms_ready))return {status:"provider_unavailable"};
@@ -3284,6 +3299,8 @@ async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today}){
       encodeURIComponent(userId)+"&saved_case_id=eq."+encodeURIComponent(caseId)+"&limit=1"})
   ]);
   const prefs=Array.isArray(preferences)?preferences[0]||null:null;
+  if(!alertKindEnabled(kind,prefs)) return {status:"category_disabled"};
+  if(kind==="court_status_update" && !sourceEventKey)return {status:"unverified_court_event"};
   const suppressed=channel==="sms" && prefs?.phone_number
     ?await supabaseRest("recordwatch_sms_suppressions",{
       query:"?phone_number=eq."+encodeURIComponent(prefs.phone_number)+"&limit=1"
@@ -3301,10 +3318,13 @@ async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today}){
     return {status:"recipient_unverified"};
   const reservation=await supabaseRest("recordwatch_alert_deliveries",{
     method:"POST",
-    query:"?on_conflict=saved_case_id,kind,channel,eligibility_date,reminder_on",
+    query:sourceEventKey
+      ? "?on_conflict=saved_case_id,source_event_key,channel"
+      : "?on_conflict=saved_case_id,kind,channel,eligibility_date,reminder_on",
     prefer:"resolution=ignore-duplicates,return=representation",
     body:{user_id:userId,saved_case_id:caseId,kind,channel,
       eligibility_date:date,reminder_on:today,
+      ...(sourceEventKey?{source_event_key:sourceEventKey}:{}),
       provider:channel==="email"?"resend":"twilio",status:"reserved"}
   });
   const entry=Array.isArray(reservation)?reservation[0]:null;
@@ -3334,31 +3354,59 @@ async function runPaidRecordwatchAlerts(){
   const providers=providerReadiness(process.env);
   if(!alertsLiveReady(providers,await recordwatchAlertMigrationReady()))
     throw new Error("Premium alerts not activated");
+  const supplementalReady=await recordwatchSupplementalMigrationReady();
   const now=new Date().toISOString(),today=now.slice(0,10);
   const paidCases=await supabaseRest("recordwatch_lifetime_cases",{
     query:"?status=eq.active&revoked_at=is.null&select=user_id,saved_case_id,status,revoked_at,amount_cents,currency,stripe_checkout_session_id,stripe_payment_intent_id&limit=1000"
   });
   const totals={cases_checked:0,provider_accepted:0,already_reserved:0,skipped:0,
-    failed_review:0,more_cases_possible:paidCases.length===1000};
-  for(const entitlement of paidCases){
-    totals.cases_checked++;
-    const caseRows=await supabaseRest("saved_cases",{
-      query:"?id=eq."+encodeURIComponent(entitlement.saved_case_id)+
-        "&user_id=eq."+encodeURIComponent(entitlement.user_id)+
-        "&select=id,eligibility_date&limit=1"
-    });
-    const date=Array.isArray(caseRows)?caseRows[0]?.eligibility_date:null;
-    const reminder=reminderForDate(date,today);
-    if(!reminder){totals.skipped++;continue;}
+    failed_review:0,more_cases_possible:paidCases.length===1000,
+    eligibility_events:0,packet_events:0,court_events:0};
+  async function dispatch(kind,caseRow,eventDate,sourceEventKey=null){
     for(const channel of ["email","sms"]){
       const outcome=await sendCasePremiumAlert({
-        userId:entitlement.user_id,caseId:entitlement.saved_case_id,
-        kind:reminder.kind,date:String(date).slice(0,10),channel,today
+        userId:caseRow.user_id,caseId:caseRow.id,
+        kind,date:eventDate,channel,today,sourceEventKey
       });
       if(outcome.status==="provider_accepted")totals.provider_accepted++;
       else if(outcome.status==="already_reserved")totals.already_reserved++;
       else if(outcome.status==="failed_review")totals.failed_review++;
       else totals.skipped++;
+    }
+  }
+  for(const entitlement of paidCases){
+    totals.cases_checked++;
+    // Deleted, archived and paused cases NEVER send. No browser state is read.
+    const caseRows=await supabaseRest("saved_cases",{
+      query:"?id=eq."+encodeURIComponent(entitlement.saved_case_id)+
+        "&user_id=eq."+encodeURIComponent(entitlement.user_id)+
+        "&deleted_at=is.null&archived_at=is.null&recordwatch_paused_at=is.null&limit=1"
+    });
+    const savedCase=Array.isArray(caseRows)?caseRows[0]:null;
+    if(!savedCase){totals.skipped++;continue;}
+    const reminder=reminderForDate(savedCase.eligibility_date,today);
+    if(reminder){
+      totals.eligibility_events++;
+      await dispatch(reminder.kind,savedCase,String(savedCase.eligibility_date).slice(0,10));
+    }
+    if(!supplementalReady)continue;
+    for(const followup of packetFollowupsForCase(savedCase,today)){
+      totals.packet_events++;
+      await dispatch(followup.kind,savedCase,followup.date);
+    }
+    // These events must be inserted by the independently authorized,
+    // evidence-backed operator or a future verified court integration.
+    // Customer-entered case notes cannot enter this private event table.
+    const courtEvents=await supabaseRest("recordwatch_verified_court_events",{
+      query:"?user_id=eq."+encodeURIComponent(entitlement.user_id)+
+        "&saved_case_id=eq."+encodeURIComponent(entitlement.saved_case_id)+
+        "&verified_at=gte."+encodeURIComponent(new Date(Date.now()-8*86400000).toISOString())+
+        "&order=verified_at.asc&limit=50"
+    });
+    for(const event of Array.isArray(courtEvents)?courtEvents:[]){
+      if(!recentVerifiedCourtEvent(event,today))continue;
+      totals.court_events++;
+      await dispatch("court_status_update",savedCase,event.occurred_on,event.event_key);
     }
   }
   return totals;
@@ -3380,6 +3428,50 @@ app.post("/api/operator/recordwatch/run-alerts",async(req,res)=>{
   }catch(error){
     console.warn("RecordWatch premium alert scheduler failure",error?.name||"unknown");
     return res.status(503).json({ok:false,error:"Alert run requires operator review."});
+  }
+});
+
+// Only an independently reviewed court record can enter the automatic
+// notification pipeline. This endpoint never sends messages synchronously.
+app.post("/api/operator/recordwatch/verified-court-event",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  if(!await recordwatchSupplementalMigrationReady())
+    return res.status(503).json({ok:false,error:"Verified court event storage is not ready."});
+  const userId=safe(req.body?.user_id),caseId=safe(req.body?.saved_case_id);
+  const eventKey=safe(req.body?.event_key),status=safe(req.body?.court_status).toUpperCase();
+  const occurredOn=safe(req.body?.occurred_on),evidenceUrl=safe(req.body?.evidence_url);
+  if(!isUuid(userId)||!isUuid(caseId)||
+     !/^[a-zA-Z0-9_:.\\-]{8,160}$/.test(eventKey)||
+     !COURT_STATUS_VALUES.includes(status)||
+     !/^\\d{4}-\\d{2}-\\d{2}$/.test(occurredOn)||
+     !Number.isFinite(Date.parse(occurredOn+"T00:00:00Z"))||
+     Date.parse(occurredOn+"T00:00:00Z")>Date.now()||
+     Date.now()-Date.parse(occurredOn+"T00:00:00Z")>365*86400000)
+    return res.status(400).json({ok:false,error:"A valid verified court event is required."});
+  let evidence;
+  try{
+    evidence=new URL(evidenceUrl);
+    const host=evidence.hostname.toLowerCase();
+    const approved=(process.env.RECORDWATCH_APPROVED_COURT_HOSTS||"").split(",")
+      .map(x=>x.trim().toLowerCase()).filter(Boolean);
+    if(evidence.protocol!=="https:"||evidence.username||evidence.password||
+       evidenceUrl.length>2000||!(host.endsWith(".gov")||host.endsWith(".us")||
+       approved.includes(host)))throw Error("Unsupported court evidence host");
+  }catch{return res.status(400).json({ok:false,error:"Independent official court evidence URL required."});}
+  try{
+    await getSavedCaseReviewFacts(userId,caseId);
+    const rows=await supabaseRest("recordwatch_verified_court_events",{
+      method:"POST",query:"?on_conflict=saved_case_id,event_key",
+      prefer:"resolution=ignore-duplicates,return=representation",
+      body:{user_id:userId,saved_case_id:caseId,event_key:eventKey,
+        court_status:status,occurred_on:occurredOn,
+        verified_source:"operator_verified",evidence_url:evidence.toString()}
+    });
+    return res.json({ok:true,recorded:Array.isArray(rows)&&rows.length===1,
+      note:"Verified event queued for the consent-gated daily Premium scheduler; no message sent by this request."});
+  }catch(error){
+    console.warn("Verified court event acceptance failed",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Verified court event could not be recorded."});
   }
 });
 
