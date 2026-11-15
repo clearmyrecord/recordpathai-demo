@@ -37,13 +37,13 @@ test("legacy browser contact from another account is not prefilled",()=>{
   assert.equal(fields.email,"login@example.org");
   assert.ok(helper.validate(fields).includes("street"));
 });
-test("explicit owner-tagged packet may reuse its saved contact fields",()=>{
+test("even an owner-tagged browser draft must never prefill court contact details",()=>{
   const packet={meta:{packet_contact_user_id:"owner-123"},petitioner:{
     full_name:"Test Applicant",phone:"702-555-0123",email:"contact@example.org",
     address:{line1:"Local saved street",city:"Henderson",state:"NV",zip:"89012"}}};
   const result=helper.mergeForAccount(packet,{},owned);
-  assert.equal(result.street,"Local saved street");
-  assert.equal(result.email,"contact@example.org");
+  assert.equal(result.street,"");
+  assert.equal(result.email,"");
 });
 test("contact input validation rejects incomplete street, email and phone but keeps unit optional",()=>{
   assert.equal(helper.validate(values).length,0);
