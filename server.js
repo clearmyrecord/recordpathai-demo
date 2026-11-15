@@ -3441,9 +3441,9 @@ app.post("/api/operator/recordwatch/verified-court-event",async(req,res)=>{
   const eventKey=safe(req.body?.event_key),status=safe(req.body?.court_status).toUpperCase();
   const occurredOn=safe(req.body?.occurred_on),evidenceUrl=safe(req.body?.evidence_url);
   if(!isUuid(userId)||!isUuid(caseId)||
-     !/^[a-zA-Z0-9_:.\\-]{8,160}$/.test(eventKey)||
+     !/^[a-zA-Z0-9_:.-]{8,160}$/.test(eventKey)||
      !COURT_STATUS_VALUES.includes(status)||
-     !/^\\d{4}-\\d{2}-\\d{2}$/.test(occurredOn)||
+     !/^\d{4}-\d{2}-\d{2}$/.test(occurredOn)||
      !Number.isFinite(Date.parse(occurredOn+"T00:00:00Z"))||
      Date.parse(occurredOn+"T00:00:00Z")>Date.now()||
      Date.now()-Date.parse(occurredOn+"T00:00:00Z")>365*86400000)
