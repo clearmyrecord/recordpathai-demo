@@ -3657,8 +3657,8 @@ app.get("/api/recordwatch/subscriptions", async (req, res) => {
   const userId = safe(req.query.user_id || req.query.userId);
   if (!userId) return res.status(400).json({ ok: false, error: "user_id is required" });
   const supabaseRows = await fetchRecordwatchRows("recordwatch_subscriptions", userId);
-  const rows = supabaseRows || recordwatchMemory.subscriptions.filter((item) => item.user_id === userId);
-  res.json({ ok: true, source: supabaseRows ? "supabase" : "local_fallback", subscriptions: rows });
+  if(!supabaseRows)return res.status(503).json({ok:false,error:"Supabase RecordWatch subscriptions are unavailable; no cached values were substituted."});
+  res.json({ok:true,source:"supabase",subscriptions:supabaseRows});
 });
 
 app.post("/api/recordwatch/eligibility-event", async (req, res) => {
@@ -3682,8 +3682,8 @@ app.get("/api/recordwatch/events", async (req, res) => {
   const userId = safe(req.query.user_id || req.query.userId);
   if (!userId) return res.status(400).json({ ok: false, error: "user_id is required" });
   const supabaseRows = await fetchRecordwatchRows("recordwatch_eligibility_events", userId);
-  const rows = supabaseRows || recordwatchMemory.events.filter((item) => item.user_id === userId);
-  res.json({ ok: true, source: supabaseRows ? "supabase" : "local_fallback", events: rows });
+  if(!supabaseRows)return res.status(503).json({ok:false,error:"Supabase RecordWatch events are unavailable; no cached values were substituted."});
+  res.json({ok:true,source:"supabase",events:supabaseRows});
 });
 
 app.get("/api/recordwatch/notifications", async (req, res) => {
@@ -3694,8 +3694,8 @@ app.get("/api/recordwatch/notifications", async (req, res) => {
   const userId = safe(req.query.user_id || req.query.userId);
   if (!userId) return res.status(400).json({ ok: false, error: "user_id is required" });
   const supabaseRows = await fetchRecordwatchRows("recordwatch_notifications", userId);
-  const rows = supabaseRows || recordwatchMemory.notifications.filter((item) => item.user_id === userId);
-  res.json({ ok: true, source: supabaseRows ? "supabase" : "local_fallback", notifications: rows });
+  if(!supabaseRows)return res.status(503).json({ok:false,error:"Supabase RecordWatch notifications are unavailable; no cached values were substituted."});
+  res.json({ok:true,source:"supabase",notifications:supabaseRows});
 });
 
 app.get("/api/recordwatch/preferences", async (req, res) => {
@@ -3706,8 +3706,8 @@ app.get("/api/recordwatch/preferences", async (req, res) => {
   const userId = safe(req.query.user_id || req.query.userId);
   if (!userId) return res.status(400).json({ ok: false, error: "user_id is required" });
   const supabaseRows = await fetchRecordwatchRows("user_notification_preferences", userId);
-  const preference = supabaseRows && supabaseRows[0] ? supabaseRows[0] : getMemoryPreferences(userId);
-  res.json({ ok: true, source: supabaseRows ? "supabase" : "local_fallback", preferences: preference });
+  if(!supabaseRows)return res.status(503).json({ok:false,error:"Supabase RecordWatch preferences unavailable; browser or memory data is not a fallback."});
+  res.json({ok:true,source:"supabase",preferences:supabaseRows[0]||{}});
 });
 
 app.post("/api/recordwatch/preferences", async (req, res) => {
