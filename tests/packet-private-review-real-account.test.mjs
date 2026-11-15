@@ -19,7 +19,8 @@ const mapped={
     court_type:"court-of-common-pleas",case_number:"SAVED-123"},
   charges:[{charge_name:"REAL saved charge",final_disposition:"Convicted"}]
 };
-function scenario({requestedId=id,consent=true,loaded=saved,mappedResult=mapped}={}){
+function scenario({requestedId=id,consent=true,loaded=saved,mappedResult=mapped,
+  normalizeForPdf=raw=>raw, selectTemplate=async()=>({id:"wood_form"})}={}){
   const events={uploads:[],errors:[],status:[],rendered:[],caseLookups:[],selected:[],saveCalls:0};
   const account={
     getCaseById:async value=>{events.caseLookups.push(value);return loaded;},
@@ -49,8 +50,8 @@ function scenario({requestedId=id,consent=true,loaded=saved,mappedResult=mapped}
       court:{state:"NV",county:"SAMPLE",case_number:"TEST-ONLY"},
       charges:[{charge_name:"SAMPLE CHARGE",final_disposition:"Dismissed"}]
     }),
-    buildNormalizedPacketData:raw=>raw,
-    loadActiveTemplateForPacket:async data=>{events.selected.push(data);return {id:"wood_form"};},
+    buildNormalizedPacketData:raw=>normalizeForPdf(raw),
+    loadActiveTemplateForPacket:async data=>{events.selected.push(data);return selectTemplate(data);},
     loadFormSchema:async()=>({}),
     getMissingRequiredFields:()=>[],
     renderMissingInfoPanel:()=>{},
@@ -113,4 +114,44 @@ test("Private review cannot upload an absent account case",async()=>{
   await job;
   assert.equal(events.uploads.length,0);
   assert.ok(events.errors.at(-1).includes("not found in this account"));
+});
+
+test("Saved ISO disposition is validated before conversion to court PDF display format",async()=>{
+  const accountCase={...mapped,
+    case:{all_charges_confirmed:"yes",proceedings_status:"none"},
+    charges:[{...mapped.charges[0],disposition_date:"2022-04-06"}]
+  };
+  const {job,events}=scenario({
+    mappedResult:accountCase,
+    // The production PDF normalizer transforms dates for display. It must
+    // never be the source for statutory/court form matching.
+    normalizeForPdf:raw=>({...raw,charges:raw.charges.map(c=>({
+      ...c,disposition_date:"04/06/2022"
+    }))}),
+    selectTemplate:async data=>data.charges[0].disposition_date==="2022-04-06"
+      ? {id:"wood_form"} : null
+  });
+  await job;
+  assert.equal(events.selected.length,1);
+  assert.equal(events.selected[0].charges[0].disposition_date,"2022-04-06");
+  assert.equal(events.rendered.length,1);
+  assert.equal(events.rendered[0].charges[0].disposition_date,"04/06/2022");
+  assert.equal(events.uploads.length,1);
+  assert.equal(events.errors.length,1); // Initial UI clear only.
+  assert.equal(events.errors[0],"");
+});
+
+test("Missing original disposition date remains blocked; PDF formatting must never invent dates",async()=>{
+  const accountCase={...mapped,
+    case:{all_charges_confirmed:"yes",proceedings_status:"none"},
+    charges:[{...mapped.charges[0],disposition_date:""}]
+  };
+  const {job,events}=scenario({
+    mappedResult:accountCase,
+    selectTemplate:async data=>data.charges.every(c=>/^\\d{4}-\\d{2}-\\d{2}$/.test(c.disposition_date))
+      ? {id:"wood_form"} : null
+  });
+  await job;
+  assert.equal(events.uploads.length,0);
+  assert.match(events.errors.at(-1),/No active reviewed form matches/);
 });
