@@ -3289,7 +3289,7 @@ async function verifyPremiumAlertPayment(row){
     return false;
   }
 }
-async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today,sourceEventKey=null}){
+async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today,sourceEventKey=null,reminderOn=today}){
   const r=providerReadiness(process.env);
   if(!(await recordwatchAlertMigrationReady())||
     !(channel==="email"?r.email_ready:r.sms_ready))return {status:"provider_unavailable"};
@@ -3318,13 +3318,11 @@ async function sendCasePremiumAlert({userId,caseId,kind,date,channel,today,sourc
     return {status:"recipient_unverified"};
   const reservation=await supabaseRest("recordwatch_alert_deliveries",{
     method:"POST",
-    query:sourceEventKey
-      ? "?on_conflict=saved_case_id,source_event_key,channel"
-      : "?on_conflict=saved_case_id,kind,channel,eligibility_date,reminder_on",
+    query:"?on_conflict=saved_case_id,kind,channel,eligibility_date,reminder_on,source_event_key",
     prefer:"resolution=ignore-duplicates,return=representation",
     body:{user_id:userId,saved_case_id:caseId,kind,channel,
-      eligibility_date:date,reminder_on:today,
-      ...(sourceEventKey?{source_event_key:sourceEventKey}:{}),
+      eligibility_date:date,reminder_on:reminderOn,
+      source_event_key:sourceEventKey||"",
       provider:channel==="email"?"resend":"twilio",status:"reserved"}
   });
   const entry=Array.isArray(reservation)?reservation[0]:null;
@@ -3362,11 +3360,11 @@ async function runPaidRecordwatchAlerts(){
   const totals={cases_checked:0,provider_accepted:0,already_reserved:0,skipped:0,
     failed_review:0,more_cases_possible:paidCases.length===1000,
     eligibility_events:0,packet_events:0,court_events:0};
-  async function dispatch(kind,caseRow,eventDate,sourceEventKey=null){
+  async function dispatch(kind,caseRow,eventDate,sourceEventKey=null,reminderOn=today){
     for(const channel of ["email","sms"]){
       const outcome=await sendCasePremiumAlert({
         userId:caseRow.user_id,caseId:caseRow.id,
-        kind,date:eventDate,channel,today,sourceEventKey
+        kind,date:eventDate,channel,today,sourceEventKey,reminderOn
       });
       if(outcome.status==="provider_accepted")totals.provider_accepted++;
       else if(outcome.status==="already_reserved")totals.already_reserved++;
@@ -3406,7 +3404,8 @@ async function runPaidRecordwatchAlerts(){
     for(const event of Array.isArray(courtEvents)?courtEvents:[]){
       if(!recentVerifiedCourtEvent(event,today))continue;
       totals.court_events++;
-      await dispatch("court_status_update",savedCase,event.occurred_on,event.event_key);
+      await dispatch("court_status_update",savedCase,event.occurred_on,event.event_key,
+        String(event.verified_at).slice(0,10));
     }
   }
   return totals;
