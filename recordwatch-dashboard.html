@@ -68,7 +68,7 @@
       </div>
     </section>
 
-    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Layer 3: Monitoring Engine</span><h1>RecordWatch Dashboard</h1><p>Track eligibility estimates, requirements, risk flags, and correction tasks across every saved case.</p><div class="hero-actions"><a class="btn" href="recordwatch-intake.html?new=1">Add New Case</a><a class="btn secondary" href="recordwatch-relief.html">Relief Actions</a></div></div></section>
+    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Layer 3: Monitoring Engine</span><h1>RecordWatch Dashboard</h1><p>Track eligibility estimates, requirements, risk flags, and correction tasks across every saved case.</p><div class="hero-actions"><a class="btn" id="recordwatchPremiumHeroAction" href="#recordwatchPremiumPanel">Premium Purchase Options — $39</a><a class="btn secondary" href="recordwatch-intake.html?new=1">Add New Case</a><a class="btn secondary" href="recordwatch-relief.html">Relief Actions</a></div></div></section>
     <section class="recordwatch-section"><div class="container recordwatch-stack">
       <div id="recordwatchDataNotice" class="meta-note"></div>
       <div class="summary-grid" id="summaryGrid"></div>
@@ -249,6 +249,12 @@
         var subscription = activeSubscription();
         var preferences = Object.assign({ email_enabled: false, sms_enabled: false }, premiumState.preferences || {});
         var premium = window.RecordWatchMessageProvider && RecordWatchMessageProvider.isPremium(subscription);
+        // The primary purchase navigation must be visible above the dashboard
+        // metrics. It scrolls to the real consent-gated form, not straight to Stripe.
+        var primaryAction=document.getElementById("recordwatchPremiumHeroAction");
+        if(primaryAction) primaryAction.textContent=premium
+          ? "Manage RecordWatch Premium"
+          : "Purchase RecordWatch Premium — $39";
         var renewal = subscription && (subscription.current_period_end || subscription.premium_expires_at);
         var caseId=selectedSavedCaseId();
         // A stale browser-only active ID should not hide $39 Premium when the
@@ -292,15 +298,18 @@
           (lifetime ? '<span class="meta-note">This case is paid. No further payment or cancellation is required.</span>' :
            legacy ? '<button class="btn secondary" type="button" data-premium-action="portal">Manage existing subscription</button><button class="btn danger" type="button" data-premium-action="cancel">Cancel existing renewal</button>' :
            caseId ? '<form id="recordwatchPreCheckoutForm" class="recordwatch-enrollment-form">' +
-             '<h3>Choose your RecordWatch notification destinations</h3>' +
-             '<p class="muted">These email and SMS details are independent of Step 1. Email and SMS are optional; your case tracking remains available even if you do not consent to messages. Voluntary consent; not required to purchase Premium.</p>' +
-             checkoutFields +
-             '<p class="meta-note">You may purchase Premium without opting into either channel. No notification will be sent before a verified payment and any required email confirmation or Twilio approval.</p>' +
+             '<h3>Purchase RecordWatch Premium — $39 once</h3>' +
+             '<p class="muted">Unlock Premium for this saved case with one $39 payment and no renewal. Choose optional notification destinations before or after purchasing; they are not required to buy Premium.</p>' +
              '<label class="toggle-row"><input id="recordwatchPurchaseTerms" type="checkbox" required> <span>I have reviewed the <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a>, <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>, and the $39 one-time lifetime-per-saved-case price. I understand court and packet charges are separate and there is no automatic renewal.</span></label>' +
-             '<p id="recordwatchCheckoutStatus" role="status" aria-live="polite" class="meta-note"></p>' +
              '<button class="btn" type="submit">' +
-                (refunded ? 'Purchase Premium again — $39' : 'Accept terms &amp; continue to Stripe — $39') +
+                (refunded ? 'Purchase Premium again — $39' : 'Purchase RecordWatch Premium — $39') +
               '</button>' +
+             '<p id="recordwatchCheckoutStatus" role="status" aria-live="polite" class="meta-note">Confirm the purchase terms above to continue to secure Stripe checkout. No charge occurs on this page.</p>' +
+             '<details class="recordwatch-optional-destinations"><summary>Optional email and SMS settings — you can configure these after payment</summary>' +
+             '<p class="muted">The destination email and phone are separate from Step 1. Voluntary consent; not required to purchase Premium. SMS requires separate express consent and provider availability. Purchasing without messaging consent does not activate messages.</p>' +
+             checkoutFields +
+             '<p class="meta-note">No email or SMS is sent before verified payment, email confirmation where applicable, and provider readiness.</p>' +
+             '</details>' +
              '</form>' :
            chooseSavedCase) +
           '</div><p class="meta-note">Lifetime access is currently linked to the selected saved case. If several cases may be sealed on one application, contact us before buying duplicate case upgrades; grouped filing checkout is still being developed. Court filing fees and the planned $50 packet service are separate. Pre-existing subscriptions follow their original terms.</p>' +

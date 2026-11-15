@@ -207,5 +207,5 @@ test("Only verified lifetime case purchases can be persisted; packet checkout ca
   assert.ok(migration.includes("on public.recordwatch_lifetime_cases for select to authenticated"));
   assert.ok(!packet.includes('recordwatchAddon'));
   assert.ok(!dashboard.includes('Subscribe — $4.99/month'));
-  assert.ok(dashboard.includes('Accept terms &amp; continue to Stripe — $39'));
+  assert.ok(dashboard.includes('Purchase RecordWatch Premium — $39'));
 });

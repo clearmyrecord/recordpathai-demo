@@ -15,11 +15,24 @@ const client=read("js/recordwatch-notifications.js");
 
 test("Checkout CTA follows separate contact destinations and mandatory purchase agreement",()=>{
   assert.match(dash,/recordwatchPreCheckoutForm/);
+  // The user's first-screen CTA must be visible without opening the optional
+  // notification form or falsely implying payment before the terms checkbox.
+  assert.match(dash,/id="recordwatchPremiumHeroAction" href="#recordwatchPremiumPanel"/);
+  assert.match(dash,/primaryAction\.textContent=premium/);
+  assert.match(dash,/Purchase RecordWatch Premium — \$39/);
   assert.match(dash,/checkoutFields \+/);
   assert.match(dash,/recordwatchPurchaseTerms/);
-  assert.match(dash,/Accept terms &amp; continue to Stripe — \$39/);
-  assert.ok(dash.indexOf("checkoutFields +") < dash.indexOf('recordwatchPurchaseTerms'));
-  assert.ok(dash.indexOf('recordwatchPurchaseTerms') < dash.indexOf('Accept terms &amp; continue to Stripe'));
+  assert.match(dash,/Purchase RecordWatch Premium — \$39/);
+  assert.match(dash,/Purchase Premium again — \$39/);
+  const form=dash.split('caseId ? \'<form id="recordwatchPreCheckoutForm"')[1]
+    .split("'</form>' :",1)[0];
+  assert.ok(form);
+  // Actual Stripe submit, not a misleading navigation link, appears before
+  // optional communication fields and directly after the required purchase agreement.
+  assert.ok(form.indexOf('recordwatchPurchaseTerms') < form.indexOf("type=\"submit\""));
+  assert.ok(form.indexOf("type=\"submit\"") < form.indexOf("checkoutFields +"));
+  assert.match(form,/<details class="recordwatch-optional-destinations"/);
+  assert.match(form,/recordwatchCheckoutStatus/);
   assert.match(dash,/if \(!purchaseTerms\)/);
   assert.match(dash,/purchase_terms_acknowledged:true/);
   assert.match(dash,/sms_consent_disclosure_version:RecordWatchSmsOptIn.DISCLOSURE_VERSION/);
