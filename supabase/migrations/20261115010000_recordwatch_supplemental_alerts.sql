@@ -7,7 +7,12 @@ ALTER TABLE public.recordwatch_notification_preferences
   ADD COLUMN IF NOT EXISTS missing_details_enabled boolean NOT NULL DEFAULT true;
 
 ALTER TABLE public.recordwatch_alert_deliveries
-  ADD COLUMN IF NOT EXISTS source_event_key text;
+  ADD COLUMN IF NOT EXISTS source_event_key text NOT NULL DEFAULT '';
+UPDATE public.recordwatch_alert_deliveries
+  SET source_event_key='' WHERE source_event_key IS NULL;
+ALTER TABLE public.recordwatch_alert_deliveries
+  ALTER COLUMN source_event_key SET DEFAULT '',
+  ALTER COLUMN source_event_key SET NOT NULL;
 ALTER TABLE public.recordwatch_alert_deliveries
   DROP CONSTRAINT IF EXISTS recordwatch_alert_deliveries_kind_check;
 ALTER TABLE public.recordwatch_alert_deliveries
@@ -18,18 +23,27 @@ ALTER TABLE public.recordwatch_alert_deliveries
     'missing_details_3_day','missing_details_7_day','missing_details_14_day',
     'court_status_update'
   ));
--- A verified court update has its own durable event key so a scheduler rerun,
--- an outage or a second status change on the same day cannot cause duplicates.
-CREATE UNIQUE INDEX IF NOT EXISTS recordwatch_alert_deliveries_court_event_idx
-  ON public.recordwatch_alert_deliveries(saved_case_id,source_event_key,channel);
+-- The event key participates in one ON CONFLICT target for all alert types.
+-- Empty key preserves normal milestone deduplication; distinct verified court
+-- events on the same date remain independently deduplicated.
+ALTER TABLE public.recordwatch_alert_deliveries
+  DROP CONSTRAINT IF EXISTS recordwatch_alert_deliveries_saved_case_id_kind_channel_eli_key;
+DROP INDEX IF EXISTS public.recordwatch_alert_deliveries_court_event_idx;
 DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+    WHERE conrelid='public.recordwatch_alert_deliveries'::regclass
+    AND conname='recordwatch_alert_deliveries_dedup_v2_key') THEN
+    ALTER TABLE public.recordwatch_alert_deliveries
+      ADD CONSTRAINT recordwatch_alert_deliveries_dedup_v2_key
+      UNIQUE(saved_case_id,kind,channel,eligibility_date,reminder_on,source_event_key);
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint
     WHERE conrelid='public.recordwatch_alert_deliveries'::regclass
     AND conname='recordwatch_alert_source_event_key_format') THEN
     ALTER TABLE public.recordwatch_alert_deliveries
       ADD CONSTRAINT recordwatch_alert_source_event_key_format CHECK(
-        source_event_key IS NULL OR
+        source_event_key='' OR
         (length(source_event_key) BETWEEN 8 AND 160 AND
          source_event_key ~ '^[a-zA-Z0-9_:.\\-]+$')
       );
