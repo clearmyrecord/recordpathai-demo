@@ -139,16 +139,26 @@
     document.addEventListener("DOMContentLoaded", async function () {
       if (!await RecordPathAuth.requireProtectedPageAsync("view your dashboard")) return;
       const user = RecordPathUserStore.getCurrentUser();
-      let cases = [];
-      let showingCachedCases = false;
+      let cases=[],profile=null;
       try {
-        cases = await RecordPathUserStore.getCasesAsync();
-        showingCachedCases = Boolean(cases && cases.isFallback);
-      } catch (error) {
-        console.warn("Supabase saved case load failed:", error);
-        cases = RecordPathUserStore.getCases();
-        showingCachedCases = cases.length > 0;
+        [cases,profile]=await Promise.all([
+          RecordPathUserStore.getSupabaseCases(),
+          RecordPathUserStore.getSupabaseProfile()
+        ]);
+        if(!user?.id || profile?.id!==user.id)
+          throw new Error("Supabase account ownership could not be verified.");
+      } catch(error) {
+        const notice=document.getElementById("savedCaseStatus");
+        if(notice)notice.textContent=
+          "Supabase account records are unavailable. No browser-saved cases or contact data are displayed.";
+        document.getElementById("recordWatchWidget").textContent=
+          "Supabase RecordWatch data unavailable; no local fallback.";
+        document.getElementById("savedCaseCount").textContent="—";
+        const btn=document.getElementById("purchaseRecordWatchPremium");
+        if(btn){btn.setAttribute("aria-disabled","true");btn.removeAttribute("href");}
+        return;
       }
+      const showingCachedCases=false;
       // A checkout link may include a case ID only after the authenticated
       // Supabase case list is available. Cached browser drafts are view-only.
       const isSavedCaseUuid = (id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ""));
@@ -166,8 +176,8 @@
         (selectedRecordWatchCaseId ? "?caseId=" + encodeURIComponent(selectedRecordWatchCaseId) : "") +
         "#recordwatchPremiumPanel";
       const savedCaseStatus = document.getElementById("savedCaseStatus");
-      if (showingCachedCases && savedCaseStatus) savedCaseStatus.textContent = "Showing cached case data. Changes will sync when your connection is restored.";
-      document.getElementById("dashboardTitle").textContent = `Your account — ${user.fullName || user.email}`;
+      if(savedCaseStatus)savedCaseStatus.textContent="Showing authenticated Supabase-saved cases only.";
+      document.getElementById("dashboardTitle").textContent = `Your account — ${profile.filing_full_name || profile.full_name || profile.email || "Account"}`;
       document.getElementById("eligibilityStatus").textContent = latest.eligibilityStatus || "Not screened yet";
       document.getElementById("eligibleDate").textContent = latest.estimatedEligibleDate ? `Estimated eligible date: ${latest.estimatedEligibleDate}` : "Complete screening to estimate a date.";
       document.getElementById("savedCaseCount").textContent = String(cases.length);
@@ -177,32 +187,31 @@
       const paymentPaid = String(latest.paymentStatus || "").toLowerCase().includes("paid");
       const packetGenerated = String(latest.packetStatus || "").toLowerCase().includes("generated");
       const nextAction = !cases.length ? ["Continue eligibility intake", "eligibility.html"] : !paymentPaid ? ["Review packet and payment", "packet.html"] : !packetGenerated ? ["Generate or download packet", "packet.html"] : ["Open RecordWatch", "recordwatch-dashboard.html"];
-      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
-        RecordWatchBridge.syncExistingRecordPathData();
-      }
       document.getElementById("nextAction").textContent = nextAction[0];
       document.getElementById("nextActionLink").href = nextAction[1];
-      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();
-      const recordWatchData = await loadRecordWatchData(selectedRecordWatchCaseId);
+      let recordWatchData=null;
+      try { recordWatchData=await loadRecordWatchData(selectedRecordWatchCaseId); }
+      catch(error) {
+        const notice=document.getElementById("savedCaseStatus");
+        if(notice)notice.textContent="Cases loaded from Supabase. Remote RecordWatch activity is temporarily unavailable.";
+      }
       const paidPremium = Boolean(window.RecordWatchMessageProvider &&
         RecordWatchMessageProvider.isPremium(recordWatchData && recordWatchData.subscription));
       if (purchaseLink && paidPremium) {
         purchaseLink.textContent = "Manage RecordWatch Premium";
       }
-      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();
       renderRecordWatchWidget(latest, recordWatchData && recordWatchData.subscription, Boolean(selectedRecordWatchCaseId));
       const caseList = document.getElementById("caseList");
       RecordPathSavedCaseCards.render(caseList, cases, { readOnly: showingCachedCases });
       RecordPathSavedCaseCards.bind(caseList, async function (message) {
-        let refreshed = [];
-        let isFallback = false;
+        let refreshed=[];
+        let isFallback=false;
         try {
-          refreshed = await RecordPathUserStore.getCasesAsync();
-          isFallback = Boolean(refreshed && refreshed.isFallback);
-        } catch (error) {
-          console.warn("Supabase saved case refresh failed:", error);
-          refreshed = RecordPathUserStore.getCases();
-          isFallback = refreshed.length > 0;
+          refreshed=await RecordPathUserStore.getSupabaseCases();
+        } catch(error) {
+          const status=document.getElementById("savedCaseStatus");
+          if(status)status.textContent="Unable to refresh Supabase cases. No browser records were used.";
+          return;
         }
         document.getElementById("savedCaseCount").textContent = String(refreshed.length);
         const status = document.getElementById("savedCaseStatus");
@@ -226,21 +235,23 @@
       }
       return {data, subscription};
     }
-    function renderRecordWatchWidget(latest, premiumSubscription, selectedVerifiedCase){
-      const events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
-      const notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
-      const localCases = window.RecordWatchMonitor ? RecordWatchMonitor.loadCases() : [];
-      const active = localCases.find((item) => item.court && (item.court.caseNumber === latest.caseNumber || item.id === latest.caseId || item.id === latest.id)) || localCases[0] || null;
-      const currentResult = active && window.RecordWatchBridge ? RecordWatchBridge.getCurrentEligibilityResult(active) : null;
-      if (active && window.RecordWatchBridge && typeof RecordWatchBridge.registerRecordWatchEligibility === "function") RecordWatchBridge.registerRecordWatchEligibility(active);
-      const currentEligibilityDate = (currentResult && currentResult.estimatedEligibleDate) || latest.estimatedEligibleDate || "";
-      const event = events.find((item) => active && item.case_id === active.id && item.eligibility_date === currentEligibilityDate) || events.find((item) => (item.case_id === latest.caseId || item.case_id === latest.id) && item.eligibility_date === currentEligibilityDate) || null;
-      const eligibilityDate = currentEligibilityDate || (event && event.eligibility_date) || "";
-      const confidence = (event && event.eligibility_confidence) || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).level : "");
-      const confidenceReason = (event && event.eligibility_confidence_reason) || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).reason : "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.");
-      const days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(eligibilityDate) : null;
-      const subscriptions = window.RecordWatchNotifications ? RecordWatchNotifications.loadSubscriptions() : [];
-      const isPremium = window.RecordWatchMessageProvider && RecordWatchMessageProvider.isPremium(premiumSubscription);
+    function renderRecordWatchWidget(latest,premiumSubscription,selectedVerifiedCase){
+      const events=window.RecordWatchNotifications?RecordWatchNotifications.loadEvents():[];
+      const notifications=window.RecordWatchNotifications?RecordWatchNotifications.loadNotifications():[];
+      // All values below come from the authenticated Supabase case and
+      // server-fetched RecordWatch history, never local monitor state.
+      const currentEligibilityDate=selectedVerifiedCase
+        ? (latest.estimatedEligibleDate||latest.eligibilityDate||""):"";
+      const event=events.find(item=>
+        item.case_id===(latest.case_id||latest.id) &&
+        item.eligibility_date===currentEligibilityDate)||null;
+      const eligibilityDate=currentEligibilityDate || event?.eligibility_date || "";
+      const confidence=latest.eligibilityConfidence||event?.eligibility_confidence||"";
+      const confidenceReason=latest.eligibilityReasons?.join?.("; ")||
+        event?.eligibility_confidence_reason||"Estimate based on the saved Supabase case.";
+      const days=window.RecordWatchNotifications?RecordWatchNotifications.daysUntil(eligibilityDate):null;
+      const isPremium=window.RecordWatchMessageProvider &&
+        RecordWatchMessageProvider.isPremium(premiumSubscription);
       const items = [
         ["Eligibility Date", eligibilityDate ? formatRecordWatchDate(eligibilityDate) : "Complete screening to estimate a date."],
         ["Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")],
