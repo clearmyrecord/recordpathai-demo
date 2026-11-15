@@ -20,14 +20,16 @@ test("when no saved case is selected, the $39 dashboard offers existing saved ca
   assert.match(panel,/caseId \? '<form id="recordwatchPreCheckoutForm"/);
 });
 
-test("RecordWatch purchase CTA never forwards browser-only case IDs as account-owned IDs",()=>{
+test("RecordWatch purchase CTA navigates only with an authenticated Supabase-saved case ID",()=>{
   const start=recordwatch.indexOf('document.querySelectorAll("[data-recordwatch-checkout]")');
-  const end=recordwatch.indexOf('var smsToggle',start);
+  const end=recordwatch.indexOf('document.getElementById("recordwatchEnrollmentForm")',start);
   assert.ok(start>=0 && end>start);
   const snippet=recordwatch.slice(start,end);
-  assert.match(snippet,/const savedUuid=\/\^\[0-9a-f\]/);
-  assert.match(snippet,/savedUuid\?"\?caseId="\+encodeURIComponent\(caseId\):""/);
+  assert.match(recordwatch,/store\.getSupabaseCases\(\)/);
+  assert.match(snippet,/if\(!caseRow\)/);
+  assert.match(snippet,/encodeURIComponent\(caseRow\.case_id\)/);
   assert.match(snippet,/#recordwatchPremiumPanel/);
+  assert.doesNotMatch(snippet,/localStorage/);
 });
 
 test("customer must still own a real saved Supabase case and accept checkout terms",()=>{

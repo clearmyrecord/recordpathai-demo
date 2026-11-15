@@ -21,7 +21,7 @@ test("case-level form review answers travel from Record Details into protected s
 test("signed private review uses case review and charges from the authenticated saved case, not browser data",()=>{
   const prepare=packet.split("async function prepareSignedReviewPdf()")[1].split("async function generateSealingPdf()",1)[0];
   assert.ok(prepare);
-  assert.match(prepare,/const savedCase=await store\.getCaseById\(caseId\)/);
+  assert.match(prepare,/const savedCase=await store\.getSupabaseCaseById\(caseId\)/);
   assert.match(prepare,/case:mapped\.case \|\| \{\},charges:mapped\.charges/);
   assert.match(prepare,/const data=buildNormalizedPacketData\(reviewData\)/);
   assert.match(packet,/all_charges_confirmed:\s*raw\.case\?\.all_charges_confirmed \|\| "unconfirmed"/);

@@ -53,14 +53,18 @@ test("Case inputs, including partial charge cards and mapped court-form inputs, 
   assert.match(details, /hydrateCharges\(data\)/);
 });
 
-test("RecordWatch is an opt-in action, while saving locally requires no sign-in", () => {
-  assert.match(details, /id="saveRecordWatchBtn"/);
-  assert.match(details, /recordPathRecordWatchOptIn/);
-  assert.match(details, /if \(!isRecordWatchEnabled\(\) \|\| !window\.RecordWatchBridge\) return;/);
-  assert.match(details, /localStorage\.setItem\(RECORDWATCH_OPT_IN_KEY, "true"\)/);
-  assert.doesNotMatch(details, /RecordPathAuth\.requireAuth\("save progress"/);
-  assert.match(details, /persistCurrentCaseDraft\(result\.casePayload, false\)/);
-  assert.match(step1, /localStorage\.getItem\("recordPathRecordWatchOptIn"\) === "true"/);
+test("RecordWatch opt-in activates only after authenticated Supabase case verification",()=>{
+  assert.match(details,/id="saveRecordWatchBtn"/);
+  assert.match(details,/getSupabaseCaseById\(caseId\)/);
+  assert.match(details,/updateCase\(caseId,\{recordWatchStatus:"active"\}\)/);
+  assert.match(details,/verifiedRemoteRecordWatchCase/);
+  assert.match(details,/Browser drafts never become RecordWatch/);
+  assert.doesNotMatch(details,/localStorage\.setItem\(RECORDWATCH_OPT_IN_KEY, "true"\)/);
+  assert.doesNotMatch(details,/RecordPathAuth\.requireAuth\("save progress"/);
+  assert.match(details,/persistCurrentCaseDraft\(result\.casePayload, false\)/);
+  // Step 1's legacy opt-in does not authorize any monitored case; only
+  // Remote RecordWatch pages read the persisted Supabase case.
+  assert.match(step1,/localStorage\.getItem\("recordPathRecordWatchOptIn"\) === "true"/);
 });
 
 test("The Ohio pilot review is not presented in the customer case intake", () => {

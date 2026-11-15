@@ -103,7 +103,7 @@ test("signed two-page court PDF requires the applicant's separate private-review
 test("private review loads a real saved account case before rendering and NEVER copies the synthetic sample or charges a card",()=>{
   const review=html.split("async function prepareSignedReviewPdf()")[1]?.split("async function generateSealingPdf()",1)[0];
   assert.ok(review);
-  assert.match(review,/const savedCase=await store\.getCaseById\(caseId\)/);
+  assert.match(review,/const savedCase=await store\.getSupabaseCaseById\(caseId\)/);
   assert.match(review,/const mapped=store\.caseToPacketData\(savedCase\)/);
   assert.match(review,/charges:mapped\.charges/);
   assert.match(review,/court:\{\.\.\.\(raw\.court\|\|\{\}\),\.\.\.mapped\.court\}/);

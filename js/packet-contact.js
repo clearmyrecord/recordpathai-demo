@@ -23,29 +23,18 @@
     });
     node[parts[parts.length-1]]=trim(value);
   }
-  function mergeForAccount(raw,profile,user) {
-    const row=profile||{},account=user||{};
-    const owner=trim(account.id);
-    const markedOwner=trim(raw?.meta?.packet_contact_user_id);
-    const savedName=trim(get(raw,"petitioner.full_name"));
-    const accountName=trim(row.filing_full_name||row.full_name||account.fullName);
-    // Old browser records had no account ownership marker: reuse those contact
-    // details only if their full legal name matches the signed-in account.
-    const verifiedLegacy=Boolean(owner && (
-      markedOwner===owner ||
-      (!markedOwner && savedName && accountName &&
-       savedName.toLocaleLowerCase()===accountName.toLocaleLowerCase())
-    ));
+  function mergeForAccount(_ignoredBrowserDraft,profile,_ignoredBrowserUser) {
+    // Only the account-owned profiles row retrieved from Supabase is a data
+    // source. Never reuse legacy localStorage data, even with a matching name.
+    const row=profile||{};
     const defaults={
-      fullName:row.full_name||account.fullName,
-      email:row.email||account.email,
-      phone:row.phone||account.phone
+      fullName:row.full_name,
+      email:row.email,
+      phone:row.phone
     };
-    return Object.fromEntries(fields.map(f=>{
-      const saved=trim(row[f.column]);
-      const cached=verifiedLegacy ? trim(get(raw,f.path)) : "";
-      return [f.key,saved||cached||trim(defaults[f.key])];
-    }));
+    return Object.fromEntries(fields.map(f=>[
+      f.key,trim(row[f.column]||defaults[f.key])
+    ]));
   }
   function validate(values) {
     const v=Object.fromEntries(fields.map(f=>[f.key,trim(values?.[f.key])]));

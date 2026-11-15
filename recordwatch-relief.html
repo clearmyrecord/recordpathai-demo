@@ -80,21 +80,30 @@
   <script>
     (function () {
       "use strict";
-      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
-        RecordWatchBridge.syncExistingRecordPathData();
+      let profile={},cases=[],plan=null;
+      const planSummary=document.getElementById("planSummary");
+      const reliefCases=document.getElementById("reliefCases");
+      function shape(item){
+        const charges=(item.chargeDetails||[]).map(c=>({
+          chargeName:c.charge_name,statuteCode:c.offense_code,
+          chargeLevel:c.offense_level,degree:c.degree||c.offense_level
+        }));
+        return {
+          id:item.case_id,
+          court:{caseNumber:item.caseNumber,courtName:item.courtName,
+            county:item.county,caseState:item.caseState},
+          charges,outcome:{outcome:item.outcome,dispositionDate:item.dispositionDate,
+            dischargeDate:item.dischargeDate,finalDischargeDate:item.finalDischargeDate},
+          eligibility:{estimatedEligibleDate:item.estimatedEligibleDate,
+            eligibilityDate:item.eligibilityDate,status:item.eligibilityStatus}
+        };
       }
-      var profile = RecordWatchMonitor.loadProfile();
-      var cases = RecordWatchMonitor.loadCases();
-      var plan = RecordWatchRelief.saveReliefPlan(RecordWatchRelief.buildReliefPlan(profile, cases));
-      var planSummary = document.getElementById("planSummary");
-      var reliefCases = document.getElementById("reliefCases");
-
       function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
       function list(items) { return items && items.length ? "<ul>" + items.map(function (item) { return "<li>" + esc(item) + "</li>"; }).join("") + "</ul>" : "<span class='muted'>None recorded</span>"; }
       function row(label, value) { return '<div class="detail-row"><strong>' + esc(label) + '</strong><span>' + (String(value || "").charAt(0) === "<" ? value : esc(value || "Not entered")) + '</span></div>'; }
 
       function render() {
-        planSummary.innerHTML = '<h2>Relief action plan summary</h2><p class="muted">Generated locally on ' + esc(new Date(plan.createdAt).toLocaleString()) + ' and saved under <code>recordwatchReliefPlan</code>.</p><div class="summary-grid"><article class="summary-card"><p class="eyebrow-mini">Total cases</p><h3>' + plan.summary.totalCases + '</h3></article><article class="summary-card"><p class="eyebrow-mini">Eligible now</p><h3>' + plan.summary.eligibleNow + '</h3></article><article class="summary-card"><p class="eyebrow-mini">Needs info</p><h3>' + plan.summary.needsInformation + '</h3></article><article class="summary-card"><p class="eyebrow-mini">Post-relief monitoring</p><h3>' + plan.summary.postReliefMonitoring + '</h3></article></div>';
+        planSummary.innerHTML = '<h2>Relief action plan summary</h2><p class="muted">Calculated from the signed-in customer&#39;s Supabase-saved case records; no browser data was imported.</p><div class="summary-grid"><article class="summary-card"><p class="eyebrow-mini">Total cases</p><h3>' + plan.summary.totalCases + '</h3></article><article class="summary-card"><p class="eyebrow-mini">Eligible now</p><h3>' + plan.summary.eligibleNow + '</h3></article><article class="summary-card"><p class="eyebrow-mini">Needs info</p><h3>' + plan.summary.needsInformation + '</h3></article><article class="summary-card"><p class="eyebrow-mini">Post-relief monitoring</p><h3>' + plan.summary.postReliefMonitoring + '</h3></article></div>';
         if (!cases.length) {
           reliefCases.innerHTML = '<div class="empty-state"><h2>No cases available</h2><p>Complete eligibility and record details, or use optional Advanced Case Intake for extra details.</p><a class="btn" href="recordwatch-intake.html">Advanced Case Intake</a></div>';
           return;
@@ -117,24 +126,62 @@
         return cases.find(function (caseData) { return caseData.id === id; });
       }
 
-      reliefCases.addEventListener("click", function (event) {
-        if (event.target.matches(".generate-court")) {
-          RecordWatchRelief.prefillCourtPacket(findCaseFromButton(event.target), profile);
+      async function saveTask(caseId,key){
+        const user=window.RecordPathUserStore.getCurrentUser();
+        if(!user?.id||!cases.some(item=>item.id===caseId))
+          throw new Error("An authenticated Supabase case is required.");
+        const client=await window.RecordPathSupabase.getClient();
+        const result=await client.from("recordwatch_case_tasks")
+          .upsert({user_id:user.id,saved_case_id:caseId,task_key:key,
+            completed:true,updated_at:new Date().toISOString()},
+            {onConflict:"user_id,saved_case_id,task_key"}).select("task_key").single();
+        if(result.error||result.data?.task_key!==key)
+          throw new Error("Supabase did not confirm the completed task.");
+      }
+      reliefCases.addEventListener("click",async function(event){
+        const button=event.target.closest("button");
+        if(!button)return;
+        const selectedCase=findCaseFromButton(button);
+        if(!selectedCase)return;
+        if(button.matches(".generate-court")){
+          location.assign("packet.html?caseId="+encodeURIComponent(selectedCase.id));
+          return;
         }
-        if (event.target.matches(".generate-dispute")) {
-          var caseData = findCaseFromButton(event.target);
-          var content = RecordWatchRelief.generateDisputePacket(caseData, profile);
-          RecordWatchRelief.downloadTextFile("recordwatch-dispute-" + (caseData.court && caseData.court.caseNumber || caseData.id) + ".txt", content);
-          RecordWatchMonitor.updateTask(caseData.id, "disputePacketGenerated", true);
-        }
-        if (event.target.matches(".mark-complete")) {
-          var selectedCase = findCaseFromButton(event.target);
-          RecordWatchMonitor.updateTask(selectedCase.id, "correctedVerified", true);
-          event.target.textContent = "Marked Verified";
-        }
+        button.disabled=true;
+        try{
+          if(button.matches(".generate-dispute")){
+            const content=RecordWatchRelief.generateDisputePacket(selectedCase,profile);
+            await saveTask(selectedCase.id,"disputePacketGenerated");
+            RecordWatchRelief.downloadTextFile(
+              "recordwatch-dispute-"+(selectedCase.court?.caseNumber||selectedCase.id)+".txt",content);
+          }else if(button.matches(".mark-complete")){
+            await saveTask(selectedCase.id,"correctedVerified");
+            button.textContent="Saved in Supabase";
+          }
+        }catch(error){
+          alert("Supabase update unavailable; no browser-only completion was recorded.");
+        }finally{button.disabled=false;}
       });
-      document.getElementById("downloadPlan").addEventListener("click", function () { RecordWatchRelief.downloadActionPlanJSON(plan); });
-      render();
+      document.getElementById("downloadPlan").addEventListener("click", function () {
+        if(plan)RecordWatchRelief.downloadActionPlanJSON(plan);
+      });
+      (async()=>{
+        try{
+          const store=window.RecordPathUserStore;
+          if(store?.ready)await store.ready;
+          const [rows,p]=await Promise.all([store.getSupabaseCases(),store.getSupabaseProfile()]);
+          const user=store.getCurrentUser?.();
+          if(!user?.id||user.id!==p?.id)throw new Error("Account verification failed");
+          profile={fullName:p.filing_full_name||p.full_name||"",
+            email:p.filing_email||p.email||"",phone:p.filing_phone||p.phone||""};
+          cases=rows.map(shape);
+          plan=RecordWatchRelief.buildReliefPlan(profile,cases);
+          render();
+        }catch(error){
+          planSummary.textContent="Supabase records unavailable. No local relief plan was displayed.";
+          reliefCases.textContent="Sign in to load your saved case details.";
+        }
+      })();
     }());
   </script>
   <script>

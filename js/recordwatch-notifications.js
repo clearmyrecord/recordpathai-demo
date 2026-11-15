@@ -6,7 +6,9 @@
   var NOTIFICATIONS_KEY = "recordwatchNotifications";
   var PREFERENCES_KEY = "recordwatchNotificationPreferences";
   var COURT_STATUS_KEY = "recordwatchCourtStatuses";
-  var FALLBACK_NOTE = "Showing locally saved RecordWatch data.";
+  var FALLBACK_NOTE = "Supabase is unavailable. No cached RecordWatch data is displayed.";
+  var remoteSnapshot = { userId:"", ready:false, subscriptions:[], events:[],
+    notifications:[],preferences:{} };
 
   var reminderDefinitions = [
     { days: 180, flag: "reminder_180_sent", type: "eligibility_180_day" },
@@ -49,16 +51,19 @@
   }
   function currentUserId() {
     if (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser()) return RecordPathUserStore.getCurrentUser().id;
-    return localStorage.getItem("email") || "demo-user";
+    return ""; // Never identify a RecordWatch account using browser-stored email.
   }
   function defaultPreferences(userId) {
     return { user_id: userId || currentUserId(), eligibility_email: true, eligibility_sms: false, court_status_updates: true, packet_reminders: true, marketing_emails: false };
   }
 
-  function loadSubscriptions() { return readJSON(SUBSCRIPTIONS_KEY, []); }
-  function loadEvents() { return readJSON(EVENTS_KEY, []); }
-  function loadNotifications() { return readJSON(NOTIFICATIONS_KEY, []); }
-  function loadPreferences(userId) { return Object.assign(defaultPreferences(userId), readJSON(PREFERENCES_KEY, {})); }
+  // Only the last successful authenticated Supabase response is used to
+  // render RecordWatch. Legacy local storage can never fill account widgets.
+  function loadSubscriptions() { return remoteSnapshot.ready?remoteSnapshot.subscriptions:[]; }
+  function loadEvents() { return remoteSnapshot.ready?remoteSnapshot.events:[]; }
+  function loadNotifications() { return remoteSnapshot.ready?remoteSnapshot.notifications:[]; }
+  function loadPreferences(userId) { return remoteSnapshot.ready&&userId===remoteSnapshot.userId
+    ?remoteSnapshot.preferences:{}; }
 
   async function authHeaders() {
     if (!window.RecordPathSupabase || !window.RecordPathSupabase.getClient) throw new Error("Authentication unavailable");
@@ -83,27 +88,27 @@
   }
 
   async function fetchRemoteData(userId) {
-    try {
-      var uid = userId || currentUserId();
-      var results = await Promise.all([
-        apiGet("/api/recordwatch/subscriptions", uid),
-        apiGet("/api/recordwatch/events", uid),
-        apiGet("/api/recordwatch/notifications", uid),
-        apiGet("/api/recordwatch/preferences", uid)
-      ]);
-      var source = results.some(function (item) { return item.source === "local_fallback"; }) ? "local_fallback" : "supabase";
-      var subscriptions = (results[0].subscriptions && results[0].subscriptions.length) ? results[0].subscriptions : loadSubscriptions();
-      var events = (results[1].events && results[1].events.length) ? results[1].events : loadEvents();
-      var notifications = (results[2].notifications && results[2].notifications.length) ? results[2].notifications : loadNotifications();
-      var preferences = results[3].preferences || loadPreferences(uid);
-      writeJSON(SUBSCRIPTIONS_KEY, subscriptions);
-      writeJSON(EVENTS_KEY, events);
-      writeJSON(NOTIFICATIONS_KEY, notifications);
-      writeJSON(PREFERENCES_KEY, preferences);
-      return { source: source, fallbackNote: source === "local_fallback" ? FALLBACK_NOTE : "", subscriptions: subscriptions, events: events, notifications: notifications, preferences: preferences };
-    } catch (error) {
-      return { source: "local_fallback", fallbackNote: FALLBACK_NOTE, subscriptions: loadSubscriptions(), events: loadEvents(), notifications: loadNotifications(), preferences: loadPreferences(userId) };
-    }
+    const uid=clean(userId||currentUserId());
+    if(!uid)throw new Error("Sign in before opening RecordWatch.");
+    // Never return cached records on an error or an empty Supabase query.
+    remoteSnapshot={userId:"",ready:false,subscriptions:[],events:[],
+      notifications:[],preferences:{}};
+    const results=await Promise.all([
+      apiGet("/api/recordwatch/subscriptions",uid),
+      apiGet("/api/recordwatch/events",uid),
+      apiGet("/api/recordwatch/notifications",uid),
+      apiGet("/api/recordwatch/preferences",uid)
+    ]);
+    if(results.some(result=>!result?.ok||result.source!=="supabase"))
+      throw new Error("Live Supabase RecordWatch data could not be verified.");
+    remoteSnapshot={
+      userId:uid,ready:true,
+      subscriptions:Array.isArray(results[0].subscriptions)?results[0].subscriptions:[],
+      events:Array.isArray(results[1].events)?results[1].events:[],
+      notifications:Array.isArray(results[2].notifications)?results[2].notifications:[],
+      preferences:results[3].preferences||{}
+    };
+    return {source:"supabase",fallbackNote:"",...remoteSnapshot};
   }
 
   function registerSubscription(payload) {
