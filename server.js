@@ -412,13 +412,17 @@ app.get("/api/packet/preview-manifest",async(req,res)=>{
   if(!validCaseId(caseId))
     return res.status(400).json({ok:false,error:"Select a saved case first."});
   try{
-    const source=await approvedPreviewForCase(user.id,caseId);
-    const confirmed=await previewHasConfirmation(user.id,caseId,source);
+    const source=await customerPreviewForCase(user.id,caseId);
+    const confirmed=source.stage==="approved" ?
+      await previewHasConfirmation(user.id,caseId,source) : false;
     res.setHeader("Cache-Control","private, no-store, max-age=0");
     res.setHeader("X-Content-Type-Options","nosniff");
     return res.json({ok:true,pageCount:source.pageCount,
       pdfSha256:source.signedPdfSha,confirmed,
-      note:"Image-only watermarked preview. The original approved PDF is downloadable only after verified payment."});
+      reviewStatus:source.stage,
+      note:source.stage==="approved" ?
+        "Approved application: confirm this exact watermarked document before checkout." :
+        "Signed DRAFT awaiting independent review. Preview is view-only; checkout and confirmation remain locked."});
   }catch(error){return previewResponseError(res,error);}
 });
 app.get("/api/packet/preview-page",async(req,res)=>{
@@ -428,7 +432,7 @@ app.get("/api/packet/preview-page",async(req,res)=>{
   if(!validCaseId(caseId)||!Number.isInteger(page)||page<1||page>MAX_PREVIEW_PAGES)
     return res.status(400).json({ok:false,error:"Invalid preview request."});
   try{
-    const source=await approvedPreviewForCase(user.id,caseId);
+    const source=await customerPreviewForCase(user.id,caseId);
     if(page>source.pageCount)
       return res.status(400).json({ok:false,error:"Preview page is out of range."});
     const original=await fetchExactApprovedPreviewPdf(source);
@@ -1560,6 +1564,54 @@ async function approvedPreviewForCase(userId,caseId){
     caseSnapshotSha:verdict.caseFingerprint,pageCount:draft.pdf_pages,
     path:draft.signed_pdf_private_path};
 }
+// A customer can inspect their own signed DRAFT before an independent
+// reviewer has approved it. This never authorizes confirmation or checkout.
+async function savedDraftPreviewForCase(userId,caseId){
+  if(!packetDatabaseReady())
+    throw previewFailure("Private packet preview storage is unavailable.",503);
+  const facts=await getSavedCaseReviewFacts(userId,caseId);
+  const scope="?user_id=eq."+encodeURIComponent(userId)+
+    "&case_id=eq."+encodeURIComponent(caseId)+"&limit=1";
+  const rows=await supabaseRest("packet_drafts",{query:scope});
+  const draft=Array.isArray(rows)?rows[0]:null;
+  if(!draft)throw previewFailure(
+    "No signed packet has been submitted yet. First draw your signature, authorize private review and select Prepare My Real Signed Packet.",409);
+  const currentFingerprint=caseReviewFingerprint(facts.savedCase,facts.charges);
+  const sha=String(draft.signed_pdf_sha256||"");
+  const path=String(draft.signed_pdf_private_path||"");
+  if(draft.user_id!==userId || draft.case_id!==caseId ||
+     !/^[a-f0-9]{64}$/.test(sha) ||
+     !/^private\/packets\/[0-9a-f-]+\/[a-f0-9]{64}\.pdf$/.test(path) ||
+     path!=="private/packets/"+caseId+"/"+sha+".pdf" ||
+     draft.case_snapshot_sha256!==currentFingerprint ||
+     !draft.private_review_authorized_at ||
+     draft.private_review_signature_mode!=="drawn" ||
+     !Number.isInteger(draft.pdf_pages) ||
+     draft.pdf_pages<1||draft.pdf_pages>MAX_PREVIEW_PAGES)
+    throw previewFailure(
+      "Your saved case or signed application has changed. Prepare a new signed packet for private review.",409);
+  return {userId,caseId,signedPdfSha:sha,caseSnapshotSha:currentFingerprint,
+    path,pageCount:draft.pdf_pages,stage:"draft"};
+}
+async function customerPreviewForCase(userId,caseId){
+  const source=await savedDraftPreviewForCase(userId,caseId);
+  // Do not claim approval from a status flag or browser field. The full
+  // independent review release gate determines whether this is approved.
+  try{
+    const approved=await approvedPreviewForCase(userId,caseId);
+    if(approved.signedPdfSha===source.signedPdfSha &&
+       approved.caseSnapshotSha===source.caseSnapshotSha &&
+       approved.path===source.path){
+      return {...source,stage:"approved"};
+    }
+  }catch(error){
+    // A draft is still viewable while its independent review is pending.
+    // The complete approved-only check remains mandatory for confirmation.
+    if(error?.httpStatus===503)throw error;
+  }
+  return source;
+}
+
 async function previewHasConfirmation(userId,caseId,source=null){
   const data=source||await approvedPreviewForCase(userId,caseId);
   const rows=await supabaseRest("packet_preview_confirmations",{

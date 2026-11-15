@@ -1072,24 +1072,29 @@
                 <p id="packetFeeExplanation" style="font-size:13px; line-height:1.5; color:#526780; margin:12px 0 0;">Court fees, any waiver, and the accepted filing/payment method must be verified before an actual charge.</p>
                 <p style="font-size:13px; line-height:1.5; color:#526780; margin:8px 0 0;">Wood County's published Rule 3.03 allows e-mailing a searchable PDF sealing application after the required court deposit is paid <strong>directly to the Clerk first</strong>. The $100 court deposit must not be collected a second time for a Lob check. A physically signed source must be retained. This email route and Lob filing are <strong>not automatic</strong>. Physical submission remains locked until the Clerk and funding requirements are verified.</p>
               </div>
-              <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
-              <section id="approvedPreviewPanel" aria-label="Approved packet preview before checkout" style="margin-top:18px;padding:18px;border:1px solid #b8c9e8;border-radius:14px;background:#f5f8ff;">
-                <h3 style="margin:0 0 8px;color:#17396d;">Review Your Actual Approved Application Before Payment</h3>
-                <p style="margin:0 0 14px;line-height:1.5;">After independent case review, view every page of your actual signed packet with a visible <strong>PREVIEW ONLY - NOT FOR FILING</strong> watermark. This is an image-only preview: no original PDF file, download, or print controls are provided before payment. The <strong>unwatermarked PDF download unlocks only after Stripe verifies payment</strong>. Court checks and filings are separate.</p>
-                <button type="button" id="openApprovedPreviewBtn" class="sig-small-btn" style="background:#1b4b9a;color:white;">Review My Approved Packet (View Only)</button>
-                <p id="approvedPreviewStatus" role="status" aria-live="polite" style="margin:12px 0;color:#344c74;"></p>
-                <div id="approvedPreviewPages" hidden style="max-height:520px;overflow:auto;background:#e7edf6;padding:10px;border-radius:9px;" aria-label="Watermarked approved packet pages"></div>
-                <label id="approvedPreviewConsentLabel" hidden style="display:flex;gap:10px;margin-top:14px;line-height:1.5;">
-                  <input type="checkbox" id="approvedPreviewConsent" style="margin-top:4px;">
-                  <span>I reviewed every displayed page of my approved application, including the court, case number and signature. I approve this exact document for the offered packet preparation purchase. I understand this does not authorize court filing or a check.</span>
-                </label>
-                <button type="button" id="confirmApprovedPreviewBtn" class="sig-small-btn" hidden style="margin-top:10px;">Confirm These Pages Before Payment</button>
-              </section>
-              <div class="sample-pdf-tools" style="margin-top:12px; padding:16px; border:1px solid #d2def3; border-radius:14px; background:#f7faff;">
+              <section id="packetSubmitStep" class="sample-pdf-tools" style="margin-top:18px; padding:18px; border:1px solid #d2def3; border-radius:14px; background:#f7faff;">
+                <h3 style="margin:0 0 8px;color:#17396d;">Step 1 — Prepare and Submit Your Real Signed Packet</h3>
+                <p style="margin:0 0 12px;color:#526780;line-height:1.55;">Select your saved case, complete all required form fields, draw your signature, and authorize private review. This securely stores your real two-page application. It does not charge you or file anything with the court.</p>
                 <button type="button" class="sig-small-btn" id="prepareSignedReviewBtn" style="background:#1c489d;color:#fff;border-color:#1c489d;">Prepare My Real Signed Packet for Private Review</button>
                 <button type="button" class="sig-small-btn" id="downloadSamplePdfBtn" hidden aria-hidden="true" style="display:none;">Test Signed PDF — SAMPLE ONLY (No Check)</button>
-                <p style="margin:9px 0 0; color:#526780; font-size:13px; line-height:1.5;"><strong>Private Review</strong> securely uploads your signed saved-case application for independent reviewer approval. The view-only, watermarked preview above is available after approval. The original PDF cannot be downloaded before verified payment. A court-filing check can only be prepared separately after authorized payment and filing approval.</p>
-              </div>
+              </section>
+              <section id="approvedPreviewPanel" aria-label="Watermarked signed packet preview" style="margin-top:18px;padding:18px;border:1px solid #b8c9e8;border-radius:14px;background:#f5f8ff;">
+                <h3 style="margin:0 0 8px;color:#17396d;">Step 2 — Preview Your Actual Application (View Only)</h3>
+                <p style="margin:0 0 14px;line-height:1.5;">After Step 1, view each page of your submitted <strong>draft</strong> with a permanent <strong>PREVIEW ONLY — NOT FOR FILING</strong> watermark. Once an independent reviewer approves the exact signed PDF, you'll be able to confirm it for checkout. <strong>No unwatermarked PDF download is available until Stripe verifies payment.</strong> Court checks and filings remain separate.</p>
+                <button type="button" id="openApprovedPreviewBtn" class="sig-small-btn" style="background:#1b4b9a;color:white;">Preview My Signed Application (View Only)</button>
+                <p id="approvedPreviewStatus" role="status" aria-live="polite" style="margin:12px 0;color:#344c74;">First prepare your real signed packet in Step 1; then preview it here.</p>
+                <div id="approvedPreviewPages" hidden style="max-height:520px;overflow:auto;background:#e7edf6;padding:10px;border-radius:9px;" aria-label="Watermarked signed packet pages"></div>
+                <label id="approvedPreviewConsentLabel" hidden style="display:flex;gap:10px;margin-top:14px;line-height:1.5;">
+                  <input type="checkbox" id="approvedPreviewConsent" style="margin-top:4px;">
+                  <span>I reviewed every displayed page of my <strong>independently approved</strong> application, including court, case number and signature. I approve this exact document for the offered packet preparation purchase. This does not authorize court filing or issuing a check.</span>
+                </label>
+                <button type="button" id="confirmApprovedPreviewBtn" class="sig-small-btn" hidden style="margin-top:10px;">Confirm Approved Pages Before Payment</button>
+              </section>
+              <section id="packetPaymentStep" style="margin-top:18px;">
+                <h3 style="margin:0 0 8px;color:#17396d;">Step 3 — Checkout After Independent Approval</h3>
+                <p style="margin:0 0 12px;color:#526780;line-height:1.5;">A reviewer must independently approve your case and signed packet. After you confirm the approved watermarked preview, this payment checkpoint can proceed. Nothing is charged just by checking readiness.</p>
+                <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
+              </section>
               <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
                 <button type="button" class="debug-pdf-link" id="testPdfBtn">Test PDF Access</button>
                 <button type="button" class="debug-pdf-link" id="openSourceBtn">Open Source PDF</button>
@@ -3075,7 +3080,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           });
           const result=await response.json().catch(()=>({}));
           if(!response.ok||result.ok!==true)throw new Error(result.error||"Private PDF upload failed.");
-          setStatus("Signed PDF was saved privately for court review. No payment was collected, no filing occurred and nothing was mailed.");
+          setStatus("Signed PDF saved privately. Next, select Step 2 — Preview My Signed Application. Reviewer approval and payment are still pending.");
+          const previewStatus=document.getElementById("approvedPreviewStatus");
+          if(previewStatus)previewStatus.textContent="Your signed packet was received. Select Preview My Signed Application to view the watermarked draft.";
         }catch(error){
           const msg=error?.message||"Unable to prepare the private signed review copy.";
           setCheckoutError(msg);
@@ -3690,7 +3697,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         const status=document.getElementById("approvedPreviewStatus");
         if(openButton)openButton.disabled=true;
         clearApprovedPreviewImages();
-        if(status)status.textContent="Verifying your independent review and preparing a private watermarked preview...";
+        setCheckoutError("");
+        if(status)status.textContent="Retrieving your saved signed packet as a watermarked image preview...";
         try{
           const resolved=await resolveCheckoutCase();
           const caseId=resolved?.checkoutCase?.saved_case_id;
@@ -3705,14 +3713,14 @@ document.addEventListener("DOMContentLoaded", async function () {
             "?case_id="+encodeURIComponent(caseId),{headers,cache:"no-store"});
           const manifest=await manifestResponse.json().catch(()=>({}));
           if(!manifestResponse.ok||manifest.ok!==true)
-            throw new Error(manifest.error||"The signed packet has not yet been independently approved for preview.");
+            throw new Error(manifest.error||"Prepare and submit your signed packet in Step 1 before opening the preview.");
           const pages=Number(manifest.pageCount);
           if(!Number.isInteger(pages)||pages<1||pages>6 ||
              !/^[a-f0-9]{64}$/.test(manifest.pdfSha256||""))
             throw new Error("Approved packet preview is unavailable.");
           const container=document.getElementById("approvedPreviewPages");
           const urls=[];
-          approvedPreviewState={caseId,sha:manifest.pdfSha256,urls,loaded:0,pageCount:pages};
+          approvedPreviewState={caseId,sha:manifest.pdfSha256,urls,loaded:0,pageCount:pages,stage:manifest.reviewStatus};
           for(let page=1;page<=pages;page++){
             const response=await fetch(approvedPreviewUrl("preview-page")+
               "?case_id="+encodeURIComponent(caseId)+"&page="+page,
@@ -3731,7 +3739,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             const wrapper=document.createElement("div");
             wrapper.style.cssText="margin:0 auto 16px;max-width:750px;text-align:center;";
             const caption=document.createElement("p");
-            caption.textContent="Page "+page+" of "+pages+" — VIEW ONLY / NOT FOR FILING";
+            caption.textContent="Page "+page+" of "+pages+" — "+(manifest.reviewStatus==="approved"?"APPROVED":"DRAFT AWAITING REVIEW")+" — VIEW ONLY / NOT FOR FILING";
             caption.style.cssText="font-weight:bold;color:#394d70;";
             const img=document.createElement("img");
             img.src=url;img.alt="Watermarked approved document, page "+page+" of "+pages;
@@ -3743,16 +3751,20 @@ document.addEventListener("DOMContentLoaded", async function () {
             approvedPreviewState.loaded++;
           }
           container.hidden=false;
-          document.getElementById("approvedPreviewConsentLabel").hidden=false;
-          document.getElementById("confirmApprovedPreviewBtn").hidden=false;
-          if(status)status.textContent=manifest.confirmed?
-            "Previously confirmed. Review the watermarked pages again if anything changed.":
-            "All "+pages+" approved pages are displayed. Confirm the exact document to continue toward payment.";
+          const approved=manifest.reviewStatus==="approved";
+          document.getElementById("approvedPreviewConsentLabel").hidden=!approved;
+          document.getElementById("confirmApprovedPreviewBtn").hidden=!approved;
+          if(status)status.textContent=!approved ?
+            "Draft preview ready. Review your "+pages+" submitted pages. Independent review is still pending; confirmation, payment and download remain locked." :
+            manifest.confirmed ?
+              "Reviewer-approved packet displayed. You already confirmed this version; review again if anything looks incorrect." :
+              "All "+pages+" reviewer-approved pages are displayed. Confirm the exact document before payment.";
         }catch(error){
           clearApprovedPreviewImages();
           const msg=error?.message||"Approved packet preview is unavailable.";
           if(status)status.textContent=msg;
-          setCheckoutError(msg);
+          // A missing draft is normal before Step 1; do not treat that as
+          // a checkout failure or duplicate a large red alert above the quote.
         }finally{if(openButton)openButton.disabled=false;}
       }
       async function confirmApprovedPacketPreview(){
@@ -3760,7 +3772,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const status=document.getElementById("approvedPreviewStatus");
         if(button)button.disabled=true;
         try{
-          if(!approvedPreviewState||
+          if(!approvedPreviewState||approvedPreviewState.stage!=="approved"||
              approvedPreviewState.loaded!==approvedPreviewState.pageCount||
              document.getElementById("approvedPreviewConsent")?.checked!==true)
             throw new Error("View all approved pages and check the confirmation box first.");

@@ -83,7 +83,7 @@ test("Private review uses canonical account record, not stale sample, and upload
   assert.equal(events.uploads[0].headers["x-recordpath-case-id"],id);
   assert.equal(events.uploads[0].headers["x-recordpath-private-review-consent"],"yes");
   assert.equal(events.saveCalls,0,"Review cannot modify source case or request any charge");
-  assert.ok(events.status.at(-1).includes("saved privately for court review"));
+  assert.ok(events.status.at(-1).includes("Signed PDF saved privately"));
   assert.ok(!events.errors.at(-1));
 });
 
