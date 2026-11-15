@@ -155,35 +155,51 @@
       function statusClass(status) { return String(status || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
       function chargeSummary(caseData) { return (caseData.charges || []).map(function (charge) { return [charge.chargeName, charge.degree || charge.chargeLevel].filter(Boolean).join(" — "); }).filter(Boolean).join("; ") || "No charges entered"; }
 
+      var verifiedProfile=null;
+      var verifiedCaseTasks={};
       async function getSavedCases() {
-        if (!window.RecordPathUserStore) {
-          verifiedSavedCases = [];
-          return RecordWatchMonitor.loadCases();
+        verifiedSavedCases=[];
+        verifiedProfile=null;
+        verifiedCaseTasks={};
+        const store=window.RecordPathUserStore;
+        if(!store?.getSupabaseCases||!store?.getSupabaseProfile)
+          throw new Error("Signed-in Supabase case access is unavailable.");
+        if(store.ready)await store.ready;
+        const [cases,profile]=await Promise.all([
+          store.getSupabaseCases(),store.getSupabaseProfile()
+        ]);
+        const user=activeUser();
+        if(!user?.id||profile?.id!==user.id)
+          throw new Error("Supabase account ownership could not be verified.");
+        verifiedSavedCases=cases.filter(item=>isSavedCaseUuid(item.case_id||item.id));
+        verifiedProfile=profile;
+        if(verifiedSavedCases.length){
+          const client=await window.RecordPathSupabase.getClient();
+          const ids=verifiedSavedCases.map(item=>item.case_id||item.id);
+          const query=await client.from("recordwatch_case_tasks")
+            .select("saved_case_id,task_key,completed")
+            .eq("user_id",user.id).in("saved_case_id",ids);
+          if(query.error)throw new Error("Supabase RecordWatch checklist could not be loaded.");
+          for(const record of query.data||[]){
+            if(!verifiedCaseTasks[record.saved_case_id])
+              verifiedCaseTasks[record.saved_case_id]={};
+            verifiedCaseTasks[record.saved_case_id][record.task_key]=record.completed===true;
+          }
         }
-        try {
-          var cases = await RecordPathUserStore.getCasesAsync();
-          verifiedSavedCases = activeUser() && !cases.isFallback
-            ? cases.filter(function (item) { return isSavedCaseUuid(item && (item.case_id || item.id)); })
-            : [];
-          var current = RecordPathUserStore.getCurrentRecordWatchCase ? await RecordPathUserStore.getCurrentRecordWatchCase() : null;
-          if (current && current.case && RecordPathUserStore.hasMeaningfulCaseData(current.case) && !cases.some(function (item) { return item.case_id === current.case.case_id || item.caseNumber === current.case.caseNumber; })) cases.push(current.case);
-          return cases;
-        } catch (error) {
-          verifiedSavedCases = [];
-          var fallback = RecordWatchMonitor.loadCases();
-          try {
-            var currentFallback = RecordPathUserStore.getCurrentRecordWatchCase ? await RecordPathUserStore.getCurrentRecordWatchCase() : null;
-            if (currentFallback && currentFallback.case) fallback.push(currentFallback.case);
-          } catch (ignored) {}
-          return fallback;
-        }
+        return verifiedSavedCases;
       }
-
+      function supabaseTaskState(caseId) {
+        const tasks={};
+        RecordWatchMonitor.taskKeys.forEach(key=>{
+          tasks[key]=verifiedCaseTasks[caseId]?.[key]===true;
+        });
+        return tasks;
+      }
       async function render() {
         await handleCaseIdParam();
-        var profile = RecordWatchMonitor.loadProfile();
         var savedCases = await getSavedCases();
-        var cases = savedCases.length ? savedCases.map(toRecordWatchCase) : RecordWatchMonitor.loadCases();
+        var profile={fullName:verifiedProfile?.filing_full_name||verifiedProfile?.full_name||""};
+        var cases = savedCases.map(toRecordWatchCase);
         var counts = { eligible: 0, future: 0, more: 0, risks: 0 };
         cases.forEach(function (caseData) {
           var status = RecordWatchRules.calculateCaseStatus(caseData);
@@ -209,9 +225,10 @@
           var date = RecordWatchRules.calculateEligibilityDate(caseData);
           var days = RecordWatchRules.daysUntil(date);
           var sourceCase = savedCases.find(function (item) { return item.case_id === caseData.id || item.caseId === caseData.id || item.id === caseData.id; }) || caseData;
-          var reminderStatus = RecordWatchMonitor.getReminderStatus(caseData.id);
-          if (String(sourceCase.recordWatchStatus || "").toLowerCase().includes("paused")) reminderStatus = "paused";
-          var tasks = RecordWatchMonitor.getCaseTasks(caseData.id);
+          var reminderStatus = sourceCase.recordWatchPausedAt ||
+            String(sourceCase.recordWatchStatus || "").toLowerCase().includes("paused")
+              ? "paused":"active";
+          var tasks = supabaseTaskState(caseData.id);
           var monitoringStatus = reminderStatus === "paused" ? "Paused" : RecordWatchMonitor.calculateMonitoringStatus(caseData, tasks);
           var checklist = RecordWatchMonitor.taskKeys.map(function (key) {
             return '<label><input type="checkbox" data-case-id="' + esc(caseData.id) + '" data-task-key="' + key + '" ' + (tasks[key] ? "checked" : "") + ' /> ' + taskLabels[key] + '</label>';
@@ -236,7 +253,7 @@
         var notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
         var active = cases[0] || null;
         var currentResult = active && window.RecordWatchBridge ? RecordWatchBridge.getCurrentEligibilityResult(active) : null;
-        if (active && window.RecordWatchBridge && typeof RecordWatchBridge.registerRecordWatchEligibility === "function") RecordWatchBridge.registerRecordWatchEligibility(active);
+        // Local eligibility-event registration is not an account data source.
         var eligibilityDate = currentResult && currentResult.estimatedEligibleDate || (active && RecordWatchRules.calculateEligibilityDate(active));
         var event = active ? events.find(function (item) { return item.case_id === active.id && item.eligibility_date === eligibilityDate; }) : null;
         var confidence = event && event.eligibility_confidence || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).level : "medium");
@@ -714,11 +731,33 @@
       function confidenceLabel(caseData) { var result = RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(caseData) : { level: "medium", reason: "Estimate based on available details." }; return confidenceText(result.level) + " — " + result.reason; }
       function row(label, value) { return '<div class="detail-row"><strong>' + esc(label) + '</strong><span>' + (String(value || "").charAt(0) === "<" ? value : esc(value || "Not entered")) + '</span></div>'; }
 
-      casesContainer.addEventListener("change", function (event) {
-        if (event.target.matches("[data-task-key]")) {
-          RecordWatchMonitor.updateTask(event.target.dataset.caseId, event.target.dataset.taskKey, event.target.checked);
-          render();
+      casesContainer.addEventListener("change", async function (event) {
+        if(!event.target.matches("[data-task-key]"))return;
+        const checkbox=event.target;
+        const caseId=checkbox.dataset.caseId,taskKey=checkbox.dataset.taskKey;
+        const user=activeUser();
+        if(!user?.id || !verifiedSavedCases.some(item=>item.case_id===caseId) ||
+           !RecordWatchMonitor.taskKeys.includes(taskKey)){
+          checkbox.checked=!checkbox.checked;
+          recordwatchDataNotice.textContent="Saved Supabase case required. No browser-only checklist change was accepted.";
+          return;
         }
+        checkbox.disabled=true;
+        try{
+          const client=await window.RecordPathSupabase.getClient();
+          const result=await client.from("recordwatch_case_tasks")
+            .upsert({user_id:user.id,saved_case_id:caseId,task_key:taskKey,
+              completed:checkbox.checked,updated_at:new Date().toISOString()},
+              {onConflict:"user_id,saved_case_id,task_key"})
+            .select("task_key,completed").single();
+          if(result.error || result.data?.completed!==checkbox.checked)
+            throw new Error("Supabase could not save this checklist change.");
+          await render();
+        }catch(error){
+          checkbox.checked=!checkbox.checked;
+          recordwatchDataNotice.textContent=
+            "Checklist change not saved to Supabase. The previous saved value remains authoritative.";
+        }finally{checkbox.disabled=false;}
       });
       casesContainer.addEventListener("click", function (event) {
         var button = event.target.closest("[data-case-action]");
@@ -729,19 +768,13 @@
         });
       });
       document.getElementById("exportJson").addEventListener("click", function () {
-        var data = JSON.stringify(RecordWatchMonitor.exportRecordWatchData(), null, 2);
+        var data = JSON.stringify({source:"supabase",exportedAt:new Date().toISOString(),
+          profile:verifiedProfile,cases:verifiedSavedCases,tasks:verifiedCaseTasks}, null, 2);
         var blob = new Blob([data], { type: "application/json" });
         var link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "recordwatch-data.json"; link.click(); URL.revokeObjectURL(link.href);
       });
-      document.getElementById("clearData").addEventListener("click", function () {
-        if (confirm("Clear RecordWatch demo profile, cases, tasks, and relief plan from this browser?")) {
-          ["recordwatchProfile", "recordwatchCases", "recordwatchTasks", "recordwatchReliefPlan", "recordwatchActiveCaseId"].forEach(function (key) { localStorage.removeItem(key); });
-          render();
-        }
-      });
-      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
-        RecordWatchBridge.syncExistingRecordPathData();
-      }
+      document.getElementById("clearData").hidden=true; // No browser demo data source.
+      document.getElementById("clearData").disabled=true;
       var initialRender = render();
       var verifyToken = new URLSearchParams(window.location.search).get("verify_recordwatch_email") || '';
       if(verifyToken){
@@ -782,9 +815,13 @@
       if (window.RecordWatchNotifications && RecordWatchNotifications.fetchRemoteData) {
         var userId = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id;
         RecordWatchNotifications.fetchRemoteData(userId).then(function (data) {
-          recordwatchDataNotice.textContent = data.source === "local_fallback" ? data.fallbackNote : "Showing Supabase-saved RecordWatch data synced to the latest case calculation.";
-          if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();
-          render();
+          recordwatchDataNotice.textContent = "Showing only authenticated Supabase-saved RecordWatch records.";
+          return render();
+        }).catch(function(){
+          verifiedSavedCases=[];
+          recordwatchDataNotice.textContent=
+            "Supabase RecordWatch activity is unavailable. No browser-saved reminders or data were displayed.";
+          recordwatchHistoryPanel.textContent="Remote notification history unavailable.";
         });
       }
 
