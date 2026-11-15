@@ -35,3 +35,19 @@ export function lifetimeCaseEntitled(row, caseId) {
     row.stripe_payment_intent_id?.startsWith("pi_") &&
     row.amount_cents === RECORDWATCH_LIFETIME_CENTS && row.currency === "usd");
 }
+
+// Refunds and disputes remove access, never the customer's ability to buy
+// another one-time entitlement later. An active payment stays protected
+// against accidental duplicate purchases.
+export function lifetimeCasePurchaseAvailable(row, caseId) {
+  return uuid(caseId) && !lifetimeCaseEntitled(row, caseId);
+}
+
+// Stable for retries of ONE purchase cycle, but changes after a refund or
+// dispute. Stripe must never replay a refunded checkout session when the
+// customer starts a new purchase in the same five-minute idempotency bucket.
+export function lifetimePurchaseGeneration(row, caseId) {
+  if (!row || row.saved_case_id !== caseId) return "first";
+  return [row.status || "unknown", row.stripe_checkout_session_id || "none",
+    row.revoked_at || "not-revoked"].join(":");
+}
