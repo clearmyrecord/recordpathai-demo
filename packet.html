@@ -831,6 +831,11 @@
 
       .footer-links a { text-align: center; }
     }
+    /* Author display rules must never override the hidden preview/consent state. */
+    #approvedPreviewPanel [hidden] { display: none !important; }
+    @media print {
+      #approvedPreviewPanel, #approvedPreviewPages { display: none !important; }
+    }
   </style>
   <link rel="stylesheet" href="css/styles.css" />
 </head>
