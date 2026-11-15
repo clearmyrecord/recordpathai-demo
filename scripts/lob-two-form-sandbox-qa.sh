@@ -39,7 +39,14 @@ for i in (2,3): writer.add_page(source.pages[i])
 with open(sys.argv[2],"wb") as f: writer.write(f)
 check=PdfReader(sys.argv[2])
 if len(check.pages)!=2: raise SystemExit("Form-only PDF is not two pages.")
-print("Validated: exactly two official blank form pages extracted.")
+def norm(text):
+    value="".join(chr(ord(ch)-0xF000) if 0xF000<=ord(ch)<=0xF0FF else ch for ch in (text or ""))
+    return "".join(ch for ch in value.upper() if ch.isalpha())
+p1=norm(check.pages[0].extract_text())
+p2=norm(check.pages[1].extract_text())
+if "ADDRESSVERIFICATION" not in p1 or "APPLICATIONTOSEALRECORD" not in p2:
+    raise SystemExit("Clerk PDF page order changed; no Lob test created.")
+print("Validated: exact two official blank form pages extracted in order.")
 PY
 
 OPS="$(gcloud secrets versions access latest \
@@ -106,6 +113,47 @@ if [[ "$STATE" != rendered ]]; then
   echo "Check ID: $CHECK_ID"
   exit 1
 fi
+
+# The signed Lob check URL is not itself evidence that the official form was
+# included. Require the actual PDF content audit added to production.
+python3 - "$TMP/status.json" "$CHECK_ID" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+check_id=sys.argv[2]
+assert r.get("ok") is True and r.get("environment")=="test", "Not a Lob sandbox result"
+assert r.get("testCheckId")==check_id, "Sandbox check ID mismatch"
+checks={
+    "proofContentsVerified":True,
+    "proofPages":4,
+    "checkAmountVerified":True,
+    "twoFormPagesConfirmed":True,
+    "officialFormStructureConfirmed":True
+}
+for key,required in checks.items():
+    if r.get(key)!=required:
+        print("Official Lob proof did NOT pass:",key,"=",r.get(key))
+        raise SystemExit(1)
+print("Verified from Lob's actual PDF: $100 TEST check and two official Wood County form pages.")
+PY
+
+# Confirm production readiness sees the same test check; this is read-only
+# and must NOT enable real bank-funded checks or court filing.
+curl --fail --silent --show-error --max-time 90 \
+  --output "$TMP/readiness.json" \
+  -H "x-recordpath-operations-key: $OPS" \
+  "$URL/api/operator/packet/launch-readiness?test_check_id=$CHECK_ID"
+python3 - "$TMP/readiness.json" "$CHECK_ID" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+lob=r.get("lob",{})
+assert lob.get("testCheckId")==sys.argv[2], "Launch readiness check ID mismatch"
+assert lob.get("testProofRendered") is True, "Proof is not rendered"
+assert lob.get("testProofContentsVerified") is True, "Official proof content audit is not yet complete"
+assert lob.get("officialFormStructureConfirmed") is True, "Official court form could not be verified"
+assert r.get("readyForLiveFiling") is False, "Unexpected live filing authorization"
+print("Production readiness proof verified; real checkout and dispatch are NOT being activated.")
+print("Other launch blockers:",", ".join(r.get("blockers",[])) or "none reported")
+PY
 unset OPS
 
 OUT="$HOME/recordpathai-two-form-test-proof.pdf"
@@ -115,8 +163,8 @@ from pypdf import PdfReader
 data=json.load(open(sys.argv[1]))
 url=data.get("proofPdfUrl","")
 host=urllib.parse.urlsplit(url)
-if host.scheme!="https" or host.hostname!="lob-assets.com":
-    raise SystemExit("Untrusted Lob proof URL; download not attempted.")
+if host.scheme!="https" or host.hostname!="lob-assets.com" or host.port or host.fragment or host.username or host.password or host.path != "/checks/"+data.get("testCheckId","")+".pdf":
+    raise SystemExit("Untrusted/mismatched Lob proof URL; download not attempted.")
 with urllib.request.urlopen(url,timeout=30) as response:
     file=response.read(15000001)
 if len(file)>15000000 or not file.startswith(b"%PDF-"):
@@ -136,5 +184,5 @@ print("Exactly two form attachment pages:",ok)
 print("Proof saved privately:",sys.argv[2])
 if not ok:raise SystemExit("WARNING: Proof contents differ from the expected 2 forms.")
 PY
-echo "SUCCESS: Lob TEST check + the two blank Wood County form pages."
-echo "No live check, charge, or real mailing was triggered."
+echo "SUCCESS: Lob official-form TEST proof rendered and verified (four total proof pages)."
+echo "No live check, customer charge, real mailing or court filing was triggered."
