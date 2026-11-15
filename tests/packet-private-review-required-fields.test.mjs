@@ -27,13 +27,15 @@ function render(paths) {
   let saved=null,listener=null;
   const input={addEventListener:(type,fn)=>{if(type==="input")listener=fn}};
   const fields={innerHTML:"",replaceChildren(){this.innerHTML="";},
+    querySelector:()=>null,
     querySelectorAll:()=>paths.some(p=>p==="petitioner.full_name")?[input]:[]};
   const summary={textContent:""};
   const document={getElementById:id=>({
     missingInfoPanel:panel,missingInfoFields:fields,missingInfoSummary:summary
   }[id]),};
   const raw={petitioner:{full_name:""}};
-  const context={document,escapeHtml:s=>String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll('"',"&quot;"),
+  const context={document,window:{RecordPathUserStore:{getCurrentUser:()=>({fullName:"Account Profile"})}},
+    escapeHtml:s=>String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll('"',"&quot;"),
     getByPath:()=>"",setByPath:(object,path,value)=>{if(path==="petitioner.full_name")object.petitioner.full_name=value},
     persistPacketData:object=>{saved=structuredClone(object)}
   };
@@ -47,6 +49,7 @@ function render(paths) {
 test("private-review gap shows readable name and saves an explicit customer edit",()=>{
   const output=render(["petitioner.full_name"]);
   assert.match(output.html,/Applicant's full legal name/);
+  assert.match(output.html,/Use my saved account profile name/);
   assert.match(output.html,/data-path="petitioner.full_name"/);
   assert.match(output.summary,/1 required field is missing/);
   assert.equal(output.display,"block");
