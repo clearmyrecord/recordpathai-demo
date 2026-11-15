@@ -136,6 +136,9 @@
       var premiumState = { subscription: null, preferences: null, error: '',
         justPurchased: false, previousPurchaseStatus: null, canPurchase: false };
       var preferenceSaveNotice = '';
+      // Only account-owned, currently active Supabase rows qualify for checkout.
+      // Browser drafts and cached rows are allowed for viewing, not billing.
+      var verifiedSavedCases = [];
 
       function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
       function list(items) { return items && items.length ? "<ul>" + items.map(function (item) { return "<li>" + esc(item) + "</li>"; }).join("") + "</ul>" : "<span class='muted'>None recorded</span>"; }
@@ -143,13 +146,20 @@
       function chargeSummary(caseData) { return (caseData.charges || []).map(function (charge) { return [charge.chargeName, charge.degree || charge.chargeLevel].filter(Boolean).join(" — "); }).filter(Boolean).join("; ") || "No charges entered"; }
 
       async function getSavedCases() {
-        if (!window.RecordPathUserStore) return RecordWatchMonitor.loadCases();
+        if (!window.RecordPathUserStore) {
+          verifiedSavedCases = [];
+          return RecordWatchMonitor.loadCases();
+        }
         try {
           var cases = await RecordPathUserStore.getCasesAsync();
+          verifiedSavedCases = activeUser() && !cases.isFallback
+            ? cases.filter(function (item) { return isSavedCaseUuid(item && (item.case_id || item.id)); })
+            : [];
           var current = RecordPathUserStore.getCurrentRecordWatchCase ? await RecordPathUserStore.getCurrentRecordWatchCase() : null;
           if (current && current.case && RecordPathUserStore.hasMeaningfulCaseData(current.case) && !cases.some(function (item) { return item.case_id === current.case.case_id || item.caseNumber === current.case.caseNumber; })) cases.push(current.case);
           return cases;
         } catch (error) {
+          verifiedSavedCases = [];
           var fallback = RecordWatchMonitor.loadCases();
           try {
             var currentFallback = RecordPathUserStore.getCurrentRecordWatchCase ? await RecordPathUserStore.getCurrentRecordWatchCase() : null;
@@ -239,10 +249,18 @@
 
       function activeUser() { return window.RecordPathUserStore && RecordPathUserStore.getCurrentUser ? RecordPathUserStore.getCurrentUser() : null; }
       function activeSubscription() { return premiumState.subscription || null; }
+      function isSavedCaseUuid(id) {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ""));
+      }
       function selectedSavedCaseId() {
-        var id = new URLSearchParams(window.location.search).get("caseId") ||
-          (window.RecordPathUserStore?.getActiveCaseId?.() || "");
-        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ? id : "";
+        var permitted = verifiedSavedCases.map(function (item) { return String(item.case_id || item.id); });
+        var requested = new URLSearchParams(window.location.search).get("caseId");
+        // An explicit stale/deleted URL must not silently charge a different case.
+        if (requested) return permitted.includes(requested) ? requested : "";
+        var active = window.RecordPathUserStore?.getActiveCaseId?.() || "";
+        if (permitted.includes(active)) return active;
+        // With one verified case, choose it only when no explicit case was requested.
+        return permitted.length === 1 ? permitted[0] : "";
       }
       function renderPremiumPanels(cases) {
         var user = activeUser();
@@ -260,10 +278,10 @@
         // A stale browser-only active ID should not hide $39 Premium when the
         // signed-in customer already has other saved Supabase case records.
         // Never guess which case to charge: ask the customer to select one.
-        var savedCaseChoices=(cases||[]).filter(function(item){
-          return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-            String(item&&item.id||""));
+        var savedCaseChoices=verifiedSavedCases.map(toRecordWatchCase).filter(function(item){
+          return isSavedCaseUuid(item && item.id);
         });
+        var selectedCase=savedCaseChoices.find(function(item){ return item.id===caseId; });
         var chooseSavedCase=savedCaseChoices.length
           ? '<div class="recordwatch-enrollment-form"><h3>Select a saved case to purchase Premium</h3>' +
             '<p class="meta-note">Choose the filing you want to upgrade. The $39 purchase applies only to that saved case.</p>' +
@@ -274,7 +292,7 @@
               return '<a class="btn secondary" href="recordwatch-dashboard.html?caseId='+
                 encodeURIComponent(item.id)+'#recordwatchPremiumPanel">'+esc(label)+'</a>';
             }).join('')+'</div></div>'
-          : '<a class="btn" href="record-details.html">Save a case to your account before purchasing Premium</a>';
+          : '<div class="recordwatch-enrollment-form"><p class="meta-note">No active, verified Supabase case is available for checkout. Browser drafts cannot be billed.</p><a class="btn" href="record-details.html">Review and save your case to your account</a></div>';
         var lifetime=Boolean(premium && subscription && subscription.plan === "lifetime_case");
         var legacy=Boolean(premium && !lifetime);
         var refunded=Boolean(!premium && premiumState.previousPurchaseStatus==="refunded");
@@ -290,7 +308,7 @@
           '</h2><p class="muted">One-time $39 for lifetime Premium tracking of one saved case, with no automatic renewal. SMS reminders require consent and an available delivery provider. Court status updates are supplied when supported.</p>' +
           (refunded ? '<p class="meta-note" role="status">Your prior payment was refunded, so Premium access is no longer active. You are welcome to purchase Premium again for this case.</p>' : '') +
           '</div></div>' +
-          '<div class="recordwatch-monitor-grid">' + statCard('Current case', caseId ? 'Selected saved case' : 'Select or save a case') +
+          '<div class="recordwatch-monitor-grid">' + statCard('Current case', selectedCase ? ((selectedCase.court?.caseNumber || 'Saved case') + ' — ' + (selectedCase.court?.courtName || 'Court not entered')) : 'Select an active saved case') +
           statCard('Status', lifetime ? 'Lifetime Premium' : legacy ? 'Existing subscription' : 'Free — no alerts') +
           statCard('Price', lifetime ? '$39 paid once' : legacy ? 'Existing plan' : '$39 one time per case') +
           statCard('Renewal', lifetime ? 'Never' : legacy ? (subscription.current_period_end ? RecordWatchRules.formatDate(subscription.current_period_end) : 'Existing plan') : 'No subscription') + '</div>' +
@@ -704,7 +722,7 @@
       if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
         RecordWatchBridge.syncExistingRecordPathData();
       }
-      render();
+      var initialRender = render();
       var verifyToken = new URLSearchParams(window.location.search).get("verify_recordwatch_email") || '';
       if(verifyToken){
         // Remove the sensitive token from browser history before any network call.
@@ -712,7 +730,12 @@
         cleanUrl.searchParams.delete("verify_recordwatch_email");
         window.history.replaceState({}, "", cleanUrl.pathname+cleanUrl.search+cleanUrl.hash);
       }
-      loadPremiumState().then(function(){
+      Promise.resolve(initialRender).catch(function(error) {
+        recordwatchDataNotice.textContent = 'Saved cases could not be loaded. Please sign in again or refresh; checkout is disabled until your active case is verified.';
+        console.warn('RecordWatch case loading unavailable', error?.name || 'unknown');
+      }).then(function() {
+        return loadPremiumState();
+      }).then(function(){
         if(verifyToken) return confirmRecordwatchEmailToken(verifyToken);
       });
       var successSessionId = new URLSearchParams(window.location.search).get("session_id");
