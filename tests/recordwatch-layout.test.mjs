@@ -28,6 +28,6 @@ test("Upcoming Premium reminders are grouped with compact labels and responsive 
 test("Free RecordWatch reminder preview does not promise delivery", () => {
   assert.match(dashboard, /These are Premium features, not scheduled free alerts/);
   assert.match(dashboard, /Email delivery depends on the configured provider/);
-  assert.match(dashboard, /supported court integration/);
+  assert.match(dashboard, /independently verified court updates from an approved source/);
   assert.match(dashboard, /recordwatch-history-list/);
 });

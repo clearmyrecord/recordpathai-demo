@@ -40,18 +40,34 @@ export function isPremiumAlertAllowed({lifetime,caseId,prefs,channel,phoneSuppre
 }
 export function neutralAlertContent(kind,channel){
   const milestoneReached=kind==="eligibility_reached";
-  // Keep case details, dates and charge/docket information out of SMS.
-  const message=milestoneReached
-    ?"A RecordWatch Premium timeline milestone is ready for review. Sign in to RecordPathAI for your saved case."
-    :"A RecordWatch Premium timeline update is available. Sign in to RecordPathAI to review your saved case.";
-  const smsText=milestoneReached
-    ?"RecordPathAI RecordWatch: A saved timeline milestone is ready for review. Sign in to your account for details. Reply STOP to opt out; HELP for help. Msg & data rates may apply."
-    :"RecordPathAI RecordWatch: A timeline update is available. Sign in to your account to review it. Reply STOP to opt out; HELP for help. Msg & data rates may apply.";
-  return {
-    subject:milestoneReached?"RecordWatch Premium: Timeline milestone":"RecordWatch Premium: Timeline update",
-    message:channel==="sms"?smsText:message,
-    kind
-  };
+  const packet=/^packet_progress_(3|7|14)_day$/.test(kind);
+  const details=/^missing_details_(3|7|14)_day$/.test(kind);
+  const court=kind==="court_status_update";
+  // Generic messages: no docket, charges, sensitive histories or exact dates.
+  const subject=court?"RecordWatch Premium: Verified court update":
+    details?"RecordWatch Premium: Saved details need review":
+    packet?"RecordWatch Premium: Packet progress reminder":
+    milestoneReached?"RecordWatch Premium: Timeline milestone":
+    "RecordWatch Premium: Timeline update";
+  const message=court
+    ?"An independently verified court-status update is available for review in RecordPathAI. Sign in to see your saved case."
+    :details
+      ?"Some information in your saved case still needs review. Sign in to RecordPathAI to continue."
+      :packet
+        ?"Your saved filing-packet preparation is incomplete. Sign in to RecordPathAI to review next steps."
+        :milestoneReached
+          ?"A RecordWatch Premium timeline milestone is ready for review. Sign in to RecordPathAI for your saved case."
+          :"A RecordWatch Premium timeline update is available. Sign in to RecordPathAI to review your saved case.";
+  const smsText=court
+    ?"RecordPathAI RecordWatch: A verified court status update is ready. Sign in for details. Reply STOP to opt out; HELP for help. Msg & data rates may apply."
+    :details
+      ?"RecordPathAI RecordWatch: Your saved details need review. Sign in for next steps. Reply STOP to opt out; HELP for help. Msg & data rates may apply."
+      :packet
+        ?"RecordPathAI RecordWatch: A packet preparation reminder is ready. Sign in for next steps. Reply STOP to opt out; HELP for help. Msg & data rates may apply."
+        :milestoneReached
+          ?"RecordPathAI RecordWatch: A saved timeline milestone is ready for review. Sign in to your account for details. Reply STOP to opt out; HELP for help. Msg & data rates may apply."
+          :"RecordPathAI RecordWatch: A timeline update is available. Sign in to your account to review it. Reply STOP to opt out; HELP for help. Msg & data rates may apply.";
+  return {subject,message:channel==="sms"?smsText:message,kind};
 }
 export function validTwilioWebhookSignature({url,params,signature,authToken}){
   if(!url?.startsWith("https://")||!signature||!authToken||
