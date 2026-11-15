@@ -148,7 +148,7 @@ test("Missing original disposition date remains blocked; PDF formatting must nev
   };
   const {job,events}=scenario({
     mappedResult:accountCase,
-    selectTemplate:async data=>data.charges.every(c=>/^\\d{4}-\\d{2}-\\d{2}$/.test(c.disposition_date))
+    selectTemplate:async data=>data.charges.every(c=>/^\d{4}-\d{2}-\d{2}$/.test(c.disposition_date))
       ? {id:"wood_form"} : null
   });
   await job;
