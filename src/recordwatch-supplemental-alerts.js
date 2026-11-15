@@ -60,6 +60,8 @@ export function recentVerifiedCourtEvent(event, today) {
   // No retroactive import blast, but allow the daily scheduler up to 7 days
   // to process a new, genuinely verified event.
   const sinceVerification = daysAfter(event.verified_at, today);
+  const sinceCourtEvent=daysAfter(event.occurred_on,today);
   return sinceVerification !== null && sinceVerification >= 0 &&
-    sinceVerification <= 7 && daysAfter(event.occurred_on,today) >= 0;
+    sinceVerification <= 7 && sinceCourtEvent !== null &&
+    sinceCourtEvent >= 0 && sinceCourtEvent <= 30;
 }
