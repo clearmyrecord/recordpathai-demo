@@ -1912,7 +1912,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const question = (Array.isArray(schema?.formSpecificQuestions) ? schema.formSpecificQuestions : [])
           .find(q => q && q.path === path && q.label);
         return question?.label || PRIVATE_REVIEW_FIELD_LABELS[path] ||
-          path.replace(/([._])/g, " ").replace(/\\b\\w/g, c => c.toUpperCase());
+          path.replace(/([._])/g, " ").replace(/\b\w/g, c => c.toUpperCase());
       }
       function renderMissingInfoPanel(paths, rawData, normalizedData, schema) {
         const panel = document.getElementById("missingInfoPanel");
@@ -1924,8 +1924,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           container.replaceChildren();
           return;
         }
-        const canonical = paths.filter(path => /^(court\\.|charges\\.\\d+\\.|case\\.)/.test(path));
-        const editable = paths.filter(path => !canonical.includes(path));
+        const canonical = paths.filter(path => /^(court\.|charges\.\d+\.|case\.)/.test(path));
         if (summary) summary.textContent =
           paths.length + " required field" + (paths.length === 1 ? " is" : "s are") +
           " missing. " + (canonical.length ? "Update saved court or charge details in Record Details; " : "") +
