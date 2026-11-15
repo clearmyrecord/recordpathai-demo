@@ -251,6 +251,24 @@
         var premium = window.RecordWatchMessageProvider && RecordWatchMessageProvider.isPremium(subscription);
         var renewal = subscription && (subscription.current_period_end || subscription.premium_expires_at);
         var caseId=selectedSavedCaseId();
+        // A stale browser-only active ID should not hide $39 Premium when the
+        // signed-in customer already has other saved Supabase case records.
+        // Never guess which case to charge: ask the customer to select one.
+        var savedCaseChoices=(cases||[]).filter(function(item){
+          return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            String(item&&item.id||""));
+        });
+        var chooseSavedCase=savedCaseChoices.length
+          ? '<div class="recordwatch-enrollment-form"><h3>Select a saved case to purchase Premium</h3>' +
+            '<p class="meta-note">Choose the filing you want to upgrade. The $39 purchase applies only to that saved case.</p>' +
+            '<div class="recordwatch-actions">' +
+            savedCaseChoices.map(function(item){
+              var label=(item.court&&item.court.caseNumber||'Saved case')+
+                ' — '+(item.court&&item.court.courtName||'Court not entered');
+              return '<a class="btn secondary" href="recordwatch-dashboard.html?caseId='+
+                encodeURIComponent(item.id)+'#recordwatchPremiumPanel">'+esc(label)+'</a>';
+            }).join('')+'</div></div>'
+          : '<a class="btn" href="record-details.html">Save a case to your account before purchasing Premium</a>';
         var lifetime=Boolean(premium && subscription && subscription.plan === "lifetime_case");
         var legacy=Boolean(premium && !lifetime);
         var refunded=Boolean(!premium && premiumState.previousPurchaseStatus==="refunded");
@@ -284,7 +302,7 @@
                 (refunded ? 'Purchase Premium again — $39' : 'Accept terms &amp; continue to Stripe — $39') +
               '</button>' +
              '</form>' :
-           '<a class="btn" href="eligibility.html">Save a case to unlock Premium</a>') +
+           chooseSavedCase) +
           '</div><p class="meta-note">Lifetime access is currently linked to the selected saved case. If several cases may be sealed on one application, contact us before buying duplicate case upgrades; grouped filing checkout is still being developed. Court filing fees and the planned $50 packet service are separate. Pre-existing subscriptions follow their original terms.</p>' +
           '<p id="premiumActionStatus" class="muted">' + esc(premiumState.error || '') + '</p>';
 
