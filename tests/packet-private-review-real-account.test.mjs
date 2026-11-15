@@ -23,7 +23,7 @@ function scenario({requestedId=id,consent=true,loaded=saved,mappedResult=mapped,
   normalizeForPdf=raw=>raw, selectTemplate=async()=>({id:"wood_form"})}={}){
   const events={uploads:[],errors:[],status:[],rendered:[],caseLookups:[],selected:[],saveCalls:0,contactSaves:0};
   const account={
-    getCaseById:async value=>{events.caseLookups.push(value);return loaded;},
+    getSupabaseCaseById:async value=>{events.caseLookups.push(value);return loaded;},
     caseToPacketData:()=>mappedResult,
     saveCase:()=>{events.saveCalls++;throw Error("Unexpected saved-case mutation");}
   };
