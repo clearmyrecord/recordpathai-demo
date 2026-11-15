@@ -1547,12 +1547,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           });
         }
         currentPacketEligibilityResult = Object.assign({}, normalized, syncFields, { checkoutEligibility });
-        try {
-          localStorage.setItem("recordPathCurrentPacketEligibility", JSON.stringify(currentPacketEligibilityResult));
-        } catch {}
-        if (window.RecordWatchBridge && typeof RecordWatchBridge.registerRecordWatchEligibility === "function") {
-          try { RecordWatchBridge.registerRecordWatchEligibility(currentPacketEligibilityResult); } catch {}
-        }
+        // Never write a browser-only eligibility value back into RecordWatch.
+        // The selected case's Supabase values remain authoritative.
         return currentPacketEligibilityResult;
       }
 
@@ -1580,10 +1576,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             candidates.push(normalizePacketEligibilityResult(RecordPathEligibilityEngine.resolveEligibilityForCase(data || {}), "recordpath_engine"));
           }
         } catch (error) { console.warn("RecordPath eligibility resolution failed:", error); }
-        try {
-          const rwSummary = window.RecordWatchBridge && typeof RecordWatchBridge.getRecordWatchSummary === "function" ? RecordWatchBridge.getRecordWatchSummary() : null;
-          candidates.push(normalizePacketEligibilityResult(rwSummary?.eligibilityResult || rwSummary, "recordwatch"));
-        } catch (error) { console.warn("RecordWatch eligibility resolution failed:", error); }
+        // Browser-maintained RecordWatch summaries are deliberately excluded.
         candidates.push(savedCaseEligibilityCandidate(options.checkoutCase));
         candidates.push(normalizePacketEligibilityResult(data?.eligibility, "normalized_fallback"));
 
@@ -1943,57 +1936,38 @@ document.addEventListener("DOMContentLoaded", async function () {
         return question?.label || PRIVATE_REVIEW_FIELD_LABELS[path] ||
           path.replace(/([._])/g, " ").replace(/\b\w/g, c => c.toUpperCase());
       }
-      function renderMissingInfoPanel(paths, rawData, normalizedData, schema) {
-        const panel = document.getElementById("missingInfoPanel");
-        const container = document.getElementById("missingInfoFields");
-        const summary = document.getElementById("missingInfoSummary");
-        if (!panel || !container) return;
-        if (!paths.length) {
-          panel.style.display = "none";
+      function renderMissingInfoPanel(paths,_rawData,_normalizedData,schema) {
+        const panel=document.getElementById("missingInfoPanel");
+        const container=document.getElementById("missingInfoFields");
+        const summary=document.getElementById("missingInfoSummary");
+        if(!panel||!container)return;
+        if(!paths.length){
+          panel.style.display="none";
           container.replaceChildren();
           return;
         }
-        const canonical = paths.filter(path => /^(court\.|charges\.\d+\.|case\.)/.test(path));
-        // Do not silently put an account holder's name on a court document.
-        // Offer it only as an explicit, editable applicant choice.
-        const accountName=String(window.RecordPathUserStore?.getCurrentUser?.()?.fullName||"").trim();
-        if (summary) summary.textContent =
-          paths.length + " required field" + (paths.length === 1 ? " is" : "s are") +
-          " missing. " + (canonical.length ? "Update saved court or charge details in Record Details; " : "") +
-          "complete applicant fields here before trying Private Review again. No PDF has been uploaded.";
-        container.innerHTML = paths.map((path) => {
-          const label = escapeHtml(privateReviewFieldLabel(path,schema));
-          if (canonical.includes(path)) return `<div class="missing-info-field"><strong>${label}</strong><p class="meta-note">This must be corrected in your saved court case, not in a browser draft.</p><a class="btn secondary" href="record-details.html">Edit Record Details</a></div>`;
-          // Confidential fields (especially a full SSN) must never be stored in
-          // unprotected localStorage. Require a separate protected intake route.
-          if (/ssn|social_security/i.test(path)) return `<div class="missing-info-field"><strong>${label}</strong><p class="meta-note">This sensitive field requires a secure form. Do not enter it into browser draft storage; contact support.</p></div>`;
-          const current = escapeHtml(getByPath(normalizedData, path, ""));
-          const accountOption = path==="petitioner.full_name" && !current && accountName
-            ? '<button class="sig-small-btn" type="button" id="useAccountNameForPacket">Use my saved account profile name</button>' : '';
-          return `<div class="missing-info-field"><label>${label}<input required aria-required="true" data-path="${escapeHtml(path)}" value="${current}" autocomplete="${path==="petitioner.full_name"?"name":"off"}" /></label>${accountOption}</div>`;
+        if(summary)summary.textContent=paths.length+
+          " saved Supabase field(s) are missing. Update the account record and reload before Private Review. No PDF was uploaded.";
+        // Do not offer browser-only inputs. Contact details are edited and saved
+        // through the owner-authenticated Supabase contact form directly above.
+        container.innerHTML=paths.map(path=>{
+          const label=escapeHtml(privateReviewFieldLabel(path,schema));
+          const contact=/^petitioner\.(full_name|phone|email|address\.)/.test(path);
+          const target=contact?"#packetContactPanel":"record-details.html";
+          return '<div class="missing-info-field"><strong>'+label+
+            '</strong><p class="meta-note">'+
+            (contact?"Complete and confirm this field in the contact section above.":
+              "Correct this value in your Supabase-saved case using Record Details.")+
+            '</p><a class="btn secondary" href="'+target+'">'+
+            (contact?"Review contact information":"Open Record Details")+'</a></div>';
         }).join("");
-        container.querySelectorAll("input[data-path]").forEach((input) => {
-          input.addEventListener("input", (event) => {
-            const p = event.target.getAttribute("data-path");
-            setByPath(rawData, p, event.target.value);
-            persistPacketData(rawData);
-          });
-        });
-        container.querySelector("#useAccountNameForPacket")?.addEventListener("click",()=>{
-          const input=container.querySelector('input[data-path="petitioner.full_name"]');
-          if(!input||!accountName)return;
-          input.value=accountName;
-          setByPath(rawData,"petitioner.full_name",accountName);
-          persistPacketData(rawData);
-          input.focus();
-        });
-        panel.style.display = "block";
+        panel.style.display="block";
       }
       function focusMissingPrivateReviewFields() {
         const panel=document.getElementById("missingInfoPanel");
         if (!panel) return;
         panel.scrollIntoView?.({behavior:"smooth",block:"center"});
-        (panel.querySelector('input[data-path]') || panel).focus?.({preventScroll:true});
+        panel.focus?.({preventScroll:true});
       }
 
       // Contact fields always appear in Step 1. A remote profile belongs to
