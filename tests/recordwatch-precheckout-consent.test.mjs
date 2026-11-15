@@ -28,7 +28,8 @@ test("Checkout CTA follows separate contact destinations and mandatory purchase 
   assert.ok(server.indexOf('req.body?.purchase_terms_acknowledged!==true') <
     server.indexOf('recordwatchStripe.checkout.sessions.create'));
   assert.doesNotMatch(dash,/data-premium-action="lifetime_case"/);
-  assert.match(landing,/window\.location\.assign\("recordwatch-dashboard\.html\?caseId=/);
+  assert.match(landing,/window\.location\.assign\("recordwatch-dashboard\.html"\+/);
+  assert.match(landing,/savedUuid\?"\?caseId="\+encodeURIComponent\(caseId\):""/);
   assert.doesNotMatch(landing,/RecordWatchNotifications\.checkoutPremium\("lifetime_case"/);
 });
 
