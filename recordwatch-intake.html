@@ -61,7 +61,7 @@
     <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Optional advanced intake</span><h1>Advanced Case Intake</h1><p>Use this optional page only when you want to add arrest, booking, prosecutor, judge, defense attorney, jail, or detailed monitoring information beyond the standard RecordPathAI eligibility and packet flow.</p><div class="hero-actions"><a class="btn secondary" href="recordwatch-dashboard.html">View Dashboard</a><a class="btn secondary" href="recordwatch-relief.html">Start Relief Actions</a></div></div></section>
 
     <section class="recordwatch-section"><div class="container recordwatch-stack">
-      <div id="saveMessage" class="success-message" role="status">Advanced case details saved locally. Your RecordWatch data will remain available after refresh in this browser.</div>
+      <div id="saveMessage" class="success-message" role="status">Additional case details are saved only to your authenticated Supabase case.</div>
       <form id="recordwatchIntakeForm" class="recordwatch-stack">
         <section class="recordwatch-form-section"><h2>Section A — Personal Information</h2><p class="muted">Most users can start at Eligibility instead; these fields prefill from the unified RecordPathAI / RecordWatch data when available.</p><div class="form-grid">
           <div class="form-field"><label for="fullName">Full legal name</label><input id="fullName" name="fullName" autocomplete="name" /></div>
@@ -133,7 +133,7 @@
       var saveMessage = document.getElementById("saveMessage");
       var editingCaseId = null;
 
-      function readJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (error) { return fallback; } }
+      let savedCase=null,accountProfile=null;
       function value(id) { return document.getElementById(id).value.trim(); }
       function setValue(id, nextValue) { var field = document.getElementById(id); if (field) field.value = nextValue || ""; }
 
@@ -172,7 +172,7 @@
         var now = new Date().toISOString();
         var profile = { fullName: value("fullName"), dateOfBirth: value("dateOfBirth"), email: value("email"), phone: value("phone"), residenceState: value("residenceState") };
         return {
-          id: editingCaseId || "rw-case-" + Date.now(), createdAt: editingCaseId ? (readJSON("recordwatchCases", []).find(function (item) { return item.id === editingCaseId; }) || {}).createdAt || now : now, updatedAt: now,
+          id: editingCaseId, createdAt:savedCase?.metadata?.recordwatchAdvancedIntake?.createdAt||now, updatedAt: now,
           personal: profile,
           arrest: { arrestDate: value("arrestDate"), arrestingAgency: value("arrestingAgency"), bookingNumber: value("bookingNumber"), detentionFacility: value("detentionFacility"), arrestCounty: value("arrestCounty"), arrestState: value("arrestState") },
           court: { caseState: value("caseState"), county: value("county"), courtName: value("courtName"), caseNumber: value("caseNumber"), judge: value("judge"), prosecutor: value("prosecutor"), defenseAttorney: value("defenseAttorney"), filingDate: value("filingDate"), arraignmentDate: value("arraignmentDate") },
@@ -182,30 +182,105 @@
         };
       }
 
-      function populateLatest() {
-        var profile = readJSON("recordwatchProfile", {});
-        Object.keys(profile).forEach(function (key) { setValue(key, profile[key]); });
-        var startBlankCase = new URLSearchParams(window.location.search).get("new") === "1";
-        var cases = readJSON("recordwatchCases", []);
-        var latest = cases[cases.length - 1];
-        if (startBlankCase || !latest) { editingCaseId = null; addCharge(); return; }
-        editingCaseId = latest.id;
-        [latest.arrest, latest.court, latest.outcome, latest.sentencing, latest.personal].forEach(function (group) { Object.keys(group || {}).forEach(function (key) { setValue(key, group[key]); }); });
-        chargesContainer.innerHTML = "";
-        (latest.charges && latest.charges.length ? latest.charges : [{}]).forEach(addCharge);
+      async function populateLatest() {
+        const store=window.RecordPathUserStore;
+        const disable=()=>{
+          form.querySelectorAll("input,select,button").forEach(input=>input.disabled=true);
+          saveMessage.textContent="Select a Supabase-saved case first. No browser draft was loaded. Use Record Details to enter or correct court and charge fields.";
+          saveMessage.classList.add("show");
+        };
+        try {
+          if(store?.ready)await store.ready;
+          if(!store?.getSupabaseCases||!store?.getSupabaseProfile)
+            throw new Error("Account case service unavailable");
+          const [cases,profile]=await Promise.all([store.getSupabaseCases(),store.getSupabaseProfile()]);
+          const requested=new URLSearchParams(location.search).get("caseId");
+          const active=store.getActiveCaseId?.()||"";
+          savedCase=cases.find(c=>c.case_id===(requested||active))||
+            (!requested&&cases.length===1?cases[0]:null);
+          if(!savedCase)throw new Error("No matching saved Supabase case");
+          accountProfile=profile;
+          editingCaseId=savedCase.case_id;
+          const advanced=savedCase.metadata?.recordwatchAdvancedIntake||{};
+          const profileFields={
+            fullName:profile.filing_full_name||profile.full_name||"",
+            email:profile.filing_email||profile.email||"",
+            phone:profile.filing_phone||profile.phone||"",
+            residenceState:profile.mailing_state||"",
+            dateOfBirth:""
+          };
+          Object.entries(profileFields).forEach(([key,val])=>setValue(key,val));
+          const canonical={
+            caseState:savedCase.caseState,county:savedCase.county,
+            courtName:savedCase.courtName,caseNumber:savedCase.caseNumber,
+            outcome:savedCase.outcome,dispositionDate:savedCase.dispositionDate,
+            finalDischargeDate:savedCase.finalDischargeDate
+          };
+          Object.entries(canonical).forEach(([key,val])=>setValue(key,val));
+          [advanced.arrest,advanced.court,advanced.outcome,advanced.sentencing]
+            .forEach(group=>Object.entries(group||{}).forEach(([key,val])=>{
+              if(!(key in canonical)&&!(key in profileFields))setValue(key,val);
+            }));
+          chargesContainer.replaceChildren();
+          const charges=(savedCase.chargeDetails||[]).map(c=>({
+            chargeName:c.charge_name,statuteCode:c.offense_code,
+            chargeLevel:c.offense_level,degree:c.degree||c.offense_level
+          }));
+          (charges.length?charges:[{}]).forEach(addCharge);
+          // No duplicated, browser-only edits to authoritative court or
+          // charge data. That work belongs in saved Record Details.
+          Object.keys(canonical).forEach(key=>{
+            const el=document.getElementById(key);
+            if(el)el.disabled=true;
+          });
+          Object.keys(profileFields).forEach(key=>{
+            const el=document.getElementById(key);
+            if(el)el.disabled=true;
+          });
+          chargesContainer.querySelectorAll("input,select,button").forEach(el=>el.disabled=true);
+          document.getElementById("addChargeTop").disabled=true;
+          document.getElementById("addChargeBottom").disabled=true;
+          saveMessage.textContent="Only authenticated Supabase data was loaded. Court/charge/profile fields are read-only here; use Record Details to edit them. Supplemental information saves to this Supabase case.";
+          saveMessage.classList.add("show");
+        }catch(error){disable();}
       }
-
-      form.addEventListener("submit", function (event) {
+      form.addEventListener("submit",async function(event){
         event.preventDefault();
-        var caseData = buildCase();
-        var cases = readJSON("recordwatchCases", []);
-        var existingIndex = cases.findIndex(function (item) { return item.id === caseData.id; });
-        if (existingIndex >= 0) cases[existingIndex] = caseData; else cases.push(caseData);
-        localStorage.setItem("recordwatchProfile", JSON.stringify(caseData.personal));
-        localStorage.setItem("recordwatchCases", JSON.stringify(cases));
-        editingCaseId = caseData.id;
+        if(!savedCase||!accountProfile){
+          saveMessage.textContent="Supabase-saved case required. Nothing saved locally.";
+          return;
+        }
+        const entered=buildCase();
+        // Store only supplemental data; canonical court, charge and identity
+        // fields are unchanged, preventing duplicate/conflicting sources.
+        const supplementary={
+          createdAt:entered.createdAt,
+          updatedAt:new Date().toISOString(),
+          arrest:entered.arrest,
+          court:Object.fromEntries(["judge","prosecutor","defenseAttorney","filingDate","arraignmentDate"]
+            .map(key=>[key,entered.court[key]||""])),
+          outcome:Object.fromEntries(["sentencingDate","caseClosedDate"]
+            .map(key=>[key,entered.outcome[key]||""])),
+          sentencing:entered.sentencing
+        };
+        try{
+          const client=await window.RecordPathSupabase.getClient();
+          const auth=await client.auth.getUser();
+          if(auth.error||auth.data?.user?.id!==accountProfile.id)
+            throw new Error("Account ownership could not be verified");
+          const metadata={...(savedCase.metadata||{}),recordwatchAdvancedIntake:supplementary};
+          const result=await client.from("saved_cases")
+            .update({metadata,updated_at:new Date().toISOString()})
+            .eq("id",savedCase.case_id).eq("user_id",accountProfile.id)
+            .select("id,metadata").single();
+          if(result.error||result.data?.id!==savedCase.case_id)
+            throw new Error("Supabase did not confirm the save");
+          savedCase.metadata=result.data.metadata;
+          saveMessage.textContent="Supplemental advanced information saved in Supabase. No browser record was created.";
+        }catch(error){
+          saveMessage.textContent="Supabase save failed. Nothing was saved to the browser.";
+        }
         saveMessage.classList.add("show");
-        saveMessage.scrollIntoView({ behavior: "smooth", block: "center" });
       });
       document.getElementById("addChargeTop").addEventListener("click", function () { addCharge(); });
       document.getElementById("addChargeBottom").addEventListener("click", function () { addCharge(); });
