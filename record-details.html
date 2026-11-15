@@ -1096,7 +1096,7 @@
 
           <aside class="recordwatch-panel" aria-labelledby="saveRecordWatchTitle">
             <h3 id="saveRecordWatchTitle">Save to RecordWatch (optional)</h3>
-            <p class="section-copy">Your case is already saved in this browser. Choose RecordWatch to track estimated eligibility and return to your saved case. Sign in to sync a saved case to your account across devices.</p>
+            <p class="section-copy">RecordWatch uses only your authenticated Supabase case. Save your case to your account before enabling tracking; browser drafts are not monitored.</p>
             <button type="button" id="saveRecordWatchBtn" class="btn btn-primary">Save to RecordWatch</button>
             <p id="recordWatchSaveMessage" class="record-status" role="status" aria-live="polite">Not yet added to RecordWatch.</p>
             <div class="recordwatch-panel-grid" id="recordWatchSummary" hidden>
@@ -1108,7 +1108,7 @@
             <p><a href="recordwatch-dashboard.html">Open RecordWatch dashboard</a></p>
           </aside>
           <p class="note">
-            Draft case details remain on this device after refresh or navigation unless browser storage is cleared. Private-browsing mode may erase them. Court eligibility is not guaranteed; RecordWatch estimates depend on the case details you provide.
+            Draft entry is not monitored. Save your data to your authenticated Supabase account to make it available to RecordWatch. Court eligibility is not guaranteed; estimates depend on your saved case details.
           </p>
         </section>
       </div>
@@ -1167,17 +1167,15 @@
       const recordStatus = document.getElementById("recordStatus");
       let offenseCounter = 0;
       let autosaveTimer = null;
-      const RECORDWATCH_OPT_IN_KEY = "recordPathRecordWatchOptIn";
+      let verifiedRemoteRecordWatchCase=null;
       function isRecordWatchEnabled() {
-        return localStorage.getItem(RECORDWATCH_OPT_IN_KEY) === "true";
+        // Only an authenticated Supabase case status counts as active.
+        return Boolean(verifiedRemoteRecordWatchCase &&
+          String(verifiedRemoteRecordWatchCase.recordWatchStatus||"").toLowerCase()==="active");
       }
-
       function syncRecordWatchFromDraft() {
-        if (!isRecordWatchEnabled() || !window.RecordWatchBridge) return;
-        const profile = collectProfile();
-        const charges = collectCharges();
-        RecordWatchBridge.saveProfileFromEligibility?.(profile);
-        if (charges.length) RecordWatchBridge.saveCaseFromRecordDetails?.({ charges });
+        // Intentionally disabled. Browser drafts never become RecordWatch
+        // monitored cases, paid entitlements or eligibility event sources.
       }
 
       function showFeeGuidance() {
@@ -1673,22 +1671,20 @@
       }
 
       function renderRecordWatchPanel() {
-        const enabled = isRecordWatchEnabled();
-        const summaryNode = document.getElementById("recordWatchSummary");
-        const saveButton = document.getElementById("saveRecordWatchBtn");
-        if (summaryNode) summaryNode.hidden = !enabled;
-        if (saveButton) saveButton.textContent = enabled ? "Update RecordWatch" : "Save to RecordWatch";
-        if (!enabled || !window.RecordWatchBridge) {
-          setText("rwTrackingStatus", "Not enabled");
-          return;
-        }
-        const summary = RecordWatchBridge.getRecordWatchSummary();
-        const missing = summary.missingRequirements && summary.missingRequirements.length ? summary.missingRequirements.join(", ") : "None recorded";
-        setText("rwTrackingStatus", "Enabled");
-        setText("rwEligibilityStatus", summary.estimatedEligibilityStatus || "More information needed");
-        setText("rwMissingRequirements", missing);
-        setText("rwNextAction", summary.nextRecommendedAction || "Review your saved case details.");
-        setText("recordWatchSaveMessage", "RecordWatch is enabled for this case on this device.");
+        const enabled=isRecordWatchEnabled();
+        const summaryNode=document.getElementById("recordWatchSummary");
+        const saveButton=document.getElementById("saveRecordWatchBtn");
+        if(summaryNode)summaryNode.hidden=!enabled;
+        if(saveButton)saveButton.textContent=enabled?"Update Supabase RecordWatch":"Save to RecordWatch";
+        setText("rwTrackingStatus",enabled?"Supabase tracking active":"Not activated");
+        setText("rwEligibilityStatus",verifiedRemoteRecordWatchCase?.eligibilityStatus||
+          "Supabase case required");
+        setText("rwMissingRequirements",verifiedRemoteRecordWatchCase
+          ?"Open RecordWatch to review remote-only requirements":"Save the case to Supabase first");
+        setText("rwNextAction","Open your RecordWatch dashboard for live saved-case tracking.");
+        setText("recordWatchSaveMessage",enabled
+          ?"Case tracking confirmed in Supabase. No browser records are used."
+          :"Save the case to your account before enabling RecordWatch.");
       }
 
       function setText(id, text) {
@@ -1719,9 +1715,14 @@
           field?.addEventListener("change",()=>window.RecordPathRecordCollection?.update?.());
           if(id==="county"||id==="courtName")field?.addEventListener("input",()=>window.RecordPathRecordCollection?.update?.());
         });
-        if (isRecordWatchEnabled() && window.RecordWatchBridge?.syncExistingRecordPathData) {
-          RecordWatchBridge.syncExistingRecordPathData();
-        }
+        // Read-only saved-case status; browser RecordWatch sync disabled.
+        try {
+          const id=new URLSearchParams(location.search).get("caseId")||
+            window.RecordPathUserStore?.getActiveCaseId?.();
+          if(id && window.RecordPathUserStore?.getSupabaseCaseById)
+            verifiedRemoteRecordWatchCase=
+              await RecordPathUserStore.getSupabaseCaseById(id);
+        } catch { verifiedRemoteRecordWatchCase=null; }
         showFeeGuidance();
         renderRecordWatchPanel();
 
@@ -1743,24 +1744,32 @@
         }
 
         document.getElementById("saveRecordWatchBtn")?.addEventListener("click", async function () {
-          const result = saveDraft(false);
-          if (result.error) return;
-          if (!result.charges.length) {
-            setText("recordWatchSaveMessage", "Add at least one charge before tracking eligibility with RecordWatch.");
+          const result=saveDraft(false);
+          if(result.error)return;
+          if(!result.charges.length){
+            setText("recordWatchSaveMessage","Save at least one charge to your account before activating RecordWatch.");
             return;
           }
-          try {
-            localStorage.setItem(RECORDWATCH_OPT_IN_KEY, "true");
-            syncRecordWatchFromDraft();
-            const saved = await persistCurrentCaseDraft(result.casePayload, true);
-            const loggedIn = !!window.RecordPathUserStore?.isLoggedIn?.();
+          try{
+            if(!window.RecordPathUserStore?.getSupabaseCaseById)
+              throw new Error("Supabase data service unavailable.");
+            const saved=await persistCurrentCaseDraft(result.casePayload,true);
+            const caseId=saved?.savedCaseId;
+            if(!caseId)throw new Error("Account case not saved.");
+            const accountCase=await RecordPathUserStore.getSupabaseCaseById(caseId);
+            if(!accountCase || accountCase.case_id!==caseId)
+              throw new Error("Supabase case verification failed.");
+            await RecordPathUserStore.updateCase(caseId,{recordWatchStatus:"active"});
+            verifiedRemoteRecordWatchCase=
+              await RecordPathUserStore.getSupabaseCaseById(caseId);
+            if(!isRecordWatchEnabled())
+              throw new Error("Supabase did not confirm RecordWatch activation.");
             renderRecordWatchPanel();
-            setText("recordWatchSaveMessage", loggedIn && saved
-              ? "Saved in RecordWatch on this device. Open your dashboard to confirm account synchronization."
-              : "Saved in RecordWatch on this device. Sign in for account-backed storage.");
-          } catch (error) {
-            console.warn("RecordWatch save failed:", error);
-            setText("recordWatchSaveMessage", "Unable to save to RecordWatch. Your browser draft is still available.");
+            setText("recordWatchSaveMessage","RecordWatch tracking saved in Supabase for this case.");
+          }catch(error){
+            verifiedRemoteRecordWatchCase=null;
+            renderRecordWatchPanel();
+            setText("recordWatchSaveMessage","Could not verify Supabase RecordWatch save. Browser drafts were not used.");
           }
         });
 
