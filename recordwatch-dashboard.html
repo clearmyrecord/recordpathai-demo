@@ -344,6 +344,22 @@
               smsEnabledChecked: preferences.sms_enabled === true && consentChecked
             })
           : '';
+        var reminderPreferenceRows=[
+          {id:"premiumReminder180",field:"reminder_180_enabled",label:"180-day eligibility reminder"},
+          {id:"premiumReminder90",field:"reminder_90_enabled",label:"90-day eligibility reminder"},
+          {id:"premiumReminder30",field:"reminder_30_enabled",label:"30-day eligibility reminder"},
+          {id:"premiumReminder7",field:"reminder_7_enabled",label:"7-day eligibility reminder"},
+          {id:"premiumReminderDay",field:"reminder_day_enabled",label:"Eligibility-day reminder"},
+          {id:"premiumPacketProgress",field:"packet_progress_enabled",label:"Packet progress follow-ups (days 3, 7, and 14)"},
+          {id:"premiumMissingDetails",field:"missing_details_enabled",label:"Missing case-details follow-ups (days 3, 7, and 14)"},
+          {id:"premiumCourtStatus",field:"court_status_enabled",label:"Verified court-status updates (only with an approved source)"}
+        ];
+        var reminderPreferenceFields='<fieldset class="recordwatch-optin-group"><legend>Premium reminder categories</legend>'+
+          '<p class="meta-note">Choose which paid reminders to receive. These do not grant consent to email or SMS; those channels remain optional above.</p>'+
+          reminderPreferenceRows.map(function(option){
+            return '<label class="toggle-row"><input type="checkbox" id="'+option.id+'" '+
+              (preferences[option.field]===false?'':'checked')+'><span>'+esc(option.label)+'</span></label>';
+          }).join('')+'</fieldset>';
         var smsReason = window.RecordWatchMessageProvider
           ? RecordWatchMessageProvider.smsDisabledReason(user, subscription, Object.assign({}, preferences, {
               phone_number: phone, sms_consent: consentChecked
@@ -361,11 +377,11 @@
                 (preferences.notification_email_verified_at
                   ? 'Verified for Premium alerts' : 'Pending — check the inbox you selected for a confirmation link') + '</p>'
               : '') +
-            smsFields +
+            smsFields + reminderPreferenceFields +
             '<p id="premiumDeliveryReadiness" class="meta-note">Checking email and SMS provider readiness…</p>' +
             '<p id="premiumSmsReason" class="meta-note">' +
               esc(smsReason || 'SMS requires separate consent, an approved provider and verified case Premium.') + '</p>' +
-            '<button class="btn" type="submit">Save SMS &amp; email preferences</button>' +
+            '<button class="btn" type="submit">Save Premium notification preferences</button>' +
             '<div class="recordwatch-actions"><button class="btn secondary" type="button" data-alert-test="email">Send test email</button>' +
               '<button class="btn secondary" type="button" data-alert-test="sms">Send test SMS</button></div>' +
             '<p class="meta-note">Test buttons only send after provider authorization to the signed-in customer\'s verified destination. Provider acceptance is not proof of delivery.</p>' +
@@ -393,9 +409,9 @@
               }).join('') + '</ol></div>' +
             '<div class="recordwatch-schedule-group"><h3>Additional notifications</h3>' +
               '<ul class="recordwatch-schedule-list">' +
-                '<li><span class="recordwatch-schedule-time">Packet progress</span><span>Reminders for incomplete or ungenerated packets</span></li>' +
-                '<li><span class="recordwatch-schedule-time">Missing details</span><span>Prompts to complete required case information</span></li>' +
-                '<li><span class="recordwatch-schedule-time">Court status</span><span>Updates only when a supported court integration is available</span></li>' +
+                '<li><span class="recordwatch-schedule-time">Packet progress</span><span>3, 7 and 14 days after saving a case, while its packet remains incomplete</span></li>' +
+                '<li><span class="recordwatch-schedule-time">Missing details</span><span>3, 7 and 14 days after saving a case, when required information is missing</span></li>' +
+                '<li><span class="recordwatch-schedule-time">Court status</span><span>Only independently verified court updates from an approved source; no live feed is assumed</span></li>' +
               '</ul></div></div>' +
           '<p class="recordwatch-schedule-note">' +
             (premium
@@ -569,6 +585,10 @@
               sms_enabled: smsEnabled
             }, activeSubscription());
             payload.notification_email=chosenEmail;
+            reminderPreferenceRows.forEach(function(option){
+              var check=document.getElementById(option.id);
+              payload[option.field]=Boolean(check && check.checked);
+            });
             payload.saved_case_id = selectedSavedCaseId() || null;
             payload.sms_consent_reconfirmed = consent && (phoneInput.dataset.consentReconfirmed === 'true');
             payload.sms_terms_acknowledged = document.getElementById('premiumSmsTerms').checked;
