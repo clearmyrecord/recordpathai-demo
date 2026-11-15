@@ -15,6 +15,11 @@ const client=read("js/recordwatch-notifications.js");
 
 test("Checkout CTA follows separate contact destinations and mandatory purchase agreement",()=>{
   assert.match(dash,/recordwatchPreCheckoutForm/);
+  // The user's first-screen CTA must be visible without opening the optional
+  // notification form or falsely implying payment before the terms checkbox.
+  assert.match(dash,/id="recordwatchPremiumHeroAction" href="#recordwatchPremiumPanel"/);
+  assert.match(dash,/primaryAction\.textContent=premium/);
+  assert.match(dash,/Purchase RecordWatch Premium — \\$39/);
   assert.match(dash,/checkoutFields \+/);
   assert.match(dash,/recordwatchPurchaseTerms/);
   assert.match(dash,/Purchase RecordWatch Premium — \\$39/);
