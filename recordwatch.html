@@ -252,8 +252,12 @@
           try {
             const plan = button.getAttribute("data-recordwatch-checkout");
             const caseId = window.RecordPathUserStore?.getActiveCaseId?.() || active && active.id;
-            if (!caseId) throw new Error("Select a saved case to review Premium notifications and pricing.");
-            window.location.assign("recordwatch-dashboard.html?caseId="+encodeURIComponent(caseId)+"#recordwatchPremiumPanel");
+            // A browser-only draft ID is not an account-owned Supabase case.
+            // Open the dashboard picker rather than directing customers into
+            // a dead-end checkout for an invalid or missing saved-case UUID.
+            const savedUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(caseId||""));
+            window.location.assign("recordwatch-dashboard.html"+
+              (savedUuid?"?caseId="+encodeURIComponent(caseId):"")+"#recordwatchPremiumPanel");
           } catch (error) {
             status.textContent = error.message || "Could not start checkout.";
             button.disabled = false;
