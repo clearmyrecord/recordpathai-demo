@@ -8,6 +8,8 @@ import {deflateSync} from "node:zlib";
 import {PDFDocument,StandardFonts,rgb,degrees} from "pdf-lib";
 import {getDocument,OPS} from "pdfjs-dist/legacy/build/pdf.mjs";
 import {isOfficialWoodConvictionFormPair} from "../src/wood-form-pages.js";
+import {renderWatermarkedPreviewPage} from "../src/packet-preview.js";
+import {createCanvas,loadImage} from "@napi-rs/canvas";
 
 const html=readFileSync(new URL("../packet.html",import.meta.url),"utf8");
 const mapping=JSON.parse(readFileSync(new URL("../templates/ohio/wood-county/sealing-conviction.json",import.meta.url),"utf8"));
@@ -97,6 +99,20 @@ try {
     "Signed output must contain exact official address and sealing-application pages");
   assert.ok(!texts.join(" ").toUpperCase().includes("CAN I SEAL OR EXPUNGE MY CRIMINAL RECORD"),
     "Eligibility guide may not be included");
+  // The previous proof checked only the official blank pages and drawn
+  // signature. It therefore passed even if ALL applicant fields were blank.
+  const overlayExpectations=[
+    ["applicant", "SYNTHETIC APPLICANT"],
+    ["mailing address", "123 Example Street"],
+    ["court case number", "SAMPLE-2026"],
+    ["charge name", "SAMPLE CHARGE"],
+    ["offense code", "0000.00"]
+  ];
+  const normalized=raw=>String(raw).toUpperCase().replace(/[^A-Z0-9]/g,"");
+  for(const [label,value] of overlayExpectations){
+    assert.ok(normalized(texts.join(" ")).includes(normalized(value)),
+      "Actual signed PDF must visibly contain mapped "+label+"; an untouched blank official PDF is not acceptable");
+  }
   const sourceApp=await unsignedOriginal.getPage(4);
   const finalApp=await rendered.getPage(2);
   const countImageOps=async page=>(await page.getOperatorList()).fnArray.filter(
@@ -134,4 +150,56 @@ try {
 }finally{await samplePdf.destroy();}
 mkdirSync("artifacts",{recursive:true});
 writeFileSync("artifacts/wood-county-synthetic-drawn-signature-NOT-FOR-FILING.pdf",sample);
+const proofPng=await renderWatermarkedPreviewPage(Buffer.from(signed),2,2);
+const basePng=await renderWatermarkedPreviewPage(Buffer.from(original),4,4);
+const addressPng=await renderWatermarkedPreviewPage(Buffer.from(signed),1,2);
+const baseAddressPng=await renderWatermarkedPreviewPage(Buffer.from(original),3,4);
+writeFileSync("artifacts/wood-county-real-preview-p1-TEST-ONLY.png",addressPng);
+writeFileSync("artifacts/wood-county-real-preview-p2-TEST-ONLY.png",proofPng);
+async function pixels(png){
+  const img=await loadImage(png);
+  const canvas=createCanvas(img.width,img.height);
+  const context=canvas.getContext("2d");
+  context.drawImage(img,0,0);
+  return {width:img.width,height:img.height,data:context.getImageData(0,0,img.width,img.height).data};
+}
+function changedInk(a,b,x0,y0,x1,y1){
+  assert.equal(a.width,b.width);assert.equal(a.height,b.height);
+  let changed=0;
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+    const i=(y*a.width+x)*4;
+    const diff=Math.max(
+      Math.abs(a.data[i]-b.data[i]),Math.abs(a.data[i+1]-b.data[i+1]),
+      Math.abs(a.data[i+2]-b.data[i+2]));
+    if(diff>30)changed++;
+  }
+  return changed;
+}
+function scaledRect(p,x,y,w,h){
+  return [Math.max(0,Math.floor(x/768*p.width)),
+    Math.max(0,Math.floor(y/994*p.height)),
+    Math.min(p.width,Math.ceil((x+w)/768*p.width)),
+    Math.min(p.height,Math.ceil((y+h)/994*p.height))];
+}
+const filledApp=await pixels(proofPng),blankApp=await pixels(basePng);
+const filledAddr=await pixels(addressPng),blankAddr=await pixels(baseAddressPng);
+for(const {label,base,filled,rect} of [
+  {label:"case number",base:blankApp,filled:filledApp,rect:[559,140,134,45]},
+  {label:"applicant name",base:blankApp,filled:filledApp,rect:[115,237,245,43]},
+  {label:"charge name",base:blankApp,filled:filledApp,rect:[85,470,190,39]},
+  {label:"address verification applicant",base:blankAddr,filled:filledAddr,rect:[200,463,438,52]},
+  {label:"address verification street",base:blankAddr,filled:filledAddr,rect:[155,514,495,45]}
+]){
+  const changed=changedInk(base,filled,...scaledRect(filled,...rect));
+  assert.ok(changed>=15,
+    "Watermarked PNG must visibly render "+label+" (pixel difference "+changed+"). Font data may be missing.");
+}
+let footerWhite=0;
+for(let y=filledApp.height-39;y<filledApp.height-3;y++)for(let x=0;x<filledApp.width;x++){
+  const i=(y*filledApp.width+x)*4;
+  if(filledApp.data[i]>215&&filledApp.data[i+1]>215&&filledApp.data[i+2]>215)footerWhite++;
+}
+assert.ok(footerWhite>60,
+  "Watermarked image must visibly display white preview-only text over its red footer.");
+console.log("PASS: actual production PNG preview visibly renders applicant, case, charge, address fields and watermark.");
 console.log("PASS: sample watermarked, production upload would reject it; no charge, filing or mail.");

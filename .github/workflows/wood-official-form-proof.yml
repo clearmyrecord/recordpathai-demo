@@ -21,6 +21,7 @@ jobs:
           node-version: '22'
       - run: npm ci --ignore-scripts
       - run: npm install --no-save --ignore-scripts --package-lock=false pdf-lib@1.17.1
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends poppler-utils fonts-liberation
       - run: node tools/wood-official-form-sample.mjs
       - run: node tools/wood-signed-review-proof.mjs
       - uses: actions/upload-artifact@v4
@@ -29,4 +30,6 @@ jobs:
           path: |
             artifacts/wood-county-official-form-SAMPLE-NOT-FOR-FILING.pdf
             artifacts/wood-county-synthetic-drawn-signature-NOT-FOR-FILING.pdf
+            artifacts/wood-county-real-preview-p1-TEST-ONLY.png
+            artifacts/wood-county-real-preview-p2-TEST-ONLY.png
           retention-days: 7

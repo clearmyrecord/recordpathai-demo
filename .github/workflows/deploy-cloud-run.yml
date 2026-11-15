@@ -32,6 +32,8 @@ jobs:
           test -f js/pilot-demo.js
           grep -qi 'Illustrative demo' pilot-demo.html
           node -e 'if (require("./package.json").engines.node !== "22") process.exit(1)'
+      - name: Install private PDF preview rendering prerequisites
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends poppler-utils fonts-liberation
       - name: Run security and intake regression tests
         run: npm run test:security
       - name: Verify zero-traffic preflight, promotion and rollback behavior
