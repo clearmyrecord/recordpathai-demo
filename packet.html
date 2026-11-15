@@ -1201,7 +1201,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         return true;
       }
       if (!await loadCaseFromUrl()) return;
-      if (window.RecordPathWorkflow && !RecordPathWorkflow.guardPage("packet")) return;
+      // Packet access must not be gated by browser-local workflow flags.
+      // Signed review and checkout require the authenticated Supabase case and server approval.
       if (window.RecordPathWorkflow) RecordPathWorkflow.renderProgress("packet");
 
       function renderRecordWatchPanel(eligibilityResult) {
@@ -1873,6 +1874,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         "dates.current_year": "generated.current_year"
       };
       let accountPacketSnapshot=null;
+      let accountSelectedCaseId=null;
       function persistPacketData(raw) {
         // Transient in-memory view only. Signed packet content must originate
         // in RLS-protected Supabase and be reread after account writes.
@@ -1978,6 +1980,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const status=document.getElementById("packetContactStatus");
         const store=window.RecordPathUserStore;
         accountPacketSnapshot=null;
+        accountSelectedCaseId=null;
         packetContactProfileLoaded=false;
         try{
           if(store?.ready)await store.ready;
@@ -1995,6 +1998,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           if(!savedCase)throw new Error(
             cases.length?"Select a saved case from your account dashboard. Browser draft selections cannot populate this packet.":
               "No Supabase-saved case is available. Complete Record Details and save it to your account.");
+          const caseId=String(savedCase.case_id||savedCase.id||"");
+          if(!isInternalUuid(caseId))throw new Error("Select a valid Supabase-saved case.");
+          accountSelectedCaseId=caseId;
           const mapped=store.caseToPacketData(savedCase);
           const values=RecordPathPacketContact.mergeForAccount(null,profile,null);
           accountPacketSnapshot=RecordPathPacketContact.applyToDraft({
@@ -2056,6 +2062,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         if(verified.length)throw new Error("Supabase did not retain complete contact details. No PDF was uploaded.");
         const raw=RecordPathPacketContact.applyToDraft(readPacketData(),savedValues,user.id);
         persistPacketData(raw);
+        // Refresh the intake summary from the persisted Supabase contact fields.
+        updateSummary(buildNormalizedPacketData(readPacketData()));
         if(status)status.textContent="Confirmed contact details were saved securely and will appear on both forms.";
       }
 
@@ -2999,15 +3007,14 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       function ensureCheckoutPrerequisites() {
-        try {
-          if (!window.RecordPathWorkflow) return true;
-          const getter = RecordPathWorkflow.getMissingPacketWorkflowPrerequisites;
-          const missing = getter ? getter("checkout") : [];
-          return showPrerequisiteErrors(missing, "checkout", "Please complete eligibility and record details before checkout.");
-        } catch (error) {
-          console.error("Checkout prerequisite check failed:", error);
-          return failCheckoutPrerequisite("Checkout requirements could not be verified. Please refresh and try again.");
-        }
+        // No legacy localStorage workflow booleans. The server verifies the
+        // persisted case and independent signed PDF approval before charging.
+        const data=readPacketData();
+        if(!packetContactProfileLoaded || !isInternalUuid(accountSelectedCaseId))
+          return failCheckoutPrerequisite("Sign in and select a Supabase-saved case before checkout.");
+        if(!data?.court?.case_number || !Array.isArray(data?.charges) || !data.charges.length)
+          return failCheckoutPrerequisite("Complete case information in Record Details and save it to your account before checkout.");
+        return true;
       }
 
 
@@ -3733,29 +3740,22 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       async function resolveCheckoutCase() {
-        const urlCaseId = new URLSearchParams(window.location.search).get("caseId");
-        if (urlCaseId && window.RecordPathUserStore?.getCaseById) {
-          const fromUrl = await RecordPathUserStore.getCaseById(urlCaseId).catch(() => null);
-          const normalized = normalizeCheckoutCase(fromUrl);
-          if (validateCheckoutCase(normalized).ok) return { source: "url", checkoutCase: normalized };
-        }
-
-        if (window.RecordPathUserStore?.getActiveCase) {
-          const active = await RecordPathUserStore.getActiveCase().catch(() => null);
-          const normalized = normalizeCheckoutCase(active);
-          if (validateCheckoutCase(normalized).ok) return { source: "active", checkoutCase: normalized };
-        }
-
-        const visible = normalizeCheckoutCase(visibleSelectedPacketRecord());
-        if (validateCheckoutCase(visible).ok) return { source: "visible", checkoutCase: visible };
-
-        const packet = packetDataAsCheckoutCase();
-        if (validateCheckoutCase(packet).ok) return { source: "packet", checkoutCase: packet };
-
-        if (!(window.RecordPathUserStore && RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn())) {
-          return { source: "anonymous", checkoutCase: packet };
-        }
-        return { source: "empty", checkoutCase: packet };
+        // URL and active browser keys select an ID only. All case fields
+        // come from the authenticated owner-scoped Supabase saved_cases row.
+        const store=window.RecordPathUserStore;
+        if(!packetContactProfileLoaded || !isInternalUuid(accountSelectedCaseId) ||
+           !store?.getSupabaseCaseById)
+          throw new Error("Select a saved case from your authenticated account before checkout.");
+        const requestedCaseId=new URLSearchParams(window.location.search).get("caseId");
+        if(requestedCaseId && requestedCaseId!==accountSelectedCaseId)
+          throw new Error("The requested case does not match your selected saved case.");
+        const savedCase=await store.getSupabaseCaseById(accountSelectedCaseId);
+        if(!savedCase || String(savedCase.case_id||savedCase.id||"")!==accountSelectedCaseId)
+          throw new Error("The selected case is unavailable in your Supabase account.");
+        const normalized=normalizeCheckoutCase(savedCase);
+        if(!validateCheckoutCase(normalized).ok)
+          throw new Error("Complete and save the selected case information in Record Details.");
+        return { source:"supabase", checkoutCase:normalized };
       }
 
       function eligibilityFieldsForSavedCase(packetEligibility) {
@@ -3778,26 +3778,20 @@ document.addEventListener("DOMContentLoaded", async function () {
         };
       }
 
-      async function saveCheckoutCaseIfNeeded(checkoutCase, packetEligibility = null) {
-        const draftPayload = Object.assign({}, checkoutCase, eligibilityFieldsForSavedCase(packetEligibility), {
-          packetStatus: isPacketPaymentComplete() ? "paid" : "Packet reviewed",
-          paymentStatus: isPacketPaymentComplete() ? "paid" : "unpaid"
-        });
-        if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) await RecordPathUserStore.saveCurrentCaseDraft(draftPayload, { network: true }).catch(function (error) { console.warn("Packet case draft save skipped:", error); });
-        const isAuthenticated = Boolean(window.RecordPathUserStore && RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn());
-        if (!isAuthenticated) {
-          const authError = new Error("Please sign in before checkout so RecordPathAI can save this packet to your account.");
-          authError.code = "auth_session_missing";
-          throw authError;
-        }
-        if (!window.RecordPathUserStore.saveCase) throw new Error("Save unavailable");
-        const saved = await RecordPathUserStore.saveCase(draftPayload);
-        if (!saved || !(saved.case_id || saved.id)) throw new Error("Save failed");
-        return Object.assign({}, checkoutCase, normalizeCheckoutCase(saved), {
-          saved_case_id: saved.case_id || saved.id,
-          case_id: saved.case_id || saved.id,
-          caseNumber: checkoutCase.caseNumber || saved.caseNumber
-        });
+      async function saveCheckoutCaseIfNeeded(checkoutCase, _packetEligibility = null) {
+        // Never change the saved case during checkout: a changed case would
+        // invalidate the independent review of its exact signed PDF.
+        const id=checkoutCase?.saved_case_id||checkoutCase?.case_id;
+        if(!isInternalUuid(id) || id!==accountSelectedCaseId ||
+           !window.RecordPathUserStore?.getSupabaseCaseById)
+          throw new Error("Select a saved account case before checkout.");
+        const saved=await RecordPathUserStore.getSupabaseCaseById(id);
+        if(!saved || String(saved.case_id||saved.id||"")!==id)
+          throw new Error("Your selected account case is no longer available.");
+        const verified=normalizeCheckoutCase(saved);
+        const validity=validateCheckoutCase(verified);
+        if(!validity.ok)throw new Error(validity.message);
+        return Object.assign({},verified,{saved_case_id:id,case_id:id});
       }
 
       function serverReadinessUrl(caseId) {
