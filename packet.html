@@ -1925,6 +1925,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           return;
         }
         const canonical = paths.filter(path => /^(court\.|charges\.\d+\.|case\.)/.test(path));
+        // Do not silently put an account holder's name on a court document.
+        // Offer it only as an explicit, editable applicant choice.
+        const accountName=String(window.RecordPathUserStore?.getCurrentUser?.()?.fullName||"").trim();
         if (summary) summary.textContent =
           paths.length + " required field" + (paths.length === 1 ? " is" : "s are") +
           " missing. " + (canonical.length ? "Update saved court or charge details in Record Details; " : "") +
@@ -1936,7 +1939,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           // unprotected localStorage. Require a separate protected intake route.
           if (/ssn|social_security/i.test(path)) return `<div class="missing-info-field"><strong>${label}</strong><p class="meta-note">This sensitive field requires a secure form. Do not enter it into browser draft storage; contact support.</p></div>`;
           const current = escapeHtml(getByPath(normalizedData, path, ""));
-          return `<label class="missing-info-field">${label}<input required aria-required="true" data-path="${escapeHtml(path)}" value="${current}" autocomplete="${path==="petitioner.full_name"?"name":"off"}" /></label>`;
+          const accountOption = path==="petitioner.full_name" && !current && accountName
+            ? '<button class="sig-small-btn" type="button" id="useAccountNameForPacket">Use my saved account profile name</button>' : '';
+          return `<div class="missing-info-field"><label>${label}<input required aria-required="true" data-path="${escapeHtml(path)}" value="${current}" autocomplete="${path==="petitioner.full_name"?"name":"off"}" /></label>${accountOption}</div>`;
         }).join("");
         container.querySelectorAll("input[data-path]").forEach((input) => {
           input.addEventListener("input", (event) => {
@@ -1944,6 +1949,14 @@ document.addEventListener("DOMContentLoaded", async function () {
             setByPath(rawData, p, event.target.value);
             persistPacketData(rawData);
           });
+        });
+        container.querySelector("#useAccountNameForPacket")?.addEventListener("click",()=>{
+          const input=container.querySelector('input[data-path="petitioner.full_name"]');
+          if(!input||!accountName)return;
+          input.value=accountName;
+          setByPath(rawData,"petitioner.full_name",accountName);
+          persistPacketData(rawData);
+          input.focus();
         });
         panel.style.display = "block";
       }
