@@ -41,6 +41,7 @@ test("Prepayment preview endpoints never return original PDF, signed URL, or cre
   assert.ok(start>0 && end>start);
   const area=server.slice(start,end);
   assert.match(area,/requireApiUser\(req,res\)/);
+  assert.match(area,/customerPreviewForCase\(user\.id,caseId\)/);
   assert.match(area,/approvedPreviewForCase\(user\.id,caseId\)/);
   assert.match(area,/fetchExactApprovedPreviewPdf\(source\)/);
   assert.match(area,/renderWatermarkedPreviewPage\(original,page,source\.pageCount\)/);
