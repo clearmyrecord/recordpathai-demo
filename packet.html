@@ -3032,7 +3032,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             charges:mapped.charges};
           const data=buildNormalizedPacketData(reviewData);
           if(/^(sample|synthetic) applicant$/i.test(String(data?.petitioner?.full_name||"").trim()) ||
-             /@example\\.invalid$/i.test(String(data?.petitioner?.email||"").trim()))
+             /@example\.invalid$/i.test(String(data?.petitioner?.email||"").trim()))
             throw new Error("Sample applicant information cannot be used for a real packet. Complete Step 1 with your own details.");
           const selected=await loadActiveTemplateForPacket(data);
           if(!selected)throw new Error("No verified form matches the saved case's court and charge outcomes. Review Record Details; the sample PDF does not establish eligibility.");
