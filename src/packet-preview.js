@@ -1,7 +1,23 @@
 // Exact approved PDF -> WATERMARKED PNG image only.
 // This module never returns the original PDF or a downloadable PDF preview.
-import { createCanvas } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts, Path2D, DOMMatrix } from "@napi-rs/canvas";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { fileURLToPath } from "node:url";
+
+const STANDARD_FONT_DIR=fileURLToPath(new URL("../node_modules/pdfjs-dist/standard_fonts/",import.meta.url));
+const LIBERATION_FONT=fileURLToPath(new URL("../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf",import.meta.url));
+let previewFontsReady=false;
+function ensurePreviewFonts(){
+  // Node's PDF.js requires both standard-font data and Path2D for glyph
+  // outlines. Without either it silently drops pdf-lib's Helvetica overlays.
+  // The same missing fonts also previously erased the watermark/footer text.
+  if(previewFontsReady)return;
+  if(typeof globalThis.Path2D==="undefined")globalThis.Path2D=Path2D;
+  if(typeof globalThis.DOMMatrix==="undefined")globalThis.DOMMatrix=DOMMatrix;
+  if(!GlobalFonts.registerFromPath(LIBERATION_FONT,"sans-serif"))
+    throw new Error("The preview font could not be loaded. Do not return an incomplete document image.");
+  previewFontsReady=true;
+}
 
 export const MAX_PREVIEW_PAGES=6;
 export const PREVIEW_WATERMARK="PREVIEW ONLY - NOT FOR FILING";
@@ -23,7 +39,12 @@ export async function renderWatermarkedPreviewPage(bytes,pageNumber,expectedPage
   const n=Number(pageNumber);
   if(!Number.isInteger(n)||n<1||n>MAX_PREVIEW_PAGES)
     throw new Error("Invalid preview page.");
-  const loading=getDocument({data:new Uint8Array(bytes),useSystemFonts:true});
+  ensurePreviewFonts();
+  const loading=getDocument({
+    data:new Uint8Array(bytes),
+    useSystemFonts:true,
+    standardFontDataUrl:STANDARD_FONT_DIR
+  });
   const pdf=await loading.promise;
   try{
     if(pdf.numPages<1||pdf.numPages>MAX_PREVIEW_PAGES ||
