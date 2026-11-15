@@ -895,7 +895,15 @@
 
   function caseToPacketData(caseData) {
     const item = normalizeCase(caseData);
+    const savedReview = item.metadata && typeof item.metadata.recordPathCaseReview === "object"
+      ? item.metadata.recordPathCaseReview : {};
     return {
+      case: {
+        // Never promote unrelated browser draft acknowledgments into an
+        // authenticated saved case. Missing legacy answers require re-review.
+        all_charges_confirmed: savedReview.all_charges_confirmed || "unconfirmed",
+        proceedings_status: savedReview.proceedings_status || "unknown"
+      },
       court: {
         state: item.caseState,
         county: item.county,
