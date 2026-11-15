@@ -67,7 +67,10 @@
             <h2>RecordWatch overview</h2>
             <p class="muted">A quick account summary. Open the dedicated RecordWatch dashboard to select a verified saved case, review timelines, and purchase $39 lifetime Premium. Email and SMS alerts require paid Premium.</p>
           </div>
-          <a class="btn secondary" href="recordwatch-dashboard.html">Open RecordWatch</a>
+          <div class="hero-actions" aria-label="RecordWatch actions">
+            <a id="purchaseRecordWatchPremium" class="btn" href="recordwatch-dashboard.html#recordwatchPremiumPanel">Purchase RecordWatch Premium — $39</a>
+            <a class="btn secondary" href="recordwatch-dashboard.html">Open RecordWatch</a>
+          </div>
         </div>
 
         <div id="recordWatchWidget" class="recordwatch-dashboard-grid"></div>
@@ -146,7 +149,22 @@
         cases = RecordPathUserStore.getCases();
         showingCachedCases = cases.length > 0;
       }
-      const latest = cases[cases.length - 1] || {};
+      // A checkout link may include a case ID only after the authenticated
+      // Supabase case list is available. Cached browser drafts are view-only.
+      const isSavedCaseUuid = (id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ""));
+      const verifiedCaseIds = showingCachedCases ? [] : cases
+        .map((item) => item && (item.case_id || item.id))
+        .filter(isSavedCaseUuid);
+      const activeCaseId = RecordPathUserStore.getActiveCaseId?.() || "";
+      const selectedRecordWatchCaseId = verifiedCaseIds.includes(activeCaseId)
+        ? activeCaseId : (verifiedCaseIds.length === 1 ? verifiedCaseIds[0] : "");
+      const latest = cases.find((item) =>
+        selectedRecordWatchCaseId && (item.case_id || item.id) === selectedRecordWatchCaseId
+      ) || cases[cases.length - 1] || {};
+      const purchaseLink = document.getElementById("purchaseRecordWatchPremium");
+      if (purchaseLink) purchaseLink.href = "recordwatch-dashboard.html" +
+        (selectedRecordWatchCaseId ? "?caseId=" + encodeURIComponent(selectedRecordWatchCaseId) : "") +
+        "#recordwatchPremiumPanel";
       const savedCaseStatus = document.getElementById("savedCaseStatus");
       if (showingCachedCases && savedCaseStatus) savedCaseStatus.textContent = "Showing cached case data. Changes will sync when your connection is restored.";
       document.getElementById("dashboardTitle").textContent = `Your account — ${user.fullName || user.email}`;
@@ -165,9 +183,14 @@
       document.getElementById("nextAction").textContent = nextAction[0];
       document.getElementById("nextActionLink").href = nextAction[1];
       if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();
-      await loadRecordWatchData();
+      const recordWatchData = await loadRecordWatchData(selectedRecordWatchCaseId);
+      const paidPremium = Boolean(window.RecordWatchMessageProvider &&
+        RecordWatchMessageProvider.isPremium(recordWatchData && recordWatchData.subscription));
+      if (purchaseLink && paidPremium) {
+        purchaseLink.textContent = "Manage RecordWatch Premium";
+      }
       if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") RecordWatchBridge.syncExistingRecordPathData();
-      renderRecordWatchWidget(latest);
+      renderRecordWatchWidget(latest, recordWatchData && recordWatchData.subscription, Boolean(selectedRecordWatchCaseId));
       const caseList = document.getElementById("caseList");
       RecordPathSavedCaseCards.render(caseList, cases, { readOnly: showingCachedCases });
       RecordPathSavedCaseCards.bind(caseList, async function (message) {
@@ -187,16 +210,23 @@
         RecordPathSavedCaseCards.render(caseList, refreshed, { readOnly: isFallback });
       });
     });
-    async function loadRecordWatchData(){
+    async function loadRecordWatchData(verifiedCaseId){
       if (!window.RecordWatchNotifications || !RecordWatchNotifications.fetchRemoteData) return null;
       const user = RecordPathUserStore.getCurrentUser();
       const data = await RecordWatchNotifications.fetchRemoteData(user && user.id);
-      if (RecordWatchNotifications.fetchPremiumSubscription) {
-        try { localStorage.setItem("recordwatchPremiumSubscription", JSON.stringify(await RecordWatchNotifications.fetchPremiumSubscription(window.RecordPathUserStore?.getActiveCaseId?.() || ""))); } catch (error) {}
+      let subscription = null;
+      if (verifiedCaseId && RecordWatchNotifications.fetchPremiumSubscription) {
+        try {
+          const result = await RecordWatchNotifications.fetchPremiumSubscription(verifiedCaseId);
+          // Only the authenticated server's case-specific entitlement is used.
+          subscription = result && result.subscription || null;
+        } catch (error) {
+          console.warn("Case-specific RecordWatch billing status unavailable", error?.name || "unknown");
+        }
       }
-      return data;
+      return {data, subscription};
     }
-    function renderRecordWatchWidget(latest){
+    function renderRecordWatchWidget(latest, premiumSubscription, selectedVerifiedCase){
       const events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
       const notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
       const localCases = window.RecordWatchMonitor ? RecordWatchMonitor.loadCases() : [];
@@ -210,14 +240,12 @@
       const confidenceReason = (event && event.eligibility_confidence_reason) || (active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active).reason : "RecordPathAI provides an estimate based on the information entered. Final eligibility depends on court rules and review.");
       const days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(eligibilityDate) : null;
       const subscriptions = window.RecordWatchNotifications ? RecordWatchNotifications.loadSubscriptions() : [];
-      let premiumSubscription = null;
-      try { premiumSubscription = JSON.parse(localStorage.getItem("recordwatchPremiumSubscription") || "null"); } catch (error) {}
       const isPremium = window.RecordWatchMessageProvider && RecordWatchMessageProvider.isPremium(premiumSubscription);
       const items = [
         ["Eligibility Date", eligibilityDate ? formatRecordWatchDate(eligibilityDate) : "Complete screening to estimate a date."],
         ["Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible now" : days + " day(s)")],
         ["Confidence", confidence ? confidence.replace(/_/g, " ") + " — " + confidenceReason : "Needs review"],
-        ["Premium RecordWatch", isPremium ? "Premium" : "Free"],
+        ["Premium RecordWatch", isPremium ? "Premium" : (selectedVerifiedCase ? "Free" : "Select a saved case")],
         ["Next Reminder Date", !isPremium ? "Premium required" : (days !== null && days > 180 ? "180-day reminder" : (days !== null && days > 90 ? "90-day reminder" : (days !== null && days > 30 ? "30-day reminder" : (days !== null && days > 7 ? "7-day reminder" : (days !== null && days >= 0 ? "Eligibility-day reminder" : "No alerts scheduled")))))],
         ["Notification Status", isPremium ? "Email + SMS available with consent" : "Email + SMS: Premium only"],
         ["Communication Preferences", isPremium ? "Manage paid email / SMS alerts" : "No free email or SMS"],
