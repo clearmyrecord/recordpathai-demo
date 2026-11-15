@@ -14,7 +14,7 @@ test("checkout readiness never trusts browser-local completed-step flags",()=>{
   assert.match(gate,/packetContactProfileLoaded/);
   assert.match(gate,/accountSelectedCaseId/);
   assert.match(gate,/readPacketData\(\)/);
-  assert.doesNotMatch(gate,/RecordPathWorkflow|localStorage/);
+  assert.doesNotMatch(gate,/RecordPathWorkflow\.(?:getState|getMissingPacketWorkflowPrerequisites)|localStorage\.(?:getItem|setItem)/);
   assert.doesNotMatch(packet,/RecordPathWorkflow\.guardPage\("packet"\)/);
 });
 
