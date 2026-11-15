@@ -63,7 +63,7 @@ test("Both checkout-readiness and Stripe session creation REQUIRE server-owned m
   assert.ok(checkout.indexOf("if(!previewConfirmed)")<checkout.indexOf("stripe.checkout.sessions.create("));
   const download=server.split('app.post("/api/packet/download-approved"')[1]?.split('app.post("/api/packet/verify-payment"',1)[0];
   assert.match(download,/verifiedPacketSession\(session,user\.id,caseId\)/);
-  assert.match(download,/Content-Disposition','attachment/);
+  assert.match(download,/Content-Disposition[^\n]*attachment/);
 });
 
 test("UI offers only image preview and an explicit acknowledgment, not downloadable real PDFs before checkout",()=>{
