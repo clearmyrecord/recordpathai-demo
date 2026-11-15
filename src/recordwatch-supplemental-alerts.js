@@ -19,6 +19,9 @@ export function alertPreferenceField(kind) {
   return null;
 }
 export function alertKindEnabled(kind, preferences) {
+  // The explicit, account-owner "send test" action is consent-gated by
+  // isPremiumAlertAllowed, but has no automated reminder-category flag.
+  if(kind==="test")return Boolean(preferences);
   const field = alertPreferenceField(kind);
   // Never use an absent preferences row as an opt-in.
   return Boolean(preferences && field && preferences[field] !== false);
