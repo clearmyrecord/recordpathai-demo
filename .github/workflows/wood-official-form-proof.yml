@@ -29,4 +29,5 @@ jobs:
           path: |
             artifacts/wood-county-official-form-SAMPLE-NOT-FOR-FILING.pdf
             artifacts/wood-county-synthetic-drawn-signature-NOT-FOR-FILING.pdf
+            artifacts/wood-county-real-preview-p2-TEST-ONLY.png
           retention-days: 7
