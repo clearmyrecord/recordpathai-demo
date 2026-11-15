@@ -133,7 +133,8 @@
       var recordwatchPreferencesPanel = document.getElementById("recordwatchPreferencesPanel");
       var recordwatchReminderSchedule = document.getElementById("recordwatchReminderSchedule");
       var recordwatchHistoryPanel = document.getElementById("recordwatchHistoryPanel");
-      var premiumState = { subscription: null, preferences: null, error: '', justPurchased: false };
+      var premiumState = { subscription: null, preferences: null, error: '',
+        justPurchased: false, previousPurchaseStatus: null, canPurchase: false };
       var preferenceSaveNotice = '';
 
       function esc(value) { return String(value || "").replace(/[&<>'"]/g, function (char) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]; }); }
@@ -252,6 +253,7 @@
         var caseId=selectedSavedCaseId();
         var lifetime=Boolean(premium && subscription && subscription.plan === "lifetime_case");
         var legacy=Boolean(premium && !lifetime);
+        var refunded=Boolean(!premium && premiumState.previousPurchaseStatus==="refunded");
         // A separate, optional notification-only destination is collected
         // before checkout; it never comes from the free eligibility intake.
         var checkoutFields=window.RecordWatchSmsOptIn
@@ -259,8 +261,11 @@
               smsConsentChecked:false,smsEnabledChecked:false}) : '';
         recordwatchPremiumPanel.innerHTML = '<div class="case-header"><div><p class="eyebrow-mini">Premium RecordWatch</p><h2>' +
           (lifetime ? 'Lifetime Premium active <span class="status-badge eligible-now">Paid</span>' :
-           legacy ? 'Existing Premium subscription active' : 'Free case tracking') +
-          '</h2><p class="muted">One-time $39 for lifetime Premium tracking of one saved case, with no automatic renewal. SMS reminders require consent and an available delivery provider. Court status updates are supplied when supported.</p></div></div>' +
+           legacy ? 'Existing Premium subscription active' :
+           refunded ? 'Premium available — previous purchase refunded' : 'Premium available — $39 once') +
+          '</h2><p class="muted">One-time $39 for lifetime Premium tracking of one saved case, with no automatic renewal. SMS reminders require consent and an available delivery provider. Court status updates are supplied when supported.</p>' +
+          (refunded ? '<p class="meta-note" role="status">Your prior payment was refunded, so Premium access is no longer active. You are welcome to purchase Premium again for this case.</p>' : '') +
+          '</div></div>' +
           '<div class="recordwatch-monitor-grid">' + statCard('Current case', caseId ? 'Selected saved case' : 'Select or save a case') +
           statCard('Status', lifetime ? 'Lifetime Premium' : legacy ? 'Existing subscription' : 'Free — no alerts') +
           statCard('Price', lifetime ? '$39 paid once' : legacy ? 'Existing plan' : '$39 one time per case') +
@@ -275,7 +280,9 @@
              '<p class="meta-note">You may purchase Premium without opting into either channel. No notification will be sent before a verified payment and any required email confirmation or Twilio approval.</p>' +
              '<label class="toggle-row"><input id="recordwatchPurchaseTerms" type="checkbox" required> <span>I have reviewed the <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a>, <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>, and the $39 one-time lifetime-per-saved-case price. I understand court and packet charges are separate and there is no automatic renewal.</span></label>' +
              '<p id="recordwatchCheckoutStatus" role="status" aria-live="polite" class="meta-note"></p>' +
-             '<button class="btn" type="submit">Accept terms &amp; continue to Stripe — $39</button>' +
+             '<button class="btn" type="submit">' +
+                (refunded ? 'Purchase Premium again — $39' : 'Accept terms &amp; continue to Stripe — $39') +
+              '</button>' +
              '</form>' :
            '<a class="btn" href="eligibility.html">Save a case to unlock Premium</a>') +
           '</div><p class="meta-note">Lifetime access is currently linked to the selected saved case. If several cases may be sealed on one application, contact us before buying duplicate case upgrades; grouped filing checkout is still being developed. Court filing fees and the planned $50 packet service are separate. Pre-existing subscriptions follow their original terms.</p>' +
@@ -553,6 +560,10 @@
         return Promise.all([RecordWatchNotifications.fetchPremiumSubscription(selectedSavedCaseId()).catch(function (error) { return { error: error.message }; }), RecordWatchNotifications.fetchPremiumPreferences(selectedSavedCaseId()).catch(function () { return {}; })]).then(function (results) {
           premiumState.subscription = results[0].subscription || null;
           premiumState.preferences = results[1].preferences || null;
+          // Only the authenticated billing endpoint can identify a refunded
+          // prior purchase. Never infer Premium access from browser history.
+          premiumState.previousPurchaseStatus = results[0].previous_purchase_status || null;
+          premiumState.canPurchase = results[0].can_purchase === true;
           premiumState.error = results[0].error || '';
           renderPremiumPanels([]);
         });
