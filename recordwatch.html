@@ -75,7 +75,7 @@
           </div>
           <div class="data-grid">
             <div class="data-panel"><label>Eligibility</label><strong>Estimated status</strong></div>
-            <div class="data-panel"><label>Monitoring</label><strong>Supabase first with local fallback</strong></div>
+            <div class="data-panel"><label>Monitoring</label><strong>Supabase only — no browser fallback</strong></div>
             <div class="data-panel wide"><label>Filing fulfillment</label><strong>Packet signing, Lob mailing and shipment tracking integration in progress</strong></div>
           </div>
         </div>
@@ -129,7 +129,7 @@
         <h2>What RecordWatch Does</h2>
         <p>RecordWatch helps users reuse RecordPathAI intake data, organize charges and outcomes, estimate sealing or expungement eligibility, track missing requirements, prepare next-step action plans, and monitor whether records have been corrected after relief. Advanced Case Intake is optional for arrest, booking, prosecutor, judge, defense attorney, jail, and detailed monitoring information.</p>
         <div class="recordwatch-grid-3">
-          <article class="mini-card"><h3>Collect early</h3><p>Capture arrest, booking, court, charge, and completion details in one local workflow.</p></article>
+          <article class="mini-card"><h3>Collect early</h3><p>Capture arrest, booking, court, charge, and completion details in your authenticated Supabase record.</p></article>
           <article class="mini-card"><h3>Estimate next steps</h3><p>Use rules-based estimates to identify possible eligibility dates, missing requirements, and review flags.</p></article>
           <article class="mini-card"><h3>Monitor corrections</h3><p>Track court dockets, repositories, background-check companies, data brokers, and verified updates.</p></article>
         </div>
@@ -184,132 +184,85 @@
 
   <script>
     document.addEventListener("DOMContentLoaded", async function () {
-      var urlCaseId = new URLSearchParams(window.location.search).get("caseId");
-      if (urlCaseId && window.RecordPathUserStore) {
-        var found = await RecordPathUserStore.setActiveCase(urlCaseId);
-        if (!found) document.querySelector("main")?.insertAdjacentHTML("afterbegin", '<section class="page-section"><div class="container"><div class="empty-state case-page-error"><h2>We could not find that saved case.</h2><p>Please choose another case from your dashboard.</p><a class="btn" href="dashboard.html">Back to dashboard</a></div></div></section>');
+      const esc=value=>String(value||"").replace(/[&<>"']/g,
+        c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+      const summary=document.getElementById("recordwatchCaseSummary");
+      const status=document.getElementById("recordwatchEnrollmentStatus");
+      const emailInput=document.getElementById("recordwatchEmail");
+      const phoneInput=document.getElementById("recordwatchPhone");
+      const smsInput=document.getElementById("recordwatchNotifySms");
+      emailInput.readOnly=true;phoneInput.readOnly=true;
+      emailInput.closest("label").title="Supabase-saved account email. Configure paid delivery in the Premium dashboard.";
+      phoneInput.closest("label").title="Supabase-saved account telephone. Configure paid SMS consent in the Premium dashboard.";
+      document.getElementById("recordwatchNotifyEmail").checked=false;
+      smsInput.checked=false;
+      let caseRow=null,profile=null;
+      try{
+        const store=window.RecordPathUserStore;
+        if(store?.ready)await store.ready;
+        if(!store?.getSupabaseCases||!store?.getSupabaseProfile)
+          throw new Error("Supabase account data is unavailable.");
+        const results=await Promise.all([store.getSupabaseCases(),store.getSupabaseProfile()]);
+        const cases=results[0];profile=results[1];
+        const requested=new URLSearchParams(location.search).get("caseId");
+        const active=store.getActiveCaseId?.()||""; // UUID selector only
+        caseRow=cases.find(row=>row.case_id===(requested||active)) ||
+          (!requested&&cases.length===1?cases[0]:null);
+        if(!caseRow)throw new Error(
+          "Select a saved Supabase case from your dashboard before tracking it.");
+        const charges=caseRow.chargeDetails||[];
+        const charge=charges[0]||{};
+        emailInput.value=profile.filing_email||profile.email||"";
+        phoneInput.value=profile.filing_phone||profile.phone||"";
+        const eligibilityDate=caseRow.eligibilityDate||caseRow.estimatedEligibleDate||"";
+        const days=window.RecordWatchNotifications
+          ?RecordWatchNotifications.daysUntil(eligibilityDate):null;
+        document.getElementById("recordwatchEstimatedDate").textContent=
+          eligibilityDate&&window.RecordWatchRules
+            ?RecordWatchRules.formatDate(eligibilityDate):"Not available yet";
+        document.getElementById("recordwatchCountdown").textContent=
+          days===null?"—":days<=0?"Eligible now":String(days);
+        const row=(label,value)=>'<div class="recordwatch-panel-item"><strong>'+
+          esc(label)+'</strong><span>'+esc(value||"Not entered")+'</span></div>';
+        summary.innerHTML='<h3>Supabase-saved case</h3><div class="recordwatch-panel-grid">'+
+          row("Case number",caseRow.caseNumber)+
+          row("Court",caseRow.courtName)+
+          row("County / State",[caseRow.county,caseRow.caseState].filter(Boolean).join(", ")+
+          row("Charge",charge.charge_name||caseRow.primaryCharge)+
+          row("Statute / level",[charge.offense_code,charge.offense_level].filter(Boolean).join(" — ")+
+          row("Outcome",caseRow.outcome)+'</div>';
+        status.textContent="Only your Supabase-saved case and account contact data are shown.";
+      }catch(error){
+        summary.innerHTML='<h3>Supabase-saved case required</h3><p class="meta-note">'+
+          esc(error.message||"Case records unavailable")+
+          '</p><a class="btn" href="dashboard.html">Open account dashboard</a>';
+        status.textContent="No browser-stored case, contact details or notifications were loaded.";
       }
-      function esc(value) { return String(value || "").replace(/[&<>"']/g, function (char) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char] || char; }); }
-      function row(label, value) { return '<div class="recordwatch-panel-item"><strong>' + esc(label) + '</strong><span>' + esc(value || "Not entered") + '</span></div>'; }
-      function recordWatchShapeFromDraft(draft) {
-        if (!draft) return null;
-        var charge = (draft.charges || [])[0] || {};
-        var caseFacts = draft.case || {};
-        return {
-          id: draft.savedCaseId || draft.localDraftId || draft.id,
-          personal: draft.person || {},
-          court: {
-            caseState: draft.court && draft.court.state || caseFacts.caseState,
-            county: draft.court && draft.court.county || caseFacts.county,
-            courtName: draft.court && (draft.court.name || draft.court.courtName) || caseFacts.courtName,
-            caseNumber: draft.court && draft.court.caseNumber || caseFacts.caseNumber,
-            judge: draft.court && draft.court.judge
-          },
-          charges: (draft.charges || []).map(function (item) { return { chargeName: item.charge_name || item.chargeName, statuteCode: item.offense_code || item.charge_code, chargeLevel: item.offense_level || item.degree || item.level, degree: item.offense_level || item.degree || item.level }; }),
-          outcome: {
-            outcome: caseFacts.outcome || charge.disposition || charge.final_disposition,
-            dispositionDate: caseFacts.dispositionDate || charge.disposition_date,
-            dischargeDate: caseFacts.dischargeDate || charge.discharge_date,
-            completionDate: caseFacts.dischargeDate || charge.discharge_date,
-            finalDischargeDate: caseFacts.finalDischargeDate || caseFacts.dischargeDate || charge.discharge_date
-          },
-          eligibility: draft.eligibility || {},
-          recordwatch: draft.recordwatch || {}
-        };
-      }
-      if (window.RecordWatchBridge) RecordWatchBridge.syncExistingRecordPathData();
-      var currentDraft = window.RecordPathUserStore && RecordPathUserStore.getCurrentRecordWatchCase ? await RecordPathUserStore.getCurrentRecordWatchCase() : null;
-      var active = recordWatchShapeFromDraft(currentDraft) || (window.RecordWatchBridge && RecordWatchBridge.getOrCreateActiveCase());
-      var date = active && (active.eligibility && (active.eligibility.estimatedEligibleDate || active.eligibility.eligibilityDate) || (window.RecordWatchRules ? RecordWatchRules.calculateEligibilityDate(active) : ""));
-      var days = window.RecordWatchNotifications ? RecordWatchNotifications.daysUntil(date) : null;
-      var profile = Object.assign({}, active && active.personal || {}, window.RecordWatchMonitor ? RecordWatchMonitor.loadProfile() : {});
-      var pendingEnrollment = {};
-      try { pendingEnrollment = JSON.parse(localStorage.getItem("recordpathai_pending_recordwatch_enrollment") || "{}") || {}; } catch (_) {}
-      var prefs = currentDraft && currentDraft.recordwatch || pendingEnrollment;
-      document.getElementById("recordwatchEmail").value = prefs.email || profile.email || localStorage.getItem("email") || "";
-      document.getElementById("recordwatchPhone").value = prefs.phone || profile.phone || localStorage.getItem("phone") || "";
-      document.getElementById("recordwatchNotifyEmail").checked = false;
-      document.getElementById("recordwatchNotifySms").checked = false;
-      document.getElementById("recordwatchEstimatedDate").textContent = window.RecordWatchRules ? RecordWatchRules.formatDate(date) : "Not available yet";
-      document.getElementById("recordwatchCountdown").textContent = days === null ? "—" : (days <= 0 ? "Eligible now" : String(days));
-      var summary = document.getElementById("recordwatchCaseSummary");
-      if (summary) {
-        if (active && (active.court && (active.court.caseNumber || active.court.courtName) || active.charges && active.charges.length)) {
-          var firstCharge = active.charges && active.charges[0] || {};
-          summary.innerHTML = '<h3>Monitoring this saved case</h3><div class="recordwatch-panel-grid">' +
-            row("Case number", active.court.caseNumber) + row("Court", active.court.courtName) + row("County / State", [active.court.county, active.court.caseState].filter(Boolean).join(", ")) +
-            row("Charge", firstCharge.chargeName) + row("Statute / level", [firstCharge.statuteCode, firstCharge.degree || firstCharge.chargeLevel].filter(Boolean).join(" — ")) + row("Outcome", active.outcome && active.outcome.outcome) + '</div>';
-        } else {
-          summary.innerHTML = '<h3>No saved case found</h3><p class="meta-note">Start with Eligibility Check or Enter Record Details so RecordWatch can monitor your case without re-entry.</p><div class="recordwatch-actions"><a class="btn" href="eligibility.html">Start with Eligibility Check</a><a class="btn secondary" href="record-details.html">Enter Record Details</a></div>';
-        }
-      }
-      document.querySelectorAll("[data-recordwatch-checkout]").forEach(function (button) {
-        button.addEventListener("click", async function () {
-          if (!window.RecordPathAuth || !(await RecordPathAuth.requireAuthAsync("purchase lifetime Premium RecordWatch for a saved case", "recordwatch.html"))) return;
-          button.disabled = true;
-          const status = document.getElementById("recordwatchEnrollmentStatus");
-          status.textContent = "Opening Premium notification consent and checkout details…";
-          try {
-            const plan = button.getAttribute("data-recordwatch-checkout");
-            const caseId = window.RecordPathUserStore?.getActiveCaseId?.() || active && active.id;
-            // A browser-only draft ID is not an account-owned Supabase case.
-            // Open the dashboard picker rather than directing customers into
-            // a dead-end checkout for an invalid or missing saved-case UUID.
-            const savedUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(caseId||""));
-            window.location.assign("recordwatch-dashboard.html"+
-              (savedUuid?"?caseId="+encodeURIComponent(caseId):"")+"#recordwatchPremiumPanel");
-          } catch (error) {
-            status.textContent = error.message || "Could not start checkout.";
-            button.disabled = false;
-          }
+      document.querySelectorAll("[data-recordwatch-checkout]").forEach(button=>{
+        button.addEventListener("click",()=>{
+          if(!caseRow){status.textContent="Save and select a case in Supabase before purchasing Premium.";return;}
+          location.assign("recordwatch-dashboard.html?caseId="+
+            encodeURIComponent(caseRow.case_id)+"#recordwatchPremiumPanel");
         });
       });
-      var smsToggle = document.getElementById("recordwatchNotifySms");
-      var smsNotice = document.getElementById("recordwatchSmsNotice");
-      smsToggle.addEventListener("change", function () { smsNotice.hidden = false; });
-      document.getElementById("recordwatchEnrollmentForm").addEventListener("submit", async function (event) {
+      document.getElementById("recordwatchEnrollmentForm").addEventListener("submit",async event=>{
         event.preventDefault();
-        var wantsSms = document.getElementById("recordwatchNotifySms").checked;
-        var recordwatchPrefs = {
-          email: document.getElementById("recordwatchEmail").value,
-          phone: document.getElementById("recordwatchPhone").value,
-          emailNotifications: false,
-          smsNotifications: false,
-          plan: "free",
-          status: "active",
-          updatedAt: new Date().toISOString(),
-          createdAt: prefs.createdAt || new Date().toISOString()
-        };
-        localStorage.setItem("recordpathai_recordwatch_draft", JSON.stringify(recordwatchPrefs));
-        localStorage.setItem("recordpathai_pending_recordwatch_enrollment", JSON.stringify(Object.assign({ caseId: active && active.id }, recordwatchPrefs)));
-        // An unauthenticated browser must never be told reminders are active.
-        // Persist only the pending draft and resume after genuine Supabase login.
-        if (!window.RecordPathAuth || !(await RecordPathAuth.requireAuthAsync("save RecordWatch case tracking", "recordwatch.html"))) {
-          document.getElementById("recordwatchEnrollmentStatus").textContent =
-            "Create an account or sign in to save your case and countdown.";
+        if(!caseRow){
+          status.textContent="Select a Supabase-saved case before activating free tracking.";
           return;
         }
-        if (window.RecordPathUserStore && RecordPathUserStore.saveCurrentCaseDraft) {
-          RecordPathUserStore.saveCurrentCaseDraft({ recordwatch: recordwatchPrefs, recordWatchStatus: "active", eligibilityDate: date, estimatedEligibleDate: date }, { network: true }).catch(function (error) { console.warn("RecordWatch draft sync skipped:", error); });
+        try{
+          const result=await window.RecordPathUserStore.updateCase(caseRow.case_id,{
+            recordWatchStatus:"active"
+          });
+          if(!result||result.case_id!==caseRow.case_id)
+            throw new Error("Supabase did not confirm your saved case.");
+          status.textContent="Free on-screen tracking saved in Supabase. Email and SMS remain off without paid consent.";
+          location.assign("recordwatch-dashboard.html?caseId="+
+            encodeURIComponent(caseRow.case_id));
+        }catch(error){
+          status.textContent="Supabase did not save the change. No browser-only tracking was enabled.";
         }
-        var subscription = RecordWatchNotifications.registerSubscription({
-          userId: (window.RecordPathUserStore && RecordPathUserStore.getCurrentUser() && RecordPathUserStore.getCurrentUser().id) || (profile.email || profile.fullName || "demo-user"),
-          caseId: active && active.id || "demo-case",
-          email: document.getElementById("recordwatchEmail").value,
-          phone: document.getElementById("recordwatchPhone").value,
-          notify_email: document.getElementById("recordwatchNotifyEmail").checked,
-          notify_sms: wantsSms,
-          plan_type: "free",
-          premium_active: false,
-          eligibilityDate: date
-        });
-        var confidence = active && RecordWatchRules.calculateEligibilityConfidence ? RecordWatchRules.calculateEligibilityConfidence(active) : { level: "medium", reason: "Estimate based on information entered." };
-        if (date) RecordWatchNotifications.registerEligibilityEvent({ userId: subscription.user_id, caseId: subscription.case_id, eligibilityDate: date, eligibilityReason: active && RecordWatchRules.calculateCaseStatus(active), waitingPeriod: active && RecordWatchRules.getRecommendedStatus(active), eligibilityConfidence: confidence.level, eligibilityConfidenceReason: confidence.reason });
-        if (window.RecordPathUserStore && active && active.id) {
-          RecordPathUserStore.updateCase(active.id, { recordWatchStatus: "active", eligibilityDate: date, estimatedEligibleDate: date }).catch(function (error) { console.warn("RecordWatch status sync skipped:", error); });
-        }
-        localStorage.removeItem("recordpathai_pending_recordwatch_enrollment");
-        document.getElementById("recordwatchEnrollmentStatus").textContent = "Saved case tracking is active. Email and SMS notifications require $39 lifetime Premium for this case.";
       });
     });
   </script>
