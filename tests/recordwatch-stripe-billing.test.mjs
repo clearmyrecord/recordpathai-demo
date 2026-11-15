@@ -129,7 +129,8 @@ test("Customer-facing checkout and account management are wired with no local pa
   const account=read("account.html");
   const provider=read("js/recordwatch-message-provider.js");
   assert.ok(dashboard.includes("RecordWatchNotifications.checkoutPremium('lifetime_case'"));
-  assert.ok(recordwatch.includes('recordwatch-dashboard.html?caseId='));
+  assert.ok(recordwatch.includes('window.location.assign("recordwatch-dashboard.html"+'));
+  assert.ok(recordwatch.includes('savedUuid?"?caseId="+encodeURIComponent(caseId):""'));
   assert.ok(dashboard.includes('recordwatchPurchaseTerms'));
   assert.ok(recordwatch.includes('data-recordwatch-checkout="lifetime_case"'));
   assert.ok(!recordwatch.includes('data-recordwatch-checkout="monthly"'));
