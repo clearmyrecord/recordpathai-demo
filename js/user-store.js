@@ -904,6 +904,7 @@
         court_id: item.courtId,
         case_number: item.caseNumber,
         caseNumber: item.caseNumber,
+        court_type: item.courtType,
         case_type: item.courtType
       },
       eligibility: {

@@ -99,3 +99,17 @@ test("signed two-page court PDF requires the applicant's separate private-review
   const render=html.split("async function renderSignedCourtPdfBytes(data,selected)")[1]?.split("async function prepareSignedReviewPdf()",1)[0];
   assert.match(render,/Math\.min\(width\/sigImage\.width,height\/sigImage\.height\)/);
 });
+
+test("private review loads a real saved account case before rendering and NEVER copies the synthetic sample or charges a card",()=>{
+  const review=html.split("async function prepareSignedReviewPdf()")[1]?.split("async function generateSealingPdf()",1)[0];
+  assert.ok(review);
+  assert.match(review,/const savedCase=await store\.getCaseById\(caseId\)/);
+  assert.match(review,/const mapped=store\.caseToPacketData\(savedCase\)/);
+  assert.match(review,/charges:mapped\.charges/);
+  assert.match(review,/court:\{\.\.\.\(raw\.court\|\|\{\}\),\.\.\.mapped\.court\}/);
+  assert.match(review,/authorizeSignedReview/);
+  assert.doesNotMatch(review,/saveCheckoutCaseIfNeeded|downloadSamplePdf|stripe\.checkout|checkout\.sessions\.create/);
+  assert.match(html,/court_type: raw\.court\?\.court_type \|\| raw\.court\?\.courtType \|\| raw\.court\?\.case_type/);
+  assert.match(html,/const requestedCaseId=new URLSearchParams\(window\.location\.search\)\.get\("caseId"\)/);
+  assert.match(html,/network: false/);
+});

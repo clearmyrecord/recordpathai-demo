@@ -154,3 +154,21 @@ test("court type survives nested snake_case packet data and existing saved case 
   assert.match(storeSource,/courtType: firstNonEmpty\(court\.type, court\.courtType, court\.court_type\)/);
   assert.match(storeSource,/if \(!payload\.court_type && existing\.court_type\) payload\.court_type = existing\.court_type/);
 });
+
+test("Saved case to packet projection carries the exact structured court type",async()=>{
+  const source=readFileSync("js/user-store.js","utf8");
+  const context={
+    localStorage:{getItem(){return null},setItem(){},removeItem(){}},
+    console,URL,CustomEvent:class{constructor(){}},
+    document:{dispatchEvent(){}},
+    window:{location:{pathname:"/record-details.html",origin:"https://recordpathai.com",search:""}}
+  };
+  vm.runInNewContext(source,context);
+  const store=context.window.RecordPathUserStore;
+  await store.ready;
+  const p=store.caseToPacketData({caseState:"OH",county:"Wood",
+    courtName:"Wood County Court of Common Pleas",courtType:"court-of-common-pleas",
+    caseNumber:"SAMPLE-ACCOUNT-CASE",charges:[{charge_name:"Synthetic possession",final_disposition:"Convicted"}]});
+  assert.equal(p.court.court_type,"court-of-common-pleas");
+  assert.equal(p.court.case_type,"court-of-common-pleas");
+});
