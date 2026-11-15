@@ -1071,7 +1071,7 @@
               <div class="sample-pdf-tools" style="margin-top:12px; padding:16px; border:1px solid #d2def3; border-radius:14px; background:#f7faff;">
                 <button type="button" class="sig-small-btn" id="downloadSamplePdfBtn">Test Signed PDF — Download Sample (No Payment)</button>
                 <button type="button" class="sig-small-btn" id="prepareSignedReviewBtn" style="margin-left:8px;">Prepare My Signed Packet for Private Review</button>
-                <p style="margin:9px 0 0; color:#526780; font-size:13px; line-height:1.5;">Tests the court PDF mapping with sample fields and the signature you draw above. Clearly watermarked NOT FOR FILING. No real case details, checkout or mailing; your signature stays in this browser download.</p>
+                <p style="margin:9px 0 0; color:#526780; font-size:13px; line-height:1.5;"><strong>Test Signed PDF</strong> deliberately produces SAMPLE APPLICANT information and has NO CHECK. It is NOT FOR FILING. <strong>Private Review</strong> uses your existing saved case and your drawn signature, then securely uploads the two-page application for review. A court-filing check can only be prepared separately after approved payment and filing authorization; neither button mails a check.</p>
               </div>
               <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
                 <button type="button" class="debug-pdf-link" id="testPdfBtn">Test PDF Access</button>
@@ -2058,7 +2058,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             state,
             county,
             name: first.court_name || raw.court?.name || "",
-            court_type: raw.court?.court_type || "",
+            court_type: raw.court?.court_type || raw.court?.courtType || raw.court?.case_type || "",
             department: raw.court?.department || "",
             docket_number: raw.court?.docket_number || first.case_number || "",
             case_number: raw.court?.case_number || first.case_number || "",
@@ -3003,22 +3003,45 @@ document.addEventListener("DOMContentLoaded", async function () {
             throw new Error("Please authorize private preparation of this signed PDF before uploading it for review.");
           if(window.RecordPathAuth && !window.RecordPathAuth.requireAuth(
             "prepare your private signed court packet", "packet.html"))return;
-          const raw=readPacketData(),data=buildNormalizedPacketData(raw);
+          // Private review must use the AUTHENTICATED, persisted case, not
+          // whichever partial/demo record happens to be in browser storage.
+          // The test-sample button has a different, isolated code path.
+          const resolved=await resolveCheckoutCase();
+          const caseId=resolved?.checkoutCase?.saved_case_id;
+          if(!isInternalUuid(caseId) || !resolved?.checkoutCase ||
+             !validateCheckoutCase(resolved.checkoutCase).ok)
+            throw new Error("Select an existing saved case in Record Details before preparing your real signed packet.");
+          const requestedCaseId=new URLSearchParams(window.location.search).get("caseId");
+          if(requestedCaseId && requestedCaseId!==caseId)
+            throw new Error("The requested saved case could not be loaded. Reopen it from Record Details.");
+          const store=window.RecordPathUserStore;
+          if(!store?.getCaseById || !store?.caseToPacketData)
+            throw new Error("Your account case records are unavailable. Sign in again and reopen this case.");
+          const savedCase=await store.getCaseById(caseId);
+          if(!savedCase || (savedCase.case_id||savedCase.id)!==caseId)
+            throw new Error("Your saved case was not found in this account. No packet was uploaded.");
+          const mapped=store.caseToPacketData(savedCase);
+          if(!mapped?.court?.case_number || !mapped?.court?.court_type ||
+             !Array.isArray(mapped.charges)||!mapped.charges.length)
+            throw new Error("The selected saved case is missing a court, case number, or charge inventory. Complete Record Details first.");
+          // Reuse the applicant's Step 1 contact and mailing fields, but take
+          // the court, outcomes, charges and dates from the saved case. Never
+          // silently mix another case's local browser charge data into a PDF.
+          const raw=readPacketData();
+          const reviewData={...raw,court:{...(raw.court||{}),...mapped.court},
+            charges:mapped.charges};
+          const data=buildNormalizedPacketData(reviewData);
+          if(/^(sample|synthetic) applicant$/i.test(String(data?.petitioner?.full_name||"").trim()) ||
+             /@example\\.invalid$/i.test(String(data?.petitioner?.email||"").trim()))
+            throw new Error("Sample applicant information cannot be used for a real packet. Complete Step 1 with your own details.");
           const selected=await loadActiveTemplateForPacket(data);
-          if(!selected)throw new Error("No verified form mapping exists for the exact court and final charge outcomes. Complete Record Details first.");
+          if(!selected)throw new Error("No verified form matches the saved case's court and charge outcomes. Review Record Details; the sample PDF does not establish eligibility.");
           const schema=await loadFormSchema(selected,data);
           if(schema?.notaryRequired)throw new Error("This form requires signing before a notary. Do not submit this browser signature as a filing signature.");
           const missing=getMissingRequiredFields(data,schema);
           renderMissingInfoPanel(missing,raw,data,schema);
-          if(missing.length)throw new Error("Complete the missing court form fields above before preparing the review copy.");
-          const resolved=await resolveCheckoutCase();
-          if(!resolved?.checkoutCase || !validateCheckoutCase(resolved.checkoutCase).ok)
-            throw new Error("Save your case information before preparing a packet.");
-          setStatus("Preparing your signed PDF in private storage for court review...");
-          const packetEligibility=resolveCurrentPacketEligibility(data);
-          const stored=await saveCheckoutCaseIfNeeded(resolved.checkoutCase,packetEligibility);
-          const caseId=stored.saved_case_id||stored.case_id;
-          if(!isInternalUuid(caseId))throw new Error("A saved account case ID is required.");
+          if(missing.length)throw new Error("Complete the missing form fields above and select Private Review again. No file was uploaded.");
+          setStatus("Preparing your actual saved-case PDF in private storage for independent review...");
           const bytes=await renderSignedCourtPdfBytes(data,selected);
           const client=await window.RecordPathSupabase.getClient();
           const session=await client.auth.getSession();
@@ -3439,6 +3462,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           dischargeDate: firstCheckoutValue(raw.dischargeDate, raw.discharge_date, primary.dischargeDate, primary.discharge_date, primary.probation_end_date),
           courtName,
           court: courtName,
+          courtType: firstCheckoutValue(raw.courtType,raw.court_type,court.court_type,court.courtType,court.case_type),
           county,
           caseState,
           charges: normalizedCharges
@@ -3869,8 +3893,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         const initialCheckoutCase = packetDataAsCheckoutCase();
         if (validateCheckoutCase(initialCheckoutCase).ok) {
           const packetDraft = Object.assign({}, initialCheckoutCase, eligibilityFieldsForSavedCase(currentPacketEligibilityResult), { packetStatus: isPacketPaymentComplete() ? "Ready to generate" : "Packet reviewed" });
-          if (RecordPathUserStore.saveCurrentCaseDraft) RecordPathUserStore.saveCurrentCaseDraft(packetDraft, { network: Boolean(RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn()) }).catch(function (error) { console.warn("Packet review draft save skipped:", error); });
-          else if (RecordPathUserStore.isLoggedIn && RecordPathUserStore.isLoggedIn()) RecordPathUserStore.saveCase(packetDraft).catch(function (error) { console.warn("Account packet review save skipped:", error); });
+          if (RecordPathUserStore.saveCurrentCaseDraft) RecordPathUserStore.saveCurrentCaseDraft(packetDraft, { network: false }).catch(function (error) { console.warn("Packet review draft save skipped:", error); });
+          // Read-only packet page load: saving a case is a separate explicit action.
         }
       }
       const packetEligibility = resolveCurrentPacketEligibility(normalizedData);
