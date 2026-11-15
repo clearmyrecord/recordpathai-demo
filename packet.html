@@ -1068,10 +1068,22 @@
                 <p style="font-size:13px; line-height:1.5; color:#526780; margin:8px 0 0;">Wood County's published Rule 3.03 allows e-mailing a searchable PDF sealing application after the required court deposit is paid <strong>directly to the Clerk first</strong>. The $100 court deposit must not be collected a second time for a Lob check. A physically signed source must be retained. This email route and Lob filing are <strong>not automatic</strong>. Physical submission remains locked until the Clerk and funding requirements are verified.</p>
               </div>
               <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
+              <section id="approvedPreviewPanel" aria-label="Approved packet preview before checkout" style="margin-top:18px;padding:18px;border:1px solid #b8c9e8;border-radius:14px;background:#f5f8ff;">
+                <h3 style="margin:0 0 8px;color:#17396d;">Review Your Actual Approved Application Before Payment</h3>
+                <p style="margin:0 0 14px;line-height:1.5;">After independent case review, view every page of your actual signed packet with a visible <strong>PREVIEW ONLY - NOT FOR FILING</strong> watermark. This is an image-only preview: no original PDF file, download, or print controls are provided before payment. The <strong>unwatermarked PDF download unlocks only after Stripe verifies payment</strong>. Court checks and filings are separate.</p>
+                <button type="button" id="openApprovedPreviewBtn" class="sig-small-btn" style="background:#1b4b9a;color:white;">Review My Approved Packet (View Only)</button>
+                <p id="approvedPreviewStatus" role="status" aria-live="polite" style="margin:12px 0;color:#344c74;"></p>
+                <div id="approvedPreviewPages" hidden style="max-height:520px;overflow:auto;background:#e7edf6;padding:10px;border-radius:9px;" aria-label="Watermarked approved packet pages"></div>
+                <label id="approvedPreviewConsentLabel" hidden style="display:flex;gap:10px;margin-top:14px;line-height:1.5;">
+                  <input type="checkbox" id="approvedPreviewConsent" style="margin-top:4px;">
+                  <span>I reviewed every displayed page of my approved application, including the court, case number and signature. I approve this exact document for the offered packet preparation purchase. I understand this does not authorize court filing or a check.</span>
+                </label>
+                <button type="button" id="confirmApprovedPreviewBtn" class="sig-small-btn" hidden style="margin-top:10px;">Confirm These Pages Before Payment</button>
+              </section>
               <div class="sample-pdf-tools" style="margin-top:12px; padding:16px; border:1px solid #d2def3; border-radius:14px; background:#f7faff;">
                 <button type="button" class="sig-small-btn" id="prepareSignedReviewBtn" style="background:#1c489d;color:#fff;border-color:#1c489d;">Prepare My Real Signed Packet for Private Review</button>
-                <button type="button" class="sig-small-btn" id="downloadSamplePdfBtn" style="margin-left:8px;">Test Signed PDF — SAMPLE ONLY (No Check)</button>
-                <p style="margin:9px 0 0; color:#526780; font-size:13px; line-height:1.5;"><strong>Test Signed PDF</strong> deliberately produces SAMPLE APPLICANT information and has NO CHECK. It is NOT FOR FILING. <strong>Private Review</strong> uses your existing saved case and your drawn signature, then securely uploads the two-page application for review. A court-filing check can only be prepared separately after approved payment and filing authorization; neither button mails a check.</p>
+                <button type="button" class="sig-small-btn" id="downloadSamplePdfBtn" hidden aria-hidden="true" style="display:none;">Test Signed PDF — SAMPLE ONLY (No Check)</button>
+                <p style="margin:9px 0 0; color:#526780; font-size:13px; line-height:1.5;"><strong>Private Review</strong> securely uploads your signed saved-case application for independent reviewer approval. The view-only, watermarked preview above is available after approval. The original PDF cannot be downloaded before verified payment. A court-filing check can only be prepared separately after authorized payment and filing approval.</p>
               </div>
               <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
                 <button type="button" class="debug-pdf-link" id="testPdfBtn">Test PDF Access</button>
@@ -3642,6 +3654,139 @@ document.addEventListener("DOMContentLoaded", async function () {
         return payload;
       }
 
+      // The original court PDF is NEVER fetched for an unpaid preview. Only
+      // authenticated, watermarked PNG page images are sent to the browser.
+      let approvedPreviewState=null;
+      function clearApprovedPreviewImages(){
+        if(approvedPreviewState?.urls)for(const url of approvedPreviewState.urls)
+          URL.revokeObjectURL(url);
+        approvedPreviewState=null;
+        const container=document.getElementById("approvedPreviewPages");
+        if(container){container.replaceChildren();container.hidden=true;}
+        const label=document.getElementById("approvedPreviewConsentLabel");
+        const button=document.getElementById("confirmApprovedPreviewBtn");
+        if(label)label.hidden=true;
+        if(button)button.hidden=true;
+        const checkbox=document.getElementById("approvedPreviewConsent");
+        if(checkbox)checkbox.checked=false;
+      }
+      function approvedPreviewUrl(path){
+        return getCheckoutEndpoint().replace(/\/api\/create-checkout-session$/,"/api/packet/"+path);
+      }
+      async function approvedPreviewToken(){
+        const client=await window.RecordPathSupabase?.getClient();
+        const session=await client?.auth?.getSession();
+        const token=session?.data?.session?.access_token;
+        if(!token)throw new Error("Sign in to the account with your saved case before previewing the approved document.");
+        return token;
+      }
+      async function openApprovedPacketPreview(){
+        const openButton=document.getElementById("openApprovedPreviewBtn");
+        const status=document.getElementById("approvedPreviewStatus");
+        if(openButton)openButton.disabled=true;
+        clearApprovedPreviewImages();
+        if(status)status.textContent="Verifying your independent review and preparing a private watermarked preview...";
+        try{
+          const resolved=await resolveCheckoutCase();
+          const caseId=resolved?.checkoutCase?.saved_case_id;
+          if(!isInternalUuid(caseId))
+            throw new Error("Open a saved case in Record Details first.");
+          const requested=new URLSearchParams(window.location.search).get("caseId");
+          if(requested && requested!==caseId)
+            throw new Error("Requested case could not be loaded. Reopen it from Record Details.");
+          const token=await approvedPreviewToken();
+          const headers={Authorization:"Bearer "+token};
+          const manifestResponse=await fetch(approvedPreviewUrl("preview-manifest")+
+            "?case_id="+encodeURIComponent(caseId),{headers,cache:"no-store"});
+          const manifest=await manifestResponse.json().catch(()=>({}));
+          if(!manifestResponse.ok||manifest.ok!==true)
+            throw new Error(manifest.error||"The signed packet has not yet been independently approved for preview.");
+          const pages=Number(manifest.pageCount);
+          if(!Number.isInteger(pages)||pages<1||pages>6 ||
+             !/^[a-f0-9]{64}$/.test(manifest.pdfSha256||""))
+            throw new Error("Approved packet preview is unavailable.");
+          const container=document.getElementById("approvedPreviewPages");
+          const urls=[];
+          approvedPreviewState={caseId,sha:manifest.pdfSha256,urls,loaded:0,pageCount:pages};
+          for(let page=1;page<=pages;page++){
+            const response=await fetch(approvedPreviewUrl("preview-page")+
+              "?case_id="+encodeURIComponent(caseId)+"&page="+page,
+              {headers,cache:"no-store"});
+            if(!response.ok) {
+              const result=await response.json().catch(()=>({}));
+              throw new Error(result.error||"Page "+page+" could not be displayed.");
+            }
+            if(!String(response.headers.get("content-type")||"").includes("image/png"))
+              throw new Error("Only a watermarked image preview is permitted.");
+            const blob=await response.blob();
+            if(blob.size<500||blob.size>10000000)
+              throw new Error("Invalid preview image.");
+            const url=URL.createObjectURL(blob);
+            urls.push(url);
+            const wrapper=document.createElement("div");
+            wrapper.style.cssText="margin:0 auto 16px;max-width:750px;text-align:center;";
+            const caption=document.createElement("p");
+            caption.textContent="Page "+page+" of "+pages+" — VIEW ONLY / NOT FOR FILING";
+            caption.style.cssText="font-weight:bold;color:#394d70;";
+            const img=document.createElement("img");
+            img.src=url;img.alt="Watermarked approved document, page "+page+" of "+pages;
+            img.draggable=false;
+            img.style.cssText="display:block;width:100%;border:1px solid #abbdda;background:#fff;user-select:none;";
+            img.addEventListener("contextmenu",event=>event.preventDefault());
+            wrapper.append(caption,img);
+            container.append(wrapper);
+            approvedPreviewState.loaded++;
+          }
+          container.hidden=false;
+          document.getElementById("approvedPreviewConsentLabel").hidden=false;
+          document.getElementById("confirmApprovedPreviewBtn").hidden=false;
+          if(status)status.textContent=manifest.confirmed?
+            "Previously confirmed. Review the watermarked pages again if anything changed.":
+            "All "+pages+" approved pages are displayed. Confirm the exact document to continue toward payment.";
+        }catch(error){
+          clearApprovedPreviewImages();
+          const msg=error?.message||"Approved packet preview is unavailable.";
+          if(status)status.textContent=msg;
+          setCheckoutError(msg);
+        }finally{if(openButton)openButton.disabled=false;}
+      }
+      async function confirmApprovedPacketPreview(){
+        const button=document.getElementById("confirmApprovedPreviewBtn");
+        const status=document.getElementById("approvedPreviewStatus");
+        if(button)button.disabled=true;
+        try{
+          if(!approvedPreviewState||
+             approvedPreviewState.loaded!==approvedPreviewState.pageCount||
+             document.getElementById("approvedPreviewConsent")?.checked!==true)
+            throw new Error("View all approved pages and check the confirmation box first.");
+          const token=await approvedPreviewToken();
+          const response=await fetch(approvedPreviewUrl("confirm-preview"),{
+            method:"POST",cache:"no-store",
+            headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},
+            body:JSON.stringify({case_id:approvedPreviewState.caseId,
+              pdf_sha256:approvedPreviewState.sha,confirmed:true})
+          });
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok||result.confirmed!==true)
+            throw new Error(result.error||"The packet could not be confirmed. Please reopen it.");
+          if(status)status.textContent="Document confirmed. If checkout is approved, the original PDF will unlock only after verified payment.";
+          setCheckoutError("");
+          try{
+            const readiness=await checkServerPacketReadiness(approvedPreviewState.caseId);
+            const pay=document.getElementById("generateSealingBtn");
+            if(readiness?.ready===true && pay && !isPacketPaymentComplete()){
+              pay.disabled=false;
+              pay.textContent="Pay $"+(Number(readiness.quote?.totalCents||5000)/100).toFixed(2)+" & Download Approved Packet";
+            }
+          }catch{
+            if(status)status.textContent+=" Checkout remains gated until all launch requirements are met.";
+          }
+        }catch(error){
+          if(status)status.textContent=error?.message||"Preview confirmation failed.";
+          setCheckoutError(error?.message||"Preview confirmation failed.");
+        }finally{if(button)button.disabled=false;}
+      }
+
       async function downloadApprovedPacket() {
         setCheckoutError("");
         try {
@@ -3902,6 +4047,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         RecordWatchBridge.syncExistingRecordPathData();
       }
 
+      document.getElementById("openApprovedPreviewBtn")?.addEventListener("click",openApprovedPacketPreview);
+      document.getElementById("confirmApprovedPreviewBtn")?.addEventListener("click",confirmApprovedPacketPreview);
+      window.addEventListener("pagehide",clearApprovedPreviewImages);
       document.getElementById("downloadSamplePdfBtn")?.addEventListener("click", downloadSamplePdf);
       document.getElementById("prepareSignedReviewBtn")?.addEventListener("click", prepareSignedReviewPdf);
       document.getElementById("testPdfBtn")?.addEventListener("click", testPdfAccess);
