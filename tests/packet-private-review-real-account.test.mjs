@@ -21,7 +21,7 @@ const mapped={
 };
 function scenario({requestedId=id,consent=true,loaded=saved,mappedResult=mapped,
   normalizeForPdf=raw=>raw, selectTemplate=async()=>({id:"wood_form"})}={}){
-  const events={uploads:[],errors:[],status:[],rendered:[],caseLookups:[],selected:[],saveCalls:0};
+  const events={uploads:[],errors:[],status:[],rendered:[],caseLookups:[],selected:[],saveCalls:0,contactSaves:0};
   const account={
     getCaseById:async value=>{events.caseLookups.push(value);return loaded;},
     caseToPacketData:()=>mappedResult,
@@ -54,6 +54,8 @@ function scenario({requestedId=id,consent=true,loaded=saved,mappedResult=mapped,
     loadActiveTemplateForPacket:async data=>{events.selected.push(data);return selectTemplate(data);},
     loadFormSchema:async()=>({}),
     getMissingRequiredFields:()=>[],
+    persistPacketContactForReview:async()=>{events.contactSaves++;},
+    clearApprovedPreviewImages:()=>{},
     renderMissingInfoPanel:()=>{},
     renderSignedCourtPdfBytes:async data=>{
       events.rendered.push(data);
@@ -84,7 +86,8 @@ test("Private review uses canonical account record, not stale sample, and upload
   assert.equal(events.uploads[0].headers["x-recordpath-case-id"],id);
   assert.equal(events.uploads[0].headers["x-recordpath-private-review-consent"],"yes");
   assert.equal(events.saveCalls,0,"Review cannot modify source case or request any charge");
-  assert.ok(events.status.at(-1).includes("Signed PDF saved privately"));
+  assert.equal(events.contactSaves,1,"Owner's filing contact is explicitly confirmed and persisted before upload");
+  assert.ok(events.status.at(-1).includes("signed PDF saved privately"));
   assert.ok(!events.errors.at(-1));
 });
 
