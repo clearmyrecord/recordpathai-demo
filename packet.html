@@ -3169,7 +3169,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           if(requestedCaseId && requestedCaseId!==caseId)
             throw new Error("The requested saved case could not be loaded. Reopen it from Record Details.");
           const store=window.RecordPathUserStore;
-          if(!store?.getCaseById || !store?.caseToPacketData)
+          if(!store?.getSupabaseCaseById || !store?.caseToPacketData)
             throw new Error("Your account case records are unavailable. Sign in again and reopen this case.");
           if(!store.getSupabaseCaseById)
             throw new Error("Supabase-only case verification is unavailable.");
