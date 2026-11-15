@@ -115,16 +115,15 @@ test("Dashboard still protects private cases and does not bypass login",()=>{
   assert.match(clientScript,/autoRefreshToken: true/);
 });
 
-test("RecordWatch enrollment requires an authenticated account and preserves pending preferences",()=>{
+test("RecordWatch enrollment requires an authenticated Supabase case and never saves browser enrollment drafts",()=>{
   const enrollment=read("recordwatch.html");
   assert.match(enrollment,/id="recordwatchEnrollmentForm"/);
   assert.match(enrollment,/signup\.html\?returnUrl=recordwatch\.html/);
   assert.match(enrollment,/login\.html\?returnUrl=recordwatch\.html/);
-  assert.match(enrollment,/RecordPathAuth\.requireAuthAsync\("save RecordWatch case tracking", "recordwatch\.html"\)/);
-  const savePending=enrollment.indexOf('localStorage.setItem("recordpathai_pending_recordwatch_enrollment"');
-  const authGuard=enrollment.indexOf('RecordPathAuth.requireAuthAsync("save RecordWatch case tracking"');
-  const register=enrollment.indexOf('RecordWatchNotifications.registerSubscription({');
-  assert.ok(savePending>=0 && authGuard>savePending && register>authGuard);
+  assert.match(enrollment,/getSupabaseCases\(\)/);
+  assert.match(enrollment,/getSupabaseProfile\(\)/);
+  assert.match(enrollment,/updateCase\(caseRow\.case_id/);
+  assert.doesNotMatch(enrollment,/localStorage|recordpathai_pending_recordwatch_enrollment|registerSubscription\(/);
 });
 
 test("Late OAuth and recovery events synchronize the shared user session", async () => {
