@@ -46,29 +46,29 @@ function render(paths) {
     getSaved:()=>saved};
 }
 
-test("private-review gap shows readable name and saves an explicit customer edit",()=>{
+test("required applicant field links only to the Supabase-backed contact editor",()=>{
   const output=render(["petitioner.full_name"]);
   assert.match(output.html,/Applicant's full legal name/);
-  assert.match(output.html,/Use my saved account profile name/);
-  assert.match(output.html,/data-path="petitioner.full_name"/);
-  assert.match(output.summary,/1 required field is missing/);
+  assert.match(output.html,/href="#packetContactPanel"/);
+  assert.doesNotMatch(output.html,/data-path="petitioner.full_name"/);
+  assert.match(output.summary,/1 saved Supabase field\(s\) are missing/);
   assert.equal(output.display,"block");
   output.updateName("Example Customer");
-  assert.equal(output.getSaved()?.petitioner.full_name,"Example Customer");
+  assert.equal(output.getSaved(),null,"No browser-only field edit may be saved");
 });
 
-test("canonical court and charge fields must be corrected in saved Record Details",()=>{
+test("canonical court and charge gaps direct customer to persisted Record Details",()=>{
   const output=render(["court.case_number","charges.0.disposition_date"]);
   assert.match(output.html,/Court case number/);
   assert.match(output.html,/Charge disposition date/);
-  assert.match(output.html,/Edit Record Details/);
+  assert.match(output.html,/Open Record Details/);
   assert.doesNotMatch(output.html,/data-path="court.case_number"/);
   assert.doesNotMatch(output.html,/data-path="charges.0.disposition_date"/);
 });
 
-test("full SSN is not collected in browser draft storage",()=>{
+test("sensitive SSN is never collected into an unprotected browser field",()=>{
   const output=render(["petitioner.ssn"]);
-  assert.match(output.html,/sensitive field requires a secure form/);
+  assert.match(output.html,/Supabase-saved case/);
   assert.doesNotMatch(output.html,/data-path="petitioner.ssn"/);
 });
 
