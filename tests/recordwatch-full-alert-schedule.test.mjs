@@ -90,7 +90,7 @@ test("live scheduler enforces every category preference and uses immutable reser
   assert.match(live,/verifyPremiumAlertPayment\(lifetime\)/);
   assert.match(live,/recordwatch_sms_suppressions/);
   assert.match(live,/resolution=ignore-duplicates/);
-  assert.match(live,/sourceEventKey\s*\? "\?on_conflict=saved_case_id,source_event_key,channel"/);
+  assert.match(live,/on_conflict=saved_case_id,kind,channel,eligibility_date,reminder_on,source_event_key/);
   assert.match(live,/packetFollowupsForCase\(savedCase,today\)/);
   assert.match(live,/recentVerifiedCourtEvent\(event,today\)/);
   assert.match(live,/deleted_at=is.null&archived_at=is.null&recordwatch_paused_at=is.null/);
@@ -99,7 +99,7 @@ test("live scheduler enforces every category preference and uses immutable reser
   assert.match(server,/verified_source:"operator_verified"/);
   assert.match(server,/Independent official court evidence URL required/);
   assert.match(sql,/GRANT ALL ON public.recordwatch_verified_court_events TO service_role/);
-  assert.match(sql,/CREATE UNIQUE INDEX IF NOT EXISTS recordwatch_alert_deliveries_court_event_idx/);
+  assert.match(sql,/ADD CONSTRAINT recordwatch_alert_deliveries_dedup_v2_key/);
 });
 
 test("paid case dashboard has real category controls and saves each flag",()=>{
