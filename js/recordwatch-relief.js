@@ -85,36 +85,15 @@
     return plan;
   }
 
-  function saveReliefPlan(plan) {
-    localStorage.setItem("recordwatchReliefPlan", JSON.stringify(plan));
-    return plan;
-  }
-
-  function loadReliefPlan() {
-    try { return JSON.parse(localStorage.getItem("recordwatchReliefPlan")) || null; } catch (error) { return null; }
-  }
-
-  function setIfValue(keys, value) {
-    if (!value) return;
-    keys.forEach(function (key) { localStorage.setItem(key, value); });
-  }
-
-  function prefillCourtPacket(caseData, profile) {
-    var firstCharge = (caseData.charges || [])[0] || {};
-    // Compatibility bridge: only writes when the user explicitly chooses Generate Court Packet.
-    setIfValue(["fullName"], profile.fullName);
-    setIfValue(["email"], profile.email);
-    setIfValue(["residenceState", "state"], profile.residenceState);
-    setIfValue(["caseState"], caseData.court && caseData.court.caseState);
-    setIfValue(["county"], caseData.court && caseData.court.county);
-    setIfValue(["court"], caseData.court && caseData.court.courtName);
-    setIfValue(["caseNumber"], caseData.court && caseData.court.caseNumber);
-    setIfValue(["offense"], firstCharge.chargeName);
-    setIfValue(["offenseCode"], firstCharge.statuteCode);
-    setIfValue(["outcome"], caseData.outcome && caseData.outcome.outcome);
-    setIfValue(["dispositionDate"], caseData.outcome && caseData.outcome.dispositionDate);
-    setIfValue(["dischargeDate"], caseData.outcome && caseData.outcome.finalDischargeDate);
-    window.location.href = "record-details.html";
+  // A relief plan is derived from Supabase rows in memory. It is never
+  // persisted or restored from browser storage.
+  function saveReliefPlan(plan) { return plan; }
+  function loadReliefPlan() { return null; }
+  function prefillCourtPacket(caseData) {
+    const id=String(caseData?.id||"");
+    if(!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(id))
+      throw new Error("Select a Supabase-saved case first.");
+    window.location.href="packet.html?caseId="+encodeURIComponent(id);
   }
 
   function generateDisputePacket(caseData, profile) {
