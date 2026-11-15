@@ -68,7 +68,7 @@
       </div>
     </section>
 
-    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Layer 3: Monitoring Engine</span><h1>RecordWatch Dashboard</h1><p>Track eligibility estimates, requirements, risk flags, and correction tasks across every saved case.</p><div class="hero-actions"><a class="btn" href="recordwatch-intake.html?new=1">Add New Case</a><a class="btn secondary" href="recordwatch-relief.html">Relief Actions</a></div></div></section>
+    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Layer 3: Monitoring Engine</span><h1>RecordWatch Dashboard</h1><p>Track eligibility estimates, requirements, risk flags, and correction tasks across every saved case.</p><div class="hero-actions"><a class="btn" id="recordwatchPremiumHeroAction" href="#recordwatchPremiumPanel">Premium Purchase Options — $39</a><a class="btn secondary" href="recordwatch-intake.html?new=1">Add New Case</a><a class="btn secondary" href="recordwatch-relief.html">Relief Actions</a></div></div></section>
     <section class="recordwatch-section"><div class="container recordwatch-stack">
       <div id="recordwatchDataNotice" class="meta-note"></div>
       <div class="summary-grid" id="summaryGrid"></div>
@@ -249,6 +249,12 @@
         var subscription = activeSubscription();
         var preferences = Object.assign({ email_enabled: false, sms_enabled: false }, premiumState.preferences || {});
         var premium = window.RecordWatchMessageProvider && RecordWatchMessageProvider.isPremium(subscription);
+        // The primary purchase navigation must be visible above the dashboard
+        // metrics. It scrolls to the real consent-gated form, not straight to Stripe.
+        var primaryAction=document.getElementById("recordwatchPremiumHeroAction");
+        if(primaryAction) primaryAction.textContent=premium
+          ? "Manage RecordWatch Premium"
+          : "Purchase RecordWatch Premium — $39";
         var renewal = subscription && (subscription.current_period_end || subscription.premium_expires_at);
         var caseId=selectedSavedCaseId();
         // A stale browser-only active ID should not hide $39 Premium when the
