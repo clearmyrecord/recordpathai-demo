@@ -19,11 +19,11 @@ test("Checkout CTA follows separate contact destinations and mandatory purchase 
   // notification form or falsely implying payment before the terms checkbox.
   assert.match(dash,/id="recordwatchPremiumHeroAction" href="#recordwatchPremiumPanel"/);
   assert.match(dash,/primaryAction\.textContent=premium/);
-  assert.match(dash,/Purchase RecordWatch Premium — \\$39/);
+  assert.match(dash,/Purchase RecordWatch Premium — \$39/);
   assert.match(dash,/checkoutFields \+/);
   assert.match(dash,/recordwatchPurchaseTerms/);
-  assert.match(dash,/Purchase RecordWatch Premium — \\$39/);
-  assert.match(dash,/Purchase Premium again — \\$39/);
+  assert.match(dash,/Purchase RecordWatch Premium — \$39/);
+  assert.match(dash,/Purchase Premium again — \$39/);
   const form=dash.split('caseId ? \'<form id="recordwatchPreCheckoutForm"')[1]
     .split("'</form>' :",1)[0];
   assert.ok(form);
