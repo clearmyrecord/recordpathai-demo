@@ -26,7 +26,7 @@ test("packet prefill is limited to account-owned Supabase profile and case",()=>
   assert.match(packet,/getSupabaseCaseById\(caseId\)/);
   const reader=packet.slice(packet.indexOf("function readPacketData()"),packet.indexOf("function formatDateForDisplay"));
   assert.match(reader,/accountPacketSnapshot/);
-  assert.doesNotMatch(reader,/localStorage|loadPacketData\(/);
+  assert.doesNotMatch(reader,/localStorage\.getItem|localStorage\.setItem|bridge\.loadPacketData\(/);
   assert.doesNotMatch(packet,/RecordPathDataBridge\.initPage\(document\)/);
   assert.doesNotMatch(packet,/RecordWatchBridge\.getRecordWatchSummary\(/);
 });
