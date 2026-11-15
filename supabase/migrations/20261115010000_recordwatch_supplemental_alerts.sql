@@ -22,12 +22,19 @@ ALTER TABLE public.recordwatch_alert_deliveries
 -- an outage or a second status change on the same day cannot cause duplicates.
 CREATE UNIQUE INDEX IF NOT EXISTS recordwatch_alert_deliveries_court_event_idx
   ON public.recordwatch_alert_deliveries(saved_case_id,source_event_key,channel);
-ALTER TABLE public.recordwatch_alert_deliveries
-  ADD CONSTRAINT recordwatch_alert_source_event_key_format CHECK(
-    source_event_key IS NULL OR
-    (length(source_event_key) BETWEEN 8 AND 160 AND
-     source_event_key ~ '^[a-zA-Z0-9_:.\-]+$')
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+    WHERE conrelid='public.recordwatch_alert_deliveries'::regclass
+    AND conname='recordwatch_alert_source_event_key_format') THEN
+    ALTER TABLE public.recordwatch_alert_deliveries
+      ADD CONSTRAINT recordwatch_alert_source_event_key_format CHECK(
+        source_event_key IS NULL OR
+        (length(source_event_key) BETWEEN 8 AND 160 AND
+         source_event_key ~ '^[a-zA-Z0-9_:.\\-]+$')
+      );
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.recordwatch_verified_court_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
