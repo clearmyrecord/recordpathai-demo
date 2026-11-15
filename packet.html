@@ -1879,13 +1879,13 @@ document.addEventListener("DOMContentLoaded", async function () {
         "dates.current_month": "generated.current_month",
         "dates.current_year": "generated.current_year"
       };
+      let accountPacketSnapshot=null;
       function persistPacketData(raw) {
-        const bridge = window.RecordPathDataBridge;
-        if (bridge && typeof bridge.savePacketData === "function") {
-          bridge.savePacketData(raw);
-          return;
-        }
-        localStorage.setItem("recordPathPacketData", JSON.stringify(raw));
+        // Transient in-memory view only. Signed packet content must originate
+        // in RLS-protected Supabase and be reread after account writes.
+        if(!accountPacketSnapshot)
+          throw new Error("Sign in and load your saved Supabase case.");
+        accountPacketSnapshot=JSON.parse(JSON.stringify(raw));
       }
       async function loadFormSchema(selected, data) {
         if (!selected) return null;
@@ -2003,34 +2003,42 @@ document.addEventListener("DOMContentLoaded", async function () {
       async function loadPacketContactProfile(){
         const status=document.getElementById("packetContactStatus");
         const store=window.RecordPathUserStore;
-        if(store?.ready)await store.ready;
-        const user=store?.getCurrentUser?.();
-        if(!user?.id){
-          if(status)status.textContent="Sign in to load your court contact information.";
-          return;
-        }
-        let profile=null;
+        accountPacketSnapshot=null;
+        packetContactProfileLoaded=false;
         try{
-          const client=await window.RecordPathSupabase.getClient();
-          const result=await client.from("profiles").select(
-            "id,full_name,email,phone,filing_full_name,filing_email,filing_phone,mailing_line1,mailing_line2,mailing_city,mailing_state,mailing_zip"
-          ).eq("id",user.id).maybeSingle();
-          if(result.error)throw result.error;
-          if(!result.data)throw new Error("The account profile could not be loaded.");
-          profile=result.data;
+          if(store?.ready)await store.ready;
+          if(!store?.getSupabaseProfile||!store?.getSupabaseCases||!store?.caseToPacketData)
+            throw new Error("The authenticated account data service is unavailable.");
+          // No browser cache, intake draft, metadata, or RecordWatch local copy.
+          const [profile,cases]=await Promise.all([
+            store.getSupabaseProfile(),store.getSupabaseCases()
+          ]);
+          const requested=new URLSearchParams(window.location.search).get("caseId");
+          const active=store.getActiveCaseId?.()||""; // ID selector only; never data
+          const selectedId=requested||active;
+          const savedCase=cases.find(item=>item.case_id===selectedId) ||
+            (!requested&&cases.length===1?cases[0]:null);
+          if(!savedCase)throw new Error(
+            cases.length?"Select a saved case from your account dashboard. Browser draft selections cannot populate this packet.":
+              "No Supabase-saved case is available. Complete Record Details and save it to your account.");
+          const mapped=store.caseToPacketData(savedCase);
+          const values=RecordPathPacketContact.mergeForAccount(null,profile,null);
+          accountPacketSnapshot=RecordPathPacketContact.applyToDraft({
+            court:mapped.court,case:mapped.case,charges:mapped.charges,
+            eligibility:mapped.eligibility,petitioner:{},meta:{}
+          },values,profile.id);
           packetContactProfileLoaded=true;
+          RecordPathPacketContact.fields.forEach(field=>{
+            const input=document.querySelector('[data-packet-contact="'+field.key+'"]');
+            if(input)input.value=values[field.key]||"";
+          });
+          if(status)status.textContent=
+            "Showing only your Supabase-saved contact details. Review the missing fields, then confirm them before submitting a newly signed packet.";
         }catch(error){
-          packetContactProfileLoaded=false;
-          console.warn("Packet contact profile loading failed",error?.name||"unknown");
+          if(status)status.textContent=error.message||
+            "Supabase records could not be loaded. Nothing was filled from this browser.";
+          console.warn("Account packet load blocked",error?.name||"unknown");
         }
-        const values=RecordPathPacketContact.mergeForAccount(readPacketData(),profile,user);
-        RecordPathPacketContact.fields.forEach(field=>{
-          const input=document.querySelector('[data-packet-contact="'+field.key+'"]');
-          if(input)input.value=values[field.key]||"";
-        });
-        if(status)status.textContent=packetContactProfileLoaded
-          ? "Review these saved account details. Any missing address fields must be entered before private review."
-          : "Contact details are unavailable from your account. Reconnect or sign in before submitting a new signed packet.";
       }
       async function persistPacketContactForReview(){
         const status=document.getElementById("packetContactStatus");
@@ -2038,7 +2046,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         const client=await window.RecordPathSupabase.getClient();
         const session=await client.auth.getSession();
         const user=session?.data?.session?.user;
-        if(!user?.id)throw new Error("Sign in before saving contact details for your court application.");
+        if(!user?.id || !packetContactProfileLoaded || !accountPacketSnapshot)
+          throw new Error("Load your Supabase-saved case and profile before submitting a new signed packet.");
         const inputs={};
         RecordPathPacketContact.fields.forEach(field=>{
           const input=document.querySelector('[data-packet-contact="'+field.key+'"]');
@@ -2063,31 +2072,23 @@ document.addEventListener("DOMContentLoaded", async function () {
         // change the authentication email or overwrite the login profile name.
         const result=await client.from("profiles")
           .update(RecordPathPacketContact.profileUpdate(inputs))
-          .eq("id",user.id).select("id").single();
+          .eq("id",user.id).select("*").single();
         if(result.error || result.data?.id!==user.id){
           if(status)status.textContent="Account contact information could not be saved; no PDF was uploaded.";
           throw new Error("Contact details could not be saved securely to your account. Sign in again and retry.");
         }
-        const raw=RecordPathPacketContact.applyToDraft(readPacketData(),inputs,user.id);
+        const savedValues=RecordPathPacketContact.mergeForAccount(null,result.data,null);
+        const verified=RecordPathPacketContact.validate(savedValues);
+        if(verified.length)throw new Error("Supabase did not retain complete contact details. No PDF was uploaded.");
+        const raw=RecordPathPacketContact.applyToDraft(readPacketData(),savedValues,user.id);
         persistPacketData(raw);
         if(status)status.textContent="Confirmed contact details were saved securely and will appear on both forms.";
       }
 
       function readPacketData() {
-        try {
-          const bridge = window.RecordPathDataBridge;
-          if (bridge && typeof bridge.loadPacketData === "function") {
-            const data = bridge.loadPacketData();
-            if (bridge.derivePacketData) bridge.derivePacketData(data);
-            if (bridge.savePacketData) bridge.savePacketData(data);
-            return data;
-          }
-
-          return JSON.parse(localStorage.getItem("recordPathPacketData") || "{}");
-        } catch (error) {
-          console.error("Could not read packet data", error);
-          return {};
-        }
+        // Never populate any court form from localStorage, browser intake,
+        // cached cases or a RecordWatch browser snapshot.
+        return accountPacketSnapshot?JSON.parse(JSON.stringify(accountPacketSnapshot)):{};
       }
 
       function formatDateForDisplay(value) {
@@ -3196,7 +3197,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           const store=window.RecordPathUserStore;
           if(!store?.getCaseById || !store?.caseToPacketData)
             throw new Error("Your account case records are unavailable. Sign in again and reopen this case.");
-          const savedCase=await store.getCaseById(caseId);
+          if(!store.getSupabaseCaseById)
+            throw new Error("Supabase-only case verification is unavailable.");
+          const savedCase=await store.getSupabaseCaseById(caseId);
           if(!savedCase || (savedCase.case_id||savedCase.id)!==caseId)
             throw new Error("Your saved case was not found in this account. No packet was uploaded.");
           const mapped=store.caseToPacketData(savedCase);
@@ -4223,10 +4226,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
       }
 
-      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
-        RecordWatchBridge.syncExistingRecordPathData();
-      }
-
+      // Do not import RecordWatch or eligibility browser drafts into packet fields.
       await syncPaymentCompletionFromUrl();
       await loadPacketContactProfile();
       document.querySelectorAll("[data-packet-contact]").forEach(input=>{
@@ -4247,10 +4247,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
       }
       const packetEligibility = resolveCurrentPacketEligibility(normalizedData);
-      if (window.RecordWatchBridge && typeof RecordWatchBridge.syncExistingRecordPathData === "function") {
-        RecordWatchBridge.syncExistingRecordPathData();
-      }
-
       document.getElementById("openApprovedPreviewBtn")?.addEventListener("click",openApprovedPacketPreview);
       document.getElementById("confirmApprovedPreviewBtn")?.addEventListener("click",confirmApprovedPacketPreview);
       window.addEventListener("pagehide",clearApprovedPreviewImages);
@@ -4315,9 +4311,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (downloadReminderBtn) downloadReminderBtn.addEventListener("click", () => downloadEligibilityReminder(normalizedData, eligibilityMode));
     });
 
-    if (window.RecordPathDataBridge && RecordPathDataBridge.initPage) {
-  RecordPathDataBridge.initPage(document);
-}
+    // Browser draft auto-hydration is intentionally disabled for court packets.
   </script>
   <script src="js/i18n.js"></script>
 </body>
