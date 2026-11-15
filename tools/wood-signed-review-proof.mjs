@@ -97,6 +97,20 @@ try {
     "Signed output must contain exact official address and sealing-application pages");
   assert.ok(!texts.join(" ").toUpperCase().includes("CAN I SEAL OR EXPUNGE MY CRIMINAL RECORD"),
     "Eligibility guide may not be included");
+  // The previous proof checked only the official blank pages and drawn
+  // signature. It therefore passed even if ALL applicant fields were blank.
+  const overlayExpectations=[
+    ["applicant", "SYNTHETIC APPLICANT"],
+    ["mailing address", "123 Example Street"],
+    ["court case number", "SAMPLE-2026"],
+    ["charge name", "SAMPLE CHARGE"],
+    ["offense code", "0000.00"]
+  ];
+  const normalized=raw=>String(raw).toUpperCase().replace(/[^A-Z0-9]/g,"");
+  for(const [label,value] of overlayExpectations){
+    assert.ok(normalized(texts.join(" ")).includes(normalized(value)),
+      "Actual signed PDF must visibly contain mapped "+label+"; an untouched blank official PDF is not acceptable");
+  }
   const sourceApp=await unsignedOriginal.getPage(4);
   const finalApp=await rendered.getPage(2);
   const countImageOps=async page=>(await page.getOperatorList()).fnArray.filter(
