@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Dashboard | RecordPathAI</title><meta name="description" content="Track RecordPathAI eligibility, saved cases, packet status, and RecordWatch status." /><link rel="stylesheet" href="css/styles.css" />
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Account Dashboard | RecordPathAI</title><meta name="description" content="Track RecordPathAI eligibility, saved cases, packet status, and RecordWatch status." /><link rel="stylesheet" href="css/styles.css" />
 <link rel="stylesheet" href="css/ledger.css" /></head>
 <body>
   <header class="site-header">
@@ -52,7 +52,7 @@
       </div>
     </section>
 
-    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Account dashboard</span><h1 id="dashboardTitle">Your RecordPathAI dashboard</h1><p>Review saved account data, live case records, packet status, RecordWatch status, and the recommended next action.</p></div></section>
+    <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Account overview</span><h1 id="dashboardTitle">Your RecordPathAI account</h1><p>Review saved account data, live case records, packet status, RecordWatch status, and the recommended next action.</p></div></section>
     <section class="page-section"><div class="container recordwatch-stack">
       <div class="dashboard-grid">
         <article class="dashboard-card"><p class="eyebrow-mini">Eligibility status</p><h3 id="eligibilityStatus">Not screened yet</h3><p id="eligibleDate" class="muted"></p></article>
@@ -64,8 +64,8 @@
       <section class="page-card recordwatch-dashboard-card">
         <div class="section-heading-row">
           <div>
-            <h2>RecordWatch</h2>
-            <p class="muted">Track your eligibility date and saved cases. Email and SMS alerts require $39 lifetime Premium per case.</p>
+            <h2>RecordWatch overview</h2>
+            <p class="muted">A quick account summary. Open the dedicated RecordWatch dashboard to select a verified saved case, review timelines, and purchase $39 lifetime Premium. Email and SMS alerts require paid Premium.</p>
           </div>
           <a class="btn secondary" href="recordwatch-dashboard.html">Open RecordWatch</a>
         </div>
@@ -149,7 +149,7 @@
       const latest = cases[cases.length - 1] || {};
       const savedCaseStatus = document.getElementById("savedCaseStatus");
       if (showingCachedCases && savedCaseStatus) savedCaseStatus.textContent = "Showing cached case data. Changes will sync when your connection is restored.";
-      document.getElementById("dashboardTitle").textContent = `Welcome, ${user.fullName || user.email}`;
+      document.getElementById("dashboardTitle").textContent = `Your account — ${user.fullName || user.email}`;
       document.getElementById("eligibilityStatus").textContent = latest.eligibilityStatus || "Not screened yet";
       document.getElementById("eligibleDate").textContent = latest.estimatedEligibleDate ? `Estimated eligible date: ${latest.estimatedEligibleDate}` : "Complete screening to estimate a date.";
       document.getElementById("savedCaseCount").textContent = String(cases.length);

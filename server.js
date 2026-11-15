@@ -3088,7 +3088,17 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
         error:"Review and accept the RecordWatch purchase terms and notification disclosures before checkout."});
     const savedCaseId=safe(req.body?.saved_case_id||req.body?.savedCaseId);
     if(!isUuid(savedCaseId))return res.status(400).json({ok:false,error:"Save and select a case before purchasing lifetime RecordWatch."});
-    await getSavedCaseReviewFacts(user.id,savedCaseId);
+    // Reject stale browser case IDs and refunded purchases tied to deleted
+    // cases before contacting Stripe. Never silently transfer an entitlement.
+    try {
+      await getSavedCaseReviewFacts(user.id,savedCaseId);
+    } catch (caseError) {
+      if (caseError.message==="Saved case not found for authenticated owner") {
+        return res.status(409).json({ok:false,error:
+          "The selected case is deleted or is not saved to this account. Choose an active saved case from RecordWatch. No charge was created."});
+      }
+      throw caseError;
+    }
     const current=await getRecordwatchLifetimeCase(user.id,savedCaseId);
     if(!lifetimeCasePurchaseAvailable(current,savedCaseId))
       return res.status(409).json({ok:false,error:"Lifetime RecordWatch is already paid for this case. No additional purchase needed.",alreadyPurchased:true});
@@ -3123,7 +3133,10 @@ app.post("/api/recordwatch/checkout", async (req, res) => {
     return res.json({ok:true,url:session.url,sessionId:session.id});
   }catch(error){
     console.warn("RecordWatch lifetime checkout unavailable",error?.type||error?.name||"unknown");
-    return res.status(error.status||503).json({ok:false,error:error.status===503?error.message:"Unable to start secure lifetime checkout. Please confirm your saved case."});
+    // A Stripe/provider exception is not evidence of a bad saved case.
+    // Keep underlying provider errors private and do not claim a charge.
+    return res.status(503).json({ok:false,error:
+      "Secure Stripe checkout is temporarily unavailable. No charge was created. Please try again or contact support."});
   }
 });
 

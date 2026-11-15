@@ -10,13 +10,13 @@ test("when no saved case is selected, the $39 dashboard offers existing saved ca
   const panel=dashboard.split("function renderPremiumPanels(cases)")[1]
     .split("function bindPremiumPanelEvents()",1)[0];
   assert.ok(panel);
-  assert.match(panel,/savedCaseChoices=\(cases\|\|\[\]\)\.filter/);
+  assert.match(panel,/savedCaseChoices=verifiedSavedCases\.map\(toRecordWatchCase\)\.filter/);
   assert.match(panel,/Select a saved case to purchase Premium/);
   assert.match(panel,/The \$39 purchase applies only to that saved case/);
   assert.match(panel,/encodeURIComponent\(item\.id\)/);
   assert.match(panel,/esc\(label\)/);
   assert.match(panel,/chooseSavedCase\) \+/);
-  assert.match(panel,/Save a case to your account before purchasing Premium/);
+  assert.match(panel,/No active, verified Supabase case is available for checkout/);
   assert.match(panel,/caseId \? '<form id="recordwatchPreCheckoutForm"/);
 });
 
