@@ -1028,11 +1028,7 @@
             <div id="notaryWarningBanner" class="callout warning" style="display:none;">
               This form requires notarization. Do not sign notarized sections until you are in front of a notary unless the court instructs otherwise.
             </div>
-            <div id="missingInfoPanel" class="missing-info-panel">
-              <h3 style="margin:0;" data-i18n="packet.missingInfo">Missing Information</h3>
-              <p style="margin:8px 0 0; color:#5f6e88;" data-i18n="packet.missingInfoHelp">Please provide the required fields below so your form can be generated.</p>
-              <div id="missingInfoFields" class="missing-info-grid"></div>
-            </div>
+
 
             <div class="sig-pad-wrap">
               <p class="sig-pad-label" data-i18n="packet.signatureDraw">Draw your signature below</p>
@@ -1075,6 +1071,11 @@
               <section id="packetSubmitStep" class="sample-pdf-tools" style="margin-top:18px; padding:18px; border:1px solid #d2def3; border-radius:14px; background:#f7faff;">
                 <h3 style="margin:0 0 8px;color:#17396d;">Step 1 — Prepare and Submit Your Real Signed Packet</h3>
                 <p style="margin:0 0 12px;color:#526780;line-height:1.55;">Select your saved case, complete all required form fields, draw your signature, and authorize private review. This securely stores your real two-page application. It does not charge you or file anything with the court.</p>
+                <div id="missingInfoPanel" class="missing-info-panel" style="display:none; margin:12px 0 18px;" tabindex="-1" role="group" aria-labelledby="missingInfoTitle">
+                  <h4 id="missingInfoTitle" style="margin:0 0 8px;">Required information for this packet</h4>
+                  <p id="missingInfoSummary" style="margin:0 0 10px;color:#40577e;" role="status" aria-live="polite">Complete these fields before submitting your signed PDF for private review.</p>
+                  <div id="missingInfoFields" class="missing-info-grid"></div>
+                </div>
                 <button type="button" class="sig-small-btn" id="prepareSignedReviewBtn" style="background:#1c489d;color:#fff;border-color:#1c489d;">Prepare My Real Signed Packet for Private Review</button>
                 <button type="button" class="sig-small-btn" id="downloadSamplePdfBtn" hidden aria-hidden="true" style="display:none;">Test Signed PDF — SAMPLE ONLY (No Check)</button>
               </section>
@@ -1891,24 +1892,56 @@ document.addEventListener("DOMContentLoaded", async function () {
           : DEFAULT_REQUIRED_FIELDS;
         return requiredFields.filter((path) => safe(getByPath(data, path)) === "");
       }
+      const PRIVATE_REVIEW_FIELD_LABELS = {
+        "petitioner.full_name": "Applicant's full legal name",
+        "petitioner.first_name": "Applicant's first name",
+        "petitioner.last_name": "Applicant's last name",
+        "petitioner.dob": "Applicant's date of birth",
+        "petitioner.address.line1": "Applicant's mailing address",
+        "petitioner.address.city": "Applicant's city",
+        "petitioner.address.state": "Applicant's state",
+        "petitioner.address.zip": "Applicant's ZIP code",
+        "court.state": "Filing court state",
+        "court.county": "Filing court county",
+        "court.name": "Filing court name",
+        "court.case_number": "Court case number",
+        "charges.0.disposition": "Charge disposition",
+        "charges.0.disposition_date": "Charge disposition date"
+      };
+      function privateReviewFieldLabel(path, schema) {
+        const question = (Array.isArray(schema?.formSpecificQuestions) ? schema.formSpecificQuestions : [])
+          .find(q => q && q.path === path && q.label);
+        return question?.label || PRIVATE_REVIEW_FIELD_LABELS[path] ||
+          path.replace(/([._])/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      }
       function renderMissingInfoPanel(paths, rawData, normalizedData, schema) {
         const panel = document.getElementById("missingInfoPanel");
         const container = document.getElementById("missingInfoFields");
-        const labelMap = Object.fromEntries(
-          (Array.isArray(schema?.formSpecificQuestions) ? schema.formSpecificQuestions : [])
-            .filter((q) => q && q.path && q.label)
-            .map((q) => [String(q.path), String(q.label)])
-        );
+        const summary = document.getElementById("missingInfoSummary");
         if (!panel || !container) return;
         if (!paths.length) {
           panel.style.display = "none";
-          container.innerHTML = "";
+          container.replaceChildren();
           return;
         }
+        const canonical = paths.filter(path => /^(court\.|charges\.\d+\.|case\.)/.test(path));
+        // Do not silently put an account holder's name on a court document.
+        // Offer it only as an explicit, editable applicant choice.
+        const accountName=String(window.RecordPathUserStore?.getCurrentUser?.()?.fullName||"").trim();
+        if (summary) summary.textContent =
+          paths.length + " required field" + (paths.length === 1 ? " is" : "s are") +
+          " missing. " + (canonical.length ? "Update saved court or charge details in Record Details; " : "") +
+          "complete applicant fields here before trying Private Review again. No PDF has been uploaded.";
         container.innerHTML = paths.map((path) => {
+          const label = escapeHtml(privateReviewFieldLabel(path,schema));
+          if (canonical.includes(path)) return `<div class="missing-info-field"><strong>${label}</strong><p class="meta-note">This must be corrected in your saved court case, not in a browser draft.</p><a class="btn secondary" href="record-details.html">Edit Record Details</a></div>`;
+          // Confidential fields (especially a full SSN) must never be stored in
+          // unprotected localStorage. Require a separate protected intake route.
+          if (/ssn|social_security/i.test(path)) return `<div class="missing-info-field"><strong>${label}</strong><p class="meta-note">This sensitive field requires a secure form. Do not enter it into browser draft storage; contact support.</p></div>`;
           const current = escapeHtml(getByPath(normalizedData, path, ""));
-          const label = labelMap[path] || path;
-          return `<label>${escapeHtml(label)}<input data-path="${escapeHtml(path)}" value="${current}" /></label>`;
+          const accountOption = path==="petitioner.full_name" && !current && accountName
+            ? '<button class="sig-small-btn" type="button" id="useAccountNameForPacket">Use my saved account profile name</button>' : '';
+          return `<div class="missing-info-field"><label>${label}<input required aria-required="true" data-path="${escapeHtml(path)}" value="${current}" autocomplete="${path==="petitioner.full_name"?"name":"off"}" /></label>${accountOption}</div>`;
         }).join("");
         container.querySelectorAll("input[data-path]").forEach((input) => {
           input.addEventListener("input", (event) => {
@@ -1917,7 +1950,21 @@ document.addEventListener("DOMContentLoaded", async function () {
             persistPacketData(rawData);
           });
         });
+        container.querySelector("#useAccountNameForPacket")?.addEventListener("click",()=>{
+          const input=container.querySelector('input[data-path="petitioner.full_name"]');
+          if(!input||!accountName)return;
+          input.value=accountName;
+          setByPath(rawData,"petitioner.full_name",accountName);
+          persistPacketData(rawData);
+          input.focus();
+        });
         panel.style.display = "block";
+      }
+      function focusMissingPrivateReviewFields() {
+        const panel=document.getElementById("missingInfoPanel");
+        if (!panel) return;
+        panel.scrollIntoView?.({behavior:"smooth",block:"center"});
+        (panel.querySelector('input[data-path]') || panel).focus?.({preventScroll:true});
       }
 
       function readPacketData() {
@@ -3077,7 +3124,13 @@ document.addEventListener("DOMContentLoaded", async function () {
           if(schema?.notaryRequired)throw new Error("This form requires signing before a notary. Do not submit this browser signature as a filing signature.");
           const missing=getMissingRequiredFields(data,schema);
           renderMissingInfoPanel(missing,raw,data,schema);
-          if(missing.length)throw new Error("Complete the missing form fields above and select Private Review again. No file was uploaded.");
+          if(missing.length){
+            focusMissingPrivateReviewFields();
+            const names=missing.slice(0,4).map(path=>privateReviewFieldLabel(path,schema));
+            const rest=missing.length>4?` and ${missing.length-4} more`:"";
+            throw new Error("Before Private Review, complete: "+names.join(", ")+rest+
+              ". The required fields are now shown in Step 1. No PDF was uploaded.");
+          }
           setStatus("Preparing your actual saved-case PDF in private storage for independent review...");
           const bytes=await renderSignedCourtPdfBytes(data,selected);
           const client=await window.RecordPathSupabase.getClient();
