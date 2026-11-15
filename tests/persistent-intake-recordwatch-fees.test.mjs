@@ -135,3 +135,22 @@ test("RecordWatch case normalization keeps individual outcomes and proof dates a
   assert.equal(restored.discharge_date, original.discharge_date);
   assert.equal(restored.notes, original.notes);
 });
+
+test("court type survives nested snake_case packet data and existing saved case updates",()=>{
+  const storeSource = readFileSync("js/user-store.js", "utf8");
+  const context = {
+    localStorage:{getItem(){return null},setItem(){},removeItem(){}},
+    console,URL,
+    CustomEvent:class {constructor(){}},
+    document:{dispatchEvent(){}},
+    window:{location:{pathname:"/record-details.html",origin:"https://recordpathai.com",search:""}}
+  };
+  vm.runInNewContext(storeSource,context);
+  const normalized=context.window.RecordPathUserStore.normalizeCase({
+    court:{state:"OH",county:"Wood",name:"Wood County Court of Common Pleas",
+      court_type:"court-of-common-pleas",caseNumber:"SYNTHETIC"}
+  });
+  assert.equal(normalized.courtType,"court-of-common-pleas");
+  assert.match(storeSource,/courtType: firstNonEmpty\(court\.type, court\.courtType, court\.court_type\)/);
+  assert.match(storeSource,/if \(!payload\.court_type && existing\.court_type\) payload\.court_type = existing\.court_type/);
+});
