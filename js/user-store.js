@@ -538,7 +538,7 @@
       county: firstNonEmpty(first.court_county, court.county, localStorage.getItem("county")),
       courtName,
       court: courtName,
-      courtType: firstNonEmpty(court.type, court.courtType),
+      courtType: firstNonEmpty(court.type, court.courtType, court.court_type),
       courtId: firstNonEmpty(court.id, court.court_id),
       ruleSetId: firstNonEmpty(eligibility.rule_set_id, eligibility.ruleSetId),
       reliefType: firstNonEmpty(eligibility.relief_type, eligibility.reliefType),
@@ -641,7 +641,7 @@
       county: firstNonEmpty(source.county, nestedCourt.county),
       courtName: firstNonEmpty(source.courtName, source.court_name, typeof source.court === "string" ? source.court : "", nestedCourt.courtName, nestedCourt.name),
       court: firstNonEmpty(source.courtName, source.court_name, typeof source.court === "string" ? source.court : "", nestedCourt.courtName, nestedCourt.name),
-      courtType: firstNonEmpty(source.courtType, source.court_type, nestedCourt.courtType, nestedCourt.type),
+      courtType: firstNonEmpty(source.courtType, source.court_type, nestedCourt.courtType, nestedCourt.court_type, nestedCourt.type),
       courtId: firstNonEmpty(source.courtId, source.court_id, nestedCourt.courtId, nestedCourt.id),
       ruleSetId: firstNonEmpty(source.ruleSetId, source.rule_set_id),
       localProfileId: firstNonEmpty(source.localProfileId, source.local_profile_id),
@@ -1328,7 +1328,12 @@
     currentUser = Object.assign({}, currentUser, { id: userId });
     const existing = await findExistingRemoteCase(supabase, nextCase);
     const payload = casePayload(nextCase, userId);
-    if (existing) payload.id = existing.id;
+    if (existing) {
+      payload.id = existing.id;
+      // Partial legacy/browser updates must not erase an already verified
+      // court division. Preserve it until the applicant explicitly changes it.
+      if (!payload.court_type && existing.court_type) payload.court_type = existing.court_type;
+    }
 
     let result;
     if (existing && existing.id) {
