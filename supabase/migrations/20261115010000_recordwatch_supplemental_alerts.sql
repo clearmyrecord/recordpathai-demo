@@ -29,7 +29,9 @@ ALTER TABLE public.recordwatch_alert_deliveries
 ALTER TABLE public.recordwatch_alert_deliveries
   DROP CONSTRAINT IF EXISTS recordwatch_alert_deliveries_saved_case_id_kind_channel_eli_key;
 DROP INDEX IF EXISTS public.recordwatch_alert_deliveries_court_event_idx;
-DO $$
+ALTER TABLE public.recordwatch_alert_deliveries
+  DROP CONSTRAINT IF EXISTS recordwatch_alert_source_event_key_format;
+DO $
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint
     WHERE conrelid='public.recordwatch_alert_deliveries'::regclass
