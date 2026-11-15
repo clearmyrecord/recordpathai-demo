@@ -1137,6 +1137,40 @@
   function getCases() { return activeCases(cachedCases.length ? cachedCases : loadLocalCases()); }
   async function getCasesAsync() { return refreshCases({ allowFallback: true }); }
 
+  // Production form/RecordWatch reads: no local cache, draft, or fallback.
+  // Caller must use the authenticated Supabase account and RLS-protected rows.
+  async function getSupabaseProfile() {
+    const supabase=await client();
+    const auth=await supabase.auth.getUser();
+    if(auth.error || !auth.data?.user?.id)
+      throw new Error("Sign in to load your saved account profile.");
+    const result=await supabase.from("profiles").select("*")
+      .eq("id",auth.data.user.id).maybeSingle();
+    if(result.error || !result.data)
+      throw new Error("Your Supabase account profile is unavailable. No local data was substituted.");
+    return result.data;
+  }
+  async function getSupabaseCases() {
+    const supabase=await client();
+    const auth=await supabase.auth.getUser();
+    if(auth.error || !auth.data?.user?.id)
+      throw new Error("Sign in to load your saved case records.");
+    const result=await supabase.from("saved_cases").select("*")
+      .eq("user_id",auth.data.user.id).is("deleted_at",null)
+      .is("archived_at",null).order("updated_at",{ascending:true});
+    if(result.error)throw new Error("Supabase case records are unavailable; browser data was not used.");
+    const charges=await fetchCaseCharges(supabase,(result.data||[]).map(row=>row.id));
+    return (result.data||[]).map(row=>
+      normalizeDbCase(Object.assign({},row,{case_charges:charges[row.id]||[]})));
+  }
+  async function getSupabaseCaseById(caseId) {
+    const id=String(caseId||"").trim();
+    if(!isUuid(id))throw new Error("Select a saved Supabase case before continuing.");
+    const cases=await getSupabaseCases();
+    return cases.find(row=>row.case_id===id) || null;
+  }
+
+
   function caseMatchesId(caseRecord, caseId, compositeKey) {
     const id = String(caseId || "").trim();
     if (!id || !caseRecord) return false;
@@ -1565,6 +1599,9 @@
     updateCurrentUser,
     getCases,
     getCasesAsync,
+    getSupabaseCases,
+    getSupabaseCaseById,
+    getSupabaseProfile,
     getCaseById,
     getActiveCase,
     setActiveCase,
