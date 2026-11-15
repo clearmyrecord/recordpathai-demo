@@ -47,7 +47,8 @@ test("multiple verified cases require explicit selection when local selection is
 
 test("unverified drafts and browser-only cases never unlock checkout", () => {
   assert.equal(select({ verified: [], query: "?caseId=" + active, cached: active }), "");
-  assert.match(html, /verifiedSavedCases = activeUser\(\) && !cases\.isFallback/);
+  assert.match(html, /verifiedSavedCases=cases\.filter\(item=>isSavedCaseUuid/);
+  assert.match(html, /store\.getSupabaseCases\(\)/);
 });
 
 test("the checkout endpoint rejects a deleted or unowned saved case before Stripe", () => {
