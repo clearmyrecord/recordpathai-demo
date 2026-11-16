@@ -1230,6 +1230,50 @@
     return data || [];
   }
 
+  async function syncChargesStrict(caseId,caseData) {
+    // Step 2 updates existing charge rows instead of deleting the entire
+    // inventory before every autosave. A failed update leaves other rows intact.
+    const db=await client();
+    const userId=currentUser?.id;
+    if(!userId)throw new Error("Supabase sign-in is required.");
+    const desired=normalizeCase(caseData).chargeDetails;
+    const prior=await db.from("case_charges").select("*")
+      .eq("case_id",caseId).eq("user_id",userId)
+      .order("created_at",{ascending:true});
+    if(prior.error)throw classifySupabaseCaseError(prior.error,"case_charges");
+    const existing=prior.data||[];
+    const results=[];
+    for(let i=0;i<desired.length;i++){
+      const charge=desired[i];
+      const row={
+        user_id:userId,case_id:caseId,
+        charge_name:charge.charge_name||null,
+        offense_code:charge.offense_code||null,
+        offense_level:charge.offense_level||null,
+        offense_date:charge.offense_date||null,
+        charge_notes:charge.charge_notes||null,
+        flags:charge.flags&&typeof charge.flags==="object"?charge.flags:{},
+        updated_at:nowIso()
+      };
+      const previous=existing[i];
+      const op=previous
+        ? db.from("case_charges").update(row).eq("id",previous.id).eq("case_id",caseId)
+          .eq("user_id",userId).select("*").single()
+        : db.from("case_charges").insert(row).select("*").single();
+      const saved=await op;
+      if(saved.error||saved.data?.case_id!==caseId || saved.data?.user_id!==userId)
+        throw classifySupabaseCaseError(saved.error||new Error("Charge save was not confirmed."),"case_charges");
+      results.push(saved.data);
+    }
+    const removed=existing.slice(desired.length).map(row=>row.id);
+    if(removed.length){
+      const result=await db.from("case_charges").delete().eq("case_id",caseId)
+        .eq("user_id",userId).in("id",removed);
+      if(result.error)throw classifySupabaseCaseError(result.error,"case_charges");
+    }
+    return results;
+  }
+
   async function syncChargesForSavedCase(caseId, caseData) {
     try {
       return await syncCharges(caseId, caseData);
@@ -1417,7 +1461,7 @@
     // Strict Step 2 must fail closed when ANY charge write fails, rather than
     // silently claiming the parent case was fully saved.
     const charges = strictRemote
-      ? await syncCharges(data.id, nextCase)
+      ? await syncChargesStrict(data.id, nextCase)
       : await syncChargesForSavedCase(data.id, nextCase);
     if(strictRemote && charges.length!==nextCase.chargeDetails.length)
       throw new Error("Not all charge rows were saved. Do not continue.");
