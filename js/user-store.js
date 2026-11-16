@@ -1366,8 +1366,14 @@
     const collected = strictRemote ? input :
       (Object.keys(input).length ? mergeNonBlank(mergeNonBlank(Object.keys(base).length ? base : collectCurrentCaseFromStorage(), readCurrentDraft().case || {}), input) : mergeNonBlank(collectCurrentCaseFromStorage(), readCurrentDraft().case || {}));
     if (!hasMeaningfulCaseData(collected)) {
-      if(strictRemote)throw new Error("Enter a court, case number, or charge to save Step 2.");
-      return null;
+      const snapshot=collected?.metadata?.recordPathStep2;
+      const hasPartialStep2=strictRemote && snapshot?.schemaVersion===1 &&
+        (Object.values(snapshot.fields||{}).some(v=>v!==""&&v!==false&&v!==null) ||
+         (snapshot.charges||[]).some(ch=>Object.values(ch).some(v=>v!==""&&v!==false&&v!==null)));
+      if(!hasPartialStep2){
+        if(strictRemote)throw new Error("Enter at least one court, charge, or related detail to save Step 2.");
+        return null;
+      }
     }
     const nextCase = normalizeCase(collected);
     if (!currentUser) {
