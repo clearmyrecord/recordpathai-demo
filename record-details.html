@@ -1603,8 +1603,8 @@
           state:data.court.state,county:data.court.county,
           courtType:data.court.court_type,courtName:data.court.name
         });
-        // This is an approved public lookup link, never verification of
-        // the applicant's individual case on the court docket.
+        // This is only the selected court's approved public lookup link.
+        // It does not mean the applicant's case was verified on that court's docket.
         data.court.selected_court_catalog_id=lookup?.linkedToExactCourt?lookup.courtId:"";
         data.court.selected_court_lookup_url=lookup?.linkedToExactCourt?lookup.url:"";
         data.court.case_number=shared.case_number;
