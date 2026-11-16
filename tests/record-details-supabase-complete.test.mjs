@@ -47,7 +47,7 @@ test("all static and charge-card Step 2 controls can be captured",()=>{
 test("Step 2 saves only authenticated Supabase records with full metadata readback",()=>{
   assert.match(store,/saveRecordDetailsToSupabase: function/);
   assert.match(store,/strictRemote \? input/);
-  assert.match(store,/await syncCharges\(data\.id, nextCase\)/);
+  assert.match(store,/await syncChargesStrict\(data\.id, nextCase\)/);
   assert.match(store,/rereadCase\.data\?\.metadata\?\.recordPathStep2/);
   assert.match(store,/rereadCharges\.data\|\|\[\]/);
   assert.match(store,/if\(strictRemote && !currentUser\)/);
