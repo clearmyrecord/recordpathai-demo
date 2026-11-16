@@ -3431,9 +3431,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         const generateBtn = document.getElementById("generateSealingBtn");
 
         if (generateBtn) {
-          generateBtn.disabled = state === "notEligible";
-          generateBtn.classList.toggle("packet-btn-muted", state === "notEligible");
-          generateBtn.classList.toggle("packet-btn-primary", state !== "notEligible");
+          // Step 3 is always available for a READ-ONLY readiness check.
+          // The server alone grants or denies payment, not a browser estimate.
+          generateBtn.disabled = false;
+          generateBtn.classList.toggle("packet-btn-muted", false);
+          generateBtn.classList.toggle("packet-btn-primary", true);
 
           if (state === "eligibleUnpaid") {
             // Do not offer a paid CTA until server review and exact fee quote
@@ -3444,7 +3446,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           } else if (state === "devBypass") {
             generateBtn.textContent = "Generate PDF Packet (Dev Mode)";
           } else {
-            generateBtn.textContent = "Not Eligible Yet";
+            generateBtn.textContent = "Review Packet Readiness";
           }
         }
 
@@ -4118,9 +4120,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           let checkoutCase = resolved.checkoutCase;
           packetEligibility = resolveCurrentPacketEligibility(normalizedData, { checkoutCase });
           checkoutEligibility = evaluatePacketCheckoutEligibility(packetEligibility);
-          if (!checkoutEligibility.canCheckout) {
-            throw new Error(checkoutEligibility.message);
-          }
+          // Server release already verified the exact signed PDF and case.
+          // A local screening estimate cannot veto an independent approval.
           if (checkoutEligibility.warning) {
             setStatus(checkoutEligibility.warning);
           }
@@ -4309,8 +4310,11 @@ document.addEventListener("DOMContentLoaded", async function () {
           if(!isInternalUuid(caseId)||!generateBtn||isPacketPaymentComplete())return;
           const readiness=await checkServerPacketReadiness(caseId);
           const cents=readiness?.quote?.totalCents;
-          if(Number.isSafeInteger(cents))generateBtn.textContent=
-            "Pay $"+(cents/100).toFixed(2)+" & Download Approved Packet";
+          if(Number.isSafeInteger(cents)){
+            generateBtn.disabled=false;
+            generateBtn.textContent=
+              "Pay $"+(cents/100).toFixed(2)+" & Confirm Approved Fulfillment";
+          }
         }catch{/* Pending review remains the primary status; no permission bypass. */}
       })();
       // Show the pending review checklist immediately, before any button click.
