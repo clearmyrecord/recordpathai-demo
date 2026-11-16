@@ -92,7 +92,9 @@ test("signed Stripe digital receipt binds one owner, case and exactly $50",()=>{
 
 test("customer digital checkout and self-file court fee disclosure are explicit",()=>{
   const html=fs.readFileSync(new URL("../packet.html",import.meta.url),"utf8");
-  assert.match(html,/fulfillment_mode: "digital_only"/);
+  assert.match(html,/fulfillment_mode: fulfillment==="mail"\?"mail":"digital_only"/);
+  assert.match(html,/selectedPacketDeliveryMode\(\)/);
+  assert.match(html,/Select.*mailing|value="mail"/);
   assert.match(html,/delivery=digital/);
   assert.match(html,/Digital packet checkout: \$50/);
   assert.match(html,/this checkout does not pay it or file the application/);
