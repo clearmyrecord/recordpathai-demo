@@ -1113,6 +1113,12 @@
               <section id="packetPaymentStep" style="margin-top:18px;">
                 <h3 style="margin:0 0 8px;color:#17396d;">Step 3 — Checkout After Independent Approval</h3>
                 <p style="margin:0 0 12px;color:#526780;line-height:1.5;">A reviewer must independently approve your case and signed packet. After you confirm the approved watermarked preview, this payment checkpoint can proceed. Nothing is charged just by checking readiness.</p>
+                <fieldset id="packetDeliveryChoice" style="margin:10px 0 18px;border:1px solid #d6e0ef;border-radius:12px;padding:12px 15px;">
+                  <legend style="font-weight:700;color:#17396d;">Choose how your approved packet is fulfilled</legend>
+                  <label style="display:block;margin:8px 0;"><input type="radio" name="packetDeliveryMode" value="digital_only" checked> $50 approved digital PDF — I pay the court separately</label>
+                  <label style="display:block;margin:8px 0;"><input type="radio" name="packetDeliveryMode" value="mail"> Verified court filing with Lob check — only where the clerk, funding bank and mailing instructions are independently approved</label>
+                  <p style="margin:8px 0;color:#526780;">Selecting mailing never issues a check, charges a card, or files anything. The court deposit is quoted before checkout; a paid mailed order is held for authorized dispatch.</p>
+                </fieldset>
                 <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
                 <section id="packetReviewStatus" role="status" aria-live="polite" hidden style="margin-top:14px;padding:16px 18px;border:1px solid #c5d6ef;border-radius:12px;background:#f6f9ff;color:#274367;"></section>
               </section>
@@ -3795,18 +3801,23 @@ document.addEventListener("DOMContentLoaded", async function () {
         return Object.assign({},verified,{saved_case_id:id,case_id:id});
       }
 
-      function serverReadinessUrl(caseId) {
-        return getCheckoutEndpoint().replace(/\/api\/create-checkout-session$/, "/api/packet/checkout-readiness")+
-          "?case_id="+encodeURIComponent(caseId)+"&delivery=digital";
+      function selectedPacketDeliveryMode(){
+        return document.querySelector('input[name="packetDeliveryMode"]:checked')?.value==="mail"
+          ? "mail" : "digital_only";
       }
-      async function checkServerPacketReadiness(caseId) {
+      function serverReadinessUrl(caseId,deliveryMode="digital_only") {
+        return getCheckoutEndpoint().replace(/\/api\/create-checkout-session$/, "/api/packet/checkout-readiness")+
+          "?case_id="+encodeURIComponent(caseId)+
+          "&delivery="+(deliveryMode==="mail"?"mail":"digital");
+      }
+      async function checkServerPacketReadiness(caseId,deliveryMode=selectedPacketDeliveryMode()) {
         if(!isInternalUuid(caseId))throw new Error("Save the case to your account before payment.");
         if(!window.RecordPathSupabase)throw new Error("Sign in before checkout.");
         const client=await window.RecordPathSupabase.getClient();
         const session=await client.auth.getSession();
         const token=session?.data?.session?.access_token;
         if(!token)throw new Error("Please sign in again before checkout.");
-        const response=await fetch(serverReadinessUrl(caseId),{
+        const response=await fetch(serverReadinessUrl(caseId,deliveryMode),{
           headers:{Authorization:"Bearer "+token},cache:"no-store"
         });
         let payload=null;
@@ -3865,7 +3876,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const session=await client.auth.getSession();
         const token=session?.data?.session?.access_token;
         if(!token)throw new Error("Your account session expired. Sign in again.");
-        const response=await fetch(serverReadinessUrl(caseId),{
+        const response=await fetch(serverReadinessUrl(caseId,selectedPacketDeliveryMode()),{
           headers:{Authorization:"Bearer "+token},cache:"no-store"
         });
         const data=await response.json().catch(()=>({}));
@@ -4132,17 +4143,18 @@ document.addEventListener("DOMContentLoaded", async function () {
             return;
           }
 
-          setStatus("Verifying independent approval for the $50 digital packet...");
+          const fulfillment=selectedPacketDeliveryMode();
+          setStatus("Verifying independent case approval and the selected fulfillment route...");
           const verifiedCaseId=checkoutCase.saved_case_id||checkoutCase.case_id;
-          const packetRelease=await checkServerPacketReadiness(verifiedCaseId);
+          const packetRelease=await checkServerPacketReadiness(verifiedCaseId,fulfillment);
           const priceCents=packetRelease?.quote?.totalCents;
           if(!Number.isSafeInteger(priceCents) || priceCents<5000)
-            throw new Error("Digital packet review is not approved. No charge was made.");
+            throw new Error("The selected delivery method is not approved for payment. No charge was made.");
           setStatus("Opening secure checkout for $"+(priceCents/100).toFixed(2)+"...");
 
           const currentUser = window.RecordPathUserStore && RecordPathUserStore.getCurrentUser ? RecordPathUserStore.getCurrentUser() : null;
           const payload = {
-            fulfillment_mode: "digital_only",
+            fulfillment_mode: fulfillment==="mail"?"mail":"digital_only",
             userId: currentUser && currentUser.id,
             user_id: currentUser && currentUser.id,
             saved_case_id: safe(checkoutCase.saved_case_id || checkoutCase.case_id),
@@ -4312,6 +4324,18 @@ document.addEventListener("DOMContentLoaded", async function () {
           if(panel){panel.hidden=false;panel.textContent=error?.message||"Review status unavailable. Sign in and retry.";}
         }
       })();
+      document.getElementById("packetDeliveryChoice")?.addEventListener("change",async()=>{
+        const button=document.getElementById("generateSealingBtn");
+        if(button && !isPacketPaymentComplete())button.textContent="Review Packet Readiness";
+        try{
+          const selected=await resolveCheckoutCase();
+          if(isInternalUuid(selected?.checkoutCase?.saved_case_id))
+            await inspectPacketReadiness(selected.checkoutCase.saved_case_id);
+        }catch(error){
+          const panel=document.getElementById("packetReviewStatus");
+          if(panel){panel.hidden=false;panel.textContent=error?.message||"Readiness unavailable.";}
+        }
+      });
       document.getElementById("openSourceBtn")?.addEventListener("click", openSourcePdf);
       document.getElementById("useDrawnSigBtn").addEventListener("click", setDrawnSignature);
       document.getElementById("clearPadBtn").addEventListener("click", clearSignature);
