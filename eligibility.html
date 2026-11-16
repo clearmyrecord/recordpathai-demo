@@ -644,13 +644,14 @@
           </form>
 
           <div class="autosave-note" data-i18n="eligibility.autosave">
-            Your intake information saves locally in this browser for the RecordPathAI workflow.
+            Your draft stays in this browser while you type. Save Personal Information securely writes your contact and mailing details to your Supabase account for court packets and RecordWatch.
           </div>
 
           <div class="button-row">
             <button type="button" id="save-profile" class="btn btn-secondary">Save Personal Information</button>
             <button type="button" id="eligibility-continue" class="btn btn-primary">Continue to Case Information</button>
           </div>
+          <p id="personalAccountSaveStatus" role="status" aria-live="polite" class="field-helper" style="margin:12px 0 0;">Confirm and save your contact information to your signed-in account before continuing. Court packets never read browser drafts.</p>
 
 
 
@@ -703,6 +704,8 @@
   <script src="js/recordwatch-notifications.js"></script>
   <script src="js/recordwatch-bridge.js"></script>
 
+  <script src="js/packet-contact.js"></script>
+  <script src="js/eligibility-profile-sync.js"></script>
   <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/workflow.js"></script>
@@ -724,6 +727,7 @@
       // cannot overwrite a name or address prefilled from the landing page.
       hydrateFromLandingPage();
       hydrateFromLocalStorage();
+      await hydrateSupabasePersonalProfile();
       // Imported cases come only from the separately approved, verified
       // court index, after applicant consent on the search results page.
       const prefill = window.RecordPathWoodCountyPrefill;
@@ -764,21 +768,25 @@
       const saveBtn = document.getElementById("save-profile");
       const continueBtn = document.getElementById("eligibility-continue");
 
-      if (saveBtn) {
-        saveBtn.addEventListener("click", function () {
+      async function saveStepOne(continueToCases){
+        if(saveBtn)saveBtn.disabled=true;
+        if(continueBtn)continueBtn.disabled=true;
+        try {
           saveEligibilityIntake();
+          setText("personalAccountSaveStatus","Saving your contact and mailing information to your Supabase account...");
+          await RecordPathEligibilityProfile.save(RecordPathEligibilityProfile.fromForm(document));
+          setText("personalAccountSaveStatus","Saved and verified in Supabase. Your packet and RecordWatch will use these account details.");
           renderRecordWatchPanel();
-          alert("Intake saved.");
-        });
+          if(continueToCases)window.location.href="record-details.html";
+        }catch(error){
+          setText("personalAccountSaveStatus",error?.message||"Account save failed. Browser draft retained; packet remains unchanged.");
+        }finally{
+          if(saveBtn)saveBtn.disabled=false;
+          if(continueBtn)continueBtn.disabled=false;
+        }
       }
-
-      if (continueBtn) {
-        continueBtn.addEventListener("click", async function () {
-          saveEligibilityIntake();
-          renderRecordWatchPanel();
-          window.location.href = "record-details.html";
-        });
-      }
+      saveBtn?.addEventListener("click",()=>saveStepOne(false));
+      continueBtn?.addEventListener("click",()=>saveStepOne(true));
 
       document.querySelectorAll("#user-profile-form input, #user-profile-form select, #user-profile-form textarea").forEach(function (field) {
         // Preserve each identity field as it is typed, even before blur/navigation.
@@ -787,6 +795,25 @@
       });
       window.addEventListener("pagehide", saveEligibilityIntake);
     });
+
+    async function hydrateSupabasePersonalProfile(){
+      try{
+        if(window.RecordPathUserStore?.ready)await RecordPathUserStore.ready;
+        const profile=await RecordPathEligibilityProfile.load();
+        // Authenticated, persisted filing fields win over a local draft.
+        // Older browser-only values are never sent to packet generation;
+        // the user must deliberately save them to this account.
+        Object.entries(RecordPathEligibilityProfile.ids).forEach(([key,id])=>{
+          if(profile.values[key])setValue(id,profile.values[key]);
+        });
+        setText("personalAccountSaveStatus",profile.fullySaved
+          ?"Supabase profile loaded. Save any changes here before continuing."
+          :"Some information has not been saved to Supabase yet. Verify the details shown and select Save Personal Information.");
+      }catch(error){
+        setText("personalAccountSaveStatus",error?.message||
+          "Sign in and save your details to use them in your packet.");
+      }
+    }
 
     function hydrateFromLandingPage() {
       const savedLandingData = localStorage.getItem("recordPathLandingData");
