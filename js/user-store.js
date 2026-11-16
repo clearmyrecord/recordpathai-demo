@@ -1350,6 +1350,12 @@
     await initUserOnly();
     const input = caseInput || {};
     const strictRemote = options.strictRemote === true;
+    // PostgreSQL jsonb reorders keys; compare the actual full field values,
+    // not JavaScript insertion order when verifying saved Step 2 snapshots.
+    const stableJson=value=>JSON.stringify(value,(key,item)=>
+      item && typeof item==="object" && !Array.isArray(item)
+        ? Object.fromEntries(Object.keys(item).sort().map(k=>[k,item[k]]))
+        : item);
     if(strictRemote && !currentUser)
       throw new Error("Create a free RecordPathAI account or sign in before saving legal case details. RecordWatch Premium is optional.");
     const activeId = strictRemote ? "" : (localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY));
@@ -1418,8 +1424,8 @@
       if(rereadCase.error||rereadCharges.error ||
          rereadCase.data?.id!==data.id ||
          (rereadCharges.data||[]).length!==nextCase.chargeDetails.length ||
-         JSON.stringify(rereadCase.data?.metadata?.recordPathStep2||null)!==
-           JSON.stringify(input.metadata?.recordPathStep2||null))
+         stableJson(rereadCase.data?.metadata?.recordPathStep2||null)!==
+           stableJson(input.metadata?.recordPathStep2||null))
         throw new Error("The Supabase readback did not match your Step 2 fields. Please retry before continuing.");
       setActiveCaseId(data.id); // The browser stores only the selected UUID.
       return normalizeDbCase(Object.assign({},rereadCase.data,{case_charges:rereadCharges.data}));
