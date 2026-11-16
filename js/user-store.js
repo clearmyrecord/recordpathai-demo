@@ -1470,13 +1470,25 @@
       const rereadCase=await supabase.from("saved_cases").select("*")
         .eq("user_id",userId).eq("id",data.id).single();
       const rereadCharges=await supabase.from("case_charges").select("*")
-        .eq("user_id",userId).eq("case_id",data.id);
+        .eq("user_id",userId).eq("case_id",data.id)
+        .order("created_at",{ascending:true});
+      const expectedCharges=nextCase.chargeDetails;
+      const actualCharges=rereadCharges.data||[];
+      const chargeRowsMatch=actualCharges.length===expectedCharges.length &&
+        actualCharges.every((row,i)=>{
+          const expected=expectedCharges[i];
+          return row.id===charges[i]?.id &&
+            (row.charge_name||"")===(expected.charge_name||"") &&
+            (row.offense_code||"")===(expected.offense_code||"") &&
+            (row.offense_level||"")===(expected.offense_level||"") &&
+            stableJson(row.flags?.recordPathIntake||{})===
+              stableJson(expected.flags?.recordPathIntake||{});
+        });
       if(rereadCase.error||rereadCharges.error ||
-         rereadCase.data?.id!==data.id ||
-         (rereadCharges.data||[]).length!==nextCase.chargeDetails.length ||
+         rereadCase.data?.id!==data.id || !chargeRowsMatch ||
          stableJson(rereadCase.data?.metadata?.recordPathStep2||null)!==
            stableJson(input.metadata?.recordPathStep2||null))
-        throw new Error("The Supabase readback did not match your Step 2 fields. Please retry before continuing.");
+        throw new Error("The Supabase readback did not match your Step 2 fields and charge rows. Please retry before continuing.");
       setActiveCaseId(data.id); // The browser stores only the selected UUID.
       return normalizeDbCase(Object.assign({},rereadCase.data,{case_charges:rereadCharges.data}));
     }
