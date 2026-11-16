@@ -1541,126 +1541,69 @@
         if (node) node.textContent = message;
       }
 
-      function persistCurrentCaseDraft(payload, syncAccount) {
-        if (!window.RecordPathUserStore || !RecordPathUserStore.saveCurrentCaseDraft)
-          return Promise.reject(new Error("Case saving is unavailable. Your browser draft remains intact."));
-        const authenticated = !!RecordPathUserStore.isLoggedIn?.();
-        // Save Progress and Continue must sync to Supabase for signed-in users.
-        // RecordWatch opt-in is separate and never gates case persistence.
-        return RecordPathUserStore.saveCurrentCaseDraft(payload, {
-          localOnly: !authenticated, network: authenticated
-        }).then(function (saved) {
-          if (authenticated && !saved?.savedCaseId)
-            throw new Error("Account save could not be verified. Remain on Record Details and try again.");
-          // Keep the on-screen unsubmitted fields in the browser draft as well.
-          saveDraft(false, { quiet: true });
-          setSaveStatus(authenticated ? "Saved to your account" : "Saved in this browser");
-          return saved;
-        }).catch(function (error) {
-          console.warn("Current case account save failed:", error);
-          saveDraft(false, { quiet: true });
-          setSaveStatus(authenticated
-            ? "Account save failed. Browser draft retained; do not continue until synced."
-            : "Unable to save account draft. Browser draft retained.");
-          if (authenticated) throw error;
-          return null;
+      function persistCurrentCaseDraft(payload, _syncAccount) {
+        const store=window.RecordPathUserStore;
+        if(!store?.saveRecordDetailsToSupabase)
+          return Promise.reject(new Error("Sign in to save this case to Supabase. Browser case saving is disabled."));
+        const operation=pendingCaseSave.then(async()=>{
+          const saved=await store.saveRecordDetailsToSupabase(payload);
+          const id=saved?.case_id||saved?.id;
+          if(!id || saved?.metadata?.recordPathStep2?.schemaVersion!==1)
+            throw new Error("Supabase did not verify all Step 2 fields. Please try Save Progress.");
+          verifiedCaseId=id;
+          verifiedRemoteRecordWatchCase=saved;
+          setSaveStatus("All Step 2 fields and charges saved and verified in Supabase.");
+          renderRecordWatchPanel();
+          return {...saved,savedCaseId:id};
         });
+        pendingCaseSave=operation.catch(error=>{
+          setSaveStatus(error?.message||"Supabase save failed. Remain on Step 2.");
+        });
+        return operation;
       }
 
       function scheduleAutosave() {
-        // Persist synchronously on every input; a quick refresh must not erase
-        // the last keystrokes. Delay only the expensive readiness UI refresh.
-        const result = saveDraft(false, { quiet: true });
-        if (result.error) return;
         clearTimeout(autosaveTimer);
-        autosaveTimer = setTimeout(function () {
-          document.dispatchEvent(new CustomEvent("recordpath:data-updated"));
-          syncRecordWatchFromDraft();
-          renderRecordWatchPanel();
-        }, 450);
+        setSaveStatus("Unsaved changes — synchronizing to Supabase...");
+        autosaveTimer=setTimeout(async()=>{
+          try{
+            const result=saveDraft(false,{quiet:true});
+            if(result.charges.length || value("caseNumber"))
+              await persistCurrentCaseDraft(result.casePayload,false);
+          }catch(error){setSaveStatus(error?.message||"Supabase synchronization failed.");}
+        },850);
       }
 
-      function saveDraft(syncRecordWatchCase, options) {
-        options = options || {};
-        const data = RecordPathDataBridge.loadPacketData();
-        const profile = collectProfile();
-        const shared = collectSharedCaseData();
-        const charges = collectCharges();
-        // Preserve verified preliminary state-form fields that are not represented
-        // by a charge-card control, rather than replacing them with empty
-        // case-wide arrest data during each autosave.
-        const priorCharges = Array.isArray(data.charges) ? data.charges : [];
-        charges.forEach((charge,i)=>{
-          const previous=priorCharges[i]||{};
-          if(!shared.arrest_date && previous.arrest_date)charge.arrest_date=previous.arrest_date;
-          if(!shared.arresting_agency && previous.arresting_agency)charge.arresting_agency=previous.arresting_agency;
-        });
-        shared.final_disposition = charges[0]?.final_disposition || "";
-        shared.disposition_date = charges[0]?.disposition_date || "";
-        shared.discharge_date = charges[0]?.discharge_date || "";
-
-        if (!data.petitioner) data.petitioner = {};
-        if (!data.petitioner.address) data.petitioner.address = {};
-        data.petitioner.first_name = profile.firstName;
-        data.petitioner.last_name = profile.lastName;
-        data.petitioner.full_name = profile.fullName;
-        data.petitioner.dob = profile.dateOfBirth;
-        data.petitioner.email = profile.email;
-        data.petitioner.phone = profile.phone;
-        data.petitioner.address.state = profile.residenceState;
-
-        if (!data.court) data.court = {};
-        if (!data.meta) data.meta = {};
-        if (!data.case) data.case = {};
-        data.case.all_charges_confirmed = value("allChargesConfirmed");
-        data.case.proceedings_status = value("proceedingsStatus");
-        const first = charges[0] || shared;
-        data.court.state = first.case_state || data.court.state || "";
-        data.court.county = first.court_county || data.court.county || "";
-        data.court.name = first.court_name || data.court.name || "";
-        data.court.court_type = value("courtType") || "";
-        const lookup=window.RecordPathRecordCollection?.linkFor?.({
-          state:data.court.state,county:data.court.county,
-          courtType:data.court.court_type,courtName:data.court.name
-        });
-        // This is only the selected court's approved public lookup link.
-        // It does not mean the applicant's case was verified on that court's docket.
-        data.court.selected_court_catalog_id=lookup?.linkedToExactCourt?lookup.courtId:"";
-        data.court.selected_court_lookup_url=lookup?.linkedToExactCourt?lookup.url:"";
-        data.court.case_number = first.case_number || data.court.case_number || "";
-        data.court.judge_name = first.judge_name || data.court.judge_name || "";
-        data.judge_name = first.judge_name || data.judge_name || "";
-        data.meta.source_state = first.case_state || data.meta.source_state || "";
-        data.meta.source_county = first.court_county || data.meta.source_county || "";
-        normalizeDateAliases(data, charges);
-        data.charges = charges;
-        data.eligibility = data.eligibility || {};
-        data.eligibility.has_pending_cases = data.case.proceedings_status !== "none" ||
+      function saveDraft(_syncRecordWatchCase, options) {
+        options=options||{};
+        const data=workingPacketData||{petitioner:{},court:{},case:{},meta:{}};
+        const profile=collectProfile();
+        const shared=collectSharedCaseData();
+        const charges=collectCharges();
+        shared.final_disposition=charges[0]?.final_disposition||"";
+        shared.disposition_date=charges[0]?.disposition_date||"";
+        shared.discharge_date=charges[0]?.discharge_date||"";
+        data.case=data.case||{};
+        data.court=data.court||{};
+        data.eligibility=data.eligibility||{};
+        data.case.all_charges_confirmed=value("allChargesConfirmed");
+        data.case.proceedings_status=value("proceedingsStatus");
+        data.court.state=shared.case_state;
+        data.court.county=shared.court_county;
+        data.court.name=shared.court_name;
+        data.court.court_type=value("courtType");
+        data.court.case_number=shared.case_number;
+        data.court.judge_name=shared.judge_name;
+        normalizeDateAliases(data,charges);
+        data.charges=charges;
+        data.eligibility.has_pending_cases=data.case.proceedings_status!=="none" ||
           charges.some(c=>c.pending_charges||c.pendingCharges);
-        RecordPathDataBridge.derivePacketData(data);
-        try {
-          // The canonical browser draft is the source of truth for reloading Step 2.
-          RecordPathDataBridge.savePacketData(data);
-          saveLegacyKeys(profile, shared, charges);
-        } catch (error) {
-          console.warn("Browser draft save failed:", error);
-          setSaveStatus("Unable to save in this browser. Check private browsing or storage settings.");
-          return { data, charges, casePayload: buildCurrentCasePayload(profile, shared, charges), error };
-        }
-        setSaveStatus("Saved in this browser");
-        if (!options.quiet) document.dispatchEvent(new CustomEvent("recordpath:data-updated"));
-        if (syncRecordWatchCase && isRecordWatchEnabled()) syncRecordWatchFromDraft();
+        workingPacketData=data;
+        window.RecordPathDataBridge?.derivePacketData?.(data);
         showFeeGuidance();
-        const assessment = window.RecordPathFormRequirements?.assess?.(data);
-        if (hasRecordDetailsCompletion(charges) && assessment && assessment.missing.length === 0 &&
-            window.RecordPathWorkflow) {
-          RecordPathWorkflow.markRecordDetailsComplete({ recordDetailsCompletedAt: new Date().toISOString() });
-          RecordPathWorkflow.renderProgress("record-details");
-          RecordPathWorkflow.decorateNavigation();
-        }
-        const casePayload = buildCurrentCasePayload(profile, shared, charges);
-        if (!options.quiet) renderRecordWatchPanel();
-        return { data, charges, casePayload };
+        const casePayload=buildCurrentCasePayload(profile,shared,charges);
+        if(verifiedCaseId)casePayload.case_id=verifiedCaseId;
+        return {data,charges,casePayload};
       }
 
       function hasRecordDetailsCompletion(charges) {
