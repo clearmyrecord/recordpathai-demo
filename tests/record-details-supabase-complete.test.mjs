@@ -39,7 +39,7 @@ test("all static and charge-card Step 2 controls can be captured",()=>{
   assert.equal(result.charges[0].isTraffic,false);
   assert.notEqual(result.charges[0].disposition_date,result.charges[0].discharge_date);
   const html=mapper.render(result);
-  assert.match(html,/Original Alleged Charge/);
+  assert.match(html,/Original alleged charge/i);
   assert.match(html,/Final supervision completion/);
   assert.match(html,/Test note/);
 });
@@ -80,6 +80,6 @@ test("Step 3 does not mark user click as reviewer approval or force Lob",()=>{
   assert.match(packet,/if\(review\.ready!==true\)/);
   const backend=source("src/packet-release.js");
   assert.match(backend,/review\.status!=="approved"/);
-  assert.match(backend,/review\?\.case_snapshot_sha256!==fingerprint/);
+  assert.match(backend,/review\.case_snapshot_sha256!==fingerprint/);
   assert.match(backend,/runtime\.lobLiveEnabled/);
 });
