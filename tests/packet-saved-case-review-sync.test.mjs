@@ -28,14 +28,18 @@ test("signed private review uses case review and charges from the authenticated 
   assert.match(packet,/proceedings_status:\s*raw\.case\?\.proceedings_status \|\| "unknown"/);
 });
 
-test("signed-in Save Progress and Continue require Supabase case persistence before navigating",()=>{
-  const save=details.split("function persistCurrentCaseDraft(payload, syncAccount)")[1].split("function scheduleAutosave()",1)[0];
-  assert.match(save,/localOnly:\s*!authenticated, network:\s*authenticated/);
-  assert.match(save,/if \(authenticated && !saved\?\.savedCaseId\)/);
-  assert.match(save,/if \(authenticated\) throw error/);
-  const continueHandler=details.split('continueBtn.addEventListener("click"')[1].split("window.location.href = \"packet.html\";",1)[0];
-  assert.match(continueHandler,/await persistCurrentCaseDraft/);
-  assert.match(continueHandler,/catch \(error\) \{[\s\S]*?return;/);
+test("Step 2 Save and Continue require full Supabase readback before navigating",()=>{
+  const save=details.split("function persistCurrentCaseDraft(payload, _syncAccount)")[1]
+    .split("function scheduleAutosave()",1)[0];
+  assert.match(save,/saveRecordDetailsToSupabase\(payload\)/);
+  assert.match(save,/saved\?\.metadata\?\.recordPathStep2\?\.schemaVersion!==1/);
+  assert.match(save,/setSaveStatus\("All Step 2 fields and charges saved/);
+  assert.doesNotMatch(save,/localStorage|network:\s*false|localOnly/);
+  const continueHandler=details.split('continueBtn.addEventListener("click"')[1].split('window.location.href="packet.html?caseId="',1)[0];
+  assert.match(continueHandler,/await persistCurrentCaseDraft\(result\.casePayload,false\)/);
+  assert.match(continueHandler,/continueBtn\.disabled=true/);
+  assert.match(details,/packet\.html\?caseId=/);
+  assert.match(store,/stableJson\(rereadCase\.data\?\.metadata\?\.recordPathStep2/);
 });
 
 test("form routing still fails closed on incomplete or unsupported case evidence",()=>{

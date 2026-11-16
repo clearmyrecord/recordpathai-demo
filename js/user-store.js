@@ -1230,6 +1230,50 @@
     return data || [];
   }
 
+  async function syncChargesStrict(caseId,caseData) {
+    // Step 2 updates existing charge rows instead of deleting the entire
+    // inventory before every autosave. A failed update leaves other rows intact.
+    const db=await client();
+    const userId=currentUser?.id;
+    if(!userId)throw new Error("Supabase sign-in is required.");
+    const desired=normalizeCase(caseData).chargeDetails;
+    const prior=await db.from("case_charges").select("*")
+      .eq("case_id",caseId).eq("user_id",userId)
+      .order("created_at",{ascending:true});
+    if(prior.error)throw classifySupabaseCaseError(prior.error,"case_charges");
+    const existing=prior.data||[];
+    const results=[];
+    for(let i=0;i<desired.length;i++){
+      const charge=desired[i];
+      const row={
+        user_id:userId,case_id:caseId,
+        charge_name:charge.charge_name||null,
+        offense_code:charge.offense_code||null,
+        offense_level:charge.offense_level||null,
+        offense_date:charge.offense_date||null,
+        charge_notes:charge.charge_notes||null,
+        flags:charge.flags&&typeof charge.flags==="object"?charge.flags:{},
+        updated_at:nowIso()
+      };
+      const previous=existing[i];
+      const op=previous
+        ? db.from("case_charges").update(row).eq("id",previous.id).eq("case_id",caseId)
+          .eq("user_id",userId).select("*").single()
+        : db.from("case_charges").insert(row).select("*").single();
+      const saved=await op;
+      if(saved.error||saved.data?.case_id!==caseId || saved.data?.user_id!==userId)
+        throw classifySupabaseCaseError(saved.error||new Error("Charge save was not confirmed."),"case_charges");
+      results.push(saved.data);
+    }
+    const removed=existing.slice(desired.length).map(row=>row.id);
+    if(removed.length){
+      const result=await db.from("case_charges").delete().eq("case_id",caseId)
+        .eq("user_id",userId).in("id",removed);
+      if(result.error)throw classifySupabaseCaseError(result.error,"case_charges");
+    }
+    return results;
+  }
+
   async function syncChargesForSavedCase(caseId, caseData) {
     try {
       return await syncCharges(caseId, caseData);
@@ -1346,14 +1390,35 @@
     return lookup.data || null;
   }
 
-  async function saveCase(caseInput) {
+  async function saveCase(caseInput, options = {}) {
     await initUserOnly();
     const input = caseInput || {};
-    const activeId = localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY);
+    const strictRemote = options.strictRemote === true;
+    // PostgreSQL jsonb reorders keys; compare the actual full field values,
+    // not JavaScript insertion order when verifying saved Step 2 snapshots.
+    const stableJson=value=>JSON.stringify(value,(key,item)=>
+      item && typeof item==="object" && !Array.isArray(item)
+        ? Object.fromEntries(Object.keys(item).sort().map(k=>[k,item[k]]))
+        : item);
+    if(strictRemote && !currentUser)
+      throw new Error("Create a free RecordPathAI account or sign in before saving legal case details. RecordWatch Premium is optional.");
+    const activeId = strictRemote ? "" : (localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY));
     let base = {};
     if (activeId && input && !input.case_id && !input.caseId && !input.id && currentUser) base = await getCaseById(activeId) || {};
-    const collected = Object.keys(input).length ? mergeNonBlank(mergeNonBlank(Object.keys(base).length ? base : collectCurrentCaseFromStorage(), readCurrentDraft().case || {}), input) : mergeNonBlank(collectCurrentCaseFromStorage(), readCurrentDraft().case || {});
-    if (!hasMeaningfulCaseData(collected)) return null;
+    // Strict Step 2 saves receive every field directly from the visible form.
+    // Never combine them with stale browser-local cases or another applicant.
+    const collected = strictRemote ? input :
+      (Object.keys(input).length ? mergeNonBlank(mergeNonBlank(Object.keys(base).length ? base : collectCurrentCaseFromStorage(), readCurrentDraft().case || {}), input) : mergeNonBlank(collectCurrentCaseFromStorage(), readCurrentDraft().case || {}));
+    if (!hasMeaningfulCaseData(collected)) {
+      const snapshot=collected?.metadata?.recordPathStep2;
+      const hasPartialStep2=strictRemote && snapshot?.schemaVersion===1 &&
+        (Object.values(snapshot.fields||{}).some(v=>v!==""&&v!==false&&v!==null) ||
+         (snapshot.charges||[]).some(ch=>Object.values(ch).some(v=>v!==""&&v!==false&&v!==null)));
+      if(!hasPartialStep2){
+        if(strictRemote)throw new Error("Enter at least one court, charge, or related detail to save Step 2.");
+        return null;
+      }
+    }
     const nextCase = normalizeCase(collected);
     if (!currentUser) {
       const local = getCases().filter(function (item) { return item.case_id !== nextCase.case_id && getCaseCompositeKey(item) !== getCaseCompositeKey(nextCase); });
@@ -1373,6 +1438,13 @@
     const payload = casePayload(nextCase, userId);
     if (existing) {
       payload.id = existing.id;
+      // Preserve billing / RecordWatch state and previous metadata when editing.
+      // A newly entered Step 2 snapshot supersedes only its own metadata key.
+      if(strictRemote){
+        payload.metadata=Object.assign({},existing.metadata||{},payload.metadata||{});
+        payload.packet_status=existing.packet_status;
+        payload.recordwatch_status=existing.recordwatch_status;
+      }
       // Partial legacy/browser updates must not erase an already verified
       // court division. Preserve it until the applicant explicitly changes it.
       if (!payload.court_type && existing.court_type) payload.court_type = existing.court_type;
@@ -1386,8 +1458,41 @@
     }
     if (result.error) throw classifySupabaseCaseError(result.error, "saved_cases");
     const data = result.data;
-    const charges = await syncChargesForSavedCase(data.id, nextCase);
+    // Strict Step 2 must fail closed when ANY charge write fails, rather than
+    // silently claiming the parent case was fully saved.
+    const charges = strictRemote
+      ? await syncChargesStrict(data.id, nextCase)
+      : await syncChargesForSavedCase(data.id, nextCase);
+    if(strictRemote && charges.length!==nextCase.chargeDetails.length)
+      throw new Error("Not all charge rows were saved. Do not continue.");
     const saved = normalizeDbCase(Object.assign({}, data, { case_charges: charges }));
+    if(strictRemote){
+      const rereadCase=await supabase.from("saved_cases").select("*")
+        .eq("user_id",userId).eq("id",data.id).single();
+      const rereadCharges=await supabase.from("case_charges").select("*")
+        .eq("user_id",userId).eq("case_id",data.id)
+        .order("created_at",{ascending:true});
+      const expectedCharges=nextCase.chargeDetails;
+      const actualCharges=rereadCharges.data||[];
+      const byId=new Map(actualCharges.map(row=>[row.id,row]));
+      const chargeRowsMatch=actualCharges.length===expectedCharges.length &&
+        expectedCharges.every((expected,i)=>{
+          const row=byId.get(charges[i]?.id);
+          return Boolean(row &&
+            (row.charge_name||"")===(expected.charge_name||"") &&
+            (row.offense_code||"")===(expected.offense_code||"") &&
+            (row.offense_level||"")===(expected.offense_level||"") &&
+            stableJson(row.flags?.recordPathIntake||{})===
+              stableJson(expected.flags?.recordPathIntake||{}));
+        });
+      if(rereadCase.error||rereadCharges.error ||
+         rereadCase.data?.id!==data.id || !chargeRowsMatch ||
+         stableJson(rereadCase.data?.metadata?.recordPathStep2||null)!==
+           stableJson(input.metadata?.recordPathStep2||null))
+        throw new Error("The Supabase readback did not match your Step 2 fields and charge rows. Please retry before continuing.");
+      setActiveCaseId(data.id); // The browser stores only the selected UUID.
+      return normalizeDbCase(Object.assign({},rereadCase.data,{case_charges:rereadCharges.data}));
+    }
     cachedCases = activeCases(getCases().filter(function (item) { return item.case_id !== saved.case_id && getCaseCompositeKey(item) !== getCaseCompositeKey(saved); }).concat(saved));
     saveLocalCases(cachedCases);
     writeActiveCaseToStorage(saved);
@@ -1619,6 +1724,7 @@
     getStableCaseId,
     hasMeaningfulCaseData,
     saveCase,
+    saveRecordDetailsToSupabase: function (caseData) { return saveCase(caseData,{strictRemote:true}); },
     collectCurrentCaseFromStorage,
     caseToPacketData,
     saveDraftSnapshot,

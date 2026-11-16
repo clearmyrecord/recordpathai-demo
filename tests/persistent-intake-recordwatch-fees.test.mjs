@@ -40,30 +40,34 @@ test("Other states and unknown dispositions show cautious court-specific guidanc
   assert.match(fees.describe("OH", [{ final_disposition: "Pending" }]).detail, /Verify unknown or mixed outcomes/);
 });
 
-test("Case inputs, including partial charge cards and mapped court-form inputs, save before refresh", () => {
-  assert.match(details, /const hasTypedValue = Array\.from\(card\.querySelectorAll/);
-  assert.match(details, /if \(!hasTypedValue\) return;/);
-  assert.doesNotMatch(details, /if \(!charge\.charge_name && !charge\.charge_code && !charge\.final_disposition\) return;/);
-  assert.match(details, /function scheduleAutosave\(\) \{[\s\S]*?const result = saveDraft\(false, \{ quiet: true \}\);/);
-  assert.match(details, /window\.addEventListener\("pagehide"/);
-  assert.match(details, /document\.addEventListener\("visibilitychange"/);
-  assert.match(details, /Saved in this browser/);
-  assert.match(step1, /field\.addEventListener\("input", saveEligibilityIntake\)/);
-  assert.match(intake, /input\.addEventListener\("input",saveMappedField\)/);
-  assert.match(details, /hydrateCharges\(data\)/);
+test("Case inputs, including partial charge cards, save through Supabase instead of browser storage",()=>{
+  const sync=readFileSync("js/record-details-fields.js","utf8");
+  const store=readFileSync("js/user-store.js","utf8");
+  assert.match(details,/const hasTypedValue = Array\.from\(card\.querySelectorAll/);
+  assert.match(details,/if \(!hasTypedValue\) return;/);
+  assert.match(details,/RecordPathRecordDetailsFields\.capture/);
+  assert.match(details,/saveRecordDetailsToSupabase\(payload\)/);
+  assert.match(details,/await store\.getSupabaseCaseById\(candidate\)/);
+  assert.match(details,/Unsaved changes — synchronizing to Supabase/);
+  assert.match(store,/hasPartialStep2/);
+  assert.match(store,/await syncChargesStrict\(data\.id, nextCase\)/);
+  assert.match(sync,/schemaVersion:1,fields,charges/);
+  assert.doesNotMatch(details,/RecordPathDataBridge\.savePacketData\(data\)/);
+  assert.doesNotMatch(details,/window\.addEventListener\("pagehide"/);
+  assert.match(step1,/field\.addEventListener\("input", saveEligibilityIntake\)/);
+  assert.match(intake,/input\.addEventListener\("input",saveMappedField\)/);
 });
 
-test("RecordWatch opt-in activates only after authenticated Supabase case verification",()=>{
+test("RecordWatch displays account-saved Step 2 fields without Premium enrollment",()=>{
+  const watch=readFileSync("recordwatch-dashboard.html","utf8");
   assert.match(details,/id="saveRecordWatchBtn"/);
-  assert.match(details,/getSupabaseCaseById\(caseId\)/);
-  assert.match(details,/updateCase\(caseId,\{recordWatchStatus:"active"\}\)/);
   assert.match(details,/verifiedRemoteRecordWatchCase/);
   assert.match(details,/Browser drafts never become RecordWatch/);
+  assert.match(details,/All saved case details are visible in RecordWatch/);
+  assert.match(watch,/RecordPathRecordDetailsFields\.render\(sourceCase\.metadata\?\.recordPathStep2\)/);
+  assert.match(watch,/store\.getSupabaseCases\(\),store\.getSupabaseProfile\(\)/);
   assert.doesNotMatch(details,/localStorage\.setItem\(RECORDWATCH_OPT_IN_KEY, "true"\)/);
-  assert.doesNotMatch(details,/RecordPathAuth\.requireAuth\("save progress"/);
-  assert.match(details,/persistCurrentCaseDraft\(result\.casePayload, false\)/);
-  // Step 1's legacy opt-in does not authorize any monitored case; only
-  // Remote RecordWatch pages read the persisted Supabase case.
+  assert.match(details,/persistCurrentCaseDraft\(result\.casePayload,false\)/);
   assert.match(step1,/localStorage\.getItem\("recordPathRecordWatchOptIn"\) === "true"/);
 });
 

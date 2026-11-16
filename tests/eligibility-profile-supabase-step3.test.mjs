@@ -82,6 +82,6 @@ test("Step 3 displays the independent review checklist for HTTP 409",()=>{
   assert.match(code,/response\.status!==409/);
   assert.match(code,/renderPacketReviewChecklist\(data\)/);
   assert.match(packet,/if\(review\.ready!==true\)/);
-  assert.match(packet,/checkServerPacketReadiness\(verifiedCaseId\)/);
+  assert.match(packet,/checkServerPacketReadiness\(verifiedCaseId,fulfillment\)/);
   assert.match(packet,/id="packetReviewStatus"/);
 });
