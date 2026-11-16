@@ -1618,7 +1618,7 @@
         const saveButton=document.getElementById("saveRecordWatchBtn");
         if(summaryNode)summaryNode.hidden=!enabled;
         if(saveButton)saveButton.textContent=enabled?"Update Supabase RecordWatch":"Save to RecordWatch";
-        setText("rwTrackingStatus",enabled?"Supabase tracking active":"Not activated");
+        setText("rwTrackingStatus",verifiedRemoteRecordWatchCase?"Saved in Supabase — Premium alerts optional":"Awaiting Supabase save");
         setText("rwEligibilityStatus",verifiedRemoteRecordWatchCase?.eligibilityStatus||
           "Supabase case required");
         setText("rwMissingRequirements",verifiedRemoteRecordWatchCase
@@ -1647,108 +1647,93 @@
       }
 
       async function init() {
-        if (!await loadCaseFromUrl()) return;
-        const data = RecordPathDataBridge.loadPacketData();
-        hydrateStaticFields(data);
-        hydrateCharges(data);
+        if(window.RecordPathUserStore?.ready)await RecordPathUserStore.ready;
+        const client=await window.RecordPathSupabase.getClient();
+        const auth=await client.auth.getUser();
+        if(auth.error||!auth.data?.user?.id){
+          document.getElementById("recordDetailsForm")?.querySelectorAll("input,select,textarea,button")
+            .forEach(el=>{el.disabled=true;});
+          if(continueBtn)continueBtn.disabled=true;
+          if(saveProgressBtn)saveProgressBtn.disabled=true;
+          setSaveStatus("Create a free RecordPathAI account or sign in before Step 2. RecordWatch Premium is optional. No browser-only case was saved.");
+          return;
+        }
+        const store=window.RecordPathUserStore;
+        const requested=new URLSearchParams(window.location.search).get("caseId");
+        const candidate=requested || store.getActiveCaseId?.() || "";
+        let remote=null;
+        if(candidate){
+          remote=await store.getSupabaseCaseById(candidate);
+          if(requested&&!remote){
+            setSaveStatus("The requested case was not found in this account. No browser case was substituted.");
+            if(continueBtn)continueBtn.disabled=true;
+            return;
+          }
+        }
+        if(remote){
+          verifiedCaseId=remote.case_id;
+          verifiedRemoteRecordWatchCase=remote;
+          workingPacketData=store.caseToPacketData(remote);
+          hydrateStaticFields(workingPacketData);
+          hydrateCharges(workingPacketData);
+          RecordPathRecordDetailsFields.hydrate(
+            document.getElementById("recordDetailsForm"),
+            remote.metadata?.recordPathStep2,addOffense);
+          setSaveStatus("Loaded saved Step 2 case information directly from your Supabase account.");
+        }else{
+          workingPacketData={petitioner:{},court:{},case:{},meta:{}};
+          document.querySelectorAll("#recordDetailsForm input,#recordDetailsForm select,#recordDetailsForm textarea")
+            .forEach(el=>{if(el.type==="checkbox")el.checked=false;else el.value="";});
+          hydrateCharges({charges:[]});
+          setSaveStatus("New case. Your details will save directly to your Supabase account.");
+        }
         window.RecordPathRecordCollection?.init?.();
         ["caseState","county","courtType","courtName"].forEach(id=>{
           const field=document.getElementById(id);
           field?.addEventListener("change",()=>window.RecordPathRecordCollection?.update?.());
-          if(id==="county"||id==="courtName")field?.addEventListener("input",()=>window.RecordPathRecordCollection?.update?.());
+          if(id==="county"||id==="courtName")
+            field?.addEventListener("input",()=>window.RecordPathRecordCollection?.update?.());
         });
-        // Read-only saved-case status; browser RecordWatch sync disabled.
-        try {
-          const id=new URLSearchParams(location.search).get("caseId")||
-            window.RecordPathUserStore?.getActiveCaseId?.();
-          if(id && window.RecordPathUserStore?.getSupabaseCaseById)
-            verifiedRemoteRecordWatchCase=
-              await RecordPathUserStore.getSupabaseCaseById(id);
-        } catch { verifiedRemoteRecordWatchCase=null; }
         showFeeGuidance();
         renderRecordWatchPanel();
-
-        addOffenseBtn.addEventListener("click", function () {
-          addOffense();
-          saveDraft(false);
-        });
-
-        if (saveProgressBtn) {
-          saveProgressBtn.addEventListener("click", async function () {
-            const result = saveDraft(false);
-            if (result.error) return;
-            try {
-              await persistCurrentCaseDraft(result.casePayload, false);
-            } catch (error) {
-              console.warn("Save Progress account synchronization failed:", error);
-            }
-          });
-        }
-
-        document.getElementById("saveRecordWatchBtn")?.addEventListener("click", async function () {
-          const result=saveDraft(false);
-          if(result.error)return;
-          if(!result.charges.length){
-            setText("recordWatchSaveMessage","Save at least one charge to your account before activating RecordWatch.");
-            return;
-          }
-          try{
-            if(!window.RecordPathUserStore?.getSupabaseCaseById)
-              throw new Error("Supabase data service unavailable.");
-            const saved=await persistCurrentCaseDraft(result.casePayload,true);
-            const caseId=saved?.savedCaseId;
-            if(!caseId)throw new Error("Account case not saved.");
-            const accountCase=await RecordPathUserStore.getSupabaseCaseById(caseId);
-            if(!accountCase || accountCase.case_id!==caseId)
-              throw new Error("Supabase case verification failed.");
-            await RecordPathUserStore.updateCase(caseId,{recordWatchStatus:"active"});
-            verifiedRemoteRecordWatchCase=
-              await RecordPathUserStore.getSupabaseCaseById(caseId);
-            if(!isRecordWatchEnabled())
-              throw new Error("Supabase did not confirm RecordWatch activation.");
-            renderRecordWatchPanel();
-            setText("recordWatchSaveMessage","RecordWatch tracking saved in Supabase for this case.");
-          }catch(error){
-            verifiedRemoteRecordWatchCase=null;
-            renderRecordWatchPanel();
-            setText("recordWatchSaveMessage","Could not verify Supabase RecordWatch save. Browser drafts were not used.");
-          }
-        });
-
-        continueBtn.addEventListener("click", async function () {
-          const result = saveDraft(false);
-          if (result.error) return;
-          if (!hasRecordDetailsCompletion(result.charges)) {
-            alert("Add at least one charge or case number before continuing.");
-            return;
-          }
-          // Missing court evidence can be reviewed on the packet page.
-          // Never erase the saved draft or demand duplicate questions here.
-          if (isRecordWatchEnabled()) syncRecordWatchFromDraft();
-          try {
-            await persistCurrentCaseDraft(result.casePayload, false);
-          } catch (error) {
-            // Do not pretend a browser-only draft is a saved Supabase case.
-            return;
-          }
-          window.location.href = "packet.html";
-        });
-
-        document.getElementById("recordDetailsForm").addEventListener("input", scheduleAutosave);
-        document.getElementById("recordDetailsForm").addEventListener("change", scheduleAutosave);
-        document.getElementById("recordDetailsForm").addEventListener("blur", scheduleAutosave, true);
-        window.addEventListener("pagehide", function () {
+        addOffenseBtn.addEventListener("click",()=>{addOffense();scheduleAutosave();});
+        saveProgressBtn?.addEventListener("click",async()=>{
           clearTimeout(autosaveTimer);
-          saveDraft(false, { quiet: true });
-          syncRecordWatchFromDraft();
+          const result=saveDraft(false);
+          try{await persistCurrentCaseDraft(result.casePayload,false);}
+          catch(error){setSaveStatus(error?.message||"Supabase save failed.");}
         });
-        document.addEventListener("visibilitychange", function () {
-          if (document.visibilityState === "hidden") {
-            clearTimeout(autosaveTimer);
-            saveDraft(false, { quiet: true });
-            syncRecordWatchFromDraft();
+        document.getElementById("saveRecordWatchBtn")?.addEventListener("click",async()=>{
+          clearTimeout(autosaveTimer);
+          const result=saveDraft(false);
+          try{
+            const saved=await persistCurrentCaseDraft(result.casePayload,false);
+            if(!saved?.savedCaseId)throw new Error("Account save not confirmed.");
+            setText("recordWatchSaveMessage","All saved case details are visible in RecordWatch. Premium alerts are optional.");
+          }catch(error){setText("recordWatchSaveMessage",error?.message||"Unable to sync the case.");}
+        });
+        continueBtn.addEventListener("click",async()=>{
+          clearTimeout(autosaveTimer);
+          const result=saveDraft(false);
+          if(!hasRecordDetailsCompletion(result.charges)){
+            setSaveStatus("Enter a case number or charge before continuing.");return;
+          }
+          continueBtn.disabled=true;
+          try{
+            const saved=await persistCurrentCaseDraft(result.casePayload,false);
+            if(!saved?.savedCaseId)throw new Error("Supabase did not confirm the saved case.");
+            // The case UUID is a selector only. The packet rereads all case
+            // information and signatures from the authenticated Supabase owner.
+            window.location.href="packet.html?caseId="+encodeURIComponent(saved.savedCaseId);
+          }catch(error){
+            setSaveStatus(error?.message||"Please save and verify all fields before Step 3.");
+            continueBtn.disabled=false;
           }
         });
+        document.getElementById("recordDetailsForm").addEventListener("input",scheduleAutosave);
+        document.getElementById("recordDetailsForm").addEventListener("change",scheduleAutosave);
+        document.getElementById("recordDetailsForm").addEventListener("blur",scheduleAutosave,true);
+        // Do not duplicate case data into localStorage on pagehide.
       }
 
       init();
