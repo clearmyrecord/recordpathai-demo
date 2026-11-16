@@ -1474,15 +1474,16 @@
         .order("created_at",{ascending:true});
       const expectedCharges=nextCase.chargeDetails;
       const actualCharges=rereadCharges.data||[];
+      const byId=new Map(actualCharges.map(row=>[row.id,row]));
       const chargeRowsMatch=actualCharges.length===expectedCharges.length &&
-        actualCharges.every((row,i)=>{
-          const expected=expectedCharges[i];
-          return row.id===charges[i]?.id &&
+        expectedCharges.every((expected,i)=>{
+          const row=byId.get(charges[i]?.id);
+          return Boolean(row &&
             (row.charge_name||"")===(expected.charge_name||"") &&
             (row.offense_code||"")===(expected.offense_code||"") &&
             (row.offense_level||"")===(expected.offense_level||"") &&
             stableJson(row.flags?.recordPathIntake||{})===
-              stableJson(expected.flags?.recordPathIntake||{});
+              stableJson(expected.flags?.recordPathIntake||{}));
         });
       if(rereadCase.error||rereadCharges.error ||
          rereadCase.data?.id!==data.id || !chargeRowsMatch ||
