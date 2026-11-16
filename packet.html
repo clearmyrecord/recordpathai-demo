@@ -1114,6 +1114,7 @@
                 <h3 style="margin:0 0 8px;color:#17396d;">Step 3 — Checkout After Independent Approval</h3>
                 <p style="margin:0 0 12px;color:#526780;line-height:1.5;">A reviewer must independently approve your case and signed packet. After you confirm the approved watermarked preview, this payment checkpoint can proceed. Nothing is charged just by checking readiness.</p>
                 <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
+                <section id="packetReviewStatus" role="status" aria-live="polite" hidden style="margin-top:14px;padding:16px 18px;border:1px solid #c5d6ef;border-radius:12px;background:#f6f9ff;color:#274367;"></section>
               </section>
               <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
                 <button type="button" class="debug-pdf-link" id="testPdfBtn">Test PDF Access</button>
@@ -3817,6 +3818,63 @@ document.addEventListener("DOMContentLoaded", async function () {
         return payload;
       }
 
+      function renderPacketReviewChecklist(payload){
+        const panel=document.getElementById("packetReviewStatus");
+        if(!panel)return;
+        panel.hidden=false;panel.replaceChildren();
+        const heading=document.createElement("strong");
+        heading.textContent=payload?.ready===true
+          ?"Approved packet: checkout available"
+          :"Independent packet review pending — no charge taken";
+        panel.append(heading);
+        const message=document.createElement("p");
+        message.textContent=payload?.ready===true
+          ?"Your exact signed PDF and watermarked preview are approved. Continue to the secure Stripe checkout."
+          :"The eligibility estimate does not authorize payment. Complete the outstanding requirements below:";
+        panel.append(message);
+        if(payload?.ready===true)return;
+        const reasons=Array.isArray(payload?.missing)?payload.missing:[];
+        const items=new Set();
+        for(const reason of reasons){
+          const r=String(reason||"");
+          if(/exact mapped court|form type/i.test(r))
+            items.add("Confirm the filing court and exact final form type in Record Details.");
+          else if(/reviewer|reviewed|snapshot/i.test(r))
+            items.add("A separate reviewer must approve this saved case and its unchanged case snapshot.");
+          else if(/signed packet|private storage/i.test(r))
+            items.add("The submitted signed draft must be independently approved. If case details change, submit a new signed draft.");
+          else if(/watermarked|confirm|preview/i.test(r))
+            items.add("Once approved, review and confirm every watermarked preview page.");
+          else if(/stripe|payment|filing amount/i.test(r))
+            items.add("The court-specific price and payment setup must be verified.");
+          else if(r)items.add(r);
+        }
+        if(!items.size)items.add("Submit the signed application and await independent review.");
+        const ul=document.createElement("ul");
+        for(const item of items){const li=document.createElement("li");li.textContent=item;ul.append(li);}
+        panel.append(ul);
+        const a=document.createElement("a");a.href="record-details.html";
+        a.textContent="Verify saved case details";panel.append(a);
+      }
+
+      async function inspectPacketReadiness(caseId){
+        if(!isInternalUuid(caseId))throw new Error("Select a Supabase-saved case before checking packet readiness.");
+        const client=await window.RecordPathSupabase.getClient();
+        const auth=await client.auth.getUser();
+        if(auth.error||!auth.data?.user?.id)throw new Error("Sign in to check your case review status.");
+        const session=await client.auth.getSession();
+        const token=session?.data?.session?.access_token;
+        if(!token)throw new Error("Your account session expired. Sign in again.");
+        const response=await fetch(serverReadinessUrl(caseId),{
+          headers:{Authorization:"Bearer "+token},cache:"no-store"
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok && response.status!==409)
+          throw new Error(data.error||"The review status could not be loaded.");
+        renderPacketReviewChecklist(data);
+        return data;
+      }
+
       // The original court PDF is NEVER fetched for an unpaid preview. Only
       // authenticated, watermarked PNG page images are sent to the browser.
       let approvedPreviewState=null;
@@ -4018,6 +4076,13 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (packetGenerationState === "devBypass") {
             if (!ensurePacketGenerationPrerequisites()) return;
             await generateSealingPdf();
+            return;
+          }
+          // HTTP 409 means independent review is pending, not a Stripe error.
+          const reviewCase=await resolveCheckoutCase();
+          const review=await inspectPacketReadiness(reviewCase?.checkoutCase?.saved_case_id);
+          if(review.ready!==true){
+            setStatus("Independent packet review is pending. See the Step 3 checklist. No payment was taken.");
             return;
           }
           // Signature is required at private-PDF preparation and independently
@@ -4233,8 +4298,19 @@ document.addEventListener("DOMContentLoaded", async function () {
           const readiness=await checkServerPacketReadiness(caseId);
           const cents=readiness?.quote?.totalCents;
           if(Number.isSafeInteger(cents))generateBtn.textContent=
-            "Pay $"+(cents/100).toFixed(2)+" & Generate Packet";
+            "Pay $"+(cents/100).toFixed(2)+" & Download Approved Packet";
         }catch{/* Pending review remains the primary status; no permission bypass. */}
+      })();
+      // Show the pending review checklist immediately, before any button click.
+      (async function(){
+        try{
+          const selected=await resolveCheckoutCase();
+          if(isInternalUuid(selected?.checkoutCase?.saved_case_id))
+            await inspectPacketReadiness(selected.checkoutCase.saved_case_id);
+        }catch(error){
+          const panel=document.getElementById("packetReviewStatus");
+          if(panel){panel.hidden=false;panel.textContent=error?.message||"Review status unavailable. Sign in and retry.";}
+        }
       })();
       document.getElementById("openSourceBtn")?.addEventListener("click", openSourcePdf);
       document.getElementById("useDrawnSigBtn").addEventListener("click", setDrawnSignature);
