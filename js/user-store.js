@@ -1346,14 +1346,23 @@
     return lookup.data || null;
   }
 
-  async function saveCase(caseInput) {
+  async function saveCase(caseInput, options = {}) {
     await initUserOnly();
     const input = caseInput || {};
-    const activeId = localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY);
+    const strictRemote = options.strictRemote === true;
+    if(strictRemote && !currentUser)
+      throw new Error("Create a free RecordPathAI account or sign in before saving legal case details. RecordWatch Premium is optional.");
+    const activeId = strictRemote ? "" : (localStorage.getItem(AI_ACTIVE_CASE_KEY) || localStorage.getItem(ACTIVE_CASE_KEY));
     let base = {};
     if (activeId && input && !input.case_id && !input.caseId && !input.id && currentUser) base = await getCaseById(activeId) || {};
-    const collected = Object.keys(input).length ? mergeNonBlank(mergeNonBlank(Object.keys(base).length ? base : collectCurrentCaseFromStorage(), readCurrentDraft().case || {}), input) : mergeNonBlank(collectCurrentCaseFromStorage(), readCurrentDraft().case || {});
-    if (!hasMeaningfulCaseData(collected)) return null;
+    // Strict Step 2 saves receive every field directly from the visible form.
+    // Never combine them with stale browser-local cases or another applicant.
+    const collected = strictRemote ? input :
+      (Object.keys(input).length ? mergeNonBlank(mergeNonBlank(Object.keys(base).length ? base : collectCurrentCaseFromStorage(), readCurrentDraft().case || {}), input) : mergeNonBlank(collectCurrentCaseFromStorage(), readCurrentDraft().case || {}));
+    if (!hasMeaningfulCaseData(collected)) {
+      if(strictRemote)throw new Error("Enter a court, case number, or charge to save Step 2.");
+      return null;
+    }
     const nextCase = normalizeCase(collected);
     if (!currentUser) {
       const local = getCases().filter(function (item) { return item.case_id !== nextCase.case_id && getCaseCompositeKey(item) !== getCaseCompositeKey(nextCase); });
@@ -1373,6 +1382,13 @@
     const payload = casePayload(nextCase, userId);
     if (existing) {
       payload.id = existing.id;
+      // Preserve billing / RecordWatch state and previous metadata when editing.
+      // A newly entered Step 2 snapshot supersedes only its own metadata key.
+      if(strictRemote){
+        payload.metadata=Object.assign({},existing.metadata||{},payload.metadata||{});
+        payload.packet_status=existing.packet_status;
+        payload.recordwatch_status=existing.recordwatch_status;
+      }
       // Partial legacy/browser updates must not erase an already verified
       // court division. Preserve it until the applicant explicitly changes it.
       if (!payload.court_type && existing.court_type) payload.court_type = existing.court_type;
@@ -1386,8 +1402,28 @@
     }
     if (result.error) throw classifySupabaseCaseError(result.error, "saved_cases");
     const data = result.data;
-    const charges = await syncChargesForSavedCase(data.id, nextCase);
+    // Strict Step 2 must fail closed when ANY charge write fails, rather than
+    // silently claiming the parent case was fully saved.
+    const charges = strictRemote
+      ? await syncCharges(data.id, nextCase)
+      : await syncChargesForSavedCase(data.id, nextCase);
+    if(strictRemote && charges.length!==nextCase.chargeDetails.length)
+      throw new Error("Not all charge rows were saved. Do not continue.");
     const saved = normalizeDbCase(Object.assign({}, data, { case_charges: charges }));
+    if(strictRemote){
+      const rereadCase=await supabase.from("saved_cases").select("*")
+        .eq("user_id",userId).eq("id",data.id).single();
+      const rereadCharges=await supabase.from("case_charges").select("*")
+        .eq("user_id",userId).eq("case_id",data.id);
+      if(rereadCase.error||rereadCharges.error ||
+         rereadCase.data?.id!==data.id ||
+         (rereadCharges.data||[]).length!==nextCase.chargeDetails.length ||
+         JSON.stringify(rereadCase.data?.metadata?.recordPathStep2||null)!==
+           JSON.stringify(input.metadata?.recordPathStep2||null))
+        throw new Error("The Supabase readback did not match your Step 2 fields. Please retry before continuing.");
+      setActiveCaseId(data.id); // The browser stores only the selected UUID.
+      return normalizeDbCase(Object.assign({},rereadCase.data,{case_charges:rereadCharges.data}));
+    }
     cachedCases = activeCases(getCases().filter(function (item) { return item.case_id !== saved.case_id && getCaseCompositeKey(item) !== getCaseCompositeKey(saved); }).concat(saved));
     saveLocalCases(cachedCases);
     writeActiveCaseToStorage(saved);
@@ -1619,6 +1655,7 @@
     getStableCaseId,
     hasMeaningfulCaseData,
     saveCase,
+    saveRecordDetailsToSupabase: function (caseData) { return saveCase(caseData,{strictRemote:true}); },
     collectCurrentCaseFromStorage,
     caseToPacketData,
     saveDraftSnapshot,
