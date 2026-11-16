@@ -50,7 +50,7 @@ test("Case inputs, including partial charge cards, save through Supabase instead
   assert.match(details,/await store\.getSupabaseCaseById\(candidate\)/);
   assert.match(details,/Unsaved changes — synchronizing to Supabase/);
   assert.match(store,/hasPartialStep2/);
-  assert.match(store,/await syncCharges\(data\.id,nextCase\)|await syncCharges\(data\.id, nextCase\)/);
+  assert.match(store,/await syncChargesStrict\(data\.id, nextCase\)/);
   assert.match(sync,/schemaVersion:1,fields,charges/);
   assert.doesNotMatch(details,/RecordPathDataBridge\.savePacketData\(data\)/);
   assert.doesNotMatch(details,/window\.addEventListener\("pagehide"/);
