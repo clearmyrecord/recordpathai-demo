@@ -46,7 +46,7 @@ test("Step 2 filing state is distinct from residence and offers all states witho
   assert.match(first,/state: residenceState/);
   assert.match(first,/state: caseState/); // Preserved context, not a second question.
   assert.match(details,/data\.petitioner\.address\.state = profile\.residenceState/);
-  assert.match(details,/data\.court\.state = first\.case_state/);
+  assert.match(details,/data\.court\.state = shared\.case_state/);
   const packet=html("packet.html");
   assert.match(packet,/data\.petitioner\.address\.state/);
   assert.match(packet,/data\.court\.state/);
