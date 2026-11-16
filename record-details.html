@@ -1172,6 +1172,7 @@
       let workingPacketData=null;
       let pendingCaseSave=Promise.resolve();
       let verifiedCaseId="";
+      let verifiedFilingProfile=null;
       function isRecordWatchEnabled() {
         // Only an authenticated Supabase case status counts as active.
         return Boolean(verifiedRemoteRecordWatchCase &&
@@ -1246,13 +1247,14 @@
       }
 
       function collectProfile() {
-        // Account identity from Supabase Auth; no browser contact fields.
-        const person=window.RecordPathUserStore?.getCurrentUser?.()||{};
-        const name=String(person.fullName||"").trim();
+        // Only this account's verified Supabase profile may supply identity.
+        const person=verifiedFilingProfile||{};
+        const name=String(person.filing_full_name||person.full_name||"").trim();
         const parts=name.split(/\s+/).filter(Boolean);
         return {firstName:parts[0]||"",lastName:parts.slice(1).join(" "),
-          fullName:name,dateOfBirth:"",email:person.email||"",
-          phone:person.phone||"",residenceState:""};
+          fullName:name,dateOfBirth:"",email:person.filing_email||person.email||"",
+          phone:person.filing_phone||person.phone||"",
+          residenceState:person.mailing_state||""};
       }
 
       function collectSharedCaseData() {
@@ -1568,8 +1570,10 @@
         autosaveTimer=setTimeout(async()=>{
           try{
             const result=saveDraft(false,{quiet:true});
-            if(result.charges.length || value("caseNumber"))
-              await persistCurrentCaseDraft(result.casePayload,false);
+            const snapshot=result.casePayload.metadata?.recordPathStep2;
+            const hasAnyDetails=Object.values(snapshot?.fields||{}).some(v=>v!==""&&v!==false) ||
+              (snapshot?.charges||[]).some(c=>Object.values(c).some(v=>v!==""&&v!==false));
+            if(hasAnyDetails)await persistCurrentCaseDraft(result.casePayload,false);
           }catch(error){setSaveStatus(error?.message||"Supabase synchronization failed.");}
         },850);
       }
@@ -1588,10 +1592,21 @@
         data.eligibility=data.eligibility||{};
         data.case.all_charges_confirmed=value("allChargesConfirmed");
         data.case.proceedings_status=value("proceedingsStatus");
-        data.court.state=shared.case_state;
+        data.petitioner=data.petitioner||{};
+        data.petitioner.address=data.petitioner.address||{};
+        data.petitioner.address.state = profile.residenceState;
+        data.court.state = shared.case_state;
         data.court.county=shared.court_county;
         data.court.name=shared.court_name;
-        data.court.court_type=value("courtType");
+        data.court.court_type = value("courtType");
+        const lookup=window.RecordPathRecordCollection?.linkFor?.({
+          state:data.court.state,county:data.court.county,
+          courtType:data.court.court_type,courtName:data.court.name
+        });
+        // This is an approved public lookup link, never verification of
+        // the applicant's individual case on the court docket.
+        data.court.selected_court_catalog_id=lookup?.linkedToExactCourt?lookup.courtId:"";
+        data.court.selected_court_lookup_url=lookup?.linkedToExactCourt?lookup.url:"";
         data.court.case_number=shared.case_number;
         data.court.judge_name=shared.judge_name;
         normalizeDateAliases(data,charges);
@@ -1659,6 +1674,9 @@
           return;
         }
         const store=window.RecordPathUserStore;
+        verifiedFilingProfile=await store.getSupabaseProfile();
+        if(verifiedFilingProfile?.id!==auth.data.user.id)
+          throw new Error("This account's saved identity is unavailable.");
         const requested=new URLSearchParams(window.location.search).get("caseId");
         const candidate=requested || store.getActiveCaseId?.() || "";
         let remote=null;
