@@ -80,7 +80,16 @@ export function normalizeCourtCase(input,batch){
    reported_termination_date:date(c.terminationDate),
    verified_supervision_termination_date:null,
    termination_evidence_reference:null,supervision_completion_verified_at:null,
-   source_line_reference:asText(c.sourceLineReference,100)||null
+   source_line_reference:asText(c.sourceLineReference,100)||null,
+   // Historical extract observations are NOT final court-adjudicated outcomes.
+   reported_charge_status:asText(c.reportedChargeStatus,100)||null,
+   reported_charge_status_date:date(c.reportedChargeStatusDate),
+   source_report_year:Number.isInteger(c.sourceReportYear)&&c.sourceReportYear>=1900&&c.sourceReportYear<=2200
+    ?c.sourceReportYear:null,
+   source_statute_raw:asText(c.sourceStatuteRaw,100)||null,
+   source_statute_audit:asText(c.sourceStatuteAudit,200)||null,
+   source_screen_color:["blue","green","red","yellow"].includes(c.sourceScreenColor)
+    ?c.sourceScreenColor:null
   };
  });
  return {caseRecord:{
