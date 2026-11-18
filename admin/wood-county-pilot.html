@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>RecordPathAI · Wood County Data Pilot</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#142b4b;background:#f3f7fc}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:1020px;margin:auto;padding:26px 20px 70px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+a{color:#15599e}h1{font-size:clamp(27px,5vw,42px);letter-spacing:-.04em;margin:10px 0}
+h2{font-size:20px;margin:0 0 12px}.muted{color:#53657b;line-height:1.55}
+.card{background:white;border:1px solid #d8e2f0;border-radius:16px;padding:23px;margin:18px 0;box-shadow:0 8px 28px #1e4e8110}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.kpi{background:#f7faff;border:1px solid #dde7f5;border-radius:12px;padding:18px}
+.kpi strong{display:block;font-size:clamp(23px,3vw,31px);margin:7px 0}
+.flag{border-left:4px solid #c3942c;background:#fffaf0;padding:15px;border-radius:5px;line-height:1.55}
+.band{height:13px;background:#edf2f8;border-radius:8px;overflow:hidden}
+.fill{height:100%;border-radius:8px}.category{margin:18px 0}.cathead{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px}
+.cathead span:last-child{font-variant-numeric:tabular-nums;font-weight:700}
+table{border-collapse:collapse;width:100%}td,th{padding:11px 0;border-bottom:1px solid #e7edf4;text-align:left;font-size:14px}
+th:last-child,td:last-child{text-align:right}.small{font-size:13px}
+footer{font-size:13px;color:#52647b;line-height:1.6}
+@media(max-width:620px){.wrap{padding:18px 12px}.kpis{grid-template-columns:1fr 1fr}.card{padding:16px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<header><div class="small">RecordPathAI / Internal pilot analytics</div><nav><a href="wave1-operations.html">County operations</a> · <a href="../index.html">Website</a></nav></header>
+<h1>Wood County <span style="color:#276fbe">record-data pilot</span></h1>
+<p class="muted">Aggregated 2000–2026 historical criminal extract analysis. No names, dates of birth, case identifiers or private court records appear on this page.</p>
+<div class="flag" role="status"><strong>Screening only — not verified eligibility.</strong> Category totals include annual-export duplicates. The last verified spreadsheet snapshot is displayed because some workbook formulas are currently unreliable. No applicant matches, checkout or court filings are authorized by these counts.</div>
+<section class="card"><h2>Source overview</h2>
+<div class="kpis">
+<div class="kpi"><div class="small muted">Historical charge rows</div><strong id="raw">—</strong></div>
+<div class="kpi"><div class="small muted">Distinct case IDs</div><strong id="cases">—</strong></div>
+<div class="kpi"><div class="small muted">Provisional charge groups</div><strong id="charges">—</strong></div>
+</div></section>
+<section class="card"><h2>Provisional screening colors</h2><div id="bars"></div>
+<p class="muted small">These are charge-row cohorts, not unique defendants, applications, or cases approved for relief.</p></section>
+<section class="card"><h2>Import deduplication and verification</h2>
+<table><tbody>
+<tr><th scope="row">Repeated annual-export rows consolidated</th><td id="duplicates">—</td></tr>
+<tr><th scope="row">Separate case-and-defendant groups</th><td id="groups">—</td></tr>
+<tr><th scope="row">Case IDs with multiple source defendant names</th><td id="conflicts">—</td></tr>
+<tr><th scope="row">Source charge dates legally verified</th><td>Not certified</td></tr>
+<tr><th scope="row">Private raw data visible to visitors</th><td>No</td></tr>
+<tr><th scope="row">Payment / filing approval from screening</th><td>No</td></tr>
+</tbody></table></section>
+<section class="card"><h2>Disposition versus reported termination</h2>
+<p class="muted">The November 15 analysis found a provisional <strong id="gap">—</strong>-day median between the source disposition and termination fields, across <strong id="pairs">—</strong> complete comparison pairs. A source termination date is <strong>not proof of final discharge</strong>, probation completion or payment of sentence obligations.</p>
+<p class="small">Ohio legal review: <a href="https://codes.ohio.gov/ohio-revised-code/section-2953.32">R.C. 2953.32</a> · <a href="https://codes.ohio.gov/ohio-revised-code/section-2953.33">R.C. 2953.33</a> · <a href="https://codes.ohio.gov/ohio-revised-code/section-2953.61">R.C. 2953.61</a>.</p></section>
+<footer id="foot">Loading aggregate snapshot. Individual-source data remains private, quarantined and subject to case-by-case review.</footer>
+</main>
+<script>
+(async()=>{
+ const fmt=n=>Number(n).toLocaleString("en-US");
+ const put=(id,v)=>document.getElementById(id).textContent=v;
+ try{
+  const response=await fetch("../data/wood-county-screening-snapshot.json",{cache:"no-store"});
+  if(!response.ok)throw Error("Snapshot unavailable");
+  const d=await response.json(),s=d.screeningChargeRows;
+  if(Object.values(s).reduce((n,v)=>n+v,0)!==d.sourceChargeRows)
+   throw Error("Screen totals do not reconcile");
+  put("raw",fmt(d.sourceChargeRows));put("cases",fmt(d.sourceDistinctCaseIds));
+  put("charges",fmt(d.sourceDedupQA.provisionalChargeGroups));
+  put("duplicates",fmt(d.sourceDedupQA.repeatedExportRowsConsolidated));
+  put("groups",fmt(d.sourceDedupQA.caseAndDefendantGroups));
+  put("conflicts",fmt(d.sourceDedupQA.caseIdsWithMultipleDefendantNames));
+  put("gap",fmt(d.dispositionToTerminationGap.medianDays));
+  put("pairs",fmt(d.dispositionToTerminationGap.completeProvisionalPairs));
+  const host=document.getElementById("bars");
+  for(const [key,color] of Object.entries({blue:"#3978c7",green:"#299f70",red:"#c95356",yellow:"#d4a43a"})){
+   const row=document.createElement("div");row.className="category";
+   const head=document.createElement("div");head.className="cathead";
+   const label=document.createElement("span");label.textContent=key[0].toUpperCase()+key.slice(1)+" — "+d.screeningColorDefinitions[key];
+   const count=document.createElement("span");count.textContent=fmt(s[key])+" ("+(s[key]/d.sourceChargeRows*100).toFixed(1)+"%)";
+   head.append(label,count);
+   const band=document.createElement("div");band.className="band";
+   const fill=document.createElement("div");fill.className="fill";
+   fill.style.width=(s[key]/d.sourceChargeRows*100)+"%";fill.style.backgroundColor=color;
+   band.append(fill);row.append(head,band);host.append(row);
+  }
+  put("foot","Aggregate snapshot checked "+d.checkedOn+" · Last verified workbook figures; not a live court-data feed. Raw records remain unavailable to browser users.");
+ }catch(error){
+  put("foot","Aggregate snapshot could not be verified. No eligibility claim is displayed.");
+ }
+})();
+</script>
+</body></html>
