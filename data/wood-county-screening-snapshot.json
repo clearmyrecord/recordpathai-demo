@@ -1,0 +1,52 @@
+{
+  "jurisdiction": {
+    "state": "OH",
+    "county": "Wood",
+    "countyFips": "39173"
+  },
+  "source": "Wood County joined historical criminal extracts, report years 2000–2026",
+  "screeningSnapshotLabel": "Last verified workbook snapshot; live summary formulas may be in error",
+  "checkedOn": "2026-11-18",
+  "sourceChargeRows": 54548,
+  "sourceDistinctCaseIds": 14884,
+  "screeningChargeRows": {
+    "blue": 14350,
+    "green": 16746,
+    "red": 9943,
+    "yellow": 13509
+  },
+  "sourceDedupQA": {
+    "caseAndDefendantGroups": 14885,
+    "provisionalChargeGroups": 28551,
+    "repeatedExportRowsConsolidated": 25997,
+    "caseIdsWithMultipleDefendantNames": 1
+  },
+  "screeningColorDefinitions": {
+    "blue": "Screening timing scenario passed; not a verified eligibility finding",
+    "green": "Source-coded nonconviction; journal and case linkage unverified",
+    "red": "Possible statutory exclusion or unfinished timing period",
+    "yellow": "Offense/subsection/degree requires legal review"
+  },
+  "dispositionToTerminationGap": {
+    "analysisDate": "2026-11-15",
+    "completeProvisionalPairs": 25856,
+    "medianDays": 136,
+    "positiveSharePct": 96.8,
+    "notFinalDischarge": true
+  },
+  "privacy": "Aggregated screening counts only. No person identifiers or criminal-history rows.",
+  "readiness": {
+    "privateImportSchemaPrepared": true,
+    "privateRecordsImported": false,
+    "publicRecordSearchEnabled": false,
+    "legalEligibilityCertified": false,
+    "automaticPaymentAllowed": false,
+    "automaticFilingAllowed": false
+  },
+  "notes": [
+    "Screening rows include repeated annual exports and cannot count unique people.",
+    "The source filing date, charge status, and termination date are not certified docket evidence.",
+    "Source color does not establish case-level eligibility or approval for payment or filing.",
+    "Dedupe uses case ID, defendant identity and charge information; amendments and identity changes require manual reconciliation."
+  ]
+}
