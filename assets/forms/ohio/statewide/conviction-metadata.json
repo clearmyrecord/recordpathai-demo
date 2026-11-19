@@ -1,0 +1,18 @@
+{
+  "state": "OH",
+  "county": "Statewide",
+  "courtName": "Ohio court using Supreme Court Form 96-C1",
+  "courtType": "statewide-standard",
+  "formType": "sealing-conviction",
+  "sourceUrl": "https://www.supremecourt.ohio.gov/docs/LegalResources/rules/superintendence/Superintendence.pdf",
+  "sourcePageUrl": "https://www.supremecourt.ohio.gov/docs/LegalResources/rules/superintendence/Superintendence.pdf",
+  "localPath": "assets/forms/ohio/statewide/application-to-seal-record-of-conviction-96-c1.pdf",
+  "sourcePdfPage": 475,
+  "sourcePdfSha256": "1acaf4d8d8e32e6e8043b073c8241e4eb4a6d5b187bda5230345e0f300f058fe",
+  "status": "mapped_review_only",
+  "requiresMapping": false,
+  "mapped": true,
+  "active": false,
+  "localCourtReviewRequired": true,
+  "customerLinkApproved": false
+}
