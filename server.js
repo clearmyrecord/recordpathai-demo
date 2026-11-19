@@ -18,7 +18,11 @@ import { alertKindEnabled, packetFollowupsForCase, recentVerifiedCourtEvent } fr
 import { timingSafeEqual, createHash, randomBytes } from "node:crypto";
 import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { findCourtProfile, courtFilingPlan } from "./src/court-profiles.js";
-import { isWoodConvictionFormPair, isOfficialWoodConvictionFormPair } from "./src/wood-form-pages.js";
+import {
+  isWoodConvictionFormPair,
+  isOfficialWoodConvictionFormPair,
+  isOfficialWoodDismissalFormPair
+} from "./src/wood-form-pages.js";
 import { trustedLobProofUrl, assessLobSandboxProof } from "./src/lob-sandbox-proof-audit.js";
 import { renderWatermarkedPreviewPage, confirmedPreviewMatches, MAX_PREVIEW_PAGES } from "./src/packet-preview.js";
 import { verifyLivePacketPaymentForLob } from "./src/lob-dispatch-payment-guard.js";
@@ -286,9 +290,22 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
         pageText.push(content.items.map(item=>String(item.str||"")).join(""));
       }
       await document.destroy();
-      if(!isOfficialWoodConvictionFormPair(pageText)) {
+      const outcomes=(facts.charges||[]).map(charge=>String(
+        charge.final_disposition||charge.disposition||""
+      ).toLowerCase().replace(/[\s_-]+/g," ").trim()).filter(Boolean);
+      if(!outcomes.length && facts.outcome)
+        outcomes.push(String(facts.outcome).toLowerCase().replace(/[\s_-]+/g," ").trim());
+      const allDismissed=outcomes.length>0 && outcomes.every(outcome=>[
+        "dismissed","dismissal","not guilty","acquittal","acquitted","no bill"
+      ].includes(outcome));
+      const officialPair=allDismissed
+        ? isOfficialWoodDismissalFormPair(pageText)
+        : isOfficialWoodConvictionFormPair(pageText);
+      if(!officialPair) {
         return res.status(400).json({ok:false,error:
-          "Wood County packet must use the official Clerk address-verification and conviction-application pages, not a synthetic test form."});
+          allDismissed
+            ? "Wood County dismissal packets must use the official Clerk address-verification and R.C. 2953.33 dismissal-application pages."
+            : "Wood County conviction packets must use the official Clerk address-verification and conviction-application pages, not a synthetic test form."});
       }
     } else await document.destroy();
     const sha=createHash("sha256").update(bytes).digest("hex");

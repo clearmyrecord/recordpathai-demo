@@ -7,5 +7,14 @@
     "pdfPath": "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-32-conviction.pdf",
     "mappingPath": "templates/ohio/wood-county/sealing-conviction.json",
     "status": "active"
+  },
+  {
+    "state": "OH",
+    "county": "Wood",
+    "courtType": "court-of-common-pleas",
+    "formType": "sealing-dismissal",
+    "pdfPath": "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf",
+    "mappingPath": "templates/ohio/wood-county/sealing-dismissal.json",
+    "status": "active"
   }
 ]

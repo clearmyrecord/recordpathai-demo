@@ -51,3 +51,38 @@ export function isOfficialWoodConvictionFormPair(rawPageTexts) {
     "RESPECTFULLYSUBMITTED"
   ].every(marker=>application.includes(marker));
 }
+
+// The R.C. 2953.33 form uses the same official address-verification page as
+// the conviction form, followed by a different dismissal / not-guilty / no-bill
+// application page. Keep this check separate so a conviction application can
+// never be substituted for a nonconviction case.
+export function isWoodDismissalFormPair(rawPageTexts) {
+  if (!Array.isArray(rawPageTexts) || rawPageTexts.length !== 2) return false;
+  const headings = rawPageTexts.map(normalizeWoodFormHeading);
+  if (headings.some(text => text.includes("CANISEALOREXPUNGEMYCRIMINALRECORD"))) return false;
+  return headings[0].includes("ADDRESSVERIFICATION") &&
+    headings[1].includes("DISMISSAL") &&
+    (headings[1].includes("NOTGUILTY") || headings[1].includes("NOBILL"));
+}
+
+export function isOfficialWoodDismissalFormPair(rawPageTexts) {
+  if (!isWoodDismissalFormPair(rawPageTexts)) return false;
+  const [address,application]=rawPageTexts.map(normalizeWoodFormHeading);
+  const combined=address+application;
+  if (["SANDBOXTEST","SAMPLEONLY","NOTFORCOURTFILING","SYNTHETICPDF","TESTONLY"].some(
+    marker=>combined.includes(marker))) return false;
+  return [
+    "PERSONALIDENTIFIERS",
+    "NAMEOFPARTY",
+    "POBOXAPARTMENTNUMBER"
+  ].every(marker=>address.includes(marker)) && [
+    "STATEOFOHIO",
+    "CASE",
+    "JUDGE",
+    "NAMEOFOFFENSECHARGE",
+    "OFFENSECODE",
+    "DEGREEOFOFFENSE",
+    "CHARGESWEREDISMISSED",
+    "RESPECTFULLYSUBMITTED"
+  ].every(marker=>application.includes(marker));
+}

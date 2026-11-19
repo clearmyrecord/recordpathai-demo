@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "formType": "sealing-dismissal",
+  "title": "Application for Sealing 2953.33 (Dismissal)",
+  "notaryRequired": false,
+  "requiredFields": [
+    "petitioner.full_name",
+    "court.state",
+    "court.county",
+    "court.name",
+    "court.case_number",
+    "charges.0.disposition",
+    "charges.0.disposition_date"
+  ],
+  "formSpecificQuestions": [
+    {
+      "path": "charges.0.disposition",
+      "label": "Dismissal, not-guilty finding, or no-bill outcome"
+    },
+    {
+      "path": "charges.0.disposition_date",
+      "label": "Date the charges were dismissed, found not guilty, or returned no bill"
+    }
+  ]
+}

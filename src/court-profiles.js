@@ -30,6 +30,10 @@ const woodCommon = Object.freeze({
   sourceFees:"https://clerkofcourt.co.wood.oh.us/189/Criminal-Division-of-the-Clerk-of-Courts",
   sourceRules:"https://www.co.wood.oh.us/lawlibrary/Common_Plea_CH3.html",
   officialForm:"https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/142/Application-for-Sealing-295332-Conviction-PDF",
+  officialForms:Object.freeze({
+    "sealing-conviction":"https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/142/Application-for-Sealing-295332-Conviction-PDF",
+    "sealing-dismissal":"https://clerkofcourt.co.wood.oh.us/DocumentCenter/View/143/Application-for-Sealing-295333-Dismissal-PDF"
+  }),
   electronicSealingAccepted:false, // No general self-represented/criminal portal e-filing.
   // Rule 3.03(A)(4)(p)*: sealing applications MAY be e-mailed/faxed
   // ONLY after the court deposit was paid to the Clerk in advance.
@@ -58,7 +62,7 @@ const woodCommon = Object.freeze({
   clerkMailingAcceptanceConfirmed:true,
   clerkMailingAcceptanceDate:"2026-11-18",
   lobChecksAuthorized:false, // External acceptance is not permission to issue a check or file a real case.
-  mappedApprovedFormTypes:["sealing-conviction"],
+  mappedApprovedFormTypes:["sealing-conviction","sealing-dismissal"],
   maxAttachmentPages:2, // only address verification + signed application
   requiredAttachmentPages:2, // reject old four-page PDFs including eligibility rules
   trackingGuarantee:false
@@ -84,6 +88,8 @@ export function courtFilingPlan(input={}) {
   return {
     supported:Boolean(formType) && profile.mappedApprovedFormTypes.includes(formType), profileId:profile.id,
     courtName:profile.courtName, address:profile.postalAddress,
+    formType,
+    officialForm:profile.officialForms?.[formType]||null,
     courtFeeCents, courtFeePayee:profile.courtFeePayee,
     filingMethod:profile.submissionMethod,
     preferredFilingRoute:profile.preferredFilingRoute||null,

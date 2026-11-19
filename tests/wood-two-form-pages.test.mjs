@@ -42,6 +42,13 @@ test("non-Wood forms are not trimmed accidentally",()=>{
   trim(doc,{...selected,county:"Franklin"},mapping);
   assert.equal(doc.getPageCount(),4);
 });
+test("Wood County dismissal template also trims only its two official form pages",()=>{
+  const dismissal={...selected,formType:"sealing-dismissal",
+    pdfPath:"assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf"};
+  const doc=fakePdf();
+  trim(doc,dismissal,mapping);
+  assert.deepEqual(doc.pages,["address form","signed application"]);
+});
 test("server only stores verified two-page Wood filings",()=>{
   const server=fs.readFileSync(new URL("../server.js",import.meta.url),"utf8");
   const start=server.indexOf('app.post("/api/packet/private-upload"');
@@ -52,9 +59,11 @@ test("server only stores verified two-page Wood filings",()=>{
   // The route intentionally delegates legacy-PDF heading decoding to the
   // shared helper (tested separately in wood-form-pages.test.mjs).
   assert.match(route,/isOfficialWoodConvictionFormPair\(pageText\)/);
+  assert.match(route,/isOfficialWoodDismissalFormPair\(pageText\)/);
   const formHelper=fs.readFileSync(new URL("../src/wood-form-pages.js",import.meta.url),"utf8");
   assert.match(formHelper,/ADDRESSVERIFICATION/);
   assert.match(formHelper,/APPLICATIONTOSEALRECORD/);
+  assert.match(formHelper,/CHARGESWEREDISMISSED/);
   assert.match(route,/signed_pdf_sha256:sha/);
 });
 test("customer's reviewed signed PDF is saved only after guide pages removed",()=>{
