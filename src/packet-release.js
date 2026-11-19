@@ -35,6 +35,19 @@ export function caseReviewFingerprint(savedCase,charges=[]) {
   })).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
   return createHash("sha256").update(JSON.stringify(stable({case:row,charges:counts}))).digest("hex");
 }
+function expectedFormType(savedCase,charges=[]) {
+  const outcomes=(Array.isArray(charges)?charges:[]).map(charge=>String(
+    charge?.final_disposition ?? charge?.disposition ?? ""
+  ).toLowerCase().replace(/[\s_-]+/g," ").trim()).filter(Boolean);
+  if(!outcomes.length && savedCase?.outcome)
+    outcomes.push(String(savedCase.outcome).toLowerCase().replace(/[\s_-]+/g," ").trim());
+  if(!outcomes.length || outcomes.some(outcome=>outcome==="mixed")) return "";
+  if(outcomes.every(outcome=>["dismissed","dismissal","not guilty","acquittal","acquitted","no bill"].includes(outcome)))
+    return "sealing-dismissal";
+  if(outcomes.every(outcome=>["convicted","conviction","guilty","pleaded guilty","plea of guilty"].includes(outcome)))
+    return "sealing-conviction";
+  return "";
+}
 export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,now=new Date(),runtime={},deliveryMode="mail"}={}) {
   const missing=[];
   if(!["mail","digital"].includes(deliveryMode))missing.push("Unknown packet delivery mode.");
@@ -50,6 +63,9 @@ export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,no
   const quote=quotePacketPricing(profileInput);
   const filing=courtFilingPlan(profileInput);
   if(!filing.supported || quote.totalCents===null)missing.push("An exact mapped court and final form type are required.");
+  const outcomeFormType=expectedFormType(savedCase,charges);
+  if(outcomeFormType && review?.form_type!==outcomeFormType)
+    missing.push("The approved court form does not match the saved final charge outcomes.");
   if(!review||review.status!=="approved")missing.push("A court-specific reviewer release has not been approved.");
   if(review?.user_id!==userId || review?.case_id!==caseId)missing.push("Reviewer release is not bound to this saved case.");
   const fingerprint=caseReviewFingerprint(savedCase,charges);

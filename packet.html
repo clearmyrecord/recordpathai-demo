@@ -1917,7 +1917,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           ? schema.requiredFields : DEFAULT_REQUIRED_FIELDS;
         const wood = String(selected?.state || "").toUpperCase()==="OH" &&
           String(selected?.county || "").toLowerCase()==="wood" &&
-          selected?.courtType==="court-of-common-pleas" && selected?.formType==="sealing-conviction";
+          selected?.courtType==="court-of-common-pleas" &&
+          ["sealing-conviction","sealing-dismissal"].includes(selected?.formType);
         const complete = wood ? [...new Set([...requiredFields,...WOOD_CONTACT_REQUIRED_FIELDS])] : requiredFields;
         return complete.filter((path) => safe(getByPath(data, path)) === "");
       }
@@ -2379,17 +2380,19 @@ document.addEventListener("DOMContentLoaded", async function () {
         return response.arrayBuffer();
       }
 
-      // The official Wood County conviction PDF is FOUR pages: two informational
-      // pages followed by address verification (p3) and signed application (p4).
-      // Fill/sign the original page coordinates first, THEN remove the guide.
-      // Fail closed if the reviewed template or mapping changes.
+      // The official Wood County conviction and dismissal PDFs are FOUR pages:
+      // two informational pages followed by address verification (p3) and the
+      // selected signed application (p4). Fill/sign the original coordinates
+      // first, THEN remove the guide. Fail closed if the source or mapping changes.
       function trimWoodConvictionGuidance(pdfDoc, selected, mapping) {
         const wood=String(selected?.state||"").toUpperCase()==="OH" &&
           String(selected?.county||"").toLowerCase()==="wood" &&
           selected?.courtType==="court-of-common-pleas" &&
-          selected?.formType==="sealing-conviction";
+          ["sealing-conviction","sealing-dismissal"].includes(selected?.formType);
         if (!wood) return;
-        const expectedPdf="assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-32-conviction.pdf";
+        const expectedPdf=selected?.formType==="sealing-dismissal"
+          ? "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf"
+          : "assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-32-conviction.pdf";
         const fields=normalizeFields(mapping);
         if (selected.pdfPath!==expectedPdf ||
             pdfDoc.getPageCount()!==4 || Number(mapping?.pageCount)!==4 ||
@@ -2970,8 +2973,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           if(!pilot)return showPrerequisiteErrors(
             ["Ohio court-law validation is unavailable; no payment will be collected."],"checkout");
           const review=pilot.review(data);
+          const ohioFormType=packetQuoteFormType(data);
+          const ohioQuote=ohioFormType==="sealing-dismissal"
+            ? "The Wood County R.C. 2953.33 dismissal quote is $50 preparation plus a $0 court filing fee."
+            : "The Wood County conviction quote is $150 ($50 preparation + $100 court deposit), or $189 including a separate $39 RecordWatch Premium purchase.";
           return showPrerequisiteErrors(
-            ["Stripe checkout has not opened because Ohio cases are review-only. No payment was taken. The Wood County conviction quote is $150 ($50 preparation + $100 court deposit), or $189 including a separate $39 RecordWatch Premium purchase, subject to verification. Packet fulfillment is not live. Required before payment: official docket, final discharge, exclusions and approved filing instructions. "+
+            ["Stripe checkout has not opened because Ohio cases are review-only. No payment was taken. "+ohioQuote+" Packet fulfillment is not live. Required before payment: official docket, final outcome, exclusions and approved filing instructions. "+
              review.issues.slice(0,3).join(" ")],"checkout");
         }
         if(!["wave1","pilot","preparatory"].includes(base.scope))
@@ -3044,12 +3051,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (!hasUsableDrawnSignature() || !signatureImageBytes)
             throw new Error(SIGNATURE_REQUIRED_MESSAGE);
           const signatureFields=fields.filter(field=>field.type==="signature");
-          const isWoodConviction=String(selected?.state||"").toUpperCase()==="OH" &&
+          const isWoodOfficial=String(selected?.state||"").toUpperCase()==="OH" &&
             String(selected?.county||"").toLowerCase()==="wood" &&
             selected?.courtType==="court-of-common-pleas" &&
-            selected?.formType==="sealing-conviction";
+            ["sealing-conviction","sealing-dismissal"].includes(selected?.formType);
           if (!signatureFields.length ||
-              (isWoodConviction &&
+              (isWoodOfficial &&
                 (signatureFields.length!==1 || Number(signatureFields[0].page)!==4)))
             throw new Error("The court-issued form's signature mapping requires review.");
           const sigImage = await pdfDoc.embedPng(signatureImageBytes);

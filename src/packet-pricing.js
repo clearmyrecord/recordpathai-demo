@@ -27,7 +27,7 @@ export function quotePacketPricing(input = {}) {
     if(type==="sealing-dismissal") return {
       ...core,scope:"wood-common-pleas-nonconviction",
       courtName:plan.courtName,
-      message:"A dismissal, not-guilty or no-bill application generally has no conviction filing fee. Verify all final outcomes and court instructions before purchasing $50 document preparation."
+      message:"Wood County's official R.C. 2953.33 dismissal form is used for dismissed, not-guilty and no-bill outcomes. The court filing fee is $0; the $50 RecordPathAI preparation charge is separate. Verify all final outcomes and court instructions before preparation."
     };
     return {
       ...core,scope:"wood-common-pleas-outcome-unverified",

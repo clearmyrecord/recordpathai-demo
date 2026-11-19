@@ -12,6 +12,19 @@ export const TEMPLATE_REGISTRY = [
     fieldMapId: "oh-wood-sealing-conviction-v1",
     matchMode: "all"
   },
+  {
+    id: "oh-wood-sealing-dismissal",
+    state: "OH",
+    county: "Wood",
+    court: "",
+    filingType: "sealing-dismissal",
+    path: "/assets/forms/ohio/wood/court-of-common-pleas/application-for-sealing-2953-33-dismissal.pdf",
+    version: "1.0",
+    active: true,
+    priority: 100,
+    fieldMapId: "oh-wood-sealing-dismissal-v1",
+    matchMode: "all"
+  },
 
   {
     id: "oh-generic-sealing",
