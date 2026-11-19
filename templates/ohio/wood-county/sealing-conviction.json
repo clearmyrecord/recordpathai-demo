@@ -1,48 +1,53 @@
 {
-  "version": 6,
-  "exportedAt": "2026-05-04T06:49:31.125Z",
+  "version": 7,
+  "exportedAt": "2026-11-19T00:00:00.000Z",
   "document": "Application for Sealing 2953.32 (Conviction).pdf",
   "pageCount": 4,
+  "pageWidth": 768,
+  "pageHeight": 994,
+  "coordinateSystem": "top-left-reference-viewport",
+  "sourcePdfSha256": "cffa9718af0a0f1ebb3f6a14eeede2865c300148275ec1ef427df25c02f0c584",
+  "coordinateSource": "official AcroForm widget rectangles, normalized from 612x792 PDF points",
   "mappings": [
     {
       "id": 1,
       "name": "generated.current_date",
       "type": "date",
       "page": 3,
-      "x": 132,
-      "y": 426,
-      "width": 180,
-      "height": 28
+      "x": 133,
+      "y": 432,
+      "width": 195,
+      "height": 24
     },
     {
       "id": 2,
       "name": "petitioner.full_name",
       "type": "text",
       "page": 3,
-      "x": 207,
-      "y": 475,
-      "width": 439,
-      "height": 30
+      "x": 202,
+      "y": 480,
+      "width": 471,
+      "height": 27
     },
     {
       "id": 3,
       "name": "petitioner.address.line1",
       "type": "text",
       "page": 3,
-      "x": 160,
-      "y": 523,
-      "width": 495,
-      "height": 29
+      "x": 148,
+      "y": 533,
+      "width": 528,
+      "height": 23
     },
     {
       "id": 4,
       "name": "petitioner.address.line2",
       "type": "text",
       "page": 3,
-      "x": 324,
-      "y": 580,
-      "width": 180,
-      "height": 28
+      "x": 302,
+      "y": 583,
+      "width": 371,
+      "height": 23
     },
     {
       "id": 5,
@@ -50,131 +55,131 @@
       "type": "text",
       "page": 3,
       "x": 179,
-      "y": 625,
-      "width": 182,
-      "height": 27
+      "y": 633,
+      "width": 216,
+      "height": 22
     },
     {
       "id": 6,
       "name": "petitioner.address.state",
       "type": "text",
       "page": 3,
-      "x": 366,
-      "y": 625,
-      "width": 180,
-      "height": 28
+      "x": 395,
+      "y": 633,
+      "width": 185,
+      "height": 22
     },
     {
       "id": 7,
       "name": "petitioner.address.zip",
       "type": "text",
       "page": 3,
-      "x": 174,
-      "y": 672,
-      "width": 180,
-      "height": 28
+      "x": 157,
+      "y": 682,
+      "width": 515,
+      "height": 23
     },
     {
       "id": 8,
       "name": "petitioner.email",
       "type": "text",
       "page": 3,
-      "x": 187,
-      "y": 721,
-      "width": 411,
-      "height": 30
+      "x": 189,
+      "y": 733,
+      "width": 484,
+      "height": 22
     },
     {
       "id": 9,
       "name": "petitioner.full_name",
       "type": "text",
       "page": 4,
-      "x": 120,
-      "y": 241,
-      "width": 243,
-      "height": 28
+      "x": 104,
+      "y": 251,
+      "width": 254,
+      "height": 23
     },
     {
       "id": 10,
       "name": "petitioner.address.line1",
       "type": "text",
       "page": 4,
-      "x": 120,
-      "y": 274,
-      "width": 235,
-      "height": 25
+      "x": 115,
+      "y": 276,
+      "width": 240,
+      "height": 23
     },
     {
       "id": 11,
       "name": "petitioner.phone",
       "type": "text",
       "page": 4,
-      "x": 135,
-      "y": 323,
-      "width": 227,
-      "height": 26
+      "x": 119,
+      "y": 325,
+      "width": 233,
+      "height": 23
     },
     {
       "id": 12,
       "name": "petitioner.email",
       "type": "text",
       "page": 4,
-      "x": 113,
-      "y": 348,
-      "width": 243,
+      "x": 101,
+      "y": 350,
+      "width": 254,
       "height": 23
     },
     {
-      "id": 8,
+      "id": 13,
       "name": "court.case_number",
       "type": "text",
       "placeholder": "",
       "page": 4,
-      "x": 559,
-      "y": 146,
-      "width": 134,
-      "height": 24
+      "x": 531,
+      "y": 153,
+      "width": 144,
+      "height": 23
     },
     {
-      "id": 9,
+      "id": 14,
       "name": "court.judge_name",
       "type": "text",
       "placeholder": "",
       "page": 4,
-      "x": 559,
-      "y": 175,
-      "width": 160,
-      "height": 25
+      "x": 518,
+      "y": 178,
+      "width": 158,
+      "height": 23
     },
     {
       "id": 15,
       "name": "petitioner.full_name",
       "type": "text",
       "page": 4,
-      "x": 126,
-      "y": 393,
-      "width": 150,
-      "height": 28
+      "x": 120,
+      "y": 400,
+      "width": 192,
+      "height": 23
     },
     {
       "id": 16,
       "name": "charges.0.disposition_date",
       "type": "date",
       "page": 4,
-      "x": 95,
-      "y": 421,
-      "width": 160,
-      "height": 25
+      "x": 82,
+      "y": 424,
+      "width": 213,
+      "height": 23
     },
     {
       "id": 17,
       "name": "charges.0.charge_name",
       "type": "text",
       "page": 4,
-      "x": 86,
-      "y": 478,
-      "width": 185,
-      "height": 27,
+      "x": 83,
+      "y": 480,
+      "width": 260,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -182,10 +187,10 @@
       "name": "charges.1.charge_name",
       "type": "text",
       "page": 4,
-      "x": 85,
-      "y": 506,
-      "width": 185,
-      "height": 29,
+      "x": 83,
+      "y": 509,
+      "width": 259,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -193,10 +198,10 @@
       "name": "charges.2.charge_name",
       "type": "text",
       "page": 4,
-      "x": 84,
-      "y": 536,
-      "width": 185,
-      "height": 27,
+      "x": 83,
+      "y": 539,
+      "width": 259,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -204,10 +209,10 @@
       "name": "charges.3.charge_name",
       "type": "text",
       "page": 4,
-      "x": 84,
-      "y": 565,
-      "width": 185,
-      "height": 27,
+      "x": 83,
+      "y": 568,
+      "width": 259,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -215,10 +220,10 @@
       "name": "charges.0.charge_code",
       "type": "text",
       "page": 4,
-      "x": 372,
-      "y": 478,
-      "width": 105,
-      "height": 27,
+      "x": 346,
+      "y": 480,
+      "width": 179,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -226,10 +231,10 @@
       "name": "charges.1.charge_code",
       "type": "text",
       "page": 4,
-      "x": 362,
-      "y": 508,
-      "width": 120,
-      "height": 27,
+      "x": 346,
+      "y": 509,
+      "width": 179,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -237,10 +242,10 @@
       "name": "charges.2.charge_code",
       "type": "text",
       "page": 4,
-      "x": 361,
-      "y": 537,
-      "width": 120,
-      "height": 27,
+      "x": 346,
+      "y": 539,
+      "width": 179,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -248,10 +253,10 @@
       "name": "charges.3.charge_code",
       "type": "text",
       "page": 4,
-      "x": 361,
-      "y": 567,
-      "width": 120,
-      "height": 27,
+      "x": 346,
+      "y": 568,
+      "width": 179,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -259,10 +264,10 @@
       "name": "charges.0.level",
       "type": "text",
       "page": 4,
-      "x": 538,
-      "y": 477,
-      "width": 104,
-      "height": 30,
+      "x": 527,
+      "y": 480,
+      "width": 167,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -270,10 +275,10 @@
       "name": "charges.1.level",
       "type": "text",
       "page": 4,
-      "x": 538,
-      "y": 505,
-      "width": 104,
-      "height": 27,
+      "x": 527,
+      "y": 509,
+      "width": 167,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -281,9 +286,9 @@
       "name": "charges.2.level",
       "type": "text",
       "page": 4,
-      "x": 537,
-      "y": 537,
-      "width": 104,
+      "x": 527,
+      "y": 539,
+      "width": 167,
       "height": 28,
       "fontSize": 9
     },
@@ -292,10 +297,10 @@
       "name": "charges.3.level",
       "type": "text",
       "page": 4,
-      "x": 536,
-      "y": 566,
-      "width": 105,
-      "height": 29,
+      "x": 527,
+      "y": 568,
+      "width": 167,
+      "height": 28,
       "fontSize": 9
     },
     {
@@ -303,10 +308,10 @@
       "name": "charges.0.discharge_date",
       "type": "date",
       "page": 4,
-      "x": 163,
-      "y": 623,
-      "width": 210,
-      "height": 20
+      "x": 141,
+      "y": 630,
+      "width": 233,
+      "height": 15
     },
     {
       "id": 30,
@@ -323,30 +328,30 @@
       "name": "petitioner.address.city",
       "type": "text",
       "page": 4,
-      "x": 141,
-      "y": 297,
-      "width": 107,
-      "height": 26
+      "x": 144,
+      "y": 301,
+      "width": 112,
+      "height": 23
     },
     {
       "id": 32,
       "name": "petitioner.address.state",
       "type": "text",
       "page": 4,
-      "x": 248,
-      "y": 298,
-      "width": 51,
-      "height": 24
+      "x": 256,
+      "y": 301,
+      "width": 48,
+      "height": 23
     },
     {
       "id": 33,
       "name": "petitioner.address.zip",
       "type": "text",
       "page": 4,
-      "x": 299,
-      "y": 297,
-      "width": 63,
-      "height": 25
+      "x": 304,
+      "y": 301,
+      "width": 60,
+      "height": 23
     }
   ]
 }
