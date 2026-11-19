@@ -28,32 +28,36 @@
   const KNOWN_WOOD=[
     // Address verification, page 3. Base-viewport positions are suggestions,
     // not automatically approved filing coordinates.
-    [3,"generated.current_date","date",132,445,195,24],
-    [3,"petitioner.full_name","text",202,496,445,25],
-    [3,"petitioner.address.line1","text",149,546,490,26],
-    [3,"petitioner.address.line2","text",299,596,335,25],
-    [3,"petitioner.address.city","text",178,645,300,25],
-    [3,"petitioner.address.state","text",490,645,110,25],
-    [3,"petitioner.address.zip","text",156,696,180,25],
-    [3,"petitioner.email","text",189,745,440,25],
+    [3,"generated.current_date","date",133,432,195,24],
+    [3,"petitioner.full_name","text",202,480,471,27],
+    [3,"petitioner.address.line1","text",148,533,528,23],
+    [3,"petitioner.address.line2","text",302,583,371,23],
+    [3,"petitioner.address.city","text",179,633,216,22],
+    [3,"petitioner.address.state","text",395,633,185,22],
+    [3,"petitioner.address.zip","text",157,682,515,23],
+    [3,"petitioner.email","text",189,733,484,22],
     // Caption and fields, page 4.
-    [4,"court.case_number","text",528,165,135,21],
-    [4,"court.judge_name","text",516,191,150,22],
-    [4,"petitioner.full_name","text",108,259,250,24],
-    [4,"petitioner.address.line1","text",115,288,245,24],
-    [4,"petitioner.address.city","text",144,314,110,22],
-    [4,"petitioner.address.state","text",257,314,43,22],
-    [4,"petitioner.address.zip","text",304,314,59,22],
-    [4,"petitioner.phone","text",119,340,241,22],
-    [4,"petitioner.email","text",100,366,260,23],
-    [4,"petitioner.full_name","text",94,411,208,24],
-    [4,"charges.0.disposition_date","date",164,459,178,24],
-    ...Array.from({length:4},(_,i)=>[
-      [4,`charges.${i}.charge_name`,"text",105,521+i*29,253,24],
-      [4,`charges.${i}.charge_code`,"text",376,521+i*29,170,24],
-      [4,`charges.${i}.level`,"text",555,521+i*29,111,24]
-    ]).flat(),
-    [4,"signatures.petitioner_signature_name","signature",408,845,234,26]
+    [4,"court.case_number","text",531,153,144,23],
+    [4,"court.judge_name","text",518,178,158,23],
+    [4,"petitioner.full_name","text",104,251,254,23],
+    [4,"petitioner.address.line1","text",115,276,240,23],
+    [4,"petitioner.address.city","text",144,301,112,23],
+    [4,"petitioner.address.state","text",256,301,48,23],
+    [4,"petitioner.address.zip","text",304,301,60,23],
+    [4,"petitioner.phone","text",119,325,233,23],
+    [4,"petitioner.email","text",101,350,254,23],
+    [4,"petitioner.full_name","text",120,400,192,23],
+    [4,"charges.0.disposition_date","date",82,424,213,23],
+    ...Array.from({length:4},(_,i)=>{
+      const y=[480,509,539,568][i];
+      return [
+      [4,`charges.${i}.charge_name`,"text",83,y,260,28],
+      [4,`charges.${i}.charge_code`,"text",346,y,179,28],
+      [4,`charges.${i}.level`,"text",527,y,167,28]
+      ];
+    }).flat(),
+    [4,"charges.0.discharge_date","date",141,630,233,15],
+    [4,"signatures.petitioner_signature_name","signature",384,848,243,28]
   ];
   function groupLines(page) {
     const src=Array.isArray(page?.items)?page.items:[];

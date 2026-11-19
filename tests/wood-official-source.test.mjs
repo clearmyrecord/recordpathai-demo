@@ -25,11 +25,34 @@ test("bundled official Wood PDF has four pages and recognizable form pages 3 and
 test("bundled coordinate map targets only form pages and includes signature",()=>{
   const mapping=JSON.parse(readFileSync(mapPath,"utf8"));
   assert.equal(mapping.pageCount,4);
+  assert.equal(mapping.pageWidth,768);
+  assert.equal(mapping.pageHeight,994);
+  assert.equal(mapping.coordinateSystem,"top-left-reference-viewport");
+  assert.equal(mapping.sourcePdfSha256,"cffa9718af0a0f1ebb3f6a14eeede2865c300148275ec1ef427df25c02f0c584");
   assert.ok(mapping.mappings.length>=20);
   assert.ok(mapping.mappings.every(f=>[3,4].includes(Number(f.page))));
+  assert.equal(new Set(mapping.mappings.map(f=>f.id)).size,mapping.mappings.length,
+    "mapping ids must identify one field location each");
   assert.ok(mapping.mappings.some(f=>f.type==="signature"&&Number(f.page)===4));
   for(const key of ["petitioner.full_name","court.case_number",
     "charges.0.disposition_date","charges.0.discharge_date"]){
     assert.ok(mapping.mappings.some(f=>f.name===key),key+" mapping missing");
   }
+  const at=(name,page)=>mapping.mappings.find(f=>f.name===name&&Number(f.page)===page);
+  assert.deepEqual(
+    [at("generated.current_date",3).x,at("generated.current_date",3).y,
+      at("generated.current_date",3).width,at("generated.current_date",3).height],
+    [133,432,195,24]);
+  assert.deepEqual(
+    [at("court.case_number",4).x,at("court.case_number",4).y,
+      at("court.case_number",4).width,at("court.case_number",4).height],
+    [531,153,144,23]);
+  assert.deepEqual(
+    [at("charges.0.charge_name",4).x,at("charges.0.charge_name",4).y,
+      at("charges.0.charge_name",4).width,at("charges.0.charge_name",4).height],
+    [83,480,260,28]);
+  assert.deepEqual(
+    [at("charges.0.discharge_date",4).x,at("charges.0.discharge_date",4).y,
+      at("charges.0.discharge_date",4).width,at("charges.0.discharge_date",4).height],
+    [141,630,233,15]);
 });
