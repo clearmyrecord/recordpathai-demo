@@ -31,4 +31,7 @@ test("launch audit is independent of live flag when verifying bank in read-only 
   assert.match(route,/evidenceScope:"production_live_paid_packet_only"/);
   assert.match(route,/reserve_packet_lob_dispatch/);
   assert.match(route,/cs_test_launch_preflight_NEVER_CHARGE/);
+  assert.match(route,/packet_dispatch_controls/);
+  assert.match(route,/database_live_dispatch_disabled/);
+  assert.match(route,/liveDispatchEnabled:databaseDispatchEnabled/);
 });

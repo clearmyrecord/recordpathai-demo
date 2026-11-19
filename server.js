@@ -895,6 +895,18 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
     }catch{}
   }
   const dbReady=Object.values(tables).every(Boolean)&&atomicDispatchFunction;
+  let databaseDispatchEnabled=false;
+  if(dbReady){
+    try{
+      const controls=await supabaseRest("packet_dispatch_controls",{
+        query:"?select=live_dispatch_enabled&id=eq.true&limit=1"
+      });
+      databaseDispatchEnabled=Array.isArray(controls)&&
+        controls[0]?.live_dispatch_enabled===true;
+    }catch{
+      // An unreadable or missing database gate is never treated as enabled.
+    }
+  }
   const lobTestKey=process.env.LOB_TEST_API_KEY||"";
   const lobTestBank=process.env.LOB_TEST_BANK_ACCOUNT_ID||"";
   const sandboxConfigured=lobTestKey.startsWith("test_")&&
@@ -989,6 +1001,7 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
   }
   const blockers=[];
   if(!dbReady)blockers.push("private_packet_database_unavailable");
+  if(!databaseDispatchEnabled)blockers.push("database_live_dispatch_disabled");
   if(!stripeLiveKeyConfigured||!stripePacketSigningSecretConfigured)
     blockers.push("stripe_webhook_credential_missing");
   if(!sandboxConfigured)blockers.push("lob_sandbox_credentials_missing");
@@ -1009,7 +1022,8 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
     stripe:{liveKeyConfigured:stripeLiveKeyConfigured,
       packetWebhookSecretConfigured:stripePacketSigningSecretConfigured,
       signedEventDeliveryProven,signedEventEvidenceAt,evidenceScope:"production_live_paid_packet_only"},
-    database:{ready:dbReady,tables,atomicDispatchFunction},
+    database:{ready:dbReady,tables,atomicDispatchFunction,
+      liveDispatchEnabled:databaseDispatchEnabled},
     lob:{sandboxConfigured,testCheckId:checkId||null,
       testProofStatus,testProofRendered,proofUrlAvailable,
       testProofContentsVerified,testProofPages,officialFormStructureConfirmed,
