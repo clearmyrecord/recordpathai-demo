@@ -24,7 +24,9 @@ test("Lob processed status does not count as rendered PDF proof",()=>{
 test("launch audit is independent of live flag when verifying bank in read-only mode",()=>{
   assert.ok(route.includes("https://api.lob.com/v1/bank_accounts/"));
   assert.match(route,/liveBankVerified=row\.id===bank && row\.verified===true/);
-  assert.match(route,/wood_county_clerk_mailing_acceptance_unconfirmed/);
+  assert.match(route,/wood_county_live_mail_authorization_disabled/);
+  assert.match(route,/mailingAcceptedByClerk:court\.clerkMailingAcceptanceConfirmed/);
+  assert.match(route,/liveMailAuthorized:court\.mailReady/);
   assert.match(route,/signed_stripe_event_to_paid_hold_not_proven/);
   assert.match(route,/packet_payment_webhook_receipts/);
   assert.match(route,/signedEventDeliveryProven=true/);

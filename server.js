@@ -1011,7 +1011,9 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
   if(!checkId)blockers.push("lob_test_proof_not_specified");
   if(!lobLiveCredentialsConfigured||!liveBankVerified||!returnAddressConfigured)
     blockers.push("lob_live_funding_configuration_unverified");
-  if(!court.mailReady)blockers.push("wood_county_clerk_mailing_acceptance_unconfirmed");
+  if(!court.clerkMailingAcceptanceConfirmed)
+    blockers.push("wood_county_clerk_mailing_acceptance_unconfirmed");
+  if(!court.mailReady)blockers.push("wood_county_live_mail_authorization_disabled");
   // A valid signed Stripe event->database paid_hold trial is not established
   // by testing that a forged signature returns 400.
   if(!signedEventDeliveryProven)blockers.push("signed_stripe_event_to_paid_hold_not_proven");
@@ -1029,7 +1031,9 @@ app.get("/api/operator/packet/launch-readiness",async(req,res)=>{
       testProofContentsVerified,testProofPages,officialFormStructureConfirmed,
       liveCredentialsConfigured:lobLiveCredentialsConfigured,
       liveBankVerified,returnAddressConfigured},
-    woodCounty:{profileId:court.profileId,mailingAcceptedByClerk:court.mailReady},
+    woodCounty:{profileId:court.profileId,
+      mailingAcceptedByClerk:court.clerkMailingAcceptanceConfirmed,
+      liveMailAuthorized:court.mailReady},
     blockers,
     note:"Read-only operator assessment. No customer payment, Lob check, filing or mailing is created."
   });

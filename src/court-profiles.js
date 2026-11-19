@@ -51,7 +51,13 @@ const woodCommon = Object.freeze({
   }),
   courtFeePayee:"Wood County Clerk of Courts", // Official Clerk payment page, verified 2026-11-11.
   payeeSource:"https://clerkofcourt.co.wood.oh.us/166/Make-a-Payment",
-  lobChecksAuthorized:false, // Keep disabled pending successful sandbox proof, court filing workflow and operator authorization.
+  // Deputy Clerk Heidi Cully confirmed on 2026-11-18 that the signed forms
+  // and fee check may be mailed together, payable to the Clerk, with the case
+  // number on the documents and check. Email filing instead requires online
+  // credit-card prepayment; a Lob check cannot fund that separate route.
+  clerkMailingAcceptanceConfirmed:true,
+  clerkMailingAcceptanceDate:"2026-11-18",
+  lobChecksAuthorized:false, // External acceptance is not permission to issue a check or file a real case.
   mappedApprovedFormTypes:["sealing-conviction"],
   maxAttachmentPages:2, // only address verification + signed application
   requiredAttachmentPages:2, // reject old four-page PDFs including eligibility rules
@@ -70,7 +76,8 @@ export function courtFilingPlan(input={}) {
   const profile=findCourtProfile(input);
   const formType=normalizeCourtFormType(input.formType||input.form_type||input.finalOutcome);
   if(!profile) return {
-    supported:false, filingMethod:"unverified", mailReady:false, onlineFeePaymentReady:false,
+    supported:false, filingMethod:"unverified", mailReady:false,
+    clerkMailingAcceptanceConfirmed:false, onlineFeePaymentReady:false,
     courtFeeCents:null, profileId:null, reason:"No approved court-specific filing profile. Confirm the actual court and current rules."
   };
   const courtFeeCents=formType==="sealing-conviction"?10000:formType==="sealing-dismissal"?0:null;
@@ -81,9 +88,11 @@ export function courtFilingPlan(input={}) {
     filingMethod:profile.submissionMethod,
     preferredFilingRoute:profile.preferredFilingRoute||null,
     emailFiling:profile.emailFiling||null,
+    clerkMailingAcceptanceConfirmed:profile.clerkMailingAcceptanceConfirmed===true,
     // Lob check + attached application in one envelope remains an
     // independently controlled product path; no automatic mail authorization.
-    mailReady:profile.lobChecksAuthorized && Boolean(profile.courtFeePayee),
+    mailReady:profile.clerkMailingAcceptanceConfirmed===true &&
+      profile.lobChecksAuthorized===true && Boolean(profile.courtFeePayee),
     onlineFeePaymentReady:false, postalTrackingGuaranteed:profile.trackingGuarantee,
     sourceFees:profile.sourceFees, sourceRules:profile.sourceRules,
     reason:courtFeeCents===null

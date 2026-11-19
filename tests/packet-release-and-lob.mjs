@@ -35,12 +35,12 @@ const review={
 };
 const runtime={stripeLiveEnabled:true,lobLiveEnabled:true,lobVerifiedBank:true,
   onlineCourtPaymentVerified:false};
-test("court with unconfirmed combined mailed packet and check cannot collect $150",()=>{
+test("clerk acceptance alone cannot collect $150 or issue a check",()=>{
   const result=evaluatePacketRelease({userId,caseId,savedCase,charges,review,runtime});
   assert.equal(result.ready,false);
   assert.equal(result.quote.totalCents,15000);
   assert.equal(result.fulfillmentMode,"lob_check");
-  assert.match(result.missing.join(" "),/clerk has not confirmed acceptance/i);
+  assert.match(result.missing.join(" "),/live mailed filing and check issuance remain disabled/i);
 });
 test("unverified cases and any change to charge/date are blocked",()=>{
   for(const [reason,opts] of [
@@ -66,7 +66,7 @@ test("unmapped dismissal cannot charge despite nonconviction $0 fee",()=>{
     review:{...review,form_type:"sealing-dismissal",approved_court_fee_cents:0,fee_payment_method:"no_fee"},runtime});
   assert.equal(result.ready,false);
 });
-test("Lob check builder blocks Wood County until clerk accepts combined mailing",()=>{
+test("Lob check builder blocks Wood County despite clerk acceptance until operator authorization",()=>{
   const from={name:"RecordPathAI",address_line1:"123 Sender Lane",
     address_city:"Test City",address_state:"OH",address_zip:"43000"};
   const payload={

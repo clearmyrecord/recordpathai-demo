@@ -80,7 +80,9 @@ export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,no
       // accepts a signed application and check in one mailed envelope.
       // Court-by-court authorization is independent of Lob/Stripe switches.
       if(!filing.mailReady)
-        missing.push("The clerk has not confirmed acceptance of this mailed filing and check. Live court-fee collection remains disabled.");
+        missing.push(filing.clerkMailingAcceptanceConfirmed
+          ? "Live mailed filing and check issuance remain disabled pending payment evidence, reviewer approval, and operator authorization."
+          : "The clerk has not confirmed acceptance of this mailed filing and check. Live court-fee collection remains disabled.");
       if(!review?.verified_check_payee)missing.push("The clerk's actual check payee has not been verified.");
       if(!review?.verified_filing_address)missing.push("The clerk's mailing destination has not been verified.");
       if(!runtime.lobLiveEnabled||!runtime.lobVerifiedBank)
