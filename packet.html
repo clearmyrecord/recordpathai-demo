@@ -1701,6 +1701,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 
       const COURT_INSTRUCTIONS_URL = "./data/court-instructions.json";
+      const OHIO_STATEWIDE_FORM_CATALOG_URL = "./data/ohio-statewide-form-catalog.json";
+      let ohioStatewideFormCatalogPromise = null;
 
       function normalizeCounty(value) {
         return safe(value).replace(/ county$/i, '').trim().toLowerCase();
@@ -1778,6 +1780,41 @@ document.addEventListener("DOMContentLoaded", async function () {
       function dispositionToFormType(value) {
         const v = String(value || '').toLowerCase();
         return v.includes('dismiss') ? 'sealing-dismissal' : 'sealing-conviction';
+      }
+
+      function statewideFormKey(formType) {
+        return formType === "sealing-dismissal" ? "sealing-nonconviction" : formType;
+      }
+
+      async function getOhioStatewideFormReview(data, formTypeOverride = "") {
+        if (normalizeState(data?.court?.state) !== "OH") return null;
+        const county = normalizeCounty(data?.court?.county);
+        if (!county) return null;
+        const formType = formTypeOverride || dispositionToFormType(
+          data?.charges?.[0]?.final_disposition || data?.charges?.[0]?.disposition
+        );
+        const key = statewideFormKey(formType);
+        if (!key || !["sealing-conviction", "sealing-nonconviction"].includes(key)) return null;
+        try {
+          if (!ohioStatewideFormCatalogPromise) {
+            ohioStatewideFormCatalogPromise = fetch(OHIO_STATEWIDE_FORM_CATALOG_URL, { cache: "no-store" })
+              .then(response => response.ok ? response.json() : null)
+              .catch(() => null);
+          }
+          const catalog = await ohioStatewideFormCatalogPromise;
+          const countyEntry = Array.isArray(catalog?.counties)
+            ? catalog.counties.find(entry => normalizeCounty(entry?.county) === county)
+            : null;
+          const form = countyEntry?.forms?.[key];
+          if (!countyEntry || !form || form.active !== false || form.localCourtReviewRequired !== true) return null;
+          return {
+            countyEntry,
+            form,
+            authority: catalog.authority || null
+          };
+        } catch {
+          return null;
+        }
       }
 
       async function loadTemplateRegistry() {
@@ -2720,13 +2757,25 @@ document.addEventListener("DOMContentLoaded", async function () {
             ${t("packet.mappedFieldsLabel")}: <strong>${fields.length}</strong>
           `;
         } catch (error) {
-          el.className = "callout warning";
-          el.innerHTML = `
-            PDF mapper has not loaded yet.<br />
-            No active template is available for this court yet. You can still export a data-only packet summary.<br />
-            You can still export a data-only PDF summary.<br />
-            Error: ${escapeHtml(error.message)}
-          `;
+          const statewide = await getOhioStatewideFormReview(data);
+          if (statewide) {
+            const source = statewide.authority?.sourceUrl || "";
+            el.className = "callout warning";
+            el.innerHTML = `
+              Official Ohio statewide form mapped for ${escapeHtml(statewide.countyEntry.county)} County:<br />
+              <strong>${escapeHtml(statewide.form.title)}</strong><br />
+              The field locations are mapped for review, but this is not an approved local-court form. The exact court, local form, filing fee, mailing address, and acceptance route still require verification. No payment, check, mailing, or filing is enabled.<br />
+              ${source ? `<a href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">View the Supreme Court source</a>` : ""}
+            `;
+          } else {
+            el.className = "callout warning";
+            el.innerHTML = `
+              PDF mapper has not loaded yet.<br />
+              No active template is available for this court yet. You can still export a data-only packet summary.<br />
+              You can still export a data-only PDF summary.<br />
+              Error: ${escapeHtml(error.message)}
+            `;
+          }
         }
 
         const conflict = document.getElementById("stateConflictCallout");
@@ -3000,8 +3049,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
         const template=await loadActiveTemplateForPacket(data);
         if(!template){
+          const statewide = await getOhioStatewideFormReview(data, ohioFormType);
           return showPrerequisiteErrors(
-            ["No reviewed, active court PDF is available for this exact county, court and final outcome yet. No document-preparation payment will be collected."],
+            [statewide
+              ? `The Supreme Court statewide form is mapped for ${statewide.countyEntry.county} County, but the exact local court form and filing profile are still review-only. No document-preparation payment will be collected.`
+              : "No reviewed, active court PDF is available for this exact county, court and final outcome yet. No document-preparation payment will be collected."],
             "checkout"
           );
         }

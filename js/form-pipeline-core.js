@@ -8,7 +8,7 @@
   "use strict";
   const SCHEMA="recordpathai.form-candidate.v1";
   const SAFE_TYPES=new Set(["text","date","checkbox","signature","static"]);
-  const ALLOWED_ROOTS=new Set(["petitioner","court","case","charges","eligibility","signature","signatures","dates","generated"]);
+  const ALLOWED_ROOTS=new Set(["petitioner","court","case","charges","eligibility","signature","signatures","dates","generated","attorney"]);
   const STATES=new Set(["pending_review","mapping_draft","approved","superseded","rejected"]);
   const HASH=/^[a-f0-9]{64}$/;
   const SAFE_PATH=/^assets\/forms\/[a-zA-Z0-9/_-]+\.pdf$/;

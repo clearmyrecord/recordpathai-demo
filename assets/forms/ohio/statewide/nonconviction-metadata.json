@@ -1,0 +1,18 @@
+{
+  "state": "OH",
+  "county": "Statewide",
+  "courtName": "Ohio court using Supreme Court Form 96-F1",
+  "courtType": "statewide-standard",
+  "formType": "sealing-nonconviction",
+  "sourceUrl": "https://www.supremecourt.ohio.gov/docs/LegalResources/rules/superintendence/Superintendence.pdf",
+  "sourcePageUrl": "https://www.supremecourt.ohio.gov/docs/LegalResources/rules/superintendence/Superintendence.pdf",
+  "localPath": "assets/forms/ohio/statewide/application-to-seal-record-of-nonconviction-96-f1.pdf",
+  "sourcePdfPage": 489,
+  "sourcePdfSha256": "deeda3dd8fb08623e462172602075ae901af9c1a0592ab5e7b07ade791f22097",
+  "status": "mapped_review_only",
+  "requiresMapping": false,
+  "mapped": true,
+  "active": false,
+  "localCourtReviewRequired": true,
+  "customerLinkApproved": false
+}
