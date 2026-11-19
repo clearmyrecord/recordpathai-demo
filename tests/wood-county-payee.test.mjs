@@ -13,6 +13,7 @@ test("Clerk payee verification does not authorize mail or automatic filing",()=>
   const filing=courtFilingPlan({...profile,formType:"conviction"});
   assert.equal(filing.courtFeeCents,10000);
   assert.equal(filing.courtFeePayee,"Wood County Clerk of Courts");
+  assert.equal(filing.clerkMailingAcceptanceConfirmed,true);
   assert.equal(filing.mailReady,false);
   assert.equal(filing.onlineFeePaymentReady,false);
 });
