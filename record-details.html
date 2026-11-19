@@ -1423,11 +1423,11 @@
         setValue("detentionFacility", first.detention_facility || first.jail);
         setValue("arrestCounty", first.arrest_county);
         setValue("arrestState", first.arrest_state);
-        setValue("caseState", first.case_state || court.state || localStorage.getItem("caseState") || localStorage.getItem("state") || "");
-        setValue("county", first.court_county || court.county || localStorage.getItem("county"));
-        setValue("courtName", first.court_name || court.name || localStorage.getItem("court"));
+        setValue("caseState", first.case_state || court.state || "");
+        setValue("county", first.court_county || court.county || "");
+        setValue("courtName", first.court_name || court.name || "");
         setValue("courtType", court.court_type || "");
-        setValue("caseNumber", first.case_number || court.case_number || localStorage.getItem("caseNumber"));
+        setValue("caseNumber", first.case_number || court.case_number || "");
         setValue("judgeName", first.judge_name || court.judge_name || data.judge_name);
         setValue("prosecutorAgency", first.prosecutor_agency);
         setValue("defenseAttorney", first.defense_attorney);
@@ -1449,32 +1449,6 @@
         } else {
           addOffense();
         }
-      }
-
-      function saveLegacyKeys(profile, shared, charges) {
-        const first = charges[0] || {};
-        const legacy = {
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-          fullName: profile.fullName,
-          dateOfBirth: profile.dateOfBirth,
-          email: profile.email,
-          phone: profile.phone,
-          residenceState: profile.residenceState,
-          caseState: shared.case_state,
-          state: shared.case_state,
-          county: shared.court_county,
-          court: shared.court_name,
-          caseNumber: shared.case_number,
-          offense: first.charge_name,
-          offenseCode: first.charge_code,
-          outcome: shared.final_disposition,
-          dispositionDate: shared.disposition_date,
-          dischargeDate: shared.discharge_date
-        };
-        Object.keys(legacy).forEach((key) => {
-          if (legacy[key] !== undefined && legacy[key] !== null && String(legacy[key]) !== "") localStorage.setItem(key, legacy[key]);
-        });
       }
 
       function buildCurrentCasePayload(profile, shared, charges) {

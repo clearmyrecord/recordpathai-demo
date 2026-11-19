@@ -897,6 +897,8 @@
     const item = normalizeCase(caseData);
     const savedReview = item.metadata && typeof item.metadata.recordPathCaseReview === "object"
       ? item.metadata.recordPathCaseReview : {};
+    const savedFields = item.metadata?.recordPathStep2?.schemaVersion === 1
+      ? item.metadata.recordPathStep2.fields || {} : {};
     return {
       case: {
         // Never promote unrelated browser draft acknowledgments into an
@@ -913,7 +915,8 @@
         case_number: item.caseNumber,
         caseNumber: item.caseNumber,
         court_type: item.courtType,
-        case_type: item.courtType
+        case_type: item.courtType,
+        judge_name: firstNonEmpty(item.metadata?.judge_name, savedFields.judgeName)
       },
       eligibility: {
         status: item.eligibilityStatus,
@@ -1079,9 +1082,10 @@
     return payload;
   }
 
-  async function fetchCaseCharges(supabase, caseIds) {
+  async function fetchCaseCharges(supabase, caseIds, userId) {
     if (!caseIds.length) return {};
-    const { data, error } = await supabase.from("case_charges").select("*").in("case_id", caseIds).eq("user_id", currentUser.id).order("created_at", { ascending: true });
+    if (!isUuid(userId)) throw new Error("Authenticated case owner is required to load charges.");
+    const { data, error } = await supabase.from("case_charges").select("*").in("case_id", caseIds).eq("user_id", userId).order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
     return (data || []).reduce(function (map, charge) {
       if (!map[charge.case_id]) map[charge.case_id] = [];
@@ -1111,7 +1115,7 @@
     }
     let chargesByCase = {};
     try {
-      chargesByCase = await fetchCaseCharges(supabase, (data || []).map(function (row) { return row.id; }));
+      chargesByCase = await fetchCaseCharges(supabase, (data || []).map(function (row) { return row.id; }), currentUser.id);
     } catch (chargeError) {
       markCaseLoadError(chargeError);
       const fallback = loadLocalCases();
@@ -1159,7 +1163,7 @@
       .eq("user_id",auth.data.user.id).is("deleted_at",null)
       .is("archived_at",null).order("updated_at",{ascending:true});
     if(result.error)throw new Error("Supabase case records are unavailable; browser data was not used.");
-    const charges=await fetchCaseCharges(supabase,(result.data||[]).map(row=>row.id));
+    const charges=await fetchCaseCharges(supabase,(result.data||[]).map(row=>row.id),auth.data.user.id);
     return (result.data||[]).map(row=>
       normalizeDbCase(Object.assign({},row,{case_charges:charges[row.id]||[]})));
   }
@@ -1186,7 +1190,7 @@
       const { data, error } = await supabase.from("saved_cases").select("*").eq("user_id", currentUser.id).eq("id", id).is("deleted_at", null).maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) return null;
-      const charges = await fetchCaseCharges(supabase, [data.id]);
+      const charges = await fetchCaseCharges(supabase, [data.id], currentUser.id);
       const found = normalizeDbCase(Object.assign({}, data, { case_charges: charges[data.id] || [] }));
       cachedCases = activeCases(getCases().filter(function (item) { return item.case_id !== found.case_id; }).concat(found));
       saveLocalCases(cachedCases);
@@ -1301,7 +1305,7 @@
       if (String(next.recordWatchStatus).toLowerCase() === "paused" && !payload.recordwatch_paused_at) payload.recordwatch_paused_at = nowIso();
       const { data, error } = await supabase.from("saved_cases").update(payload).eq("id", next.case_id).eq("user_id", currentUser.id).select("*").single();
       if (error) throw new Error(error.message);
-      const charges = updates && updates.charges ? await syncCharges(next.case_id, next) : await fetchCaseCharges(supabase, [next.case_id]);
+      const charges = updates && updates.charges ? await syncCharges(next.case_id, next) : await fetchCaseCharges(supabase, [next.case_id], currentUser.id);
       const saved = normalizeDbCase(Object.assign({}, data, { case_charges: Array.isArray(charges) ? charges : (charges[next.case_id] || []) }));
       cachedCases = activeCases(getCases().filter(function (item) { return item.case_id !== saved.case_id; }).concat(saved));
       saveLocalCases(cachedCases);
