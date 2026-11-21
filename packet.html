@@ -1119,7 +1119,7 @@
                   <label style="display:block;margin:8px 0;"><input type="radio" name="packetDeliveryMode" value="mail"> Verified court filing with Lob check — only where the clerk, funding bank and mailing instructions are independently approved</label>
                   <p style="margin:8px 0;color:#526780;">Selecting mailing never issues a check, charges a card, or files anything. The court deposit is quoted before checkout; a paid mailed order is held for authorized dispatch.</p>
                 </fieldset>
-                <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn" disabled>Not Eligible Yet</button>
+                <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn">Review Packet Readiness</button>
                 <section id="packetReviewStatus" role="status" aria-live="polite" hidden style="margin-top:14px;padding:16px 18px;border:1px solid #c5d6ef;border-radius:12px;background:#f6f9ff;color:#274367;"></section>
               </section>
               <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
@@ -1197,6 +1197,27 @@
   <script src="js/workflow.js"></script>
  <script>
 document.addEventListener("DOMContentLoaded", async function () {
+      // Attach Step 3 before async account/PDF initialization. A loading
+      // failure must never leave the readiness button unresponsive.
+      let packetStep3Initialized = false;
+      const step3ActionButton = document.getElementById("generateSealingBtn");
+      if (step3ActionButton) {
+        step3ActionButton.disabled = false;
+        step3ActionButton.textContent = "Review Packet Readiness";
+        step3ActionButton.addEventListener("click", function (event) {
+          if (!packetStep3Initialized) {
+            event.preventDefault();
+            const message = "Your saved case is still loading or could not be loaded. Sign in and reopen it from Record Details before checking payment.";
+            const callout = document.getElementById("checkoutError");
+            if (callout) {
+              callout.textContent = message;
+              callout.style.display = "block";
+            }
+            return;
+          }
+          void startCheckout(event);
+        });
+      }
       async function loadCaseFromUrl() {
         const caseId = new URLSearchParams(window.location.search).get("caseId");
         if (!caseId || !window.RecordPathUserStore) return true;
@@ -4154,7 +4175,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           const reviewCase=await resolveCheckoutCase();
           const review=await inspectPacketReadiness(reviewCase?.checkoutCase?.saved_case_id);
           if(review.ready!==true){
-            setStatus("Independent packet review is pending. See the Step 3 checklist. No payment was taken.");
+            const blockers = Array.isArray(review.missing) ? review.missing.slice(0, 3).join(" ") : "";
+            const message = "Checkout is not available yet. " +
+              (blockers || "Independent packet review has not been approved.") +
+              " No payment was taken.";
+            setCheckoutError(message);
+            setStatus(message, "error");
             return;
           }
           // Signature is required at private-PDF preparation and independently
@@ -4334,6 +4360,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       // Do not import RecordWatch or eligibility browser drafts into packet fields.
       await syncPaymentCompletionFromUrl();
       await loadPacketContactProfile();
+      packetStep3Initialized = true;
       document.querySelectorAll("[data-packet-contact]").forEach(input=>{
         input.addEventListener("input",()=>{
           const checkbox=document.getElementById("packetContactConfirmed");
@@ -4359,7 +4386,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       document.getElementById("prepareSignedReviewBtn")?.addEventListener("click", prepareSignedReviewPdf);
       document.getElementById("testPdfBtn")?.addEventListener("click", testPdfAccess);
       const generateBtn = document.getElementById("generateSealingBtn");
-      if (generateBtn) generateBtn.addEventListener("click", startCheckout);
+      // Step 3 listener is already installed before asynchronous initialization.
       // Update CTA to the verified quote only when the server has released
       // this case. Client-side eligibility labels never grant payment access.
       (async function() {
