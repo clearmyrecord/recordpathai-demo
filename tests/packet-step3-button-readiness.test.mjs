@@ -7,7 +7,10 @@ const page = readFileSync(new URL("../packet.html", import.meta.url), "utf8");
 const server = readFileSync(new URL("../server.js", import.meta.url), "utf8");
 
 test("Step 3 readiness button is usable even if async account loading fails", () => {
-  assert.match(page, /id="generateSealingBtn">Review Packet Readiness<\/button>/);
+  assert.match(page, /id="generateSealingBtn">Pay and Mail<\/button>/);
+  assert.match(page, /name="packetDeliveryMode" value="mail" checked/);
+  assert.match(page, /selectedPacketDeliveryMode\(\)==="mail" \? "Pay and Mail" : "Pay and Download"/);
+  assert.doesNotMatch(page, /Review Packet Readiness/);
   const handlerPosition = page.indexOf('step3ActionButton.addEventListener("click"');
   const firstAccountLoad = page.indexOf('if (!await loadCaseFromUrl()) return;');
   assert.ok(handlerPosition > 0 && firstAccountLoad > 0 && handlerPosition < firstAccountLoad);
