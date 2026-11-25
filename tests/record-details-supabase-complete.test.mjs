@@ -62,7 +62,7 @@ test("Step 2 loads only selected owner's Supabase case and continues with UUID",
   const init=page.slice(page.indexOf("async function init()"),page.indexOf("init();",page.indexOf("async function init()")));
   assert.match(init,/await client\.auth\.getUser\(\)/);
   assert.match(init,/await store\.getSupabaseCaseById\(candidate\)/);
-  assert.match(init,/recordPathStep2,addOffense/);
+  assert.match(init,/savedCharges\(workingPacketData\.charges,snapshot\)/);
   assert.match(init,/packet\.html\?caseId=/);
   assert.match(init,/Premium is optional/);
   assert.doesNotMatch(init,/RecordPathDataBridge\.loadPacketData\(/);
@@ -82,4 +82,17 @@ test("Step 3 does not mark user click as reviewer approval or force Lob",()=>{
   assert.match(backend,/review\.status!=="approved"/);
   assert.match(backend,/review\.case_snapshot_sha256!==fingerprint/);
   assert.match(backend,/runtime\.lobLiveEnabled/);
+});
+
+test("empty or stale Step 2 snapshots cannot replace saved charge rows",()=>{
+  const context=vm.createContext({window:{}});
+  vm.runInContext(fieldSource,context);
+  const fields=context.window.RecordPathRecordDetailsFields;
+  const row={charge_name:"Synthetic",charge_code:"123",final_disposition:"Dismissed"};
+  for(const charges of [[],[null],[{charge_name:"Stale"}]]){
+    const selected=fields.savedCharges([row],{schemaVersion:1,charges});
+    assert.equal(selected.length,1);
+    assert.equal(selected[0],row);
+  }
+  assert.equal(fields.savedCharges([],{schemaVersion:1,charges:[null,row]})[0],row);
 });

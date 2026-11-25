@@ -952,7 +952,7 @@
                 </div>
                 <button type="button" class="btn btn-soft" id="addOffenseBtn" data-i18n="record.addOffense">+ Add Charge</button>
               </div>
-              <div class="record-status" id="recordStatus">1 charge added</div>
+              <div class="record-status" id="recordStatus" role="status">Loading charges…</div>
               <div class="record-list" id="offenseList"></div>
               <div class="record-grid" style="margin-top:14px">
                 <div class="field"><label for="allChargesConfirmed">All charges from this case included?</label>
@@ -1166,7 +1166,6 @@
       const continueBtn = document.getElementById("continueBtn");
       const saveProgressBtn = document.getElementById("saveProgressBtn");
       const recordStatus = document.getElementById("recordStatus");
-      let offenseCounter = 0;
       let autosaveTimer = null;
       let verifiedRemoteRecordWatchCase=null;
       let workingPacketData=null;
@@ -1339,7 +1338,7 @@
       }
 
       function addOffense(data = null) {
-        const index = offenseCounter++;
+        const index = offenseList.children.length;
         const card = buildChargeCard(index);
         card._existingCharge = data && typeof data === "object" ? Object.assign({}, data) : {};
         offenseList.appendChild(card);
@@ -1443,7 +1442,6 @@
       function hydrateCharges(data) {
         const charges = Array.isArray(data.charges) ? data.charges : [];
         offenseList.innerHTML = "";
-        offenseCounter = 0;
         if (charges.length) {
           charges.forEach(addOffense);
         } else {
@@ -1667,10 +1665,9 @@
           verifiedRemoteRecordWatchCase=remote;
           workingPacketData=store.caseToPacketData(remote);
           hydrateStaticFields(workingPacketData);
-          hydrateCharges(workingPacketData);
-          RecordPathRecordDetailsFields.hydrate(
-            document.getElementById("recordDetailsForm"),
-            remote.metadata?.recordPathStep2,addOffense);
+          const snapshot=remote.metadata?.recordPathStep2;
+          RecordPathRecordDetailsFields.hydrate(document.getElementById("recordDetailsForm"),snapshot);
+          hydrateCharges({charges:RecordPathRecordDetailsFields.savedCharges(workingPacketData.charges,snapshot)});
           setSaveStatus("Loaded saved Step 2 case information directly from your Supabase account.");
         }else{
           workingPacketData={petitioner:{},court:{},case:{},meta:{}};
@@ -1728,7 +1725,12 @@
         // Do not duplicate case data into localStorage on pagehide.
       }
 
-      init();
+      init().catch(()=>{
+        recordStatus.textContent="Saved offense details could not be loaded.";
+        document.getElementById("recordDetailsForm")?.querySelectorAll("input,select,textarea,button")
+          .forEach(el=>{el.disabled=true;});
+        setSaveStatus("Reload the page to try again. No case details were changed.");
+      });
     }());
   </script>
   <script src="js/i18n.js"></script>

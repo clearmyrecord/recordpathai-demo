@@ -24,27 +24,26 @@ function restoreControl(el,value){
   if(el.type==="checkbox")el.checked=value===true;
   else el.value=value===null||value===undefined?"":String(value);
 }
-function hydrate(form,snapshot,addCharge){
-  if(!form||!snapshot||snapshot.schemaVersion!==1)return false;
-  for(const [id,value] of Object.entries(snapshot.fields||{})){
-    const el=form.querySelector("#"+id);
-    if(el && !el.closest(".record-card"))restoreControl(el,value);
-  }
-  if(Array.isArray(snapshot.charges)){
-    const list=form.querySelector("#offenseList");
-    if(list){
-      list.replaceChildren();
-      for(const charge of snapshot.charges){
-        addCharge();
-        const card=list.lastElementChild;
-        for(const el of card?.querySelectorAll("[data-field]")||[])
-          if(Object.hasOwn(charge,el.dataset.field))
-            restoreControl(el,charge[el.dataset.field]);
-      }
-      if(!snapshot.charges.length)addCharge();
-    }
+function hydrate(form,snapshot){
+  if(!form||snapshot?.schemaVersion!==1)return false;
+  for(const el of form.querySelectorAll("input[id],select[id],textarea[id]")){
+    if(el.closest(".record-card")||!Object.hasOwn(snapshot.fields||{},el.id))continue;
+    const value=snapshot.fields[el.id];
+    // Older snapshots contain empty court controls even when the case has
+    // valid court information. Keep the saved case values in that situation.
+    if(!value && ["caseState","county","courtName","courtType","caseNumber"].includes(el.id))continue;
+    restoreControl(el,value);
   }
   return true;
+}
+function savedCharges(charges,snapshot){
+  const validRows=rows=>Array.isArray(rows)
+    ? rows.filter(row=>row && typeof row==="object" && !Array.isArray(row) &&
+        Object.values(row).some(value=>value===true ||
+          (typeof value==="string" && value.trim()!=="")))
+    : [];
+  const canonical=validRows(charges);
+  return canonical.length ? canonical : validRows(snapshot?.schemaVersion===1 ? snapshot.charges : []);
 }
 const escape=x=>String(x??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 function label(name){
@@ -80,5 +79,5 @@ function render(snapshot){
       '<h4>Charge '+(i+1)+'</h4><div class="detail-list">'+rows(charge)+'</div>'
     ).join("")+'</details>';
 }
-root.RecordPathRecordDetailsFields=Object.freeze({capture,hydrate,render});
+root.RecordPathRecordDetailsFields=Object.freeze({capture,hydrate,savedCharges,render});
 })(typeof window!=="undefined"?window:globalThis);
