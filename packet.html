@@ -1102,8 +1102,8 @@
               <section id="approvedPreviewPanel" aria-label="Watermarked signed packet preview" style="margin-top:18px;padding:18px;border:1px solid #b8c9e8;border-radius:14px;background:#f5f8ff;">
                 <h3 style="margin:0 0 8px;color:#17396d;">Step 2 — Preview Your Actual Application (View Only)</h3>
                 <p style="margin:0 0 14px;line-height:1.5;">This preview shows the <strong>last submitted signed draft</strong>. If you correct or add contact details in Step 1, you must submit a <strong>new signed packet</strong> before the preview will change. After Step 1, view each page of your submitted <strong>draft</strong> with a permanent <strong>PREVIEW ONLY — NOT FOR FILING</strong> watermark. For an eligible Wood County dismissal, review each page and confirm the exact document for digital checkout. <strong>No unwatermarked PDF download is available until Stripe verifies payment.</strong> Court checks and filings remain separate.</p>
-                <button type="button" id="openApprovedPreviewBtn" class="sig-small-btn" style="background:#1b4b9a;color:white;">Preview My Signed Application (View Only)</button>
-                <p id="approvedPreviewStatus" role="status" aria-live="polite" style="margin:12px 0;color:#344c74;">First prepare your real signed packet in Step 1; then preview it here.</p>
+                <button type="button" id="openApprovedPreviewBtn" class="sig-small-btn" style="background:#1b4b9a;color:white;">Reload Signed Application Preview (View Only)</button>
+                <p id="approvedPreviewStatus" role="status" aria-live="polite" style="margin:12px 0;color:#344c74;">Prepare your signed packet in Step 1. Both watermarked pages will appear here automatically.</p>
                 <div id="approvedPreviewPages" hidden style="max-height:520px;overflow:auto;background:#e7edf6;padding:10px;border-radius:9px;" aria-label="Watermarked signed packet pages"></div>
                 <label id="approvedPreviewConsentLabel" hidden style="display:flex;gap:10px;margin-top:14px;line-height:1.5;">
                   <input type="checkbox" id="approvedPreviewConsent" style="margin-top:4px;">
@@ -3250,7 +3250,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       async function prepareSignedReviewPdf() {
         const button=document.getElementById("prepareSignedReviewBtn");
+        const previewButton=document.getElementById("openApprovedPreviewBtn");
         if(button)button.disabled=true;
+        if(previewButton)previewButton.disabled=true;
         const draftStatus=document.getElementById("privateDraftStatus");
         if(draftStatus)draftStatus.textContent="Preparing your signed application…";
         setCheckoutError("");
@@ -3343,21 +3345,25 @@ document.addEventListener("DOMContentLoaded", async function () {
           });
           const result=await response.json().catch(()=>({}));
           if(!response.ok||result.ok!==true)throw new Error(result.error||"Private PDF upload failed.");
-          clearApprovedPreviewImages();
-          setStatus("Updated signed PDF saved privately. Select Step 2 to review both pages, including your contact details. Independent approval and payment are pending.");
+          setStatus("Updated signed PDF saved privately. Loading your watermarked Step 2 preview.");
           const previewStatus=document.getElementById("approvedPreviewStatus");
-          if(draftStatus)draftStatus.textContent="Signed application saved. Opening Step 2.";
-          if(previewStatus){
-            previewStatus.textContent="Your signed packet was received. Select Preview My Signed Application to view the watermarked draft.";
-            document.getElementById("approvedPreviewPanel")?.scrollIntoView({block:"start"});
-            await openApprovedPacketPreview();
-          }
+          if(draftStatus)draftStatus.textContent="Signed application saved. Loading Step 2 automatically…";
+          if(previewStatus)previewStatus.textContent="Your signed packet was received. Loading your watermarked preview automatically.";
+          document.getElementById("approvedPreviewPanel")?.scrollIntoView({block:"start"});
+          const previewLoaded=await openApprovedPacketPreview();
+          if(draftStatus)draftStatus.textContent=previewLoaded
+            ?"Signed application saved. Step 2 preview is ready."
+            :"Signed application saved. Step 2 preview could not load; use Reload Signed Application Preview to retry without signing again.";
+          if(previewLoaded)setStatus("Signed packet saved privately. Review all pages in Step 2 before confirming or paying.");
         }catch(error){
           const msg=error?.message||"Unable to prepare the private signed review copy.";
           if(draftStatus)draftStatus.textContent=msg;
           setCheckoutError(msg);
           setStatus(msg,"error");
-        }finally{if(button)button.disabled=false;}
+        }finally{
+          if(button)button.disabled=false;
+          if(previewButton)previewButton.disabled=false;
+        }
       }
 
       async function generateSealingPdf() {
@@ -3996,7 +4002,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           URL.revokeObjectURL(url);
         approvedPreviewState=null;
         const container=document.getElementById("approvedPreviewPages");
-        if(container){container.replaceChildren();container.hidden=true;}
+        if(container){container.replaceChildren();container.scrollTop=0;container.hidden=true;}
         const label=document.getElementById("approvedPreviewConsentLabel");
         const button=document.getElementById("confirmApprovedPreviewBtn");
         if(label)label.hidden=true;
@@ -4016,8 +4022,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
       async function openApprovedPacketPreview(){
         const openButton=document.getElementById("openApprovedPreviewBtn");
+        const submitButton=document.getElementById("prepareSignedReviewBtn");
+        const submitWasDisabled=submitButton?.disabled===true;
         const status=document.getElementById("approvedPreviewStatus");
         if(openButton)openButton.disabled=true;
+        if(submitButton)submitButton.disabled=true;
         clearApprovedPreviewImages();
         setCheckoutError("");
         if(status)status.textContent="Retrieving your saved signed packet as a watermarked image preview...";
@@ -4074,6 +4083,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             approvedPreviewState.loaded++;
           }
           container.hidden=false;
+          container.scrollTop=0;
           const approved=manifest.reviewStatus==="approved";
           document.getElementById("approvedPreviewConsentLabel").hidden=!approved;
           document.getElementById("confirmApprovedPreviewBtn").hidden=!approved;
@@ -4082,13 +4092,18 @@ document.addEventListener("DOMContentLoaded", async function () {
             manifest.confirmed ?
               "You already confirmed this version. Review it again if anything looks incorrect." :
               "All "+pages+" signed pages are displayed. Review and confirm the exact document before payment.";
+          return true;
         }catch(error){
           clearApprovedPreviewImages();
           const msg=error?.message||"Approved packet preview is unavailable.";
           if(status)status.textContent=msg;
           // A missing draft is normal before Step 1; do not treat that as
           // a checkout failure or duplicate a large red alert above the quote.
-        }finally{if(openButton)openButton.disabled=false;}
+          return false;
+        }finally{
+          if(openButton)openButton.disabled=false;
+          if(submitButton)submitButton.disabled=submitWasDisabled;
+        }
       }
       async function confirmApprovedPacketPreview(){
         const button=document.getElementById("confirmApprovedPreviewBtn");
