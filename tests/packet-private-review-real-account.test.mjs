@@ -56,6 +56,7 @@ function scenario({requestedId=id,consent=true,loaded=saved,mappedResult=mapped,
     getMissingRequiredFields:()=>[],
     persistPacketContactForReview:async()=>{events.contactSaves++;},
     clearApprovedPreviewImages:()=>{},
+    openApprovedPacketPreview:async()=>{events.previewLoads=(events.previewLoads||0)+1;return true;},
     renderMissingInfoPanel:()=>{},
     renderSignedCourtPdfBytes:async data=>{
       events.rendered.push(data);
@@ -87,7 +88,8 @@ test("Private review uses canonical account record, not stale sample, and upload
   assert.equal(events.uploads[0].headers["x-recordpath-private-review-consent"],"yes");
   assert.equal(events.saveCalls,0,"Review cannot modify source case or request any charge");
   assert.equal(events.contactSaves,1,"Owner's filing contact is explicitly confirmed and persisted before upload");
-  assert.ok(events.status.at(-1).includes("signed PDF saved privately"));
+  assert.equal(events.previewLoads,1,"Successful private upload automatically opens Step 2");
+  assert.ok(events.status.at(-1).includes("Signed packet saved privately"));
   assert.ok(!events.errors.at(-1));
 });
 
