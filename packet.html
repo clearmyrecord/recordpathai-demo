@@ -2189,7 +2189,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           arrest_date: formatDateForCourt(charge.arrest_date || charge.offense_date || ""),
           citation_date: formatDateForCourt(charge.citation_date || ""),
           offense_date: formatDateForCourt(charge.offense_date || ""),
-          disposition: charge.disposition || charge.final_disposition || "",
+          disposition: charge.final_disposition || charge.disposition || "",
           disposition_date: formatDateForCourt(charge.disposition_date || charge.dispositionDate || ""),
           sentencing_date: formatDateForCourt(charge.sentencing_date || ""),
           release_date: formatDateForCourt(charge.release_date || ""),
@@ -2204,8 +2204,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           arresting_agency: charge.arresting_agency || "",
           prosecutor_agency: charge.prosecutor_agency || "",
           final_disposition: charge.final_disposition || charge.disposition || "",
-          is_dismissed: packetFlagIsYes(charge.is_dismissed) || String(charge.final_disposition || "").toLowerCase() === "dismissed",
-          is_convicted: packetFlagIsYes(charge.is_convicted) || String(charge.final_disposition || "").toLowerCase() === "convicted",
+          is_dismissed: charge.final_disposition || charge.disposition
+            ? String(charge.final_disposition || charge.disposition).trim().toLowerCase() === "dismissed"
+            : packetFlagIsYes(charge.is_dismissed),
+          is_convicted: charge.final_disposition || charge.disposition
+            ? String(charge.final_disposition || charge.disposition).trim().toLowerCase() === "convicted"
+            : packetFlagIsYes(charge.is_convicted),
           is_sealable: charge.is_sealable !== false,
           pending_charges: packetFlagIsYes(charge.pending_charges) || packetFlagIsYes(charge.pendingCharges),
           sex_offense_registry: packetFlagIsYes(charge.sex_offense_registry) || packetFlagIsYes(charge.isSexOffenseRegistry) || packetFlagIsYes(charge.isSexOffense),
@@ -2306,7 +2310,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
           eligibility: {
             state_ruleset: state,
-            filing_type: "Application for Sealing of Record of Conviction",
+            filing_type: normalizedCharges.every(charge => charge.is_dismissed)
+              ? "Application for Sealing of Dismissed Case"
+              : (first.is_convicted ? "Application for Sealing of Record of Conviction" : "Record sealing"),
             is_eligible: false,
             eligibility_status: "Needs Review",
             eligibility_reason: t("packet.waitingPeriodSatisfiedSavedData"),
@@ -2355,7 +2361,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             no_pending_cases: true,
             all_fines_paid: true,
             charge_dismissed: first.is_dismissed,
-            charge_convicted: first.is_convicted || true,
+            charge_convicted: first.is_convicted === true,
             first_time_offense: true,
             repeat_offender: false
           },
