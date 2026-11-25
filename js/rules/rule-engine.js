@@ -22,6 +22,13 @@
   function getCompletionDateResult(normalizedCase) {
     var charge = normalizedCase.primaryCharge || {};
     var outcomeObject = (normalizedCase.originalCaseData && normalizedCase.originalCaseData.outcome) || {};
+    if (isOhioDismissal(normalizedCase)) {
+      var dates = normalizedCase.charges.map(function (item) { return dateUtils.toIsoDate(item.dispositionDate); });
+      var dispositionDate = dates.length > 1
+        ? (dates.every(Boolean) ? dates.sort().pop() : "")
+        : charge.dispositionDate || firstValue(outcomeObject, ["dispositionDate", "disposition_date"]);
+      return { date: dateUtils.toIsoDate(dispositionDate), field: "disposition_date", raw: dispositionDate };
+    }
     var sentencing = normalizedCase.sentencing || {};
     var sources = [charge, outcomeObject, sentencing, normalizedCase.originalCaseData || {}];
     var priority = [
@@ -46,6 +53,10 @@
     return { date: "", field: "", raw: "" };
   }
 
+  function isOhioDismissal(record) {
+    return record.court.state === "oh" && lower(record.outcome) === "dismissed";
+  }
+
   function getRiskFlags(normalizedCase) {
     var eligibility = normalizedCase.eligibility || {};
     var flags = [];
@@ -54,7 +65,7 @@
       if (isYes(charge.violentOffense) || isYes(eligibility.felony_violence_offense)) flags.push(prefix + ": felony violence offense flag");
       if (isYes(charge.sexOffense) || isYes(eligibility.sex_offense_registry)) flags.push(prefix + ": sex offense registry flag");
       if (isYes(charge.domesticViolence)) flags.push(prefix + ": domestic violence flag");
-      if (isYes(charge.trafficOffense) || /traffic/i.test(charge.name + " " + charge.statuteCode)) flags.push(prefix + ": traffic offense flag");
+      if (isYes(charge.trafficOffense) || /\btraffic\b/i.test(charge.name + " " + charge.statuteCode)) flags.push(prefix + ": traffic offense flag");
       if (isYes(charge.pendingCharges) || isYes(eligibility.has_pending_cases)) flags.push(prefix + ": pending charges flag");
     });
     return flags;
@@ -64,7 +75,7 @@
     var missing = [];
     var outcome = lower(normalizedCase.outcome);
     if (!outcome) missing.push("Case outcome/disposition");
-    if (outcome !== "pending" && !completion.date) missing.push("Sentence completion, probation completion, discharge, or final completion date");
+    if (outcome !== "pending" && !completion.date) missing.push(isOhioDismissal(normalizedCase) ? "Dismissal disposition date" : "Sentence completion, probation completion, discharge, or final completion date");
     if (!normalizedCase.court.caseNumber) missing.push("Case number");
     if (!normalizedCase.court.courtName) missing.push("Court name");
     if (!normalizedCase.charges.length || !normalizedCase.primaryCharge.name) missing.push("Charge information");
@@ -89,6 +100,12 @@
     var missing = getMissingRequirements(normalized, completion);
     var outcome = lower(normalized.outcome);
     var status = statusFromResult(eligibilityDate, risks, missing, outcome);
+    if (isOhioDismissal(normalized)) {
+      if (normalized.charges.some(function (charge) { return lower(charge.disposition) !== "dismissed"; })) {
+        missing.push("Confirm the final outcome of each count before using the dismissal application");
+      }
+      if (missing.length || risks.length) status = "More information needed";
+    }
     var needsReview = status === "More information needed" || status === "Likely ineligible";
     var days = dateUtils.daysUntil(eligibilityDate);
 

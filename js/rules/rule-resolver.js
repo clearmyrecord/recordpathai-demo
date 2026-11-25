@@ -99,7 +99,7 @@
       stateRules = ohioRules;
     }
     var rule = stateRules.resolve(normalized);
-    if (profile && profile.defaultRuleCitation) {
+    if (profile && profile.defaultRuleCitation && rule.reliefType === "Ohio conviction sealing") {
       rule.ruleCitation = profile.defaultRuleCitation;
     }
     return { normalizedCase: normalized, courtProfile: profile, rule: rule };

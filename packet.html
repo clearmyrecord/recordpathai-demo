@@ -914,9 +914,9 @@
             <h2 class="section-title" data-i18n="packet.eligibilityStatus">Eligibility Status</h2>
 
             <div class="status-banner">
-              <div id="statusPill" class="status-pill pending" data-i18n="packet.eligibilityNeedsReview">Eligibility Needs Review</div>
-              <h3 id="eligibilityHeadline" class="status-headline" data-i18n="packet.checkingEligibility">Checking your eligibility...</h3>
-              <p id="eligibilitySummary" class="status-copy" data-i18n="packet.reviewingCaseStateData">We are reviewing the case-state data you entered.</p>
+              <div id="statusPill" class="status-pill pending">Eligibility Needs Review</div>
+              <h3 id="eligibilityHeadline" class="status-headline">Checking your eligibility...</h3>
+              <p id="eligibilitySummary" class="status-copy">We are reviewing the case-state data you entered.</p>
               <ul id="eligibilityReasons" class="reason-list"></ul>
             </div>
 
@@ -926,7 +926,7 @@
                 <p class="date-value" id="reliefTypeValue">—</p>
               </div>
               <div class="date-box">
-                <p class="date-label" data-i18n="packet.dischargeDate">Discharge Date</p>
+                <p class="date-label" id="eligibilityDateBasis">Discharge Date</p>
                 <p class="date-value" id="dischargeDateValue">—</p>
               </div>
               <div class="date-box">
@@ -1535,6 +1535,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         const pastDateEligible = Boolean(dateValue) && isEligibilityDatePastOrToday(dateValue);
         const futureDate = Boolean(dateValue) && isEligibilityDateInFuture(dateValue);
 
+        if (normalized.completionDateField === "disposition_date" && normalized.needsReview) {
+          return { canCheckout: false, kind: "unknown", message: "Review the dismissal details before payment.", warning: "", result: normalized };
+        }
         if (hasBlocking) {
           return { canCheckout: false, kind: "ineligible", message: "This record does not appear eligible yet based on the information entered.", warning: "", result: normalized };
         }
@@ -1611,7 +1614,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         const validCandidates = candidates.filter(Boolean);
         const eligibleCandidate = validCandidates.find((candidate) => evaluatePacketCheckoutEligibility(candidate).canCheckout);
-        const selected = eligibleCandidate || validCandidates[0] || null;
+        const selected = validCandidates[0]?.completionDateField === "disposition_date" ? validCandidates[0] : (eligibleCandidate || validCandidates[0] || null);
         return syncResolvedPacketEligibility(data, selected) || selected;
       }
 
@@ -2157,6 +2160,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
       }
 
+      function packetFlagIsYes(value) {
+        return /^(true|yes|y|1)$/i.test(String(value).trim());
+      }
+
       function buildNormalizedPacketData(raw) {
         const petitioner = raw.petitioner || {};
         const address = petitioner.address || {};
@@ -2183,7 +2190,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           citation_date: formatDateForCourt(charge.citation_date || ""),
           offense_date: formatDateForCourt(charge.offense_date || ""),
           disposition: charge.disposition || charge.final_disposition || "",
-          disposition_date: formatDateForCourt(charge.disposition_date || ""),
+          disposition_date: formatDateForCourt(charge.disposition_date || charge.dispositionDate || ""),
           sentencing_date: formatDateForCourt(charge.sentencing_date || ""),
           release_date: formatDateForCourt(charge.release_date || ""),
           probation_end_date: formatDateForCourt(charge.probation_end_date || charge.probationEndDate || charge.discharge_date || charge.dischargeDate || ""),
@@ -2197,13 +2204,13 @@ document.addEventListener("DOMContentLoaded", async function () {
           arresting_agency: charge.arresting_agency || "",
           prosecutor_agency: charge.prosecutor_agency || "",
           final_disposition: charge.final_disposition || charge.disposition || "",
-          is_dismissed: !!charge.is_dismissed || String(charge.final_disposition || "").toLowerCase() === "dismissed",
-          is_convicted: !!charge.is_convicted || String(charge.final_disposition || "").toLowerCase() === "convicted",
+          is_dismissed: packetFlagIsYes(charge.is_dismissed) || String(charge.final_disposition || "").toLowerCase() === "dismissed",
+          is_convicted: packetFlagIsYes(charge.is_convicted) || String(charge.final_disposition || "").toLowerCase() === "convicted",
           is_sealable: charge.is_sealable !== false,
-          pending_charges: !!charge.pending_charges || !!charge.pendingCharges,
-          sex_offense_registry: !!charge.sex_offense_registry || !!charge.isSexOffenseRegistry || !!charge.isSexOffense,
-          victim_under_13: !!charge.victim_under_13 || !!charge.victimUnder13,
-          felony_violence_offense: !!charge.felony_violence_offense || !!charge.isViolentOffense,
+          pending_charges: packetFlagIsYes(charge.pending_charges) || packetFlagIsYes(charge.pendingCharges),
+          sex_offense_registry: packetFlagIsYes(charge.sex_offense_registry) || packetFlagIsYes(charge.isSexOffenseRegistry) || packetFlagIsYes(charge.isSexOffense),
+          victim_under_13: packetFlagIsYes(charge.victim_under_13) || packetFlagIsYes(charge.victimUnder13),
+          felony_violence_offense: packetFlagIsYes(charge.felony_violence_offense) || packetFlagIsYes(charge.isViolentOffense),
           f3_felony_count: charge.f3_felony_count || charge.totalF3 || "",
           ineligible_reason: charge.ineligible_reason || "",
           fine_amount_due: charge.fine_amount_due || "",
@@ -2305,7 +2312,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             eligibility_reason: t("packet.waitingPeriodSatisfiedSavedData"),
             estimated_eligible_on: "",
             waiting_period_complete: false,
-            has_pending_cases: false,
+            has_pending_cases: packetFlagIsYes(raw.eligibility?.has_pending_cases) || raw.case?.proceedings_status === "open",
             has_outstanding_fines: false,
             has_open_warrants: false,
             requires_prosecutor_notice: true,
@@ -2722,23 +2729,13 @@ document.addEventListener("DOMContentLoaded", async function () {
         const summary = document.getElementById("eligibilitySummary");
         const reasonList = document.getElementById("eligibilityReasons");
 
-        const flagLabels = {
-          "Missing discharge date": t("packet.flag.missingDischargeDate"),
-          "F1/F2 disqualifying level": t("packet.flag.f1f2"),
-          "Pending charges": t("packet.flag.pendingCharges"),
-          "Traffic offense": t("packet.flag.trafficOffense"),
-          "Three or more F3 felonies": t("packet.flag.threePlusF3"),
-          "Domestic violence": t("packet.flag.domesticViolence"),
-          "Sex offense registry": t("packet.flag.sexRegistry"),
-          "Victim under 13": t("packet.flag.victimUnder13"),
-          "Felony violence offense": t("packet.flag.felonyViolence")
-        };
-        const checks = Object.keys(flagLabels).map((flag) => [flagLabels[flag], result.flags.includes(flag)]);
+        const isDismissal = result.completionDateField === "disposition_date";
+        setText("eligibilityDateBasis", isDismissal ? "Dismissal disposition date" : "Discharge date");
 
         if (result.isEligibleNow) {
           pill.className = "status-pill eligible";
           pill.textContent = "Likely Eligible";
-          headline.textContent = `Screening result for ${escapeHtml(data.court.state || "this case")}`;
+          headline.textContent = isDismissal ? "Dismissed case — likely eligible for sealing" : `Screening result for ${data.court.state || "this case"}`;
           summary.textContent = result.reason || t("packet.waitingSatisfiedNoFlags");
         } else if (result.isNotYetEligible) {
           pill.className = "status-pill review";
@@ -2749,12 +2746,14 @@ document.addEventListener("DOMContentLoaded", async function () {
           pill.className = "status-pill review";
           pill.textContent = "Needs Review";
           headline.textContent = "Screening Needs Review";
-          summary.textContent = result.flags.includes("Missing discharge date")
-            ? t("packet.needsReviewMissingDischarge")
-            : (charge.ineligible_reason || result.reason || t("packet.reviewChecklistBeforeFiling"));
+          summary.textContent = result.flags.length ? "Review the following case details." : (charge.ineligible_reason || result.reason || "Review the case details before filing.");
         }
 
-        reasonList.innerHTML = checks.map(([label, flagged]) => `<li>${escapeHtml(label)}: <strong>${flagged ? "Yes" : "No"}</strong></li>`).join("");
+        reasonList.replaceChildren(...result.flags.map((flag) => {
+          const item = document.createElement("li");
+          item.textContent = flag;
+          return item;
+        }));
       }
 
       async function updateTemplateCallout() {

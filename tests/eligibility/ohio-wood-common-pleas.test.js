@@ -40,3 +40,20 @@ assert.equal(result.courtProfile?.courtName, 'Wood County Court of Common Pleas'
 assert.equal(result.reliefType, 'Ohio conviction sealing');
 
 console.log('Ohio Wood County Common Pleas eligibility test passed:', result.estimatedEligibleDate);
+
+const evaluateDismissal = (updates = {}, additionalCharges = []) =>
+  globalThis.RecordPathEligibilityEngine.resolveEligibilityForCase({
+    court: { state: 'OH', courtName: 'Wood County Court of Common Pleas', caseNumber: 'TEST' },
+    charges: [{ chargeName: 'Drug trafficking', disposition: 'Dismissed',
+      dispositionDate: '2020-02-12', dischargeDate: '2021-08-09', ...updates }, ...additionalCharges]
+  });
+
+const dismissal = evaluateDismissal();
+assert.equal(dismissal.status, 'Eligible now');
+assert.equal(dismissal.completionDateField, 'disposition_date');
+assert.equal(dismissal.estimatedEligibleDate, '2020-02-12');
+assert.equal(dismissal.ruleCitation, 'Ohio R.C. 2953.33');
+assert.deepEqual(dismissal.flags, []);
+assert.equal(evaluateDismissal({ dispositionDate: '' }).estimatedEligibleDate, '');
+assert.equal(evaluateDismissal({ pendingCharges: true }).isEligibleNow, false);
+assert.equal(evaluateDismissal({}, [{ disposition: 'Convicted' }]).isEligibleNow, false);

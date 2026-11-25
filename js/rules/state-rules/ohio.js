@@ -31,7 +31,7 @@
   function resolve(context) {
     var outcome = String(context.outcome || "").toLowerCase();
     if (["dismissed", "not guilty", "acquitted", "no bill"].indexOf(outcome) !== -1) {
-      return { waitingPeriodYears: 0, waitingPeriodMonths: 0, waitingPeriodText: "No waiting period", ruleCitation: "Ohio dismissal sealing", reliefType: "Ohio non-conviction sealing" };
+      return { waitingPeriodYears: 0, waitingPeriodMonths: 0, waitingPeriodText: "No waiting period", ruleCitation: "Ohio R.C. 2953.33", reliefType: "Ohio non-conviction sealing" };
     }
     return getOhioConvictionRule(context);
   }
