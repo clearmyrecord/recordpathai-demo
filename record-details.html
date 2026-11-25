@@ -1587,7 +1587,6 @@
         data.eligibility.has_pending_cases=data.case.proceedings_status!=="none" ||
           charges.some(c=>c.pending_charges||c.pendingCharges);
         workingPacketData=data;
-        window.RecordPathDataBridge?.derivePacketData?.(data);
         showFeeGuidance();
         const casePayload=buildCurrentCasePayload(profile,shared,charges);
         if(verifiedCaseId)casePayload.case_id=verifiedCaseId;

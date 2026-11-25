@@ -96,3 +96,27 @@ test("empty or stale Step 2 snapshots cannot replace saved charge rows",()=>{
   }
   assert.equal(fields.savedCharges([],{schemaVersion:1,charges:[null,row]})[0],row);
 });
+
+test("Step 2 can save new and resumed cases before packet-only fields exist",async()=>{
+  const block=page.slice(page.indexOf("function saveDraft("),page.indexOf("function hasRecordDetailsCompletion"));
+  const persistence=page.slice(page.indexOf("function persistCurrentCaseDraft"),page.indexOf("function scheduleAutosave"));
+  const charge={charge_name:"Sample offense",charge_code:"123",final_disposition:"Dismissed"};
+  for(const workingPacketData of [{petitioner:{},court:{},case:{},meta:{}},{court:{},charges:[charge]}]){
+    let written;
+    const context=vm.createContext({
+      window:{RecordPathUserStore:{saveRecordDetailsToSupabase:async payload=>{
+        written=payload;
+        return {case_id:"sample",metadata:{recordPathStep2:{schemaVersion:1}}};
+      }}},
+      workingPacketData,verifiedCaseId:"",verifiedRemoteRecordWatchCase:null,pendingCaseSave:Promise.resolve(),
+      collectProfile:()=>({}),collectSharedCaseData:()=>({case_number:"TEST-1"}),
+      collectCharges:()=>[charge],value:()=>"",normalizeDateAliases(){},showFeeGuidance(){},
+      buildCurrentCasePayload:(_profile,shared,charges)=>({caseNumber:shared.case_number,charges}),
+      setSaveStatus(){},renderRecordWatchPanel(){}
+    });
+    vm.runInContext(source("js/packet-data-bridge.js"),context);
+    const saved=await vm.runInContext(block+persistence+"\npersistCurrentCaseDraft(saveDraft().casePayload)",context);
+    assert.equal(saved.savedCaseId,"sample");
+    assert.equal(written.charges[0].charge_name,"Sample offense");
+  }
+});
