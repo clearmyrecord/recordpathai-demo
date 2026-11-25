@@ -3191,6 +3191,19 @@ document.addEventListener("DOMContentLoaded", async function () {
             const path = fieldPath(field);
             let value = getByPath(data, path, "");
 
+            // Both official Wood County applications have one street-address
+            // line on source page 4 (final page 2). Keep separate fields on
+            // the address-verification page, but include the saved unit here.
+            const combinedWoodAddress=isWoodOfficial && pageIndex===3 &&
+              path==="petitioner.address.line1";
+            if(combinedWoodAddress){
+              const unit=String(getByPath(data,"petitioner.address.line2","")||"").trim();
+              value=[String(value||"").trim(),unit].filter(Boolean).join(", ");
+              // Never silently truncate or spill a unit number beyond the line.
+              if(helvetica.widthOfTextAtSize(value,6)>width)
+                throw new Error("The complete mailing address is too long for the court form. Review the saved street and apartment address before preparing the packet.");
+            }
+
             if (field.type === "date") {
               value = formatDateForCourt(value);
             }
@@ -3233,7 +3246,7 @@ document.addEventListener("DOMContentLoaded", async function () {
               textY,
               width,
               fontSize,
-              7,
+              combinedWoodAddress ? 6 : 7,
               field.bold ? helveticaBold : helvetica
             );
           });
@@ -3345,6 +3358,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           });
           const result=await response.json().catch(()=>({}));
           if(!response.ok||result.ok!==true)throw new Error(result.error||"Private PDF upload failed.");
+          clearApprovedPreviewImages();
           setStatus("Updated signed PDF saved privately. Loading your watermarked Step 2 preview.");
           const previewStatus=document.getElementById("approvedPreviewStatus");
           if(draftStatus)draftStatus.textContent="Signed application saved. Loading Step 2 automatically…";
