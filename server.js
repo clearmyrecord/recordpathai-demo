@@ -344,6 +344,12 @@ function publicSupabaseConfig() {
 }
 
 // Public pricing information only; this endpoint accepts no names, signatures or case numbers.
+function digitalCheckoutConfigured(){
+  return process.env.RECORDPATH_DIGITAL_PACKET_CHECKOUT_ENABLED==="true" &&
+    (process.env.STRIPE_SECRET_KEY||"").startsWith("sk_live_") &&
+    (process.env.STRIPE_WEBHOOK_SECRET||"").startsWith("whsec_") && packetDatabaseReady();
+}
+
 app.get("/api/packet/quote", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const quote = quotePacketPricing({
@@ -352,7 +358,7 @@ app.get("/api/packet/quote", (req, res) => {
     courtType: req.query.courtType,
     formType: req.query.formType
   });
-  return res.json({ ok: true, quote });
+  return res.json({ ok: true, quote, digitalCheckoutConfigured:digitalCheckoutConfigured() });
 });
 
 
@@ -1170,7 +1176,8 @@ async function dispatchPaidPacketToLob(sessionId,res){
     const liveSession=await stripe.checkout.sessions.retrieve(sessionId,{
       expand:["payment_intent.latest_charge"]
     });
-    if(!verifyLivePacketPaymentForLob(liveSession,job).ok)
+    if(liveSession?.metadata?.signedPdfSha!==draft.signed_pdf_sha256 ||
+       !verifyLivePacketPaymentForLob(liveSession,job).ok)
       return res.status(409).json({ok:false,error:
         "The live Stripe payment is not safely confirmed (or was refunded/disputed). No check was issued."});
     // Database claim occurs immediately before the irreversible provider call.
@@ -1600,7 +1607,7 @@ async function packetReleaseStatus(userId,caseId,deliveryMode="mail") {
     const review=Array.isArray(rows)?rows[0]:null;
     const runtime={
       stripeLiveEnabled:(deliveryMode==="digital"
-        ? process.env.RECORDPATH_DIGITAL_PACKET_CHECKOUT_ENABLED==="true"
+        ? digitalCheckoutConfigured()
         : process.env.RECORDPATH_LIVE_PACKET_CHECKOUT==="true") &&
         (process.env.STRIPE_SECRET_KEY||"").startsWith("sk_live_"),
       lobLiveEnabled:process.env.LOB_LIVE_CHECKS_ENABLED==="true" &&

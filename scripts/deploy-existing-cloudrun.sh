@@ -83,9 +83,25 @@ if (("${#UNUSED_RUNTIME_SECRET_BINDINGS[@]}" > 0)); then
   echo "Excluding unused runtime secret references from the candidate: $joined"
 fi
 
+# Apply the digital checkout rollout once to the existing production service.
+# Keeping a separate rollout marker lets operations pause checkout on later revisions.
+DIGITAL_ARGS=()
+if [[ "$PROJECT/$REGION/$SERVICE" == "recordpathai-production/us-west1/recordpathai" ]] &&
+   python3 - "$BEFORE" <<'PYFLAG'
+import json,sys
+with open(sys.argv[1]) as file:
+    containers=json.load(file).get("spec",{}).get("template",{}).get("spec",{}).get("containers",[])
+env={entry["name"]:entry for container in containers for entry in container.get("env",[])}
+sys.exit(0 if "STRIPE_SECRET_KEY" in env and "STRIPE_WEBHOOK_SECRET" in env and
+         env.get("RECORDPATH_DIGITAL_ROLLOUT",{}).get("value") != "1" else 1)
+PYFLAG
+then
+  DIGITAL_ARGS+=("--update-env-vars=RECORDPATH_DIGITAL_PACKET_CHECKOUT_ENABLED=true,RECORDPATH_DIGITAL_ROLLOUT=1")
+fi
+
 echo "Deploying a tagged new revision at 0% traffic for independent verification..."
 gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" \
-  "${DEPLOY_SECRET_ARGS[@]}" --no-traffic --tag "$CANDIDATE_TAG" --quiet
+  "${DEPLOY_SECRET_ARGS[@]}" "${DIGITAL_ARGS[@]}" --no-traffic --tag "$CANDIDATE_TAG" --quiet
 # Cloud Run status can lag the successful deploy response. Retry the
 # control-plane read, but NEVER promote unless a single tagged ready revision
 # is proven to be distinct from the currently serving one and at 0% traffic.
@@ -135,6 +151,11 @@ fi
 NEW_REV="${CANDIDATE[0]}"
 URL="${CANDIDATE[1]}"
 echo "Verified preflight target revision $NEW_REV at $URL"
+
+if (( ${#DIGITAL_ARGS[@]} )); then
+  curl -fsS --retry 3 --max-time 30 "$URL/api/packet/quote" |
+    python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("digitalCheckoutConfigured") is True else 1)'
+fi
 
 # Verify the complete HTTP response before searching its contents. With
 # "set -o pipefail", piping curl into "grep -q" can make curl exit 23 (SIGPIPE)
