@@ -70,7 +70,9 @@ test("Eligibility Save and Continue await account persistence before navigation"
   const end=html.indexOf('document.querySelectorAll("#user-profile-form input',start);
   const code=html.slice(start,end);
   assert.match(code,/await RecordPathEligibilityProfile\.save\(RecordPathEligibilityProfile\.fromForm\(document\)\)/);
-  assert.ok(code.indexOf("await RecordPathEligibilityProfile.save")<code.indexOf('window.location.href="record-details.html"'));
+  assert.ok(code.indexOf("await RecordPathEligibilityProfile.save")<code.indexOf("window.location.href=nextCaseId"));
+  assert.match(code,/await store\.saveRecordDetailsToSupabase/);
+  assert.match(code,/record-details\.html\?caseId=/);
   assert.doesNotMatch(code,/alert\("Intake saved\."\)/);
   assert.match(html,/js\/eligibility-profile-sync\.js/);
 });

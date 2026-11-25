@@ -730,6 +730,7 @@
       await hydrateSupabasePersonalProfile();
       // Imported cases come only from the separately approved, verified
       // court index, after applicant consent on the search results page.
+      let confirmedCourtImport=null;
       const prefill = window.RecordPathWoodCountyPrefill;
       if(prefill && window.RecordPathDataBridge){
         const accepted=prefill.applyStaged(RecordPathDataBridge,{
@@ -740,7 +741,8 @@
           )
         });
         if(accepted.status==="imported"){
-          const current=RecordPathDataBridge.loadPacketData();
+          const current=accepted.data;
+          confirmedCourtImport=current;
           for(const input of document.querySelectorAll("[data-path]")){
             const path=input.dataset.path;
             const value=RecordPathDataBridge.getValueByPath(current,path);
@@ -777,7 +779,34 @@
           await RecordPathEligibilityProfile.save(RecordPathEligibilityProfile.fromForm(document));
           setText("personalAccountSaveStatus","Saved and verified in Supabase. Your packet and RecordWatch will use these account details.");
           renderRecordWatchPanel();
-          if(continueToCases)window.location.href="record-details.html";
+          if(continueToCases){
+            let nextCaseId=caseId;
+            if(confirmedCourtImport){
+              setText("personalAccountSaveStatus","Saving the confirmed court record to your account...");
+              const store=window.RecordPathUserStore;
+              const {court,charges,meta}=confirmedCourtImport;
+              const normalizeNumber=number=>String(number||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+              const existing=(await store.getSupabaseCases()).filter(item=>
+                ["OH","OHIO"].includes(String(item.caseState||"").toUpperCase()) &&
+                /^wood(?: county)?$/i.test(String(item.county||"").trim()) &&
+                (item.courtType==="court-of-common-pleas" ||
+                  (!item.courtType && item.courtName===court.name)) &&
+                normalizeNumber(item.caseNumber)===normalizeNumber(court.case_number));
+              if(existing.length>1)
+                throw new Error("Multiple saved versions of this court case exist. Open the correct one from your dashboard.");
+              const saved=existing[0] || await store.saveRecordDetailsToSupabase({
+                caseState:court.state,county:court.county,courtName:court.name,
+                courtType:"court-of-common-pleas",caseNumber:court.case_number,charges,
+                eligibilityStatus:"Needs Review",
+                metadata:{recordPathCourtImport:meta}
+              });
+              nextCaseId=saved?.case_id;
+              if(!nextCaseId)throw new Error("Supabase did not confirm the imported court record.");
+            }
+            window.location.href=nextCaseId
+              ? "record-details.html?caseId="+encodeURIComponent(nextCaseId)
+              : "record-details.html";
+          }
         }catch(error){
           setText("personalAccountSaveStatus",error?.message||"Account save failed. Browser draft retained; packet remains unchanged.");
         }finally{
