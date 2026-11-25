@@ -70,5 +70,11 @@ test("No draft is a guided Step 1 state, not a checkout error",()=>{
     ?.split('async function confirmApprovedPacketPreview()',1)[0];
   const catchBlock=preview.split('}catch(error){')[1]||"";
   assert.doesNotMatch(catchBlock,/setCheckoutError\(msg\)/);
-  assert.match(html,/Your signed packet was received\. Select Preview My Signed Application/);
+  const submit=html.split('async function prepareSignedReviewPdf()')[1]
+    ?.split('async function generateSealingPdf()',1)[0];
+  assert.ok(submit);
+  assert.match(submit,/if\(!response\.ok\|\|result\.ok!==true\)throw/);
+  assert.match(submit,/await openApprovedPacketPreview\(\)/);
+  assert.ok(submit.indexOf('result.ok!==true') < submit.indexOf('await openApprovedPacketPreview()'));
+  assert.match(html,/Your signed packet was received\./);
 });
