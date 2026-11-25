@@ -63,12 +63,12 @@ const nested={
     level:"F5",disposition_date:"2020-01-15",discharge_date:"2023-01-15"}],
   generated:{current_date:"2026-11-14"}
 };
-function makeRenderer({ink=true,templateMapping=mapping}={}){
+function makeRenderer({ink=true,templateMapping=mapping,sourcePdf=original}={}){
   const context=vm.createContext({
     window:{PDFLib:{PDFDocument,StandardFonts,rgb}},
     loadTemplateMapping:async()=>templateMapping,
     normalizeFields:m=>m.mappings||m.fields||[],
-    loadTemplatePdf:async()=>original,
+    loadTemplatePdf:async()=>sourcePdf,
     hasUsableDrawnSignature:()=>ink,
     signatureImageBytes:ink?syntheticInkPng():null,
     SIGNATURE_REQUIRED_MESSAGE:"Signature required",
@@ -113,6 +113,10 @@ try {
     assert.ok(normalized(texts.join(" ")).includes(normalized(value)),
       "Actual signed PDF must visibly contain mapped "+label+"; an untouched blank official PDF is not acceptable");
   }
+  for(const [index,pageText] of texts.entries()){
+    assert.ok(normalized(pageText).includes("APTTEST"),
+      "Saved apartment must be visible on conviction packet page "+(index+1));
+  }
   const sourceApp=await unsignedOriginal.getPage(4);
   const finalApp=await rendered.getPage(2);
   const countImageOps=async page=>(await page.getOperatorList()).fnArray.filter(
@@ -129,6 +133,20 @@ try {
 } finally {
   await rendered.destroy();await unsignedOriginal.destroy();
 }
+const dismissal=registry.find(t=>t.state==="OH"&&t.county==="Wood"&&t.formType==="sealing-dismissal");
+assert.ok(dismissal,"Reviewed Wood County dismissal template is required");
+const dismissalMapping=JSON.parse(readFileSync(new URL("../"+dismissal.mappingPath,import.meta.url),"utf8"));
+const dismissalOriginal=readFileSync(new URL("../"+dismissal.pdfPath,import.meta.url));
+const dismissalBytes=await makeRenderer({templateMapping:dismissalMapping,sourcePdf:dismissalOriginal})(nested,dismissal);
+const dismissalDoc=await getDocument({data:new Uint8Array(dismissalBytes),useSystemFonts:true}).promise;
+try{
+  assert.equal(dismissalDoc.numPages,2);
+  for(let i=1;i<=2;i++){
+    const page=await dismissalDoc.getPage(i);
+    const content=(await page.getTextContent()).items.map(x=>x.str||"").join(" ").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    assert.ok(content.includes("APTTEST"),"Saved apartment must be visible on dismissal packet page "+i);
+  }
+}finally{await dismissalDoc.destroy();}
 const doc=await PDFDocument.load(signed);
 const bold=await doc.embedFont(StandardFonts.HelveticaBold);
 for(const page of doc.getPages()){
