@@ -17,11 +17,12 @@ export function validSandboxPacketSession(session,signedId){
   const serviceFee=Number(session.metadata.serviceFeeCents);
   const courtFee=Number(session.metadata.courtFeeCents);
   if(!UUID.test(owner||"") || !UUID.test(caseId||"") ||
-     serviceFee!==PACKET_PRICE_CENTS || courtFee!==10000 ||
-     session.metadata.fulfillmentMode!=="lob_check" ||
+     serviceFee!==PACKET_PRICE_CENTS ||
+     !((courtFee===10000 && session.metadata.fulfillmentMode==="lob_check") ||
+       (courtFee===0 && ["no_fee","digital_only"].includes(session.metadata.fulfillmentMode))) ||
      !Number.isSafeInteger(serviceFee)||!Number.isSafeInteger(courtFee))return false;
   return verifiedPacketSession(session,owner,caseId) &&
-    session.amount_total===15000;
+    session.amount_total===PACKET_PRICE_CENTS+courtFee;
 }
 
 export function createPacketSandboxWebhookApp({stripeClient,db,signingSecret}){
@@ -58,9 +59,10 @@ export function createPacketSandboxWebhookApp({stripeClient,db,signingSecret}){
         await db.query(
           "INSERT INTO packet_sandbox_paid_holds "+
           "(stripe_session_id,stripe_event_id,user_id,case_id,status,court_fee_cents,payment_method) "+
-          "VALUES ($1,$2,$3,$4,'paid_hold',10000,'lob_check') "+
+          "VALUES ($1,$2,$3,$4,'paid_hold',$5,$6) "+
           "ON CONFLICT (stripe_session_id) DO NOTHING",
-          [current.id,event.id,current.metadata.userId,current.metadata.saved_case_id]
+          [current.id,event.id,current.metadata.userId,current.metadata.saved_case_id,
+            Number(current.metadata.courtFeeCents),current.metadata.fulfillmentMode]
         );
         return res.json({received:true,mode:"sandbox_only",status:"paid_hold"});
       }catch{

@@ -15,10 +15,18 @@ CREATE TABLE IF NOT EXISTS public.packet_sandbox_paid_holds(
   user_id uuid NOT NULL,
   case_id uuid NOT NULL,
   status text NOT NULL DEFAULT 'paid_hold' CHECK(status='paid_hold'),
-  court_fee_cents integer NOT NULL CHECK(court_fee_cents=10000),
-  payment_method text NOT NULL CHECK(payment_method='lob_check'),
+  court_fee_cents integer NOT NULL,
+  payment_method text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE public.packet_sandbox_paid_holds
+  DROP CONSTRAINT IF EXISTS packet_sandbox_paid_holds_court_fee_cents_check,
+  DROP CONSTRAINT IF EXISTS packet_sandbox_paid_holds_payment_method_check,
+  DROP CONSTRAINT IF EXISTS packet_sandbox_paid_holds_route_check,
+  ADD CONSTRAINT packet_sandbox_paid_holds_route_check CHECK (
+    (court_fee_cents=10000 AND payment_method='lob_check') OR
+    (court_fee_cents=0 AND payment_method IN ('no_fee','digital_only'))
+  );
 -- No Lob check ID/dispatch attempt columns exist by design.
 
 -- Defense in depth if the isolated database is hosted on a Supabase project:

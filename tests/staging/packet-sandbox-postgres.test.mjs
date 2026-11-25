@@ -81,3 +81,16 @@ test("forged, wrong amount, unpaid, nonpacket, provider outage never create rows
   assert.equal((await count()).length,0);
   assert.ok(requests>=4);
 });
+
+test("signed $50 dismissal and digital receipts remain distinct and replay safely",async()=>{
+  for(const method of ["no_fee","digital_only"]){
+    await db.query("TRUNCATE packet_sandbox_paid_holds");
+    fail=false;
+    current={...session,amount_total:5000,metadata:{...session.metadata,courtFeeCents:"0",fulfillmentMode:method}};
+    for(let i=0;i<2;i++) assert.equal((await post(event())).body.status,"paid_hold");
+    const rows=await count();
+    assert.equal(rows.length,1);
+    assert.equal(rows[0].court_fee_cents,0);
+    assert.equal(rows[0].payment_method,method);
+  }
+});
