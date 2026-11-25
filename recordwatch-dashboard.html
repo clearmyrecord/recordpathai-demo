@@ -246,15 +246,36 @@
       function toRecordWatchCase(caseData) {
         if (caseData && caseData.court && typeof caseData.court === "object" && caseData.court.caseNumber) return caseData;
         var item = window.RecordPathUserStore && RecordPathUserStore.normalizeCase ? RecordPathUserStore.normalizeCase(caseData) : caseData;
-        var chargeRows = item.chargeDetails && item.chargeDetails.length ? item.chargeDetails : (item.charges || []).map(function (charge) { return typeof charge === "string" ? { charge_name: charge } : charge; });
-        return { id: item.case_id || item.caseId || item.id, court: { caseNumber: item.caseNumber, courtName: item.courtName || item.court, county: item.county, caseState: item.caseState }, charges: (chargeRows.length ? chargeRows : [{ charge_name: item.primaryCharge, offense_level: item.level }]).filter(function (charge) { return charge && (charge.charge_name || charge.chargeName || item.primaryCharge); }).map(function (charge) { return { chargeName: charge.charge_name || charge.chargeName || item.primaryCharge, statuteCode: charge.offense_code || charge.charge_code || item.offenseCode, degree: charge.offense_level || charge.degree || item.level, chargeLevel: charge.offense_level || charge.degree || item.level }; }), outcome: { outcome: item.outcome, dispositionDate: item.dispositionDate, dischargeDate: item.dischargeDate, completionDate: item.dischargeDate, finalDischargeDate: item.finalDischargeDate || item.dischargeDate }, recordWatchStatus: item.recordWatchStatus, estimatedEligibleDate: item.estimatedEligibleDate, eligibility: { estimatedEligibleDate: item.estimatedEligibleDate, eligibilityDate: item.eligibilityDate, status: item.eligibilityStatus } };
+        var packet = RecordPathUserStore.caseToPacketData(item);
+        var rows = packet.charges.length ? packet.charges : (item.charges || []).map(function (charge) {
+          return typeof charge === "string" ? { charge_name: charge } : charge;
+        });
+        if (!rows.length && item.primaryCharge) rows = [{ charge_name: item.primaryCharge }];
+        var charges = rows.map(function (charge) {
+          return Object.assign({}, charge, {
+            chargeName: charge.charge_name || charge.chargeName,
+            statuteCode: charge.charge_code || charge.offense_code || item.offenseCode,
+            chargeLevel: charge.level || charge.offense_level || item.level,
+            disposition: charge.final_disposition || charge.disposition || (rows.length === 1 ? item.outcome : "")
+          });
+        });
+        return {
+          id: item.case_id || item.caseId || item.id,
+          court: packet.court,
+          charges: charges,
+          outcome: { outcome: charges[0]?.disposition || item.outcome, dispositionDate: item.dispositionDate,
+            dischargeDate: item.dischargeDate, finalDischargeDate: item.finalDischargeDate },
+          eligibility: Object.assign({}, packet.eligibility, { has_pending_cases: packet.case.proceedings_status === "open" }),
+          recordWatchStatus: item.recordWatchStatus,
+          estimatedEligibleDate: item.estimatedEligibleDate
+        };
       }
 
       function renderRecordWatchWidget(cases) {
         var events = window.RecordWatchNotifications ? RecordWatchNotifications.loadEvents() : [];
         var notifications = window.RecordWatchNotifications ? RecordWatchNotifications.loadNotifications() : [];
         var active = cases[0] || null;
-        var currentResult = active && window.RecordWatchBridge ? RecordWatchBridge.getCurrentEligibilityResult(active) : null;
+        var currentResult = active ? RecordWatchRules.calculateEligibilityResult(active) : null;
         // Local eligibility-event registration is not an account data source.
         var eligibilityDate = currentResult && currentResult.estimatedEligibleDate || (active && RecordWatchRules.calculateEligibilityDate(active));
         var event = active ? events.find(function (item) { return item.case_id === active.id && item.eligibility_date === eligibilityDate; }) : null;
