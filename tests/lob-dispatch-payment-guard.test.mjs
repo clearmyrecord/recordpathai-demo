@@ -51,3 +51,19 @@ test("blocks wrong case, payment amounts, court fee, and payment intent",()=>{
     s=>s.payment_intent.latest_charge.payment_intent="pi_other",
   ]){const s=valid();change(s);assert.equal(verifyLivePacketPaymentForLob(s,job).ok,false);}
 });
+
+test("verifies a paid $50 dismissal and refuses refund or mismatched mailing route",()=>{
+  const session=valid();
+  session.amount_total=5000;
+  session.metadata.courtFeeCents="0";
+  session.metadata.fulfillmentMode="no_fee";
+  session.payment_intent.amount=5000;
+  session.payment_intent.amount_received=5000;
+  const charge=session.payment_intent.latest_charge;
+  charge.amount=5000;
+  const dismissalJob={...job,court_fee_cents:0,payment_method:"no_fee"};
+  assert.equal(verifyLivePacketPaymentForLob(session,dismissalJob).ok,true);
+  assert.equal(verifyLivePacketPaymentForLob(session,{...dismissalJob,payment_method:"digital_only"}).ok,false);
+  charge.amount_refunded=5000;
+  assert.equal(verifyLivePacketPaymentForLob(session,dismissalJob).ok,false);
+});

@@ -7,7 +7,7 @@ export const PACKET_JOB_STATUSES = Object.freeze([
 ]);
 const STAGE_LABELS = Object.freeze({
   drafted:"Signed court packet",approved:"Court-specific review",
-  paid:"Verified packet payment",submitted:"Lob check submission",
+  paid:"Verified packet payment",submitted:"Lob mailing submission",
   mailed:"USPS mailing",delivered:"Delivery confirmation",
   court:"Court receipt / filing"
 });
@@ -22,7 +22,7 @@ export function projectPacketFulfillment({draft=null,review=null,job=null}={}){
     review.signed_pdf_private_path===draft.signed_pdf_private_path);
   const paid=Boolean(job && status!=="not_paid" && status!=="cancelled");
   const digitalOnly=Boolean(job?.payment_method==="digital_only" && paid);
-  const lobSubmitted=Boolean(job?.lob_check_id && ["submitted_to_lob","delivered"].includes(status));
+  const lobSubmitted=Boolean((job?.lob_check_id || job?.lob_letter_id) && ["submitted_to_lob","delivered"].includes(status));
   const mailed=Boolean(lobSubmitted && job?.mailed_at);
   const delivered=Boolean(status==="delivered" && lobSubmitted && mailed);
   const issue=["failed","cancelled"].includes(status);
@@ -32,7 +32,7 @@ export function projectPacketFulfillment({draft=null,review=null,job=null}={}){
     stage("paid",paid,paid?(digitalOnly?"Verified $50 digital packet payment; no court fee collected":"Stripe payment recorded for packet + any court fee"):"No verified packet payment recorded",issue)
   ];
   if(!digitalOnly){
-    steps.push(stage("submitted",lobSubmitted,lobSubmitted?"Check and signed packet accepted by Lob":"No Lob check has been submitted"));
+    steps.push(stage("submitted",lobSubmitted,lobSubmitted?"Signed packet accepted by Lob":"No mailing has been submitted to Lob"));
     steps.push(stage("mailed",mailed,mailed?"Mailing recorded after Lob verification":"USPS mailing not yet verified"));
     steps.push(stage("delivered",delivered,delivered?"Delivery recorded after Lob verification":"Delivery not yet verified"));
   }
@@ -48,8 +48,8 @@ export function projectPacketFulfillment({draft=null,review=null,job=null}={}){
     "Your approved signed digital packet is available for download. Any court fee and filing are your responsibility; nothing was mailed.":
     "Digital packet payment recorded. Your signed review copy needs support verification before download; nothing was mailed.";
   if(status==="submitted_to_lob")
-    summary=mailed?"Lob has reported the check mailed. Court acceptance is not confirmed.":
-      "Lob accepted the check order. USPS mailing has not yet been verified.";
+    summary=mailed?"Lob has reported the packet mailed. Court acceptance is not confirmed.":
+      "Lob accepted the mailing order. USPS mailing has not yet been verified.";
   if(status==="delivered")
     summary=delivered?"Delivery verified through Lob; court filing acceptance remains unconfirmed.":
       "Lob has reported delivery, but the mailing audit trail needs review.";
@@ -64,7 +64,8 @@ export function projectPacketFulfillment({draft=null,review=null,job=null}={}){
     lob_submitted:lobSubmitted,
     mailed_verified:mailed,delivered_verified:delivered,
     court_receipt_verified:false,
-    lob_check_reference:lobSubmitted?job.lob_check_id:null,
+    lob_check_reference:lobSubmitted?job.lob_check_id||null:null,
+    lob_letter_reference:lobSubmitted?job.lob_letter_id||null:null,
     postal_tracking_number:null,
     last_updated_at:job?.updated_at||job?.created_at||null,
     court_fee_cents:paid?Number(job.court_fee_cents)||0:null,

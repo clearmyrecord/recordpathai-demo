@@ -69,7 +69,7 @@ test("server separates live digital checkout from Lob and charges exactly one $5
   assert.doesNotMatch(checkout,/ui_mode\s*:/);
   assert.match(webhook,/\["lob_check","court_online","no_fee","digital_only"\]/);
   assert.match(webhook,/method==="digital_only" && \(fee!==0 \|\| current\.amount_total!==PACKET_PRICE_CENTS\)/);
-  const dispatch=server.slice(server.indexOf('app.post("/api/operator/packet/dispatch-lob"'));
+  const dispatch=server.slice(server.indexOf('async function dispatchPaidPacketToLob'));
   assert.match(dispatch,/job\.payment_method!=="lob_check"/);
 });
 

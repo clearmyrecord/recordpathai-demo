@@ -88,6 +88,13 @@ export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,no
   if(!Number.isSafeInteger(courtFeeCents)||courtFeeCents<0 ||
     review?.approved_court_fee_cents!==courtFeeCents)
     missing.push("The court filing amount has not been independently approved.");
+  if(mailing && courtFeeCents===0){
+    if(!runtime.lobLettersEnabled)
+      missing.push("Automated mailing for filings without a court fee is unavailable. Select digital delivery to file the packet yourself.");
+    if(review?.form_type!=="sealing-dismissal" || review?.fee_payment_method!=="no_fee" ||
+       review?.accepted_fee_waiver!==false || !review?.verified_filing_address)
+      missing.push("No-fee mailing requires an approved dismissal and verified filing address.");
+  }
   if(courtFeeCents>0 && mailing){
     if(review?.fee_payment_method!=="lob_check" && review?.fee_payment_method!=="court_online")
       missing.push("A permitted court-fee payment method must be selected.");
