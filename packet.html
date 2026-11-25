@@ -1113,14 +1113,14 @@
               </section>
               <section id="packetPaymentStep" style="margin-top:18px;">
                 <h3 style="margin:0 0 8px;color:#17396d;">Step 3 — Checkout After Independent Approval</h3>
-                <p style="margin:0 0 12px;color:#526780;line-height:1.5;">For an eligible Wood County dismissal, your review of the signed pages authorizes the $50 digital purchase. Choose digital delivery if you want to keep mailing on hold. Court mailing requires separate filing authorization.</p>
+                <p style="margin:0 0 12px;color:#526780;line-height:1.5;">Choose Pay and Mail to request court mailing of your approved signed packet. Stripe checkout opens only after the court-specific fee and filing requirements are verified. You can choose digital delivery instead if you prefer to file yourself.</p>
                 <fieldset id="packetDeliveryChoice" style="margin:10px 0 18px;border:1px solid #d6e0ef;border-radius:12px;padding:12px 15px;">
                   <legend style="font-weight:700;color:#17396d;">Choose how your approved packet is fulfilled</legend>
-                  <label style="display:block;margin:8px 0;"><input type="radio" name="packetDeliveryMode" value="digital_only" checked> $50 approved digital PDF — I pay the court separately</label>
-                  <label style="display:block;margin:8px 0;"><input type="radio" name="packetDeliveryMode" value="mail"> Verified court mailing where available. Dismissed Wood County cases have a $0 court fee and ship without a check.</label>
+                  <label style="display:block;margin:8px 0;"><input type="radio" name="packetDeliveryMode" value="mail" checked> Mail my approved application to the court where available. Dismissed Wood County cases have a $0 court fee and ship without a check.</label>
+                  <label style="display:block;margin:8px 0;"><input type="radio" name="packetDeliveryMode" value="digital_only"> $50 approved digital PDF — I file and pay the court separately</label>
                   <p style="margin:8px 0;color:#526780;">Selecting mailing never issues a check, charges a card, or files anything. The court deposit is quoted before checkout; a paid mailed order is held for authorized dispatch.</p>
                 </fieldset>
-                <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn">Review Packet Readiness</button>
+                <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn">Pay and Mail</button>
                 <section id="packetReviewStatus" role="status" aria-live="polite" hidden style="margin-top:14px;padding:16px 18px;border:1px solid #c5d6ef;border-radius:12px;background:#f6f9ff;color:#274367;"></section>
               </section>
               <div class="debug-pdf-tools" id="debugPdfTools" hidden aria-label="Debug PDF tools">
@@ -1204,7 +1204,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const step3ActionButton = document.getElementById("generateSealingBtn");
       if (step3ActionButton) {
         step3ActionButton.disabled = false;
-        step3ActionButton.textContent = "Review Packet Readiness";
+        step3ActionButton.textContent = packetCheckoutButtonLabel();
         step3ActionButton.addEventListener("click", function (event) {
           if (!packetStep3Initialized) {
             event.preventDefault();
@@ -3545,13 +3545,13 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (state === "eligibleUnpaid") {
             // Do not offer a paid CTA until server review and exact fee quote
             // have independently succeeded for this specific court.
-            generateBtn.textContent = "Review Packet Readiness";
+            generateBtn.textContent = packetCheckoutButtonLabel();
           } else if (state === "eligiblePaid") {
             generateBtn.textContent = "Download Approved Signed PDF";
           } else if (state === "devBypass") {
             generateBtn.textContent = "Generate PDF Packet (Dev Mode)";
           } else {
-            generateBtn.textContent = "Review Packet Readiness";
+            generateBtn.textContent = packetCheckoutButtonLabel();
           }
         }
 
@@ -3569,7 +3569,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           const rawForReadiness = readPacketData();
           const readinessState = normalizeState(rawForReadiness?.court?.state || "");
           paymentCallout.textContent = readinessState === "OH"
-            ? "Your screening estimate is not a verified filing approval. Ohio packet checkout is under review until official court requirements are confirmed. Select Review Packet Readiness to see the blocker, or download a free sample PDF below to test the renderer."
+            ? "Your screening estimate is not a verified filing approval. Ohio packet checkout is under review until official court requirements are confirmed. Select the Step 3 button to see the blocker, or download a free sample PDF below to test the renderer."
             : checkoutEligibility.warning || "Based on the information entered, you may qualify. Select Pay to verify requirements and continue to secure checkout.";
         } else if (packetEligibility?.isNotYetEligible) {
           paymentCallout.className = "callout danger";
@@ -3912,6 +3912,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         return document.querySelector('input[name="packetDeliveryMode"]:checked')?.value==="mail"
           ? "mail" : "digital_only";
       }
+      function packetCheckoutButtonLabel(){
+        return selectedPacketDeliveryMode()==="mail" ? "Pay and Mail" : "Pay and Download";
+      }
       function serverReadinessUrl(caseId,deliveryMode="digital_only") {
         return getCheckoutEndpoint().replace(/\/api\/create-checkout-session$/, "/api/packet/checkout-readiness")+
           "?case_id="+encodeURIComponent(caseId)+
@@ -3947,7 +3950,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         panel.append(heading);
         const message=document.createElement("p");
         message.textContent=payload?.ready===true
-          ?"Your exact signed PDF and watermarked preview are approved. Continue to the secure Stripe checkout."
+          ?"Your exact signed PDF and watermarked preview are approved. Continue to the secure Stripe checkout." + (Number.isSafeInteger(payload?.quote?.totalCents) ? " Total due: $"+(payload.quote.totalCents/100).toFixed(2)+"." : "")
           :"The eligibility estimate does not authorize payment. Complete the outstanding requirements below:";
         panel.append(message);
         if(payload?.ready===true)return;
@@ -4131,7 +4134,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             const pay=document.getElementById("generateSealingBtn");
             if(readiness?.ready===true && pay && !isPacketPaymentComplete()){
               pay.disabled=false;
-              pay.textContent="Pay $"+(Number(readiness.quote?.totalCents||5000)/100).toFixed(2)+" & Download Approved Packet";
+              pay.textContent=packetCheckoutButtonLabel();
             }
           }catch{
             if(status)status.textContent+=" Checkout remains gated until all launch requirements are met.";
@@ -4434,8 +4437,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           const cents=readiness?.quote?.totalCents;
           if(Number.isSafeInteger(cents)){
             generateBtn.disabled=false;
-            generateBtn.textContent=
-              "Pay $"+(cents/100).toFixed(2)+" & Confirm Approved Fulfillment";
+            generateBtn.textContent=packetCheckoutButtonLabel();
           }
         }catch{/* Pending review remains the primary status; no permission bypass. */}
       })();
@@ -4452,7 +4454,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       })();
       document.getElementById("packetDeliveryChoice")?.addEventListener("change",async()=>{
         const button=document.getElementById("generateSealingBtn");
-        if(button && !isPacketPaymentComplete())button.textContent="Review Packet Readiness";
+        if(button && !isPacketPaymentComplete())button.textContent=packetCheckoutButtonLabel();
         try{
           const selected=await resolveCheckoutCase();
           if(isInternalUuid(selected?.checkoutCase?.saved_case_id))
