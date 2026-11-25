@@ -66,6 +66,19 @@ test("unmapped dismissal cannot charge despite nonconviction $0 fee",()=>{
     review:{...review,form_type:"sealing-dismissal",approved_court_fee_cents:0,fee_payment_method:"no_fee"},runtime});
   assert.equal(result.ready,false);
 });
+test("an approved dismissal can use digital delivery while no-fee mailing is unavailable",()=>{
+  const dismissedCase={...savedCase,outcome:"dismissed"};
+  const dismissalReview={...review,form_type:"sealing-dismissal",approved_court_fee_cents:0,
+    fee_payment_method:"no_fee",case_snapshot_sha256:caseReviewFingerprint(dismissedCase,charges)};
+  const input={userId,caseId,savedCase:dismissedCase,charges,review:dismissalReview,runtime};
+  const mail=evaluatePacketRelease(input);
+  assert.equal(mail.ready,false);
+  assert.equal(mail.quote.totalCents,5000);
+  assert.match(mail.missing.join(" "),/Automated mailing for filings without a court fee is unavailable/);
+  const digital=evaluatePacketRelease({...input,deliveryMode:"digital"});
+  assert.equal(digital.ready,true);
+  assert.equal(digital.quote.totalCents,5000);
+});
 test("Lob check builder blocks Wood County despite clerk acceptance until operator authorization",()=>{
   const from={name:"RecordPathAI",address_line1:"123 Sender Lane",
     address_city:"Test City",address_state:"OH",address_zip:"43000"};
