@@ -1030,18 +1030,6 @@
             </div>
 
 
-            <div class="sig-pad-wrap">
-              <p class="sig-pad-label" data-i18n="packet.signatureDraw">Draw your signature below</p>
-              <canvas id="signaturePad"></canvas>
-              <div class="sig-actions" style="margin-top: 10px;">
-                <button type="button" class="sig-small-btn" id="useDrawnSigBtn" data-i18n="packet.useDrawn">Use Drawn Signature</button>
-                <button type="button" class="sig-small-btn" id="clearPadBtn" data-i18n="packet.clearPad">Clear Pad</button>
-              </div>
-            </div>
-            <label for="authorizeSignedReview" style="display:flex; gap:10px; align-items:flex-start; margin:12px 0; line-height:1.45; color:#33486b; font-size:14px;">
-              <input type="checkbox" id="authorizeSignedReview" style="margin-top:3px; flex-shrink:0;">
-              <span>I authorize RecordPathAI to place the signature I draw above on my court application and store the completed PDF privately for case review. This is not authorization to charge me, file with a court, or mail a check.</span>
-            </label>
             <p style="font-size:12px; color:#5a6884; margin:5px 0 10px; line-height:1.45;">Wood County email/fax filings require a physically signed source document retained by the filer. Drawing here does not automatically satisfy that separate requirement. Court submission and mailing remain subject to individual review.</p>
 
   <p style="font-size:14px; color:#6a7894; margin:18px 0 0; line-height:1.5;" data-i18n="packet.disclaimerPurchase">
@@ -1095,28 +1083,41 @@
                   <p id="missingInfoSummary" style="margin:0 0 10px;color:#40577e;" role="status" aria-live="polite">Complete these fields before submitting your signed PDF for private review.</p>
                   <div id="missingInfoFields" class="missing-info-grid"></div>
                 </div>
+            <div class="sig-pad-wrap">
+              <p class="sig-pad-label" data-i18n="packet.signatureDraw">Draw your signature below</p>
+              <canvas id="signaturePad" aria-label="Draw your application signature" tabindex="-1"></canvas>
+              <div class="sig-actions" style="margin-top: 10px;">
+                <button type="button" class="sig-small-btn" id="useDrawnSigBtn" data-i18n="packet.useDrawn">Use Drawn Signature</button>
+                <button type="button" class="sig-small-btn" id="clearPadBtn" data-i18n="packet.clearPad">Clear Pad</button>
+              </div>
+            </div>
+            <label for="authorizeSignedReview" style="display:flex; gap:10px; align-items:flex-start; margin:12px 0; line-height:1.45; color:#33486b; font-size:14px;">
+              <input type="checkbox" id="authorizeSignedReview" style="margin-top:3px; flex-shrink:0;">
+              <span>I authorize RecordPathAI to place the signature I draw above on my court application and store the completed PDF privately for case review. This is not authorization to charge me, file with a court, or mail a check.</span>
+            </label>
+                <p id="privateDraftStatus" role="status" aria-live="polite"></p>
                 <button type="button" class="sig-small-btn" id="prepareSignedReviewBtn" style="background:#1c489d;color:#fff;border-color:#1c489d;">Prepare My Real Signed Packet for Private Review</button>
                 <button type="button" class="sig-small-btn" id="downloadSamplePdfBtn" hidden aria-hidden="true" style="display:none;">Test Signed PDF — SAMPLE ONLY (No Check)</button>
               </section>
               <section id="approvedPreviewPanel" aria-label="Watermarked signed packet preview" style="margin-top:18px;padding:18px;border:1px solid #b8c9e8;border-radius:14px;background:#f5f8ff;">
                 <h3 style="margin:0 0 8px;color:#17396d;">Step 2 — Preview Your Actual Application (View Only)</h3>
-                <p style="margin:0 0 14px;line-height:1.5;">This preview shows the <strong>last submitted signed draft</strong>. If you correct or add contact details in Step 1, you must submit a <strong>new signed packet</strong> before the preview will change. After Step 1, view each page of your submitted <strong>draft</strong> with a permanent <strong>PREVIEW ONLY — NOT FOR FILING</strong> watermark. Once an independent reviewer approves the exact signed PDF, you'll be able to confirm it for checkout. <strong>No unwatermarked PDF download is available until Stripe verifies payment.</strong> Court checks and filings remain separate.</p>
+                <p style="margin:0 0 14px;line-height:1.5;">This preview shows the <strong>last submitted signed draft</strong>. If you correct or add contact details in Step 1, you must submit a <strong>new signed packet</strong> before the preview will change. After Step 1, view each page of your submitted <strong>draft</strong> with a permanent <strong>PREVIEW ONLY — NOT FOR FILING</strong> watermark. For an eligible Wood County dismissal, review each page and confirm the exact document for digital checkout. <strong>No unwatermarked PDF download is available until Stripe verifies payment.</strong> Court checks and filings remain separate.</p>
                 <button type="button" id="openApprovedPreviewBtn" class="sig-small-btn" style="background:#1b4b9a;color:white;">Preview My Signed Application (View Only)</button>
                 <p id="approvedPreviewStatus" role="status" aria-live="polite" style="margin:12px 0;color:#344c74;">First prepare your real signed packet in Step 1; then preview it here.</p>
                 <div id="approvedPreviewPages" hidden style="max-height:520px;overflow:auto;background:#e7edf6;padding:10px;border-radius:9px;" aria-label="Watermarked signed packet pages"></div>
                 <label id="approvedPreviewConsentLabel" hidden style="display:flex;gap:10px;margin-top:14px;line-height:1.5;">
                   <input type="checkbox" id="approvedPreviewConsent" style="margin-top:4px;">
-                  <span>I reviewed every displayed page of my <strong>independently approved</strong> application, including court, case number and signature. I approve this exact document for the offered packet preparation purchase. This does not authorize court filing or issuing a check.</span>
+                  <span>I reviewed every displayed page of my <strong>signed</strong> application, including court, case number and signature. I approve this exact document for the offered packet preparation purchase. This does not authorize court filing or issuing a check.</span>
                 </label>
-                <button type="button" id="confirmApprovedPreviewBtn" class="sig-small-btn" hidden style="margin-top:10px;">Confirm Approved Pages Before Payment</button>
+                <button type="button" id="confirmApprovedPreviewBtn" class="sig-small-btn" hidden style="margin-top:10px;">Confirm My Reviewed Pages Before Payment</button>
               </section>
               <section id="packetPaymentStep" style="margin-top:18px;">
                 <h3 style="margin:0 0 8px;color:#17396d;">Step 3 — Checkout After Independent Approval</h3>
-                <p style="margin:0 0 12px;color:#526780;line-height:1.5;">A reviewer must independently approve your case and signed packet. After you confirm the approved watermarked preview, this payment checkpoint can proceed. Nothing is charged just by checking readiness.</p>
+                <p style="margin:0 0 12px;color:#526780;line-height:1.5;">For an eligible Wood County dismissal, your review of the signed pages authorizes the $50 digital purchase. Choose digital delivery if you want to keep mailing on hold. Court mailing requires separate filing authorization.</p>
                 <fieldset id="packetDeliveryChoice" style="margin:10px 0 18px;border:1px solid #d6e0ef;border-radius:12px;padding:12px 15px;">
                   <legend style="font-weight:700;color:#17396d;">Choose how your approved packet is fulfilled</legend>
                   <label style="display:block;margin:8px 0;"><input type="radio" name="packetDeliveryMode" value="digital_only" checked> $50 approved digital PDF — I pay the court separately</label>
-                  <label style="display:block;margin:8px 0;"><input type="radio" name="packetDeliveryMode" value="mail"> Verified court filing with Lob check — only where the clerk, funding bank and mailing instructions are independently approved</label>
+                  <label style="display:block;margin:8px 0;"><input type="radio" name="packetDeliveryMode" value="mail"> Verified court mailing where available. Dismissed Wood County cases have a $0 court fee and ship without a check.</label>
                   <p style="margin:8px 0;color:#526780;">Selecting mailing never issues a check, charges a card, or files anything. The court deposit is quoted before checkout; a paid mailed order is held for authorized dispatch.</p>
                 </fieldset>
                 <button type="button" class="packet-btn packet-btn-primary" id="generateSealingBtn">Review Packet Readiness</button>
@@ -1952,7 +1953,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
       async function loadFormSchema(selected, data) {
         if (!selected) return null;
-        const state = normalizeState(data?.court?.state || selected.state).toLowerCase();
+        const stateCode = normalizeState(data?.court?.state || selected.state).toLowerCase();
+        const state = stateCode === "oh" ? "ohio" : stateCode;
         const county = safe(data?.court?.county || selected.county).replace(/ county$/i, "").toLowerCase();
         const courtType = safe(selected.courtType || deriveCourtType(data?.court?.name));
         const formType = safe(selected.formType || dispositionToFormType(data?.charges?.[0]?.disposition));
@@ -2505,6 +2507,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           const ratio = Math.max(window.devicePixelRatio || 1, 1);
           const rect = canvas.getBoundingClientRect();
 
+          if (canvas.width === Math.floor(rect.width * ratio) && canvas.height === Math.floor(rect.height * ratio)) return;
           canvas.width = rect.width * ratio;
           canvas.height = rect.height * ratio;
 
@@ -3248,10 +3251,15 @@ document.addEventListener("DOMContentLoaded", async function () {
       async function prepareSignedReviewPdf() {
         const button=document.getElementById("prepareSignedReviewBtn");
         if(button)button.disabled=true;
+        const draftStatus=document.getElementById("privateDraftStatus");
+        if(draftStatus)draftStatus.textContent="Preparing your signed application…";
         setCheckoutError("");
         try {
           if(!window.PDFLib)throw new Error("PDF rendering library unavailable.");
-          if(!requireSavedDrawnSignature())return;
+          if(!requireSavedDrawnSignature()){
+            const field=document.getElementById("signaturePad");
+            field?.focus();throw new Error("Draw your signature in Step 1 before preparing your application.");
+          }
           if(document.getElementById("authorizeSignedReview")?.checked!==true)
             throw new Error("Please authorize private preparation of this signed PDF before uploading it for review.");
           if(window.RecordPathAuth && !window.RecordPathAuth.requireAuth(
@@ -3338,9 +3346,15 @@ document.addEventListener("DOMContentLoaded", async function () {
           clearApprovedPreviewImages();
           setStatus("Updated signed PDF saved privately. Select Step 2 to review both pages, including your contact details. Independent approval and payment are pending.");
           const previewStatus=document.getElementById("approvedPreviewStatus");
-          if(previewStatus)previewStatus.textContent="Your signed packet was received. Select Preview My Signed Application to view the watermarked draft.";
+          if(draftStatus)draftStatus.textContent="Signed application saved. Opening Step 2.";
+          if(previewStatus){
+            previewStatus.textContent="Your signed packet was received. Select Preview My Signed Application to view the watermarked draft.";
+            document.getElementById("approvedPreviewPanel")?.scrollIntoView({block:"start"});
+            await openApprovedPacketPreview();
+          }
         }catch(error){
           const msg=error?.message||"Unable to prepare the private signed review copy.";
+          if(draftStatus)draftStatus.textContent=msg;
           setCheckoutError(msg);
           setStatus(msg,"error");
         }finally{if(button)button.disabled=false;}
@@ -3937,6 +3951,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           const r=String(reason||"");
           if(/exact mapped court|form type/i.test(r))
             items.add("Confirm the filing court and exact final form type in Record Details.");
+          else if(/No signed packet|Digital Stripe checkout|Court mailing is on hold/i.test(r))items.add(r);
           else if(/reviewer|reviewed|snapshot/i.test(r))
             items.add("A separate reviewer must approve this saved case and its unchanged case snapshot.");
           else if(/signed packet|private storage/i.test(r))
@@ -4046,11 +4061,12 @@ document.addEventListener("DOMContentLoaded", async function () {
             const wrapper=document.createElement("div");
             wrapper.style.cssText="margin:0 auto 16px;max-width:750px;text-align:center;";
             const caption=document.createElement("p");
-            caption.textContent="Page "+page+" of "+pages+" — "+(manifest.reviewStatus==="approved"?"APPROVED":"DRAFT AWAITING REVIEW")+" — VIEW ONLY / NOT FOR FILING";
+            caption.textContent="Page "+page+" of "+pages+" — "+(manifest.reviewStatus==="approved"?(manifest.reviewBasis==="customer"?"READY FOR YOUR REVIEW":"APPROVED"):"DRAFT AWAITING REVIEW")+" — VIEW ONLY / NOT FOR FILING";
             caption.style.cssText="font-weight:bold;color:#394d70;";
             const img=document.createElement("img");
             img.src=url;img.alt="Watermarked approved document, page "+page+" of "+pages;
             img.draggable=false;
+            await img.decode();
             img.style.cssText="display:block;width:100%;border:1px solid #abbdda;background:#fff;user-select:none;";
             img.addEventListener("contextmenu",event=>event.preventDefault());
             wrapper.append(caption,img);
@@ -4064,8 +4080,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           if(status)status.textContent=!approved ?
             "Draft preview ready. Review your "+pages+" submitted pages. Independent review is still pending; confirmation, payment and download remain locked." :
             manifest.confirmed ?
-              "Reviewer-approved packet displayed. You already confirmed this version; review again if anything looks incorrect." :
-              "All "+pages+" reviewer-approved pages are displayed. Confirm the exact document before payment.";
+              "You already confirmed this version. Review it again if anything looks incorrect." :
+              "All "+pages+" signed pages are displayed. Review and confirm the exact document before payment.";
         }catch(error){
           clearApprovedPreviewImages();
           const msg=error?.message||"Approved packet preview is unavailable.";

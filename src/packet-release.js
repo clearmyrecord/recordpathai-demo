@@ -31,16 +31,19 @@ export function caseReviewFingerprint(savedCase,charges=[]) {
   const counts=charges.map(c=>({
     id:c.id,charge_name:c.charge_name,offense_code:c.offense_code,
     offense_level:c.offense_level,offense_date:c.offense_date,
+    ...(c.final_disposition ? {final_disposition:c.final_disposition} : {}),
+    ...(c.disposition_date ? {disposition_date:c.disposition_date} : {}),
     flags:c.flags||{}
   })).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
   return createHash("sha256").update(JSON.stringify(stable({case:row,charges:counts}))).digest("hex");
 }
-function expectedFormType(savedCase,charges=[]) {
-  const outcomes=(Array.isArray(charges)?charges:[]).map(charge=>String(
-    charge?.final_disposition ?? charge?.disposition ?? ""
-  ).toLowerCase().replace(/[\s_-]+/g," ").trim()).filter(Boolean);
-  if(!outcomes.length && savedCase?.outcome)
-    outcomes.push(String(savedCase.outcome).toLowerCase().replace(/[\s_-]+/g," ").trim());
+export function savedChargeOutcome(charge) {
+  const intake=charge?.flags?.recordPathIntake;
+  return String(charge?.final_disposition || intake?.final_disposition || charge?.disposition || intake?.disposition || "").trim().toLowerCase();
+}
+export function expectedFormType(savedCase,charges=[]) {
+  const outcomes=charges.map(savedChargeOutcome);
+  if(charges.length===1 && !outcomes[0])outcomes[0]=String(savedCase?.outcome||"").trim().toLowerCase();
   if(!outcomes.length || outcomes.some(outcome=>outcome==="mixed")) return "";
   if(outcomes.every(outcome=>["dismissed","dismissal","not guilty","acquittal","acquitted","no bill"].includes(outcome)))
     return "sealing-dismissal";
@@ -58,13 +61,13 @@ export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,no
   const profileInput={
     state:savedCase?.case_state,county:savedCase?.county,
     courtType:savedCase?.court_type,
-    formType:review?.form_type
+    formType:review?.form_type || expectedFormType(savedCase,charges)
   };
   const quote=quotePacketPricing(profileInput);
   const filing=courtFilingPlan(profileInput);
   if(!filing.supported || quote.totalCents===null)missing.push("An exact mapped court and final form type are required.");
   const outcomeFormType=expectedFormType(savedCase,charges);
-  if(outcomeFormType && review?.form_type!==outcomeFormType)
+  if(review && outcomeFormType && review.form_type!==outcomeFormType)
     missing.push("The approved court form does not match the saved final charge outcomes.");
   if(!review||review.status!=="approved")missing.push("A court-specific reviewer release has not been approved.");
   if(review?.user_id!==userId || review?.case_id!==caseId)missing.push("Reviewer release is not bound to this saved case.");

@@ -8,7 +8,7 @@ import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect
 import { RECORDWATCH_LIFETIME_CENTS, RECORDWATCH_LIFETIME_PRICE_ENV, assertRecordwatchLifetimePrice, paidRecordwatchLifetimeCheckout, lifetimeCaseEntitled, lifetimeCasePurchaseAvailable, lifetimePurchaseGeneration } from "./src/recordwatch-lifetime.js";
 import { quotePacketPricing } from "./src/packet-pricing.js";
 import { projectPacketFulfillment } from "./src/packet-fulfillment-tracking.js";
-import { evaluatePacketRelease, caseReviewFingerprint, validCaseId } from "./src/packet-release.js";
+import { evaluatePacketRelease, caseReviewFingerprint, savedChargeOutcome, expectedFormType, validCaseId } from "./src/packet-release.js";
 import { AFFILIATE_COMMISSION_BPS, AFFILIATE_ATTRIBUTION_DAYS, AFFILIATE_HOLD_DAYS, normalizeAffiliateCode, newAffiliateCode, eligibleAffiliatePurchase, affiliateCommissionCents, commissionAvailableAfter } from "./src/affiliate-program.js";
 import { affiliatePayoutAmount } from "./src/affiliate-payouts.js";
 import { registerAffiliatePayoutRoutes } from "./src/affiliate-payout-service.js";
@@ -290,14 +290,9 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
         pageText.push(content.items.map(item=>String(item.str||"")).join(""));
       }
       await document.destroy();
-      const outcomes=(facts.charges||[]).map(charge=>String(
-        charge.final_disposition||charge.disposition||""
-      ).toLowerCase().replace(/[\s_-]+/g," ").trim()).filter(Boolean);
-      if(!outcomes.length && facts.outcome)
-        outcomes.push(String(facts.outcome).toLowerCase().replace(/[\s_-]+/g," ").trim());
-      const allDismissed=outcomes.length>0 && outcomes.every(outcome=>[
-        "dismissed","dismissal","not guilty","acquittal","acquitted","no bill"
-      ].includes(outcome));
+      const formType=expectedFormType(facts.savedCase,facts.charges);
+      if(!formType)return res.status(409).json({ok:false,error:"Verify the final disposition for every count in Record Details."});
+      const allDismissed=formType==="sealing-dismissal";
       const officialPair=allDismissed
         ? isOfficialWoodDismissalFormPair(pageText)
         : isOfficialWoodConvictionFormPair(pageText);
@@ -442,7 +437,7 @@ app.get("/api/packet/preview-manifest",async(req,res)=>{
     res.setHeader("X-Content-Type-Options","nosniff");
     return res.json({ok:true,pageCount:source.pageCount,
       pdfSha256:source.signedPdfSha,confirmed,
-      reviewStatus:source.stage,
+      reviewStatus:source.stage,reviewBasis:source.reviewBasis,
       note:source.stage==="approved" ?
         "Approved application: confirm this exact watermarked document before checkout." :
         "Signed DRAFT awaiting independent review. Preview is view-only; checkout and confirmation remain locked."});
@@ -1616,10 +1611,22 @@ async function packetReleaseStatus(userId,caseId,deliveryMode="mail") {
           ?.[0]?.live_dispatch_enabled===true,
       onlineCourtPaymentVerified:false
     };
+    if(!review && customerDismissalReviewAllowed(facts)){
+      if(deliveryMode==="mail")return {ready:false,missing:[
+        "Court mailing is on hold for this dismissal. Select digital delivery for the $50 packet. The court fee is $0."
+      ],quote:quotePacketPricing({state:facts.savedCase.case_state,county:facts.savedCase.county,
+        courtType:facts.savedCase.court_type,formType:"sealing-dismissal"})};
+      const draft=await savedDraftPreviewForCase(userId,caseId);
+      const quote=quotePacketPricing({state:facts.savedCase.case_state,county:facts.savedCase.county,
+        courtType:facts.savedCase.court_type,formType:"sealing-dismissal"});
+      return {ready:runtime.stripeLiveEnabled,missing:runtime.stripeLiveEnabled?[]:["Digital Stripe checkout has not been enabled."],
+        quote,profileId:quote.profileId,fulfillmentMode:"digital_only",signedPdfSha:draft.signedPdfSha,
+        caseFingerprint:draft.caseSnapshotSha};
+    }
     return evaluatePacketRelease({userId,caseId,...facts,review,runtime,deliveryMode});
   } catch (error) {
     console.warn("Private packet release preflight unavailable",error?.name||"unknown");
-    return {ready:false,missing:["Case approval or private review record is unavailable."],quote:null};
+    return {ready:false,missing:[error?.httpStatus===409 ? error.message : "Case approval or private review record is unavailable."],quote:null};
   }
 }
 
@@ -1627,6 +1634,18 @@ async function packetReleaseStatus(userId,caseId,deliveryMode="mail") {
 // or a downloadable PDF until Stripe verifies the customer's payment.
 function previewFailure(message,status=409){
   const e=new Error(message);e.httpStatus=status;return e;
+}
+function customerDismissalReviewAllowed({savedCase,charges}){
+  const answers=savedCase.metadata?.recordPathCaseReview;
+  return findCourtProfile({state:savedCase.case_state,county:savedCase.county,courtType:savedCase.court_type})?.id==="oh-wood-common-pleas" &&
+    answers?.all_charges_confirmed==="yes" && answers.proceedings_status==="none" &&
+    charges.length>0 && charges.every(charge=>{
+      const date=charge.disposition_date || charge.flags?.recordPathIntake?.disposition_date ||
+        (charges.length===1 && savedCase.disposition_date);
+      return savedChargeOutcome(charge)==="dismissed" && /^\d{4}-\d{2}-\d{2}$/.test(date||"") &&
+        date<=new Date().toISOString().slice(0,10) && Number.isFinite(Date.parse(date)) &&
+        new Date(date).toISOString().slice(0,10)===date;
+    });
 }
 async function approvedPreviewForCase(userId,caseId){
   if(!packetDatabaseReady())throw previewFailure("Private document preview is unavailable.",503);
@@ -1638,6 +1657,22 @@ async function approvedPreviewForCase(userId,caseId){
   ]);
   const review=Array.isArray(releases)?releases[0]:null;
   const draft=Array.isArray(drafts)?drafts[0]:null;
+  if(!review && customerDismissalReviewAllowed(facts)){
+    const source=await savedDraftPreviewForCase(userId,caseId);
+    const bytes=await fetchExactApprovedPreviewPdf(source);
+    const {getDocument}=await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const pdf=await getDocument({data:new Uint8Array(bytes),useSystemFonts:true}).promise;
+    try{
+      if(pdf.numPages!==2)throw previewFailure("Submit the two-page dismissal application.");
+      const text=[];
+      for(const n of [1,2]){
+        const page=await pdf.getPage(n);
+        text.push((await page.getTextContent()).items.map(item=>item.str).join(""));
+      }
+      if(!isOfficialWoodDismissalFormPair(text))throw previewFailure("Submit the correct signed dismissal application.");
+    }finally{await pdf.destroy();}
+    return {...source,reviewBasis:"customer"};
+  }
   // The preview is independent from the live Stripe enablement switch,
   // but NOT from reviewer signoff, statutory review, signing, or form approval.
   const verdict=evaluatePacketRelease({
@@ -1696,7 +1731,7 @@ async function customerPreviewForCase(userId,caseId){
     if(approved.signedPdfSha===source.signedPdfSha &&
        approved.caseSnapshotSha===source.caseSnapshotSha &&
        approved.path===source.path){
-      return {...source,stage:"approved"};
+      return {...source,stage:"approved",reviewBasis:approved.reviewBasis||"reviewer"};
     }
   }catch(error){
     // A draft is still viewable while its independent review is pending.
@@ -2395,9 +2430,18 @@ app.post("/api/packet/download-approved",async(req,res)=>{
   if(!validCaseId(caseId)||!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
     return res.status(400).json({ok:false,error:"Saved case and verified payment session required."});
   try {
-    const session=await stripe.checkout.sessions.retrieve(sessionId);
-    if(!verifiedPacketSession(session,user.id,caseId))
+    const session=await stripe.checkout.sessions.retrieve(sessionId,{expand:["payment_intent.latest_charge"]});
+    const charge=session.payment_intent?.latest_charge;
+    if(session.metadata?.saved_case_id!==caseId || !charge?.paid || charge.refunded || charge.disputed ||
+       charge.amount_refunded!==0 || !verifiedPacketSession(session,user.id,caseId))
       return res.status(403).json({ok:false,error:"Payment was not verified for this saved case."});
+    const purchasedSha=session.metadata?.signedPdfSha;
+    if(session.metadata?.fulfillmentMode==="digital_only" && /^[a-f0-9]{64}$/.test(purchasedSha||"")){
+      const bytes=await fetchExactApprovedPreviewPdf({path:"private/packets/"+caseId+"/"+purchasedSha+".pdf",signedPdfSha:purchasedSha});
+      res.setHeader("Cache-Control","private, no-store");
+      res.setHeader("Content-Disposition",'attachment; filename="recordpathai-signed-application.pdf"');
+      return res.type("application/pdf").send(bytes);
+    }
     const [reviews,drafts]=await Promise.all([
       supabaseRest("packet_releases",{query:"?case_id=eq."+encodeURIComponent(caseId)+
         "&user_id=eq."+encodeURIComponent(user.id)+"&limit=1"}),
@@ -3928,7 +3972,12 @@ app.post("/api/create-checkout-session", async (req, res) => {
     // Server-side mandatory customer preview acknowledgment. A browser flag,
     // client-supplied digest, or hidden checkout button cannot bypass this.
     let previewConfirmed=false;
-    try{previewConfirmed=await previewHasConfirmation(checkoutUser.id,savedCaseId);}
+    try{
+      const source=await approvedPreviewForCase(checkoutUser.id,savedCaseId);
+      previewConfirmed=(!release.signedPdfSha || release.signedPdfSha===source.signedPdfSha) &&
+        release.caseFingerprint===source.caseSnapshotSha && await previewHasConfirmation(checkoutUser.id,savedCaseId,source);
+      if(previewConfirmed)release.signedPdfSha=source.signedPdfSha;
+    }
     catch{previewConfirmed=false;}
     if(!previewConfirmed){
       return res.status(409).json({ok:false,
@@ -3951,7 +4000,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     const checkoutBucket=Math.floor(Date.now()/300000);
     const checkoutKey=createHash("sha256").update([
       "packet-checkout",checkoutUser.id,savedCaseId,release.caseFingerprint,
-      quote.totalCents,release.fulfillmentMode,finalSuccessUrl,finalCancelUrl,checkoutBucket
+      quote.totalCents,release.signedPdfSha,release.fulfillmentMode,finalSuccessUrl,finalCancelUrl,checkoutBucket
     ].join(":")).digest("hex");
     const internalOrderId="packet_"+checkoutKey.slice(0,24);
     const checkoutCaseNumber = safe((req.body || {}).case_number || (req.body || {}).caseNumber || caseInfo.case_number || caseInfo.caseNumber);
@@ -4000,6 +4049,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
         serviceFeeCents: String(PACKET_PRICE_CENTS),
         courtFeeCents: String(release.fulfillmentMode==="digital_only" ? 0 : (quote.canCollect && quote.courtFeeCents > 0 ? quote.courtFeeCents : 0)),
         courtProfileId:String(release.profileId||""),
+        signedPdfSha:release.signedPdfSha,
         fulfillmentMode:String(release.fulfillmentMode||""),
         userId: checkoutUser.id,
         saved_case_id: isUuid(savedCaseId) ? savedCaseId : "",

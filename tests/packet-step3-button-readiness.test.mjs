@@ -32,7 +32,7 @@ test("Live Stripe and approved preview remain enforced on the server", () => {
   const route = server.split('app.post("/api/create-checkout-session"')[1]?.split('app.get("/api/find-packet"', 1)[0];
   assert.ok(route);
   assert.match(route, /packetReleaseStatus\(checkoutUser\.id,savedCaseId,deliveryMode\)/);
-  assert.match(route, /previewHasConfirmation\(checkoutUser\.id,savedCaseId\)/);
+  assert.match(route, /previewHasConfirmation\(checkoutUser\.id,savedCaseId,source\)/);
   assert.ok(route.indexOf("if(!previewConfirmed)") < route.indexOf("stripe.checkout.sessions.create("));
 });
 

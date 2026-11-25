@@ -50,7 +50,7 @@ test("Draft stage cannot confirm or buy; approval is still checked by the server
   assert.match(readiness,/previewHasConfirmation\(user.id,caseId\)/);
   const checkout=server.split('app.post("/api/create-checkout-session"')[1]
     ?.split('app.get("/api/find-packet"',1)[0];
-  assert.match(checkout,/previewHasConfirmation\(checkoutUser.id,savedCaseId\)/);
+  assert.match(checkout,/previewHasConfirmation\(checkoutUser.id,savedCaseId,source\)/);
   const client=html.split('async function openApprovedPacketPreview()')[1]
     ?.split('async function confirmApprovedPacketPreview()',1)[0];
   assert.ok(client);

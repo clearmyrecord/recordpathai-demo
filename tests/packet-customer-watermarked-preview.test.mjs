@@ -59,7 +59,7 @@ test("Both checkout-readiness and Stripe session creation REQUIRE server-owned m
   assert.match(readiness,/const ready=result\.ready && confirmed/);
   const checkout=server.split('app.post("/api/create-checkout-session"')[1]?.split('app.get("/api/find-packet"',1)[0];
   assert.ok(checkout);
-  assert.match(checkout,/previewHasConfirmation\(checkoutUser\.id,savedCaseId\)/);
+  assert.match(checkout,/previewHasConfirmation\(checkoutUser\.id,savedCaseId,source\)/);
   assert.match(checkout,/if\(!previewConfirmed\)/);
   assert.ok(checkout.indexOf("if(!previewConfirmed)")<checkout.indexOf("stripe.checkout.sessions.create("));
   const download=server.split('app.post("/api/packet/download-approved"')[1]?.split('app.post("/api/packet/verify-payment"',1)[0];
