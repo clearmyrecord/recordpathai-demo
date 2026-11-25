@@ -953,6 +953,7 @@
                 <button type="button" class="btn btn-soft" id="addOffenseBtn" data-i18n="record.addOffense">+ Add Charge</button>
               </div>
               <div class="record-status" id="recordStatus" role="status">Loading charges…</div>
+              <p id="recordDetailsRecovery" hidden><a id="recordDetailsRecoveryLink" class="btn btn-secondary" href="dashboard.html">Open your dashboard</a></p>
               <div class="record-list" id="offenseList"></div>
               <div class="record-grid" style="margin-top:14px">
                 <div class="field"><label for="allChargesConfirmed">All charges from this case included?</label>
@@ -1621,16 +1622,15 @@
         if (node) node.textContent = text;
       }
 
-      async function loadCaseFromUrl() {
-        const caseId = new URLSearchParams(window.location.search).get("caseId");
-        if (!caseId || !window.RecordPathUserStore) return true;
-        const found = await RecordPathUserStore.setActiveCase(caseId);
-        if (!found) {
-          const form = document.getElementById("recordDetailsForm");
-          if (form) form.insertAdjacentHTML("beforebegin", '<div class="empty-state case-page-error"><h2>We could not find that saved case.</h2><p>Please choose another case from your dashboard.</p><a class="btn" href="dashboard.html">Back to dashboard</a></div>');
-          return false;
-        }
-        return true;
+      function showLoadRecovery(message, label, href) {
+        recordStatus.textContent=message;
+        setSaveStatus(message);
+        const link=document.getElementById("recordDetailsRecoveryLink");
+        link.textContent=label;
+        link.href=href;
+        document.getElementById("recordDetailsRecovery").hidden=false;
+        document.getElementById("recordDetailsForm")
+          .querySelectorAll("input,select,textarea,button").forEach(el=>{el.disabled=true;});
       }
 
       async function init() {
@@ -1638,27 +1638,25 @@
         const client=await window.RecordPathSupabase.getClient();
         const auth=await client.auth.getUser();
         if(auth.error||!auth.data?.user?.id){
-          document.getElementById("recordDetailsForm")?.querySelectorAll("input,select,textarea,button")
-            .forEach(el=>{el.disabled=true;});
-          if(continueBtn)continueBtn.disabled=true;
-          if(saveProgressBtn)saveProgressBtn.disabled=true;
-          setSaveStatus("Create a free RecordPathAI account or sign in before Step 2. RecordWatch Premium is optional. No browser-only case was saved.");
+          const returnUrl=window.location.pathname+window.location.search;
+          showLoadRecovery("Sign in to edit and save offense details. RecordWatch Premium is optional.",
+            "Sign in","login.html?returnUrl="+encodeURIComponent(returnUrl));
           return;
         }
         const store=window.RecordPathUserStore;
         verifiedFilingProfile=await store.getSupabaseProfile();
         if(verifiedFilingProfile?.id!==auth.data.user.id)
           throw new Error("This account's saved identity is unavailable.");
-        const requested=new URLSearchParams(window.location.search).get("caseId");
-        const candidate=requested || store.getActiveCaseId?.() || "";
-        let remote=null;
-        if(candidate){
-          remote=await store.getSupabaseCaseById(candidate);
-          if(requested&&!remote){
-            setSaveStatus("The requested case was not found in this account. No browser case was substituted.");
-            if(continueBtn)continueBtn.disabled=true;
-            return;
-          }
+        const params=new URLSearchParams(window.location.search);
+        const requested=params.get("caseId");
+        const activeCaseId=params.get("new")==="1" ? "" : store.getActiveCaseId?.();
+        const candidate=requested || activeCaseId || "";
+        const isSavedCaseId=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(candidate);
+        const remote=isSavedCaseId ? await store.getSupabaseCaseById(candidate) : null;
+        if(requested&&!remote){
+          showLoadRecovery("This saved case is unavailable in your account.",
+            "Choose a saved case","dashboard.html");
+          return;
         }
         if(remote){
           verifiedCaseId=remote.case_id;
@@ -1726,10 +1724,8 @@
       }
 
       init().catch(()=>{
-        recordStatus.textContent="Saved offense details could not be loaded.";
-        document.getElementById("recordDetailsForm")?.querySelectorAll("input,select,textarea,button")
-          .forEach(el=>{el.disabled=true;});
-        setSaveStatus("Reload the page to try again. No case details were changed.");
+        showLoadRecovery("Step 2 could not load your account or saved case. Your saved details were not changed.",
+          "Retry Step 2",window.location.pathname+window.location.search);
       });
     }());
   </script>

@@ -805,7 +805,7 @@
             }
             window.location.href=nextCaseId
               ? "record-details.html?caseId="+encodeURIComponent(nextCaseId)
-              : "record-details.html";
+              : "record-details.html?new=1";
           }
         }catch(error){
           setText("personalAccountSaveStatus",error?.message||"Account save failed. Browser draft retained; packet remains unchanged.");
