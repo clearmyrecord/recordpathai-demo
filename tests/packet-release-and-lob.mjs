@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { caseReviewFingerprint, evaluatePacketRelease } from "../src/packet-release.js";
-import { buildCourtCheckRequest, requireLobLiveDispatch } from "../src/lob-checks.js";
+import { buildCourtCheckRequest, buildCourtLetterRequest, requireLobLiveDispatch } from "../src/lob-checks.js";
 
 const userId="11111111-1111-4111-8111-111111111111";
 const caseId="22222222-2222-4222-8222-222222222222";
@@ -69,12 +69,17 @@ test("unmapped dismissal cannot charge despite nonconviction $0 fee",()=>{
 test("an approved dismissal can use digital delivery while no-fee mailing is unavailable",()=>{
   const dismissedCase={...savedCase,outcome:"dismissed"};
   const dismissalReview={...review,form_type:"sealing-dismissal",approved_court_fee_cents:0,
-    fee_payment_method:"no_fee",case_snapshot_sha256:caseReviewFingerprint(dismissedCase,charges)};
+    fee_payment_method:"no_fee",accepted_fee_waiver:false,
+    case_snapshot_sha256:caseReviewFingerprint(dismissedCase,charges)};
   const input={userId,caseId,savedCase:dismissedCase,charges,review:dismissalReview,runtime};
   const mail=evaluatePacketRelease(input);
   assert.equal(mail.ready,false);
   assert.equal(mail.quote.totalCents,5000);
   assert.match(mail.missing.join(" "),/Automated mailing for filings without a court fee is unavailable/);
+  const enabled=evaluatePacketRelease({...input,runtime:{...runtime,lobLettersEnabled:true}});
+  assert.equal(enabled.ready,true);
+  assert.equal(enabled.fulfillmentMode,"no_fee");
+  assert.equal(enabled.quote.courtFeeCents,0);
   const digital=evaluatePacketRelease({...input,deliveryMode:"digital"});
   assert.equal(digital.ready,true);
   assert.equal(digital.quote.totalCents,5000);
@@ -124,4 +129,26 @@ test("Email-first route never accidentally authorizes old $150 Stripe/Lob checko
   assert.equal(result.ready,false);
   assert.match(result.missing.join(" "),/prepaid e-mail filing is permitted/i);
   assert.equal(result.quote.totalCents,15000);
+});
+
+test("Wood County dismissal letter uses the exact court and the two private form pages",()=>{
+  const input={
+    profileInput:{state:"OH",county:"Wood",courtType:"court-of-common-pleas"},
+    review:{...review,form_type:"sealing-dismissal",fee_payment_method:"no_fee",
+      approved_court_fee_cents:0,accepted_fee_waiver:false},
+    from:{name:"RecordPathAI",address_line1:"123 Sender Lane",address_city:"Test City",
+      address_state:"OH",address_zip:"43000"},
+    attachmentUrl:"https://example.supabase.co/storage/v1/object/sign/sample?token=synthetic",
+    attachmentPages:2
+  };
+  const letter=buildCourtLetterRequest(input);
+  assert.equal(letter.to.name,"Wood County Clerk of Courts");
+  assert.equal(letter.file,input.attachmentUrl);
+  assert.equal(letter.address_placement,"insert_blank_page");
+  assert.equal(letter.bank_account,undefined);
+  assert.equal(letter.amount,undefined);
+  assert.throws(()=>buildCourtLetterRequest({...input,attachmentPages:4}),/two-page/);
+  assert.throws(()=>buildCourtLetterRequest({...input,review}),/no-fee dismissal/);
+  assert.throws(()=>buildCourtLetterRequest({...input,review:{...input.review,
+    accepted_fee_waiver:true}}),/no-fee dismissal/);
 });

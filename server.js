@@ -16,7 +16,7 @@ import { canonicalSmsPhone, validSmsPhone, validAlertEmail, reminderForDate, neu
 import { providerReadiness, sendPremiumEmail, sendPremiumSms } from "./src/recordwatch-alert-dispatch.js";
 import { alertKindEnabled, packetFollowupsForCase, recentVerifiedCourtEvent } from "./src/recordwatch-supplemental-alerts.js";
 import { timingSafeEqual, createHash, randomBytes } from "node:crypto";
-import { buildCourtCheckRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
+import { buildCourtCheckRequest, buildCourtLetterRequest, requireLobLiveDispatch } from "./src/lob-checks.js";
 import { findCourtProfile, courtFilingPlan } from "./src/court-profiles.js";
 import {
   isWoodConvictionFormPair,
@@ -385,7 +385,7 @@ app.get("/api/packet/filing-status",async(req,res)=>{
       }),
       supabaseRest("packet_fulfillment_jobs",{
         query:"?"+identity+
-        "&select=status,created_at,updated_at,court_fee_cents,payment_method,lob_check_id,mailed_at"+
+        "&select=status,created_at,updated_at,court_fee_cents,payment_method,lob_check_id,lob_letter_id,mailed_at"+
         "&order=created_at.desc&limit=1"
       })
     ]);
@@ -689,7 +689,7 @@ app.post("/api/operator/lob-test-check-pdf",
     // Repeating the same fixture must not create duplicate sandbox checks.
     const idempotency="recordpathai-wood-two-pages-"+createHash("sha256")
       .update(bytes).digest("hex").slice(0,32);
-    const lob=await fetch("https://api.lob.com/v1/checks",{
+    const lob=await fetch(letter?"https://api.lob.com/v1/letters":"https://api.lob.com/v1/checks",{
       method:"POST",headers:{
         Authorization:"Basic "+Buffer.from(key+":").toString("base64"),
         "Idempotency-Key":idempotency
@@ -1073,9 +1073,12 @@ app.get("/api/operator/packet/lob-check-status",async(req,res)=>{
       query:"?stripe_session_id=eq."+encodeURIComponent(sessionId)+"&limit=1"
     });
     const job=Array.isArray(rows)?rows[0]:null;
-    if(!job||!/^chk_[A-Za-z0-9]+$/.test(job.lob_check_id||""))
-      return res.status(404).json({ok:false,error:"No Lob check has been submitted for this paid order."});
-    const remote=await fetch("https://api.lob.com/v1/checks/"+job.lob_check_id,{
+    const letter=/^ltr_[A-Za-z0-9]+$/.test(job?.lob_letter_id||"");
+    const check=/^chk_[A-Za-z0-9]+$/.test(job?.lob_check_id||"");
+    if(!letter&&!check)
+      return res.status(404).json({ok:false,error:"No Lob mailing has been submitted for this paid order."});
+    const providerPath=letter?"letters/"+job.lob_letter_id:"checks/"+job.lob_check_id;
+    const remote=await fetch("https://api.lob.com/v1/"+providerPath,{
       headers:{Authorization:"Basic "+Buffer.from(process.env.LOB_LIVE_API_KEY+":").toString("base64")},
       signal:AbortSignal.timeout(15000)
     });
@@ -1097,7 +1100,7 @@ app.get("/api/operator/packet/lob-check-status",async(req,res)=>{
       });
     }
     res.setHeader("Cache-Control","no-store, private");
-    return res.json({ok:true,lobCheckId:job.lob_check_id,renderStatus:result.status||null,
+    return res.json({ok:true,lobCheckId:job.lob_check_id,lobLetterId:job.lob_letter_id,renderStatus:result.status||null,
       postalStatus:status,hasPostalTrackingNumber:Boolean(result.tracking_number),
       trackingNumber:result.tracking_number||null,
       note:"Delivery is not proof of court acceptance or granted record relief."});
@@ -1107,26 +1110,24 @@ app.get("/api/operator/packet/lob-check-status",async(req,res)=>{
   }
 });
 
-app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
-  if(!requireOperationsKey(req,res))return;
-  if(!requireLobLiveDispatch(process.env))
-    return res.status(503).json({ok:false,error:"Live Lob check dispatch not enabled or bank not configured."});
-  const sessionId=safe(req.body?.stripe_session_id);
+async function dispatchPaidPacketToLob(sessionId,res){
   if(!/^cs_live_[A-Za-z0-9]+$/.test(sessionId))
     return res.status(400).json({ok:false,error:"Verified live Stripe payment ID required."});
-  if(!await lobBankVerified())
-    return res.status(503).json({ok:false,error:"Lob bank is not verified or check API entitlement is unavailable."});
   try {
     const rows=await supabaseRest("packet_fulfillment_jobs",{
       query:"?stripe_session_id=eq."+encodeURIComponent(sessionId)+"&limit=1"
     });
     const job=Array.isArray(rows)?rows[0]:null;
     if(!job)return res.status(404).json({ok:false,error:"Paid order not in private fulfillment queue."});
-    if(job.status==="submitted_to_lob"||job.lob_check_id)
-      return res.json({ok:true,status:job.status,lobCheckId:job.lob_check_id,duplicate:true});
-    if(job.status!=="paid_hold"||job.payment_method!=="lob_check"||
-       !Number.isSafeInteger(job.court_fee_cents)||job.court_fee_cents<=0)
-      return res.status(409).json({ok:false,error:"This order is not approved for a physical check."});
+    if(job.lob_check_id || job.lob_letter_id)
+      return res.json({ok:true,status:job.status,lobCheckId:job.lob_check_id,
+        lobLetterId:job.lob_letter_id,duplicate:true});
+    const letter=job.payment_method==="no_fee" && job.court_fee_cents===0;
+    if(job.status!=="paid_hold" || (!letter && (job.payment_method!=="lob_check" ||
+       !Number.isSafeInteger(job.court_fee_cents) || job.court_fee_cents<=0)))
+      return res.status(409).json({ok:false,error:"This order is not approved for Lob mailing."});
+    if(letter ? !lobLetterDispatchConfigured() : !requireLobLiveDispatch(process.env) || !await lobBankVerified())
+      return res.status(503).json({ok:false,error:"The Lob mailing route is not enabled or funding is unavailable."});
     const release=await packetReleaseStatus(job.user_id,job.case_id);
     if(!release.ready)return res.status(409).json({ok:false,missing:release.missing,
       error:"The saved case or live fulfillment requirements are no longer approved."});
@@ -1159,11 +1160,13 @@ app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
     if(new URL(signedUrl).origin!==new URL(config.url).origin)
       throw new Error("Invalid private PDF origin");
     const from=JSON.parse(process.env.LOB_FROM_ADDRESS_JSON||"null");
-    const checked=buildCourtCheckRequest({
+    const filing={
       profileInput:{state:facts.savedCase.case_state,county:facts.savedCase.county,
         courtType:facts.savedCase.court_type},
-      review,from,bankAccount:process.env.LOB_VERIFIED_BANK_ID,
-      attachmentUrl:signedUrl,attachmentPages:draft.pdf_pages,
+      review,from,attachmentUrl:signedUrl,attachmentPages:draft.pdf_pages
+    };
+    const checked=letter ? buildCourtLetterRequest(filing) : buildCourtCheckRequest({
+      ...filing,bankAccount:process.env.LOB_VERIFIED_BANK_ID,
       caseReference:facts.savedCase.case_number,
       approvedCourtFeeCents:job.court_fee_cents
     });
@@ -1184,7 +1187,7 @@ app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
     if(!Array.isArray(claimed)||claimed.length!==1)
       return res.status(409).json({ok:false,error:
         "Dispatch is already claimed or another order exists for this case. Check Lob before retrying."});
-    const lob=await fetch("https://api.lob.com/v1/checks",{
+    const lob=await fetch(letter?"https://api.lob.com/v1/letters":"https://api.lob.com/v1/checks",{
       method:"POST",
       headers:{
         Authorization:"Basic "+Buffer.from(process.env.LOB_LIVE_API_KEY+":").toString("base64"),
@@ -1197,20 +1200,57 @@ app.post("/api/operator/packet/dispatch-lob",async(req,res)=>{
       return res.status(502).json({ok:false,error:"Lob rejected this check. No retry until account authorization and existing Lob orders are reviewed."});
     }
     const result=await lob.json();
-    if(!/^chk_[A-Za-z0-9]+$/.test(result.id||""))
-      throw new Error("Lob did not confirm a check ID");
+    const idPattern=letter?/^ltr_[A-Za-z0-9]+$/:/^chk_[A-Za-z0-9]+$/;
+    const idColumn=letter?"lob_letter_id":"lob_check_id";
+    if(!idPattern.test(result.id||""))throw new Error("Lob did not confirm a mailing ID");
     const saved=await supabaseRest("packet_fulfillment_jobs",{
       method:"PATCH",query:"?stripe_session_id=eq."+encodeURIComponent(sessionId)+"&status=eq.ready_for_dispatch",
-      body:{status:"submitted_to_lob",lob_check_id:result.id}
+      body:{status:"submitted_to_lob",[idColumn]:result.id}
     });
-    if(!Array.isArray(saved)||saved.length!==1||saved[0].lob_check_id!==result.id)
+    if(!Array.isArray(saved)||saved.length!==1||saved[0][idColumn]!==result.id)
       throw new Error("Lob order accepted but durable fulfillment confirmation failed");
     res.setHeader("Cache-Control","no-store, private");
-    return res.json({ok:true,status:"submitted_to_lob",lobCheckId:result.id,
+    return res.json({ok:true,status:"submitted_to_lob",...(letter?{lobLetterId:result.id}:{lobCheckId:result.id}),
       note:"Accepted by Lob for processing; this does not prove USPS mailing or court filing."});
   } catch(error) {
     console.warn("Lob dispatch prevented",error?.name||"unknown");
     return res.status(503).json({ok:false,error:"Lob dispatch could not be verified. Do not resubmit until the Lob dashboard is checked for duplicates."});
+  }
+}
+
+app.post("/api/operator/packet/dispatch-lob",(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  return dispatchPaidPacketToLob(safe(req.body?.stripe_session_id),res);
+});
+
+// This authenticated endpoint is invoked by a scheduler. Stripe webhook
+// delivery stays independent of provider latency and mailing failures.
+app.post("/api/operator/packet/fulfill-paid",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  if(process.env.RECORDPATH_ENABLE_AUTOMATIC_FULFILLMENT!=="true")
+    return res.status(503).json({ok:false,error:"Automatic packet fulfillment is disabled."});
+  try{
+    const jobs=await supabaseRest("packet_fulfillment_jobs",{
+      query:"?status=eq.paid_hold&attempted_at=is.null&payment_method=in.(lob_check,no_fee)"+
+        "&select=stripe_session_id&order=created_at.asc&limit=3"
+    });
+    const counts={submitted:0,held:0};
+    for(const job of jobs){
+      // Capture only the disposition of each dispatch. Keep customer and
+      // provider identifiers out of scheduler responses and logs.
+      const result={
+        code:200,
+        status(code){this.code=code;return this;},
+        setHeader(){},
+        json(body){return this.code===200 && body.ok===true;}
+      };
+      if(await dispatchPaidPacketToLob(job.stripe_session_id,result))counts.submitted++;
+      else counts.held++;
+    }
+    return res.json({ok:true,...counts});
+  }catch(error){
+    console.warn("Packet fulfillment scheduler failure",error?.name||"unknown");
+    return res.status(503).json({ok:false,error:"Packet fulfillment scheduler could not complete."});
   }
 });
 
@@ -1542,6 +1582,16 @@ async function lobBankVerified() {
     return result.id===bank && result.verified===true;
   } catch {return false;}
 }
+function lobLetterDispatchConfigured(){
+  if(process.env.RECORDPATH_ENABLE_LIVE_DISPATCH!=="true" ||
+     process.env.LOB_LIVE_LETTERS_ENABLED!=="true" ||
+     !(process.env.LOB_LIVE_API_KEY||"").startsWith("live_"))return false;
+  try{
+    const from=JSON.parse(process.env.LOB_FROM_ADDRESS_JSON||"null");
+    return Boolean(from && ["name","address_line1","address_city","address_state","address_zip"]
+      .every(field=>typeof from[field]==="string" && from[field].trim()));
+  }catch{return false;}
+}
 async function packetReleaseStatus(userId,caseId,deliveryMode="mail") {
   if(!packetDatabaseReady())return {
     ready:false,missing:["Private approval storage is not configured."],
@@ -1560,7 +1610,10 @@ async function packetReleaseStatus(userId,caseId,deliveryMode="mail") {
         (process.env.STRIPE_SECRET_KEY||"").startsWith("sk_live_"),
       lobLiveEnabled:process.env.LOB_LIVE_CHECKS_ENABLED==="true" &&
         process.env.LOB_CHECK_ATTACHMENTS_APPROVED==="true",
-      lobVerifiedBank:await lobBankVerified(),
+      lobVerifiedBank:review?.fee_payment_method==="lob_check" && await lobBankVerified(),
+      lobLettersEnabled:review?.fee_payment_method==="no_fee" && lobLetterDispatchConfigured() &&
+        (await supabaseRest("packet_dispatch_controls",{query:"?id=eq.true&select=live_dispatch_enabled"}))
+          ?.[0]?.live_dispatch_enabled===true,
       onlineCourtPaymentVerified:false
     };
     return evaluatePacketRelease({userId,caseId,...facts,review,runtime,deliveryMode});

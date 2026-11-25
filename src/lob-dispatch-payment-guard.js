@@ -12,8 +12,10 @@ export function verifyLivePacketPaymentForLob(session, job) {
     return fail();
 
   const fee = Number(session.metadata?.courtFeeCents);
-  if (session.metadata?.fulfillmentMode !== "lob_check" ||
-      !Number.isSafeInteger(fee) || fee <= 0 || fee !== job.court_fee_cents)
+  const method = session.metadata?.fulfillmentMode;
+  if (!Number.isSafeInteger(fee) || fee !== job.court_fee_cents ||
+      method !== (job.payment_method || "lob_check") ||
+      !((method === "lob_check" && fee > 0) || (method === "no_fee" && fee === 0)))
     return fail();
 
   const intent = session.payment_intent;

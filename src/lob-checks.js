@@ -46,3 +46,28 @@ export function requireLobLiveDispatch(env={}){
     String(env.LOB_LIVE_API_KEY||"").startsWith("live_") &&
     BANK.test(String(env.LOB_VERIFIED_BANK_ID||""));
 }
+
+// Keep postal window printing off the official court forms. Lob supplies
+// the address sheet and the private application remains exactly two pages.
+export function buildCourtLetterRequest({profileInput,review,from,attachmentUrl,attachmentPages}={}) {
+  const profile=findCourtProfile(profileInput);
+  if(!profile?.dismissalMailingAccepted || review?.status!=="approved" ||
+     review.form_type!=="sealing-dismissal" || review.fee_payment_method!=="no_fee" ||
+     review.approved_court_fee_cents!==0 || review.accepted_fee_waiver!==false ||
+     !review.verified_filing_address)
+    throw new Error("An approved no-fee dismissal and verified court address are required.");
+  if(attachmentPages!==profile.requiredAttachmentPages || !HTTPS.test(attachmentUrl||"") ||
+     new URL(attachmentUrl).username || new URL(attachmentUrl).password)
+    throw new Error("The private two-page dismissal application is required.");
+  const fields=["name","address_line1","address_city","address_state","address_zip"];
+  if(!from || fields.some(field=>typeof from[field]!=="string" || !from[field].trim()))
+    throw new Error("Verified RecordPathAI return mailing address is required.");
+  const returnAddress=Object.fromEntries([...fields,"address_line2"]
+    .filter(field=>typeof from[field]==="string" && from[field].trim())
+    .map(field=>[field,from[field]]));
+  return {
+    to:{...profile.postalAddress},from:returnAddress,file:attachmentUrl,
+    address_placement:"insert_blank_page",color:false,double_sided:false,
+    mail_type:"usps_first_class",use_type:"operational"
+  };
+}

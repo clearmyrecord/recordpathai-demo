@@ -61,6 +61,9 @@ const woodCommon = Object.freeze({
   // credit-card prepayment; a Lob check cannot fund that separate route.
   clerkMailingAcceptanceConfirmed:true,
   clerkMailingAcceptanceDate:"2026-11-18",
+  // Clerk acceptability confirmed by the operator for printed electronic
+  // signatures and mailing the two dismissal forms without a fee.
+  dismissalMailingAccepted:true,
   lobChecksAuthorized:false, // External acceptance is not permission to issue a check or file a real case.
   mappedApprovedFormTypes:["sealing-conviction","sealing-dismissal"],
   maxAttachmentPages:2, // only address verification + signed application
