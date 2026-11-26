@@ -730,6 +730,65 @@ app.post("/api/operator/lob-test-check-pdf",
   }
 });
 
+// Operator-only TEST letter probe. Use blank official court forms only; no customer records.
+app.post("/api/operator/lob-test-dismissal-letter-pdf",
+  express.raw({type:"application/pdf",limit:"4mb"}),async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  res.setHeader("Cache-Control","no-store, private");
+  const key=process.env.LOB_TEST_API_KEY||"";
+  if(!key.startsWith("test_"))
+    return res.status(503).json({ok:false,error:"Lob sandbox key not configured."});
+  const bytes=req.body;
+  if(!Buffer.isBuffer(bytes)||bytes.length<500||bytes.length>4194304||
+     bytes.subarray(0,5).toString("ascii")!=="%PDF-")
+    return res.status(400).json({ok:false,error:"Upload the blank official two-page dismissal PDF below 4 MB."});
+  try {
+    const {getDocument}=await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const pdf=await getDocument({data:new Uint8Array(bytes),useSystemFonts:true}).promise;
+    const texts=[];
+    try{
+      if(pdf.numPages!==2)return res.status(400).json({ok:false,error:"Exactly two form pages are required."});
+      for(let i=1;i<=2;i++){
+        const page=await pdf.getPage(i);
+        const content=await page.getTextContent();
+        texts.push(content.items.map(item=>String(item.str||"")).join(""));
+      }
+      if(!isOfficialWoodDismissalFormPair(texts))
+        return res.status(400).json({ok:false,error:"Only official Wood County address verification and dismissal application pages are accepted."});
+    }finally{await pdf.destroy();}
+    const fields=new FormData();
+    const values={
+      address_placement:"insert_blank_page",color:"false",double_sided:"false",
+      mail_type:"usps_first_class",use_type:"operational",
+      "to[name]":"TEST COURT RECIPIENT",
+      "to[address_line1]":"One Courthouse Square","to[address_city]":"Bowling Green",
+      "to[address_state]":"OH","to[address_zip]":"43402",
+      "from[name]":"RecordPathAI TEST","from[address_line1]":"210 King St",
+      "from[address_city]":"San Francisco","from[address_state]":"CA","from[address_zip]":"94107"
+    };
+    for(const [name,value] of Object.entries(values))fields.append(name,value);
+    fields.append("file",new Blob([bytes],{type:"application/pdf"}),"wood-dismissal-blank-TEST.pdf");
+    const idempotency="recordpathai-dismissal-test-"+createHash("sha256").update(bytes).digest("hex").slice(0,32);
+    const lob=await fetch("https://api.lob.com/v1/letters",{
+      method:"POST",headers:{Authorization:"Basic "+Buffer.from(key+":").toString("base64"),
+        "Idempotency-Key":idempotency},body:fields,signal:AbortSignal.timeout(30000)
+    });
+    const result=await lob.json().catch(()=>({}));
+    if(!lob.ok)return res.status(502).json({ok:false,lobStatus:lob.status,
+      code:result?.error?.code||null,
+      requestId:lob.headers.get("x-request-id")||null,
+      error:"Lob TEST letter rejected; live dismissal mailing must remain disabled."});
+    if(!/^ltr_[A-Za-z0-9]+$/.test(result.id||""))
+      throw new Error("Lob did not return a letter ID");
+    return res.json({ok:true,environment:"test",testLetterId:result.id,
+      proofPdfUrl:result.url||null,formPages:2,courtFeeCents:0,
+      note:"TEST only. Inspect the rendered proof before enabling live mailing. No court check or payment."});
+  }catch(error){
+    console.warn("Lob dismissal sandbox probe unavailable",error?.name||"unknown");
+    return res.status(502).json({ok:false,error:"Unable to validate or submit blank dismissal sandbox PDF."});
+  }
+});
+
 // Read a Lob TEST proof from a trusted signed Lob URL. Validate page count,
 // ordered form headings and test check amount. No mail, charge or filing occurs.
 async function auditLobSandboxCheckProof(result,id,requireReadableSignedForms=false){

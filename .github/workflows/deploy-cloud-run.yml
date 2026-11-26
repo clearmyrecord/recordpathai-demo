@@ -125,3 +125,8 @@ jobs:
       - name: Deploy preview at zero traffic, verify, promote, and rollback on failure
         if: steps.current.outputs.current == 'true'
         run: bash scripts/deploy-existing-cloudrun.sh
+      - name: Verify dismissal mailing with blank official forms in Lob TEST
+        if: steps.current.outputs.current == 'true'
+        continue-on-error: true
+        run: bash scripts/lob-dismissal-letter-sandbox-qa.sh
+
