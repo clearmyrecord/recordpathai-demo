@@ -333,6 +333,23 @@ app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:
   }
 });
 
+app.post("/api/packet/sandbox-stripe-webhook",express.raw({type:"application/json",limit:"256kb"}),async(req,res)=>{
+  const key=process.env.STRIPE_TEST_SECRET_KEY||"";
+  const secret=process.env.STRIPE_TEST_PACKET_WEBHOOK_SECRET||"";
+  if(!key.startsWith("sk_test_") || !secret.startsWith("whsec_"))
+    return res.status(503).json({error:"Packet sandbox webhook is not configured."});
+  let event;
+  try{
+    event=new Stripe(key).webhooks.constructEvent(req.body,req.get("stripe-signature"),secret);
+  }catch{return res.status(400).json({error:"Invalid sandbox webhook signature."});}
+  const object=event.data?.object;
+  if(event.livemode!==false || !["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type) ||
+    object?.livemode!==false || object?.metadata?.productType!=="packet-sandbox-simulation" ||
+    object?.metadata?.lobProof!=="wood-conviction-v1" || object.payment_status!=="paid")
+    return res.json({received:true,ignored:true});
+  return reconcileSandboxProof(object.id,res,event.id);
+});
+
 app.use(express.json());
 
 function publicSupabaseConfig() {
@@ -820,9 +837,9 @@ app.post("/api/operator/stripe-test-checkout",async(req,res)=>{
 
 // Possession of an operator-created test Checkout Session permits only its
 // synthetic proof. Payment, amount, mode and product are rechecked at Stripe.
-app.post("/api/packet/sandbox-proof",async(req,res)=>{
+app.post("/api/packet/sandbox-proof",(req,res)=>reconcileSandboxProof(req.body?.session_id,res));
+async function reconcileSandboxProof(sessionId,res,eventId){
   res.setHeader("Cache-Control","private, no-store");
-  const sessionId=req.body?.session_id;
   if(typeof sessionId!=="string" || !/^cs_test_[A-Za-z0-9]{16,180}$/.test(sessionId))
     return res.status(400).json({error:"Test checkout session required."});
   const key=process.env.STRIPE_TEST_SECRET_KEY||"";
@@ -846,6 +863,10 @@ app.post("/api/packet/sandbox-proof",async(req,res)=>{
       await sessions.update(sessionId,{metadata:{lobTestCheckId:checkId}});
     }
     if(!/^chk_[A-Za-z0-9]+$/.test(checkId))throw Error("Invalid test check reference");
+    if(eventId){
+      await sessions.update(sessionId,{metadata:{lobProofWebhookEvent:eventId}});
+      return res.json({received:true,testCheckId:checkId});
+    }
     const response=await fetch("https://api.lob.com/v1/checks/"+checkId,{
       headers:{Authorization:auth},signal:AbortSignal.timeout(15000)
     });
@@ -853,13 +874,13 @@ app.post("/api/packet/sandbox-proof",async(req,res)=>{
     const check=await response.json();
     if(check.id!==checkId)throw Error("Lob test check mismatch");
     const audit=await auditLobSandboxCheckProof(check,checkId);
-    return res.json({testCheckId:checkId,renderStatus:check.status,
+    return res.json({testCheckId:checkId,webhookConfirmed:Boolean(session.metadata.lobProofWebhookEvent),renderStatus:check.status,
       proofUrl:audit.proofContentsVerified?check.url:null,...audit});
   }catch(error){
     console.warn("Paid sandbox proof unavailable",error?.name||"unknown");
     return res.status(502).json({error:"Unable to verify the Stripe test session or retrieve its Lob proof. Retry this checkout."});
   }
-});
+}
 
 // Operators may inspect fulfillment status. No applicant or docket data returns.
 app.get("/api/operator/packet/fulfillment-status",async(req,res)=>{
