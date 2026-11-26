@@ -882,6 +882,44 @@ async function reconcileSandboxProof(sessionId,res,eventId){
   }
 }
 
+// Staging validates Stripe signatures before inserting an isolated paid hold.
+const stagingProofUrl="https://ckrqmlnckhagskpumjbh.supabase.co/functions/v1/packet-sandbox-proof";
+app.post("/api/packet/staging-lob-proof",async(req,res)=>{
+  res.setHeader("Cache-Control","private, no-store");
+  const sessionId=req.body?.session_id;
+  if(typeof sessionId!=="string" || !/^cs_test_[A-Za-z0-9]{16,180}$/.test(sessionId))
+    return res.status(400).json({error:"A Stripe test session is required."});
+  try{
+    const receipt=await fetch(stagingProofUrl,{method:"POST",redirect:"error",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({session_id:sessionId,action:"receipt"}),
+      signal:AbortSignal.timeout(12000)});
+    if(!receipt.ok)return res.status(receipt.status===409?409:503).json({error:"Verified staging payment required."});
+    const hold=await receipt.json();
+    if(hold.paid!==true)throw Error("Invalid staging receipt");
+    const key=process.env.LOB_TEST_API_KEY||"",bank=process.env.LOB_TEST_BANK_ACCOUNT_ID||"";
+    if(!key.startsWith("test_")||!/^bank_[A-Za-z0-9]+$/.test(bank))throw Error("Lob test setup incomplete");
+    const auth="Basic "+Buffer.from(key+":").toString("base64");
+    const id=hold.testCheckId || (await createPaidSandboxProof({sessionId,bank,auth,signedFixture:true})).id;
+    if(!/^chk_[A-Za-z0-9]+$/.test(id))throw Error("Invalid test check");
+    const response=await fetch("https://api.lob.com/v1/checks/"+id,{headers:{Authorization:auth},
+      signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw Error("Lob test check unavailable");
+    const check=await response.json();
+    if(check.id!==id)throw Error("Lob test check mismatch");
+    const audit=await auditLobSandboxCheckProof(check,id);
+    return res.json({testCheckId:id,webhookConfirmed:true,renderStatus:check.status,
+      proofUrl:audit.proofContentsVerified?check.url:null,...audit});
+  }catch{return res.status(502).json({error:"Unable to render the paid staging proof."});}
+});
+app.post("/api/packet/staging-proof-status",async(req,res)=>{
+  res.setHeader("Cache-Control","private, no-store");
+  try{
+    const response=await fetch(stagingProofUrl,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"render",session_id:req.body?.session_id}),signal:AbortSignal.timeout(60000)});
+    return res.status(response.status).json(await response.json());
+  }catch{return res.status(503).json({error:"Staging proof temporarily unavailable."});}
+});
+
 // Operators may inspect fulfillment status. No applicant or docket data returns.
 app.get("/api/operator/packet/fulfillment-status",async(req,res)=>{
   if(!requireOperationsKey(req,res))return;

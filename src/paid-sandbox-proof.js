@@ -11,8 +11,8 @@ export function paidSandboxProofSession(session,id){
     session.metadata?.lobProof==="wood-conviction-v1";
 }
 
-export async function createPaidSandboxProof({sessionId,bank,auth,request=fetch}){
-  const fixture=await readFile(new URL("../assets/lob-wood-two-form-TEST-ONLY.pdf",import.meta.url));
+export async function createPaidSandboxProof({sessionId,bank,auth,request=fetch,signedFixture=false}){
+  const fixture=await readFile(new URL(signedFixture?"../assets/wood-signed-packet-TEST-ONLY.pdf":"../assets/lob-wood-two-form-TEST-ONLY.pdf",import.meta.url));
   const fields=new FormData();
   const values={
     bank_account:bank, amount:"100", message:"TEST ONLY - NO REAL PAYMENT",

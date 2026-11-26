@@ -38,3 +38,22 @@ test("a paid test session has a repeatable Lob request with two ordered forms",a
     await createPaidSandboxProof({sessionId,bank:"bank_test",auth:"test",request});
   assert.equal(keys[0],keys[1]);assert.notEqual(keys[0],keys[2]);
 });
+test("staging attaches the signed two-page sample rendered by the packet page",async()=>{
+  const request=async(url,options)=>{
+    const file=options.body.get("attachment");
+    const pdf=await getDocument({data:new Uint8Array(await file.arrayBuffer()),useSystemFonts:true}).promise;
+    try{
+      assert.equal(pdf.numPages,2);
+      const texts=[];
+      for(const i of [1,2]){
+        const page=await pdf.getPage(i);
+        texts.push((await page.getTextContent()).items.map(item=>item.str).join(" "));
+      }
+      assert.ok(isWoodConvictionFormPair(texts));
+      assert.match(texts.join(" "),/SAMPLE-2026/);
+      assert.match(texts.join(" "),/NOT FOR FILING/i);
+    }finally{await pdf.destroy();}
+    return Response.json({id:"chk_example"});
+  };
+  await createPaidSandboxProof({sessionId:id,bank:"bank_test",auth:"test",request,signedFixture:true});
+});
