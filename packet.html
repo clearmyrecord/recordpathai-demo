@@ -2447,8 +2447,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       async function loadTemplatePdf(template) {
         if (!template?.pdfPath) throw new Error("Template PDF path is missing.");
-        console.log("[Packet Generator] PDF path:", template.pdfPath);
-        const response = await fetch(`./${template.pdfPath}?v=${Date.now()}`);
+        const printPath = template.printPdfPath || template.pdfPath;
+        console.log("[Packet Generator] PDF path:", printPath);
+        const response = await fetch(`./${printPath}?v=${Date.now()}`);
         if (!response.ok) throw new Error("The court PDF template could not be loaded.");
         return response.arrayBuffer();
       }
