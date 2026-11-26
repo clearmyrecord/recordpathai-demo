@@ -16,8 +16,8 @@ test("Ohio conviction court fees are separate from RecordPathAI's service charge
   assert.match(result.heading, /\$50 state fee.*\$50 local court fee/);
   assert.match(result.detail, /poverty affidavit/);
   assert.match(result.sourceUrl, /2953\.32$/);
-  assert.match(details, /\$50 for your final packet and tracked mailing/);
-  assert.match(details, /Charged only at checkout, not during case intake/);
+  assert.match(details, /\$50 for preparation and the \$100 court deposit/);
+  assert.match(details, /Payment is collected at checkout after you confirm your approved forms/);
 });
 
 test("Dismissed, not-guilty, and no-bill Ohio cases do not display conviction application fee", () => {
