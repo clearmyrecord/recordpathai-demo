@@ -43,7 +43,7 @@ test("sample PDF check downloads watermarked synthetic fields and user-drawn sig
 
 test("actual packet payment still requires checkout verification", () => {
   assert.match(html, /checkServerPacketReadiness\(verifiedCaseId,fulfillment\)/);
-  assert.match(html, /Stripe checkout has not opened because Ohio cases are review-only/);
+  assert.match(html, /Checkout requires independent review of your saved case/);
   assert.match(html, /const token = login\?\.data\?\.session\?\.access_token/);
   assert.match(html, /if \(!response\.ok\)/);
   assert.match(html, /Stripe checkout is not configured or temporarily unavailable/);

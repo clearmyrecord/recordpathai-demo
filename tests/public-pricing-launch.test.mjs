@@ -10,30 +10,20 @@ const packet = read("packet.html");
 const how = read("how-it-works.html");
 const sitemap = read("sitemap.xml");
 
-test("Website publishes verified lifetime RecordWatch checkout without inventing full filing availability", () => {
-  assert.match(home, /RecordWatch Premium is live/);
-  assert.match(home, /Only the \$39 RecordWatch purchase is live today/);
-  assert.match(recordwatch, /data-recordwatch-checkout="lifetime_case"/);
-  assert.match(pricing, /\$39 live one-time Premium checkout/);
-  assert.match(pricing, /not yet available as a bundled purchase|not a live bundle checkout/i);
-  assert.match(pricing, /Lob printing and mailing/);
-});
-
-test("Wood County example is explicitly $39 + $50 + $100 = $189, and not a paid filing bundle", () => {
-  for (const term of ["$39", "$50", "$100", "$189"]) {
-    assert.ok(pricing.includes(term), term);
-    assert.ok(home.includes(term), term);
+test("Public pages identify the live conviction mailing and separate monitoring price", () => {
+  for (const page of [home, pricing, recordwatch, packet, how]) {
+    for (const fee of ["$39", "$50", "$100", "$150"]) assert.ok(page.includes(fee), fee);
+    assert.match(page, /tax included|including tax/i);
+    assert.doesNotMatch(page, /Only the \$39 RecordWatch purchase is live today|full workflow launches/);
   }
-  assert.match(pricing, /Wood County Court of Common Pleas, Ohio/);
-  assert.match(pricing, /clerkofcourt\.co\.wood\.oh\.us\/189\/Criminal-Division-of-the-Clerk-of-Courts/);
-  assert.ok(pricing.includes("$89"));
-  assert.match(packet, /This \$189 bundle cannot be purchased here yet/);
-  assert.match(how, /signed-packet fulfillment workflow is not live yet/);
+  assert.match(recordwatch, /data-recordwatch-checkout="lifetime_case"/);
+  assert.match(pricing, /operator releases both signed forms/);
+  assert.match(packet, /dismissal packets are available for digital delivery/);
 });
 
 test("Website distinguishes day-one case tracking from statutory filing eligibility", () => {
   assert.match(pricing, /An application cannot necessarily be filed on the arrest date/);
-  assert.match(home, /an arrest alone does not make a case immediately eligible|an arrest alone does not establish eligibility/);
+  assert.match(home, /an arrest alone does not make a case immediately eligible|an arrest alone does not establish eligibility/i);
   assert.match(pricing, /When court rules permit several charges or cases on a single sealing application/);
   assert.match(pricing, /live \$39 RecordWatch checkout is still linked to one saved case/);
 });

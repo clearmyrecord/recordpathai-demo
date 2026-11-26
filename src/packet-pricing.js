@@ -22,7 +22,7 @@ export function quotePacketPricing(input = {}) {
     if(type==="sealing-conviction") return {
       ...core,scope:"wood-common-pleas-conviction",
       courtName:plan.courtName,
-      message:"Wood County Common Pleas conviction sealing: $50 for RecordPathAI preparation plus a separate $100 court deposit (estimated combined $150, absent an accepted fee waiver). Local Rule 3.03 permits filing a searchable PDF by e-mail AFTER direct court prepayment; that $100 must not also be collected for a Lob check. Filing and packet checkout remain gated until the signed original, proof of prepayment and applicant authorization are verified."
+      message:"Approved Wood County Common Pleas conviction Pay and Mail costs $150, tax included: $50 preparation and a $100 court deposit. After verified payment, an operator releases the signed forms and check to the clerk. For digital delivery, the applicant pays any court deposit directly to the clerk."
     };
     if(type==="sealing-dismissal") return {
       ...core,scope:"wood-common-pleas-nonconviction",
@@ -32,7 +32,7 @@ export function quotePacketPricing(input = {}) {
     return {
       ...core,scope:"wood-common-pleas-outcome-unverified",
       courtName:plan.courtName,
-      message:"For a standard conviction filing without fee waiver, Wood County's published court deposit is $100 (proposed total $150 including preparation). Unknown and nonconviction outcomes have different fee rules. No payment until confirmed."
+      message:"For a standard conviction filing without fee waiver, Wood County's published court deposit is $100 (Pay and Mail total $150 including preparation and tax after approval). Unknown and nonconviction outcomes have different fee rules. No payment until confirmed."
     };
   }
   return {
