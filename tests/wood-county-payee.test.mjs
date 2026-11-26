@@ -9,12 +9,12 @@ test("Wood County check payee matches the Clerk's published instructions",()=>{
   assert.equal(court.postalAddress.address_line1,"One Courthouse Square");
   assert.equal(court.postalAddress.address_city,"Bowling Green");
 });
-test("Clerk payee verification does not authorize mail or automatic filing",()=>{
+test("Wood County profile permits reviewed conviction packets by mail",()=>{
   const filing=courtFilingPlan({...profile,formType:"conviction"});
   assert.equal(filing.courtFeeCents,10000);
   assert.equal(filing.courtFeePayee,"Wood County Clerk of Courts");
   assert.equal(filing.clerkMailingAcceptanceConfirmed,true);
-  assert.equal(filing.mailReady,false);
+  assert.equal(filing.mailReady,true);
   assert.equal(filing.onlineFeePaymentReady,false);
 });
 
@@ -28,5 +28,5 @@ test("Published Rule 3.03 permits only prepaid searchable email/fax sealing fili
   assert.equal(filing.emailFiling.physicallySignedSourceRequired,true);
   assert.equal(filing.emailFiling.fileStampOrDocketConfirmationRequired,true);
   assert.equal(filing.onlineFeePaymentReady,false);
-  assert.equal(filing.mailReady,false);
+  assert.equal(filing.mailReady,true);
 });

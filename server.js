@@ -1226,6 +1226,11 @@ async function dispatchPaidPacketToLob(sessionId,res){
     if(job.lob_check_id || job.lob_letter_id)
       return res.json({ok:true,status:job.status,lobCheckId:job.lob_check_id,
         lobLetterId:job.lob_letter_id,duplicate:true});
+    const receipts=await supabaseRest("packet_payment_webhook_receipts",{
+      query:"?stripe_session_id=eq."+encodeURIComponent(sessionId)+"&select=event_id&limit=1"
+    });
+    if(!Array.isArray(receipts) || !/^evt_[A-Za-z0-9_]+$/.test(receipts[0]?.event_id||""))
+      return res.status(409).json({ok:false,error:"Waiting for a signed live Stripe payment receipt."});
     const letter=job.payment_method==="no_fee" && job.court_fee_cents===0;
     if(job.status!=="paid_hold" || (!letter && (job.payment_method!=="lob_check" ||
        !Number.isSafeInteger(job.court_fee_cents) || job.court_fee_cents<=0)))
@@ -4120,10 +4125,12 @@ app.post("/api/create-checkout-session", async (req, res) => {
       {
         quantity: 1,
         price_data: {
-          currency: safe(currency, "usd").toLowerCase(),
+          currency: "usd",
+          ...(release.fulfillmentMode==="lob_check"?{tax_behavior:"inclusive"}:{}),
           unit_amount: numericAmount,
           product_data: {
             name: "RecordPathAI Packet Preparation",
+            ...(release.fulfillmentMode==="lob_check"?{tax_code:"txcd_20030000"}:{}),
             description: "Court-ready sealing / expungement packet preparation"
           }
         }
@@ -4138,8 +4145,10 @@ app.post("/api/create-checkout-session", async (req, res) => {
         price_data: {
           currency: "usd",
           unit_amount: quote.courtFeeCents,
+          tax_behavior:"inclusive",
           product_data: {
             name: "Court filing deposit",
+            tax_code:"txcd_00000000",
             description: "Amount payable to filing court; separate from RecordPathAI preparation"
           }
         }
@@ -4153,6 +4162,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
       client_reference_id: internalOrderId,
       customer_email: checkoutUser.email || undefined,
       line_items: lineItems,
+      ...(release.fulfillmentMode==="lob_check"?{automatic_tax:{enabled:true}}:{}),
       metadata: {
         productType: "record-sealing-packet",
         orderId: internalOrderId,

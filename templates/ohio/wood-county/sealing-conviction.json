@@ -10,6 +10,16 @@
   "coordinateSource": "official AcroForm widget rectangles, normalized from 612x792 PDF points",
   "mappings": [
     {
+      "id": 100,
+      "name": "court.case_number",
+      "type": "text",
+      "page": 3,
+      "x": 96,
+      "y": 285,
+      "width": 240,
+      "height": 19
+    },
+    {
       "id": 1,
       "name": "generated.current_date",
       "type": "date",
