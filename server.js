@@ -1,3 +1,4 @@
+import { paidSandboxProofSession, createPaidSandboxProof } from "./src/paid-sandbox-proof.js";
 import express from "express";
 import Stripe from "stripe";
 import cors from "cors";
@@ -690,7 +691,7 @@ app.post("/api/operator/lob-test-check-pdf",
     // Repeating the same fixture must not create duplicate sandbox checks.
     const idempotency="recordpathai-wood-two-pages-"+createHash("sha256")
       .update(bytes).digest("hex").slice(0,32);
-    const lob=await fetch(letter?"https://api.lob.com/v1/letters":"https://api.lob.com/v1/checks",{
+    const lob=await fetch("https://api.lob.com/v1/checks",{
       method:"POST",headers:{
         Authorization:"Basic "+Buffer.from(key+":").toString("base64"),
         "Idempotency-Key":idempotency
@@ -805,7 +806,7 @@ app.post("/api/operator/stripe-test-checkout",async(req,res)=>{
         {quantity:1,price_data:{currency:"usd",unit_amount:10000,
           product_data:{name:"TEST ONLY - simulated court deposit"}}}
       ],
-      metadata:{productType:"packet-sandbox-simulation",sandboxOnly:"true"}
+      metadata:{productType:"packet-sandbox-simulation",sandboxOnly:"true",lobProof:"wood-conviction-v1"}
     });
     res.setHeader("Cache-Control","no-store, private");
     return res.json({ok:true,livemode:false,totalCents:15000,
@@ -814,6 +815,49 @@ app.post("/api/operator/stripe-test-checkout",async(req,res)=>{
   }catch(error){
     console.warn("Stripe sandbox setup error",error?.name||"unknown");
     return res.status(502).json({ok:false,error:"Unable to create Stripe test checkout session."});
+  }
+});
+
+// Possession of an operator-created test Checkout Session permits only its
+// synthetic proof. Payment, amount, mode and product are rechecked at Stripe.
+app.post("/api/packet/sandbox-proof",async(req,res)=>{
+  res.setHeader("Cache-Control","private, no-store");
+  const sessionId=req.body?.session_id;
+  if(typeof sessionId!=="string" || !/^cs_test_[A-Za-z0-9]{16,180}$/.test(sessionId))
+    return res.status(400).json({error:"Test checkout session required."});
+  const key=process.env.STRIPE_TEST_SECRET_KEY||"";
+  const lobKey=process.env.LOB_TEST_API_KEY||"";
+  const bank=process.env.LOB_TEST_BANK_ACCOUNT_ID||"";
+  if(!key.startsWith("sk_test_") || !lobKey.startsWith("test_") || !/^bank_[A-Za-z0-9]+$/.test(bank))
+    return res.status(503).json({error:"Stripe and Lob sandbox credentials are required."});
+  try{
+    const sessions=new Stripe(key).checkout.sessions;
+    const session=await sessions.retrieve(sessionId);
+    if(!paidSandboxProofSession(session,sessionId))
+      return res.status(409).json({error:"Stripe has not confirmed a completed $150 test packet payment for this proof."});
+    const auth="Basic "+Buffer.from(lobKey+":").toString("base64");
+    let checkId=session.metadata.lobTestCheckId;
+    if(!checkId){
+      // Restrict creation to the first hour, inside Lob's idempotency window.
+      if(!Number.isSafeInteger(session.created) || Date.now()/1000-session.created>3600)
+        return res.status(410).json({error:"Start a new test checkout to generate a proof."});
+      const check=await createPaidSandboxProof({sessionId,bank,auth});
+      checkId=check.id;
+      await sessions.update(sessionId,{metadata:{lobTestCheckId:checkId}});
+    }
+    if(!/^chk_[A-Za-z0-9]+$/.test(checkId))throw Error("Invalid test check reference");
+    const response=await fetch("https://api.lob.com/v1/checks/"+checkId,{
+      headers:{Authorization:auth},signal:AbortSignal.timeout(15000)
+    });
+    if(!response.ok)throw Error("Lob test check unavailable");
+    const check=await response.json();
+    if(check.id!==checkId)throw Error("Lob test check mismatch");
+    const audit=await auditLobSandboxCheckProof(check,checkId);
+    return res.json({testCheckId:checkId,renderStatus:check.status,
+      proofUrl:audit.proofContentsVerified?check.url:null,...audit});
+  }catch(error){
+    console.warn("Paid sandbox proof unavailable",error?.name||"unknown");
+    return res.status(502).json({error:"Unable to verify the Stripe test session or retrieve its Lob proof. Retry this checkout."});
   }
 });
 
