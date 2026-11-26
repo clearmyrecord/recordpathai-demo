@@ -26,7 +26,7 @@ export async function createPaidSandboxProof({sessionId,bank,auth,request=fetch,
   fields.append("attachment",new Blob([fixture],{type:"application/pdf"}),"wood-test-forms.pdf");
   const result=await request("https://api.lob.com/v1/checks",{
     method:"POST",headers:{Authorization:auth,
-      "Idempotency-Key":createHash("sha256").update(sessionId).digest("hex")},
+      "Idempotency-Key":createHash("sha256").update(sessionId).update(signedFixture?fixture:"").digest("hex")},
     body:fields,signal:AbortSignal.timeout(30000)
   });
   if(!result.ok)throw Error("Lob test proof creation failed");

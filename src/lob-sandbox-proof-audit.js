@@ -13,7 +13,16 @@ export function trustedLobProofUrl(rawUrl,checkId) {
   }catch{return false;}
 }
 
-export function assessLobSandboxProof({checkId,check,proofPageTexts}={}) {
+export function readableSignedWoodFormText(formPages) {
+  if(formPages.length!==2)return false;
+  const [address,application]=formPages.map(text=>String(text).toLowerCase().replace(/[^a-z0-9]/g,""));
+  return ["whensubmittingacasedocumenttoacourt","shallomitpersonalidentifiersfromthedocument",
+    "thefollowinginformationisconsideredtobetheconfidentialpersonalidentifiers"].every(t=>address.includes(t)) &&
+    ["100depositforfees","includingalljailandprisonterms",
+    "conditionsofcommunitycontrol","postreleasecontrolterms"].every(t=>application.includes(t));
+}
+
+export function assessLobSandboxProof({checkId,check,proofPageTexts,requireReadableSignedForms=false}={}) {
   const status=String(check?.status||"");
   const pages=Array.isArray(proofPageTexts)?proofPageTexts:[];
   const exactFourPageProof=pages.length===4;
@@ -26,7 +35,8 @@ export function assessLobSandboxProof({checkId,check,proofPageTexts}={}) {
     Number(check.amount)===100;
   const trustworthyUrl=trustedLobProofUrl(check?.url,checkId);
   const proofContentsVerified=check?.id===checkId && status==="rendered" &&
-    checkAmountVerified && trustworthyUrl && twoFormPagesConfirmed;
+    checkAmountVerified && trustworthyUrl && twoFormPagesConfirmed &&
+    (!requireReadableSignedForms || readableSignedWoodFormText(formPages));
   return {
     proofContentsVerified,
     proofPages:pages.length,

@@ -732,7 +732,7 @@ app.post("/api/operator/lob-test-check-pdf",
 
 // Read a Lob TEST proof from a trusted signed Lob URL. Validate page count,
 // ordered form headings and test check amount. No mail, charge or filing occurs.
-async function auditLobSandboxCheckProof(result,id){
+async function auditLobSandboxCheckProof(result,id,requireReadableSignedForms=false){
   const unverified={proofContentsVerified:false,proofPages:0,
     checkAmountVerified:Number(result?.amount)===100,
     exactFourPageProof:false,twoFormPagesConfirmed:false,
@@ -761,7 +761,7 @@ async function auditLobSandboxCheckProof(result,id){
       }
     }finally{await document.destroy();}
     return assessLobSandboxProof({
-      checkId:id,check:result,proofPageTexts:pageTexts
+      checkId:id,check:result,proofPageTexts:pageTexts,requireReadableSignedForms
     });
   }catch(error){
     console.warn("Lob test proof PDF content verification unavailable",error?.name||"unknown");
@@ -906,7 +906,7 @@ app.post("/api/packet/staging-lob-proof",async(req,res)=>{
     if(!response.ok)throw Error("Lob test check unavailable");
     const check=await response.json();
     if(check.id!==id)throw Error("Lob test check mismatch");
-    const audit=await auditLobSandboxCheckProof(check,id);
+    const audit=await auditLobSandboxCheckProof(check,id,true);
     return res.json({testCheckId:id,webhookConfirmed:true,renderStatus:check.status,
       proofUrl:audit.proofContentsVerified?check.url:null,...audit});
   }catch{return res.status(502).json({error:"Unable to render the paid staging proof."});}
