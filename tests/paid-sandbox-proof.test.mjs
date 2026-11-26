@@ -1,3 +1,4 @@
+import {readableSignedWoodFormText} from "../src/lob-sandbox-proof-audit.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {paidSandboxProofSession,createPaidSandboxProof} from "../src/paid-sandbox-proof.js";
@@ -50,6 +51,9 @@ test("staging attaches the signed two-page sample rendered by the packet page",a
         texts.push((await page.getTextContent()).items.map(item=>item.str).join(" "));
       }
       assert.ok(isWoodConvictionFormPair(texts));
+      assert.ok(readableSignedWoodFormText(texts));
+      assert.equal(readableSignedWoodFormText([texts[0],"Garbled deposit and sentence"]),false);
+      assert.equal(readableSignedWoodFormText(["Garbled identifiers",texts[1]]),false);
       assert.match(texts.join(" "),/SAMPLE-2026/);
       assert.match(texts.join(" "),/NOT FOR FILING/i);
     }finally{await pdf.destroy();}
