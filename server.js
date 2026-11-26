@@ -351,6 +351,19 @@ app.post("/api/packet/sandbox-stripe-webhook",express.raw({type:"application/jso
 });
 
 app.use(express.json());
+ 
+// Anonymous Wood County public marketing counters only; no account or case association.
+// Infrastructure request logging is separate; never log submitted payloads or identifiers here.
+app.post("/api/marketing/wood-county/event",(req,res)=>{
+  const channels=new Set(["google","social","library","court","probation","reentry","workforce","bgsu","legal-aid","staffing","local-media","community","poster","direct"]);
+  const events=new Set(["landing_view","eligibility_click"]);
+  const body=req.body;
+  if(!body || typeof body!=="object" || Array.isArray(body) || Object.keys(body).length!==2 ||
+     !channels.has(body.channel) || !events.has(body.event))return res.status(400).end();
+  console.info(JSON.stringify({type:"wood_county_public_campaign",channel:body.channel,event:body.event}));
+  return res.status(204).end();
+});
+
 
 function publicSupabaseConfig() {
   // All three supported names must agree with supabaseRestConfig, otherwise
