@@ -16,7 +16,7 @@ const mapping=JSON.parse(readFileSync(new URL("../templates/ohio/wood-county/sea
 const registry=JSON.parse(readFileSync(new URL("../templates/index.json",import.meta.url),"utf8"));
 const selected=registry.find(t=>t.state==="OH"&&t.county==="Wood"&&t.formType==="sealing-conviction");
 assert.ok(selected,"Reviewed Wood County template is required");
-const original=readFileSync(new URL("../"+selected.pdfPath,import.meta.url));
+const original=readFileSync(new URL("../"+selected.printPdfPath,import.meta.url));
 function extract(start,end){
   const a=html.indexOf(start),b=html.indexOf(end,a+start.length);
   assert.ok(a>=0&&b>a, "Actual production code section could not be extracted: "+start);
