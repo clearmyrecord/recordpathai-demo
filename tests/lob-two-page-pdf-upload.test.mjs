@@ -20,7 +20,7 @@ test("sandbox sends blank PDF as multipart not remote or secret URL",()=>{
   assert.match(route,/new FormData\(\)/);
   assert.match(route,/fields\.append\("attachment",new Blob\(\[bytes\]/);
   assert.match(route,/Authorization:"Basic "/);
-  assert.match(route,/https:\/\/api\.lob\.com\/v1\/checks/);
+  assert.match(route,/fetch\("https:\/\/api\.lob\.com\/v1\/checks",/);
   assert.doesNotMatch(route,/attachment:testAttachment|private\/packets|signed_pdf_private_path/);
 });
 test("identical sandbox form upload is idempotent, never auto-mailed live",()=>{
