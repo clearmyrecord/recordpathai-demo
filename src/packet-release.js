@@ -109,7 +109,8 @@ export function evaluatePacketRelease({userId,caseId,savedCase,charges,review,no
         missing.push(filing.clerkMailingAcceptanceConfirmed
           ? "Live mailed filing and check issuance remain disabled pending payment evidence, reviewer approval, and operator authorization."
           : "The clerk has not confirmed acceptance of this mailed filing and check. Live court-fee collection remains disabled.");
-      if(!review?.verified_check_payee)missing.push("The clerk's actual check payee has not been verified.");
+      if(review?.verified_check_payee!==filing.courtFeePayee)missing.push("The clerk's actual check payee has not been verified.");
+      if(!Array.isArray(review?.reviewer_evidence_links)||!review.reviewer_evidence_links.length)missing.push("Independent review evidence is required before court-fee checkout.");
       if(!review?.verified_filing_address)missing.push("The clerk's mailing destination has not been verified.");
       if(!runtime.lobLiveEnabled||!runtime.lobVerifiedBank)
         missing.push("Lob live check entitlement and verified funding bank are not available.");

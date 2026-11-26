@@ -10,10 +10,10 @@ export function buildCourtCheckRequest({profileInput,review,from,bankAccount,att
   if(profile.lobChecksAuthorized!==true)
     throw new Error("Court mailing and combined filing-check acceptance is not authorized.");
   if(review?.status!=="approved"||review?.fee_payment_method!=="lob_check"||
-     !review?.verified_check_payee || !review?.verified_filing_address)
+     review.verified_check_payee!==profile.courtFeePayee || !review?.verified_filing_address)
     throw new Error("Human-verified filing check payee and address are required.");
   const amount=Number(approvedCourtFeeCents);
-  if(!Number.isSafeInteger(amount)||amount<=0||amount>50000)
+  if(!Number.isSafeInteger(amount)||amount!==10000||review.approved_court_fee_cents!==amount||review.form_type!=="sealing-conviction"||!String(caseReference||"").trim())
     throw new Error("Court check amount is not approved.");
   if(!BANK.test(bankAccount||""))throw new Error("Verified Lob bank account ID required.");
   if(!HTTPS.test(attachmentUrl||"")||new URL(attachmentUrl).username||new URL(attachmentUrl).password)

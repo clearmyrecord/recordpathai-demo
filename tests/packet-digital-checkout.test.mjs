@@ -40,7 +40,7 @@ test("approved digital-only case is $50 and cannot charge or dispatch court fee"
   assert.equal(digital.quote.directCourtPaymentRequired,true);
   const mailed=evaluatePacketRelease(inputs);
   assert.equal(mailed.ready,false);
-  assert.match(mailed.missing.join(" "),/live mailed filing and check issuance remain disabled/i);
+  assert.match(mailed.missing.join(" "),/verified funding bank are not available/i);
 });
 
 test("digital-only checkout still refuses missing review, changed charges and unsigned packets",()=>{

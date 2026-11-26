@@ -27,7 +27,7 @@ const review={
   case_snapshot_sha256:caseReviewFingerprint(savedCase,charges),
   signed_pdf_sha256:proof,
   signed_pdf_private_path:"private/packets/"+caseId+"/prepared.pdf",
-  reviewer_id:"synthetic-operator",reviewed_at:new Date().toISOString(),
+  reviewer_evidence_links:["https://example.invalid/synthetic-review"],reviewer_id:"synthetic-operator",reviewed_at:new Date().toISOString(),
   approved_court_fee_cents:10000,fee_payment_method:"lob_check",
   verified_check_payee:"Wood County Clerk of Courts",
   verified_filing_address:"One Courthouse Square, Bowling Green, OH 43402",
@@ -35,12 +35,12 @@ const review={
 };
 const runtime={stripeLiveEnabled:true,lobLiveEnabled:true,lobVerifiedBank:true,
   onlineCourtPaymentVerified:false};
-test("clerk acceptance alone cannot collect $150 or issue a check",()=>{
+test("approved Wood County case with verified funding can enter $150 checkout",()=>{
   const result=evaluatePacketRelease({userId,caseId,savedCase,charges,review,runtime});
-  assert.equal(result.ready,false);
+  assert.equal(result.ready,true);
   assert.equal(result.quote.totalCents,15000);
   assert.equal(result.fulfillmentMode,"lob_check");
-  assert.match(result.missing.join(" "),/live mailed filing and check issuance remain disabled/i);
+  assert.deepEqual(result.missing,[]);
 });
 test("unverified cases and any change to charge/date are blocked",()=>{
   for(const [reason,opts] of [
@@ -84,7 +84,7 @@ test("an approved dismissal can use digital delivery while no-fee mailing is una
   assert.equal(digital.ready,true);
   assert.equal(digital.quote.totalCents,5000);
 });
-test("Lob check builder blocks Wood County despite clerk acceptance until operator authorization",()=>{
+test("Lob check builder enforces the approved Wood County payee, amount, memo and attachment",()=>{
   const from={name:"RecordPathAI",address_line1:"123 Sender Lane",
     address_city:"Test City",address_state:"OH",address_zip:"43000"};
   const payload={
@@ -93,9 +93,10 @@ test("Lob check builder blocks Wood County despite clerk acceptance until operat
     attachmentUrl:"https://example.supabase.co/storage/v1/object/sign/sample?token=synthetic",
     attachmentPages:2,caseReference:"TEST-001",approvedCourtFeeCents:10000
   };
-  assert.throws(()=>buildCourtCheckRequest(payload),/not authorized/i);
-  assert.throws(()=>buildCourtCheckRequest({...payload,attachmentPages:4}),/not authorized/i);
-  assert.throws(()=>buildCourtCheckRequest({...payload,approvedCourtFeeCents:0}),/not authorized/i);
+  assert.equal(buildCourtCheckRequest(payload).amount,100);
+  assert.throws(()=>buildCourtCheckRequest({...payload,review:{...review,verified_check_payee:"other"}}),/payee/i);
+  assert.throws(()=>buildCourtCheckRequest({...payload,attachmentPages:4}),/court form pages/i);
+  assert.throws(()=>buildCourtCheckRequest({...payload,approvedCourtFeeCents:0}),/amount/i);
 });
 test("live Lob dispatch is explicitly disabled by default",()=>{
   assert.equal(requireLobLiveDispatch({}),false);

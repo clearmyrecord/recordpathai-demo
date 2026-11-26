@@ -99,6 +99,22 @@ then
   DIGITAL_ARGS+=("--update-env-vars=RECORDPATH_DIGITAL_PACKET_CHECKOUT_ENABLED=true,RECORDPATH_DIGITAL_ROLLOUT=1")
 fi
 
+# One-time activation for reviewed Wood County conviction checkout. Dispatch
+# remains separately controlled; future operations can pause checkout.
+if [[ "$PROJECT/$REGION/$SERVICE" == "recordpathai-production/us-west1/recordpathai" ]] &&
+   python3 - "$BEFORE" <<'PYMAIL'
+import json,sys
+with open(sys.argv[1]) as f:
+    containers=json.load(f).get("spec",{}).get("template",{}).get("spec",{}).get("containers",[])
+env={e["name"]:e for c in containers for e in c.get("env",[])}
+required={"STRIPE_SECRET_KEY","STRIPE_WEBHOOK_SECRET","LOB_LIVE_API_KEY","LOB_VERIFIED_BANK_ID","LOB_FROM_ADDRESS_JSON"}
+sys.exit(0 if required.issubset(env) and env.get("LOB_LIVE_CHECKS_ENABLED",{}).get("value")=="true"
+         and env.get("RECORDPATH_WOOD_CHECKOUT_ROLLOUT",{}).get("value")!="1" else 1)
+PYMAIL
+then
+  DIGITAL_ARGS+=("--update-env-vars=RECORDPATH_LIVE_PACKET_CHECKOUT=true,LOB_CHECK_ATTACHMENTS_APPROVED=true,RECORDPATH_ENABLE_LIVE_DISPATCH=true,RECORDPATH_ENABLE_AUTOMATIC_FULFILLMENT=false,LOB_LIVE_LETTERS_ENABLED=false,RECORDPATH_WOOD_CHECKOUT_ROLLOUT=1")
+fi
+
 echo "Deploying a tagged new revision at 0% traffic for independent verification..."
 gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" \
   "${DEPLOY_SECRET_ARGS[@]}" "${DIGITAL_ARGS[@]}" --no-traffic --tag "$CANDIDATE_TAG" --quiet

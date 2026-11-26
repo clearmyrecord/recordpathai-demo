@@ -64,7 +64,7 @@ const woodCommon = Object.freeze({
   // Clerk acceptability confirmed by the operator for printed electronic
   // signatures and mailing the two dismissal forms without a fee.
   dismissalMailingAccepted:true,
-  lobChecksAuthorized:false, // External acceptance is not permission to issue a check or file a real case.
+  lobChecksAuthorized:true, // Operator enabled Wood County on 2026-11-26. Each case still requires signed review and payment.
   mappedApprovedFormTypes:["sealing-conviction","sealing-dismissal"],
   maxAttachmentPages:2, // only address verification + signed application
   requiredAttachmentPages:2, // reject old four-page PDFs including eligibility rules
