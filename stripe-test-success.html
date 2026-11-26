@@ -27,9 +27,9 @@ if(params.has("cancelled")){
       const result=await response.json();
       if(!response.ok)throw Error(result.error||"Proof check unavailable.");
       if(result.proofContentsVerified && result.proofUrl){
-        status.textContent="Stripe confirmed the $150 test payment. Lob rendered a four-page proof with the $100 test check and two sample form pages.";
+        status.textContent="Stripe confirmed the $150 test payment. Lob rendered a four-page proof with the $100 test check and two sample form pages. "+(result.webhookConfirmed?"Signed Stripe webhook received.":"Signed webhook delivery is still unconfirmed.");
         const link=document.getElementById("proof");
-        link.href=result.proofUrl;link.hidden=false;button.hidden=true;
+        link.href=result.proofUrl;link.hidden=false;button.hidden=result.webhookConfirmed;button.textContent="Recheck signed webhook delivery";
       }else{
         status.textContent="Stripe confirmed payment. Lob test check "+result.testCheckId+
           " is "+result.renderStatus+". The PDF has not passed verification. Select the button again to check.";
