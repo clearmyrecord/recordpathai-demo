@@ -4520,6 +4520,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       const downloadReminderBtn = document.getElementById("downloadEligibilityReminderBtn");
       if (saveReminderBtn) saveReminderBtn.addEventListener("click", () => saveEligibilityReminder(normalizedData, eligibilityMode));
       if (downloadReminderBtn) downloadReminderBtn.addEventListener("click", () => downloadEligibilityReminder(normalizedData, eligibilityMode));
+      if(new URLSearchParams(location.search).get("savedPacket")==="1"&&isInternalUuid(accountSelectedCaseId)){
+        document.getElementById("approvedPreviewPanel")?.scrollIntoView({block:"start"});
+        await openApprovedPacketPreview();
+      }
     });
 
     // Browser draft auto-hydration is intentionally disabled for court packets.

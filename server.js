@@ -414,14 +414,14 @@ app.get("/api/packet/filing-status",async(req,res)=>{
       "&user_id=eq."+encodeURIComponent(user.id);
     const [drafts,reviews,jobs]=await Promise.all([
       supabaseRest("packet_drafts",{
-        query:"?"+identity+"&select=signed_pdf_sha256,signed_pdf_private_path&limit=1"
+        query:"?"+identity+"&select=signed_pdf_sha256,signed_pdf_private_path,pdf_pages,private_review_authorized_at&limit=1"
       }),
       supabaseRest("packet_releases",{
         query:"?"+identity+"&select=status,signed_pdf_sha256,signed_pdf_private_path&limit=1"
       }),
       supabaseRest("packet_fulfillment_jobs",{
         query:"?"+identity+
-        "&select=status,created_at,updated_at,court_fee_cents,payment_method,lob_check_id,lob_letter_id,mailed_at"+
+        "&select=id,status,stripe_session_id,created_at,updated_at,court_fee_cents,payment_method,lob_check_id,lob_letter_id,mailed_at"+
         "&order=created_at.desc&limit=1"
       })
     ]);
@@ -432,7 +432,12 @@ app.get("/api/packet/filing-status",async(req,res)=>{
     res.setHeader("Cache-Control","no-store, private");
     res.setHeader("X-Content-Type-Options","nosniff");
     return res.json({ok:true,case_id:caseId,source:"verified_private_records",
-      ...timeline,note:"Lob mail delivery is not proof of court filing or sealing approval."});
+      ...timeline,packet_library:{
+        generated:timeline.signed_pdf_uploaded,
+        generated_at:latest(drafts)?.private_review_authorized_at||null,
+        page_count:latest(drafts)?.pdf_pages||null,
+        paid_download_job:timeline.packet_payment_verified&&/^cs_live_[A-Za-z0-9]+$/.test(latest(jobs)?.stripe_session_id||"")?latest(jobs).id:null
+      },note:"Lob mail delivery is not proof of court filing or sealing approval."});
   }catch(error){
     console.warn("Private packet filing status unavailable",error?.name||"unknown");
     return res.status(503).json({ok:false,
@@ -2617,7 +2622,17 @@ app.post("/api/packet/download-approved",async(req,res)=>{
   if(!user)return;
   if(!stripe||!packetDatabaseReady())
     return res.status(503).json({ok:false,error:"Paid packet download is temporarily unavailable."});
-  const caseId=safe(req.body?.case_id),sessionId=safe(req.body?.session_id);
+  const caseId=safe(req.body?.case_id);let sessionId=safe(req.body?.session_id);
+  const libraryJob=safe(req.body?.recordwatch_job_id);
+  if(libraryJob){
+    if(sessionId||!validCaseId(caseId)||!validCaseId(libraryJob))return res.status(400).json({ok:false,error:"Select a saved packet."});
+    try{
+      await getSavedCaseReviewFacts(user.id,caseId);
+      const [job]=await supabaseRest("packet_fulfillment_jobs",{query:"?id=eq."+encodeURIComponent(libraryJob)+"&case_id=eq."+encodeURIComponent(caseId)+"&user_id=eq."+encodeURIComponent(user.id)+"&select=stripe_session_id,status&limit=1"});
+      if(!job||job.status==="cancelled"||!/^cs_live_[A-Za-z0-9]+$/.test(job.stripe_session_id||""))return res.status(403).json({ok:false,error:"No verified saved payment is available."});
+      sessionId=job.stripe_session_id;
+    }catch{return res.status(503).json({ok:false,error:"Saved packet could not be verified. Do not pay again."});}
+  }
   if(!validCaseId(caseId)||!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))
     return res.status(400).json({ok:false,error:"Saved case and verified payment session required."});
   try {
@@ -2627,7 +2642,8 @@ app.post("/api/packet/download-approved",async(req,res)=>{
        charge.amount_refunded!==0 || !verifiedPacketSession(session,user.id,caseId))
       return res.status(403).json({ok:false,error:"Payment was not verified for this saved case."});
     const purchasedSha=session.metadata?.signedPdfSha;
-    if(session.metadata?.fulfillmentMode==="digital_only" && /^[a-f0-9]{64}$/.test(purchasedSha||"")){
+    if(libraryJob && (!session.livemode || !/^[a-f0-9]{64}$/.test(purchasedSha||"")))return res.status(409).json({ok:false,error:"The exact purchased document needs support verification. Do not pay again."});
+    if((libraryJob || session.metadata?.fulfillmentMode==="digital_only") && /^[a-f0-9]{64}$/.test(purchasedSha||"")){
       const bytes=await fetchExactApprovedPreviewPdf({path:"private/packets/"+caseId+"/"+purchasedSha+".pdf",signedPdfSha:purchasedSha});
       res.setHeader("Cache-Control","private, no-store");
       res.setHeader("Content-Disposition",'attachment; filename="recordpathai-signed-application.pdf"');

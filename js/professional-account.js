@@ -73,7 +73,7 @@ async function refreshBilling(token=epoch){
   $("billing-state").textContent=(data.plan==="solo"?"Individual":"Firm")+" · $"+(data.amount_cents/100).toFixed(2)+"/month plus applicable tax · "+(data.active?"Subscription verified":data.subscription_exists?"Existing subscription requires attention":"Ready to subscribe");
   $("billing-checkout").hidden=data.subscription_exists;$("billing-consent-label").hidden=data.subscription_exists;$("billing-portal").hidden=!data.subscription_exists;
   if(data.active){
-   $("practice-link").hidden=false;$("practice-link").href="professional-account.html?secure=1";$("practice-link").textContent="Open secure workspace";
+   $("practice-link").hidden=false;$("practice-link").href="professional-account.html?secure=1";$("practice-link").textContent="Open RecordWatch";
    if(secure){$("submitted").hidden=true;$("pilot-link").hidden=true;if(await ensureMfa(token)&&token===epoch)location.replace("professional-practice.html");}
   }
  }catch{if(token===epoch)$("billing-state").textContent="Subscription verification unavailable. Contact professional support or refresh.";}

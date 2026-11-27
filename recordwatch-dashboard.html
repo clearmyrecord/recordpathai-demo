@@ -80,15 +80,15 @@
        <section class="recordwatch-widget recordwatch-filing-roadmap" aria-label="Private filing and delivery status">
          <div class="recordwatch-section-heading">
            <p class="eyebrow-mini">Packet · payment · Lob · court</p>
-           <h2>My packet and mailing status</h2>
+           <h2>My saved packets and mailing status</h2>
            <p class="muted">This panel reads your private saved-case filing records, not an estimated or simulated order. Lob mailing and court filing are separate steps.</p>
          </div>
-         <p id="recordwatchFilingStatus" class="recordwatch-empty-copy" role="status" aria-live="polite">Select a saved case to check its packet and mailing status.</p>
+         <label for="recordwatchPacketCase">Choose saved case</label><select id="recordwatchPacketCase"><option value="">Select a saved case</option></select><p id="recordwatchPacketSaved" class="recordwatch-schedule-note" role="status">Select a case to find its saved packet.</p><p id="recordwatchFilingStatus" class="recordwatch-empty-copy" role="status" aria-live="polite">Select a saved case to check its packet and mailing status.</p>
          <div id="recordwatchFilingSteps" class="recordwatch-fulfillment-steps" aria-label="Verified filing milestones"></div>
          <div id="recordwatchFilingReference" class="recordwatch-schedule-note"></div>
          <div class="recordwatch-actions">
            <button class="btn secondary" id="refreshRecordwatchFiling" type="button">Refresh filing status</button>
-           <a class="btn secondary" id="recordwatchPacketLink" href="packet.html">Open signed-packet preparation</a>
+           <a class="btn secondary" id="recordwatchPacketLink" href="packet.html" hidden>Open saved packet</a><button class="btn" id="recordwatchPacketDownload" type="button" hidden>Download purchased PDF</button>
          </div>
          <p class="recordwatch-schedule-note">A payment alone does not submit documents to a court. Lob submission is not USPS mailing, and USPS delivery is not court acceptance. The $50 packet service and Lob live dispatch remain subject to court review, authorization and provider setup. <a href="pricing.html">Pricing and fulfillment status</a>.</p>
        </section>

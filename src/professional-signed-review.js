@@ -5,6 +5,7 @@ import {isOfficialWoodConvictionFormPair,isOfficialWoodDismissalFormPair,normali
 const HOST="ckrqmlnckhagskpumjbh.supabase.co";
 const PRODUCTION_HOST="pfyxjhdlqgpzzzdssqpk.supabase.co";
 const META="id,org_id,case_id,attorney_id,sha256,page_count,attorney_signature_attested,created_at,signature_mode,counsel_name,counsel_bar_number";
+const GENERATED_META="id,org_id,case_id,attorney_id,kind,sha256,page_count,created_at";
 export const PROFESSIONAL_PDF_MAX=2097152;
 const uuid=v=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const digest=b=>createHash("sha256").update(b).digest("hex");
@@ -23,6 +24,16 @@ export async function validateProfessionalSignedPdf(bytes,outcome,parse,counsel=
  const counselMarked=texts.some(t=>normalizeWoodFormHeading(t).includes("COUNSELSIGNATUREASSUMPTIONDONOTFILE"));
  if(Boolean(counsel)!==counselMarked)throw Error("Signature mode mismatch");
  if(counsel&&(!texts.every(t=>normalizeWoodFormHeading(t).includes("COUNSELSIGNATUREASSUMPTIONDONOTFILE"))||!normalizeWoodFormHeading(combined).includes(normalizeWoodFormHeading("/s/ "+counsel.full_name+" (counsel)"))||!combined.replace(/\s/g,"").includes(counsel.ohio_bar_number)))throw Error("Counsel identity missing");
+ if(!(outcome==="conviction"?isOfficialWoodConvictionFormPair(texts):isOfficialWoodDismissalFormPair(texts)))throw Error("Wrong official form pair");
+ return digest(bytes);
+}
+export async function validateGeneratedProfessionalPacket(bytes,outcome,kind,parse){
+ if(!["review_draft","unsigned_application"].includes(kind)||!Buffer.isBuffer(bytes)||bytes.length<500||bytes.length>PROFESSIONAL_PDF_MAX||bytes.subarray(0,5).toString()!=="%PDF-"||!bytes.subarray(-2048).includes(Buffer.from("%%EOF")))throw Error("Invalid packet");
+ if(!["conviction","dismissal","not_guilty"].includes(outcome))throw Error("Outcome requires review");
+ const texts=await parse(bytes);
+ if(texts.length!==2||texts.some(t=>normalizeWoodFormHeading(t).includes("COUNSELSIGNATUREASSUMPTIONDONOTFILE")))throw Error("Unexpected packet");
+ const marked=texts.map(t=>normalizeWoodFormHeading(t).includes("UNSIGNEDREVIEWDRAFT"));
+ if(kind==="review_draft"?!marked.every(Boolean):marked.some(Boolean))throw Error("Packet kind mismatch");
  if(!(outcome==="conviction"?isOfficialWoodConvictionFormPair(texts):isOfficialWoodDismissalFormPair(texts)))throw Error("Wrong official form pair");
  return digest(bytes);
 }
@@ -60,6 +71,37 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
   if(ctx.mode!=="staging"){res.status(503).json({ok:false,error:"Sandbox subscription routes are staging-only."});return null;}
   return ctx;
  }});
+ // Generated packets are private case archives, not signed or independently reviewed documents.
+ app.post("/api/professional/recordwatch/generated-packet",express.raw({type:"application/pdf",limit:"2mb"}),async(req,res)=>{
+  try{
+   const ctx=await context(req,res);if(!ctx)return;
+   if(ctx.mode!=="production")return res.status(503).end();
+   const c=await ctx.ownedCase(req.get("x-professional-case-id"));
+   if(!c)return res.status(403).json({ok:false,error:"Approved assigned case required."});
+   const kind=req.get("x-professional-packet-kind");
+   let sha;try{sha=await validateGeneratedProfessionalPacket(req.body,c.outcome,kind,parse);}catch{return res.status(400).json({ok:false,error:"Generated document must use the correct official two-page forms."});}
+   if(!await ctx.ownedCase(c.id))return res.status(403).end();
+   const existing=await ctx.rest("professional_generated_packets","select="+GENERATED_META+"&case_id=eq."+c.id+"&kind=eq."+kind+"&sha256=eq."+sha+"&limit=1");
+   if(existing.length)return res.json({ok:true,document:existing[0]});
+   const rows=await ctx.rest("professional_generated_packets","select="+GENERATED_META,{service:true,body:{org_id:c.org_id,case_id:c.id,attorney_id:ctx.user.id,kind,sha256:sha,pdf_bytes:"\\x"+req.body.toString("hex"),page_count:2}});
+   return res.json({ok:true,document:rows[0],note:"Saved privately. Not proof of a signature, payment, or filing."});
+  }catch{return res.status(503).json({ok:false,error:"Generated packet could not be saved in RecordWatch."});}
+ });
+ app.get("/api/professional/recordwatch/generated-packet/:id",async(req,res)=>{
+  try{
+   const ctx=await context(req,res);if(!ctx)return;
+   if(ctx.mode!=="production"||!uuid(req.params.id))return res.status(404).end();
+   const [d]=await ctx.rest("professional_generated_packets","select="+GENERATED_META+"&id=eq."+req.params.id+"&attorney_id=eq."+ctx.user.id+"&limit=1");
+   if(!d||!await ctx.ownedCase(d.case_id))return res.status(404).end();
+   const [row]=await ctx.rest("professional_generated_packets","select=pdf_bytes,sha256&id=eq."+d.id+"&case_id=eq."+d.case_id+"&attorney_id=eq."+ctx.user.id+"&limit=1",{service:true});
+   if(!row||typeof row.pdf_bytes!=="string"||!/^\\x[0-9a-f]+$/i.test(row.pdf_bytes))return res.status(503).end();
+   const bytes=Buffer.from(row.pdf_bytes.slice(2),"hex");
+   if(bytes.length>PROFESSIONAL_PDF_MAX||digest(bytes)!==d.sha256||row.sha256!==d.sha256||!await ctx.ownedCase(d.case_id))return res.status(403).end();
+   res.setHeader("X-Content-Type-Options","nosniff");
+   res.setHeader("Content-Disposition",'attachment; filename="recordwatch-unsigned-packet.pdf"');
+   return res.type("application/pdf").send(bytes);
+  }catch{return res.status(503).end();}
+ });
  app.post("/api/professional/signed-review",express.raw({type:"application/pdf",limit:"2mb"}),async(req,res)=>{
   try{
    const ctx=await context(req,res);if(!ctx)return;
