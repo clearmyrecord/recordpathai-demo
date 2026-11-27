@@ -35,3 +35,14 @@ test("The new pricing page is discoverable across core customer journey", () => 
   assert.match(sitemap, /https:\/\/recordpathai\.com\/pricing\.html/);
   assert.match(sitemap, /https:\/\/recordpathai\.com\/recordwatch\.html/);
 });
+
+test("Homepage keeps the consumer funnel and links to the separate attorney suite from primary navigation", () => {
+  const nav = home.match(/<nav class="nav" id="primary-navigation"[\s\S]*?<\/nav>/)?.[0];
+  assert.ok(nav);
+  assert.match(nav, /<a href="professional\.html">Attorneys<\/a>/);
+  assert.match(nav, /href="eligibility\.html" class="nav-cta"/);
+  assert.doesNotMatch(home, /id="professional-suite"|Grow your practice\. Not your paperwork\./);
+  assert.match(home, /id="available-now"/);
+  assert.match(home, /id="why-seal"/);
+  assert.match(read("professional.html"), /RecordPathAI Professional/);
+});
