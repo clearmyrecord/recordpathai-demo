@@ -5,7 +5,7 @@ const $=id=>document.getElementById(id), notice=t=>$("notice").textContent=t;
 const production="pfyxjhdlqgpzzzdssqpk.supabase.co";
 let api,orgs=[],epoch=0,active=false,renewal=null,packetCaseId=null,internalTestAccess=false;
 const caseFilter=()=>$("client-filter").value;
-const setStep=n=>{$("professional-steps").hidden=!n;for(const [i,id] of ["step-personal","step-record","step-packet"].entries()){if(i+1===n)$(id).setAttribute("aria-current","step");else $(id).removeAttribute("aria-current");}};
+const setStep=n=>{$("app").classList.toggle("professional-packet-mode",n===3);$("professional-steps").hidden=!n;for(const [i,id] of ["step-personal","step-record","step-packet"].entries()){if(i+1===n)$(id).setAttribute("aria-current","step");else $(id).removeAttribute("aria-current");}};
 const hideIntake=()=>{for(const id of ["client-intake","case-intake"])$(id).hidden=true;};
 const returnDashboard=()=>{$("client-form").reset();$("case-form").reset();sharedIntake?.reset();hideIntake();packetCaseId=null;setStep(0);$("case-filter").value="";$("client-filter").value="";refresh().catch(fail);$("saved-clients").scrollIntoView({block:"start"});};
 const showIntake=id=>{if(!active)return;if(id==="client-intake")$("client-form").reset();else{const selected=$("clients").value;$("case-form").reset();sharedIntake?.reset();if(selected)$("clients").value=selected;}hideIntake();packetCaseId=null;setStep(id==="client-intake"?1:2);$(id).hidden=false;$(id).scrollIntoView({block:"start"});};
@@ -129,17 +129,26 @@ async function refresh(){
   add(card,"p","Reminders use attorney-entered dates. Official events require independent verification; no live docket feed or email/SMS dispatch is connected.");
   const docketInfo=window.RecordPathRecordCollection.linkFor({state:detailFields.caseState||(row.court_id==="oh-wood-common-pleas"?"OH":""),county:detailFields.county||(row.court_id==="oh-wood-common-pleas"?"Wood":""),courtType:detailFields.courtType||(row.court_id==="oh-wood-common-pleas"?"court-of-common-pleas":""),courtName:actualCourt});if(docketInfo.url){const docket=add(card,"a",docketInfo.label);docket.href=docketInfo.url;docket.target="_blank";docket.rel="noopener noreferrer";}else add(card,"p",docketInfo.note);
 
-  card=packetPanel.body;
-  add(card,"h4","Step 3 — Prepare and review your application");
+  card=packetPanel.body;card.classList.add("professional-packet-page");
+  add(card,"h2","Your Filing Packet");
   add(card,"p","Client: "+client.full_name+" · Case: "+row.case_number+" · Eligibility: "+eligibilityBadge.textContent+" · Estimated date: "+estimated.textContent);
   add(card,"p","RecordPathAI packet preparation: $0 — included with professional access. Applicable court fees are separate: "+(row.outcome==="conviction"?"$100 for a qualifying conviction":row.outcome==="mixed"?"Requires review":"$0 for qualifying dismissal or not-guilty cases")+".");
+  const fees=add(card,"section","");fees.className="professional-packet-fees";add(fees,"h3","Your packet and court fees");
+  for(const [label,value] of [["RecordPathAI application preparation","$0 — included"],["Court filing fee / deposit",row.outcome==="conviction"?"$100":row.outcome==="mixed"?"Review required":"$0"],["Optional conviction mailing",row.outcome==="conviction"?"$10 + applicable tax":"Not applicable"]]){const line=add(fees,"div","");add(line,"span",label);add(line,"strong",value);}
+  const stage=(title,desc)=>{const section=add(packetPanel.body,"section","");section.className="professional-packet-stage";add(section,"h3",title);add(section,"p",desc);return section;};
+  const prepare=stage("Step 1 — Prepare and Submit Your Signed Packet","Verify the saved client and case information, prepare the official forms, and obtain the applicant’s actual signature. This does not charge or file anything.");
+  const contact=add(prepare,"div","");contact.className="professional-packet-contact";add(contact,"h4","Verify contact and mailing details on both court forms");for(const [label,value] of [["Full legal name",client.full_name],["Mailing address",[client.line1,client.line2,client.city,client.state,client.zip].filter(Boolean).join(", ")],["Telephone number",client.phone],["Email address",client.email],["Court",actualCourt],["Case number",row.case_number]]){const line=add(contact,"div","");add(line,"strong",label);add(line,"span",value||"Not entered");}
+  const preview=stage("Step 2 — Preview Your Actual Application (View Only)","Review both watermarked pages of the saved signed application before confirming the exact document.");
+  const payment=stage("Step 3 — Checkout After Independent Approval","Digital preparation is included in your professional subscription. Optional mailing is separate and available only after the required review and release checks.");
+  card=prepare;
   if(!decision){
+   add(preview,"p","Complete Step 1 to preview your signed application.");add(payment,"p","Complete preparation and review before continuing.");
    const label=add(card,"label","");const checked=document.createElement("input");checked.type="checkbox";label.append(checked,document.createTextNode(" I reviewed the complete docket, charge inventory, eligibility and filing requirements."));
    const decide=async value=>{if(!checked.checked)throw Error("Review required");ok(await api.from("professional_case_decisions").insert({org_id:org,case_id:row.id,decision:value,entire_case_reviewed:true}));await refresh();};
    button("Hold for review",()=>decide("hold"));
    if(row.outcome!=="mixed")button("Approve unsigned draft",()=>decide("approved_for_unsigned_draft"));
   }else if(decision.decision==="approved_for_unsigned_draft"){
-   card=packetPanel.body;
+   card=payment;
    add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". File directly with the court; no payment collected here.");
    if(row.outcome==="conviction"&&!internalTestAccess&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
     add(card,"h4","Optional Pay and Mail");
@@ -163,6 +172,7 @@ async function refresh(){
      if(Array.isArray(data.providerEvents))for(const e of data.providerEvents){if(e.name) add(mailStatus,"span"," · "+e.name+(e.time?" ("+e.time+")":""));}
     }catch{mailStatus.textContent="Mailing status unavailable. Do not pay again."}})();
    }
+   card=prepare;
    button("Generate and save review draft",async()=>{
     const token=epoch;
     const [freshClient,freshCase,freshDecision]=await Promise.all([api.from("professional_clients").select("*").eq("id",client.id).single(),api.from("professional_cases").select("*").eq("id",row.id).single(),api.from("professional_case_decisions").select("*").eq("case_id",row.id).single()]);
@@ -192,8 +202,9 @@ async function refresh(){
     const selected=file.files[0];if(!attested.checked||!selected||selected.size>2097152)throw Error("Signed PDF and attestation required");
     const token=epoch;const headers=await auth();if(!active||token!==epoch||org!==orgId())return;
     const response=await fetch("/api/professional/signed-review",{method:"POST",headers:{...headers,"Content-Type":"application/pdf","x-professional-case-id":row.id,"x-professional-signature-attested":"yes"},body:selected,cache:"no-store"});
-    if(!response.ok)throw Error("Upload rejected");file.value="";await refresh();
+    if(!response.ok)throw Error("Upload rejected");file.value="";packetCaseId=row.id;await refresh();
    });
+   card=preview;
    add(card,"h4","Saved packets");
    const saved=generated.filter(x=>x.case_id===row.id);
    if(!saved.length)add(card,"p","No generated packet saved for this case yet.");
@@ -208,19 +219,32 @@ async function refresh(){
    }
    const rowDocs=documents.filter(x=>x.case_id===row.id);
    const rowReviews=signedReviews.filter(x=>x.case_id===row.id);
+   if(!rowDocs.length)add(card,"p","Upload the signed application in Step 1. The actual two-page preview will be available here.");
    for(const doc of rowDocs){
     add(card,"p",(doc.signature_mode==="counsel_assumption_staging"?"Counsel assumption — not filing-ready · ":"Applicant-signed · ")+"PDF SHA-256: "+doc.sha256+" · "+(rowReviews.some(r=>r.document_id===doc.id)?"Reviewed":"Awaiting exact-document review"));
     let downloaded=false;
-    button("Open private signed PDF",async()=>{
-      const token=epoch;const headers=await auth();const response=await fetch("/api/professional/signed-review/"+encodeURIComponent(doc.id),{headers,cache:"no-store"});
-      if(!response.ok)throw Error("Download rejected");const blob=await response.blob();if(!active||token!==epoch||org!==orgId())return;
-      const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="signed-review.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);downloaded=true;
-    });
+    const previewPages=add(card,"div","");previewPages.className="professional-preview-pages";const previewStatus=add(card,"p","");previewStatus.setAttribute("role","status");
+    const loadPreview=async()=>{
+      const token=epoch,headers=await auth();downloaded=false;previewPages.replaceChildren();previewStatus.textContent="Loading both private watermarked pages…";
+      try{
+       for(const page of [1,2]){
+        const response=await fetch("/api/professional/signed-review/"+encodeURIComponent(doc.id)+"/preview/"+page,{headers,cache:"no-store"});
+        if(!response.ok)throw Error("Preview unavailable");const blob=await response.blob();
+        if(!active||token!==epoch||org!==orgId())return;if(blob.type!=="image/png")throw Error("Unexpected preview");
+        const url=URL.createObjectURL(blob);const img=document.createElement("img");img.alt="Watermarked signed application — page "+page;img.onload=img.onerror=()=>URL.revokeObjectURL(url);img.src=url;previewPages.append(img);
+       }
+       downloaded=true;previewStatus.textContent="Both pages loaded. Review the exact document.";
+      }catch{previewPages.replaceChildren();previewStatus.textContent="Unable to load the signed application preview. Retry before confirming.";throw Error("Preview unavailable");}
+    };
+    button("Reload Signed Application Preview (View Only)",loadPreview);
+    if(packetCaseId===row.id&&doc===rowDocs[0])void loadPreview().catch(()=>{});
     if(!rowReviews.some(r=>r.document_id===doc.id)){
       const reviewLabel=add(card,"label","");const reviewed=document.createElement("input");reviewed.type="checkbox";reviewLabel.append(reviewed,document.createTextNode(" I inspected this exact signed PDF, confirmed the signature and information, and accept responsibility for any subsequent manual filing."));
-      button("Record exact signed PDF review",async()=>{if(!reviewed.checked||!downloaded)throw Error("Open and review the PDF first");ok(await api.from("professional_signed_reviews").insert({document_id:doc.id,org_id:org,case_id:row.id,exact_document_reviewed:true}));await refresh();});
+      button("Confirm My Reviewed Pages",async()=>{if(!reviewed.checked||!downloaded)throw Error("Open and review both pages first");ok(await api.from("professional_signed_reviews").insert({document_id:doc.id,org_id:org,case_id:row.id,exact_document_reviewed:true}));await refresh();});
     }
    }
+   card=payment;
+   for(const doc of rowDocs.filter(d=>rowReviews.some(r=>r.document_id===d.id))){button("Download reviewed signed application — included",async()=>{const token=epoch,headers=await auth();const response=await fetch("/api/professional/signed-review/"+encodeURIComponent(doc.id),{headers,cache:"no-store"});if(!response.ok)throw Error("Download unavailable");const blob=await response.blob();if(!active||token!==epoch||org!==orgId())return;const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="signed-application.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});}
    if(rowReviews.some(r=>rowDocs.some(d=>d.id===r.document_id&&d.signature_mode==="applicant_external"))){
     add(card,"h4","Manual filing instructions");
     add(card,"p","Mail the reviewed signed Address Verification and application to Wood County Clerk of Courts, One Courthouse Square, Bowling Green, OH 43402. Counsel must handle any required service or additional copies.");
@@ -238,7 +262,7 @@ async function refresh(){
   }
   if(!decision||decision.decision!=="approved_for_unsigned_draft")add(packetPanel.body,"p","Complete eligibility review and approve the draft before preparing a packet.");
   const back=add(packetPanel.body,"button","Save & return to RecordWatch");back.type="button";back.className="btn secondary";back.addEventListener("click",returnDashboard);
-  $("cases").append(shell);if(packetCaseId===row.id){packetPanel.d.open=true;setStep(3);}
+  $("cases").append(shell);if(packetCaseId===row.id){shell.classList.add("packet-focused");packetPanel.d.open=true;setStep(3);}
  }
  notice(internalTestAccess?"Internal testing workspace — no paid subscription. Use fictional client records only; live mailing is unavailable.":"Professional workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
 }
