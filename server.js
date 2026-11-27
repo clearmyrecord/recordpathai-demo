@@ -1,3 +1,4 @@
+import {registerProfessionalReviewRoutes} from "./src/professional-signed-review.js";
 import { paidSandboxProofSession, createPaidSandboxProof } from "./src/paid-sandbox-proof.js";
 import express from "express";
 import Stripe from "stripe";
@@ -223,6 +224,9 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
 
 // The original packet webhook remains independent, preserving paid-hold
 // fulfillment for court packets and refusing RecordWatch subscription events.
+// Professional routes are independent of the consumer raw Stripe webhook.
+registerProfessionalReviewRoutes(app,{express,publicSupabaseConfig,supabaseRestConfig,requireApiUser,getBearerToken});
+
 app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb"}),async(req,res)=>{
   const secret=process.env.STRIPE_WEBHOOK_SECRET||"";
   if(!stripe||!secret||!packetDatabaseReady())
