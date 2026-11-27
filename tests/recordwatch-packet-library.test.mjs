@@ -28,10 +28,16 @@ test("RecordWatch professional archive is separate from signatures and uses assi
  const js=read("js/professional-practice.js");
  assert.match(js,/window.RecordPathEligibilityEngine.resolveEligibilityForCase/);
  assert.match(js,/c.client_id===caseFilter\(\)/);
- assert.match(js,/await saveGeneratedPacket\(bytes,row.id,"review_draft"/);
- assert.match(js,/await saveGeneratedPacket\(bytes,row.id,"unsigned_application"/);
+ assert.match(js,/renderProfessionalDraft\(\{\.\.\.fresh,signatureReady:true,applicantSignature\}\)/);
+ assert.match(js,/fetch\("\/api\/professional\/signed-review",\{method:"POST"/);
+ assert.match(js,/body:bytes,cache:"no-store"/);
+ const server=read("src/professional-signed-review.js");
+ assert.match(server,/ctx\.rest\("professional_signed_documents","select="\+META,\{service:true,body:/);
+ assert.match(server,/ctx\.ownedCase\(d\.case_id\)/);
  assert.match(js,/professional_generated_packets/);
- assert.match(js,/Open saved /);
+ assert.match(js,/Download Signed Application — \$0/);
+ assert.match(js,/professional_signed_reviews/);
+ assert.match(js,/Confirm My Reviewed Pages Before Payment/);
 });
 test("consumer RecordWatch retrieves exact purchased bytes after live Stripe verification, not current draft",async()=>{
  const server=read("server.js");const begin=server.indexOf('app.post("/api/packet/download-approved"'),end=server.indexOf('app.post("/api/packet/verify-payment"',begin);
