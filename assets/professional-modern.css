@@ -1,0 +1,47 @@
+/* Professional pages share the exact consumer homepage design tokens and components.
+   Only professional layouts are extended; no consumer styles are changed. */
+.rp-professional [hidden]{display:none!important}
+.rp-professional{line-height:1.55}
+.rp-professional .site-header .professional-label{color:var(--muted);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-right:auto}
+.rp-professional .home-hero-copy,.rp-professional .home-conversion-card,.rp-professional .home-feature{min-width:0}
+.rp-professional .home-conversion-list{margin-bottom:0}
+.rp-professional .home-feature .home-btn{color:#fff;margin-top:auto}
+.rp-professional .home-feature .home-btn:hover{color:#fff}
+.rp-professional .home-feature{display:flex;flex-direction:column;align-items:flex-start}
+.rp-professional .home-feature p{flex:1}
+.rp-professional .professional-price{font-size:clamp(32px,4vw,46px);font-weight:800;letter-spacing:-.04em;line-height:1.2;color:var(--text);margin:8px 0 16px}
+.rp-professional .professional-price small{font-size:14px;letter-spacing:0;color:var(--muted);font-weight:700}
+.rp-professional .professional-main{padding-top:26px;padding-bottom:40px}
+.rp-professional .professional-main.narrow{max-width:760px}
+.rp-professional .professional-main h1{font-size:clamp(32px,4.5vw,52px);line-height:1.1;letter-spacing:-.035em;margin:14px 0 16px}
+.rp-professional .professional-main h2{font-size:clamp(22px,2.8vw,30px);line-height:1.2;letter-spacing:-.02em;margin:0 0 12px}
+.rp-professional .professional-main p{color:var(--muted);overflow-wrap:anywhere}
+.rp-professional .professional-main .home-section-card{margin:18px 0;padding:28px}
+.rp-professional .professional-main .home-section-card>h2:not(:first-child){margin-top:24px}
+.rp-professional .professional-main fieldset{border:0;padding:0;margin:0;min-width:0}
+.rp-professional .professional-main .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px}
+.rp-professional .professional-main label,.rp-professional .professional-demo label{display:block;font-size:14px;font-weight:800;margin:12px 0 8px;line-height:1.55}
+.rp-professional .professional-main input:not([type=checkbox]),.rp-professional .professional-main select,.rp-professional .professional-demo select{
+  display:block;width:100%;min-width:0;max-width:100%;min-height:50px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--text);font:inherit;font-size:16px;margin:6px 0 10px
+}
+.rp-professional .professional-main input[type=checkbox]{width:18px;height:18px;accent-color:var(--blue-dark);vertical-align:middle;margin:0 6px 0 0}
+.rp-professional .professional-main input[type=file]{overflow:hidden}
+.rp-professional .professional-main button:not(.menu-toggle),.rp-professional .professional-main a.btn,.rp-professional .professional-demo button{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:16px;min-height:50px;padding:14px 22px;font:inherit;font-size:15px;font-weight:800;text-decoration:none;
+  background:linear-gradient(180deg,#7fb2ff,#5b93eb);border:1px solid #6d9fed;color:#fff;box-shadow:0 10px 22px rgba(91,147,235,.18);cursor:pointer;margin:8px 8px 8px 0;max-width:100%;white-space:normal
+}
+.rp-professional .professional-main button:not(.menu-toggle):hover,.rp-professional .professional-main a.btn:hover,.rp-professional .professional-demo button:hover{background:#447fdd;color:#fff}
+.rp-professional .professional-main button:disabled,.rp-professional .professional-demo button:disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
+.rp-professional .professional-main a:not(.btn):not(.home-btn){color:var(--blue-dark);font-weight:700}
+.rp-professional .professional-main #notice,.rp-professional .professional-main #status{background:var(--blue-soft);border:1px solid var(--line);border-radius:16px;padding:16px 20px;color:var(--text)}
+.rp-professional .professional-main #secret{overflow-wrap:anywhere;font-family:Consolas,Monaco,monospace;user-select:all}
+.rp-professional .professional-main #cases article,.rp-professional .professional-main #matters article{border-top:1px solid var(--line);padding:24px 0}
+.rp-professional .professional-main #cases article h3,.rp-professional .professional-main #matters article h3{margin:0 0 12px}
+.rp-professional .professional-demo dl{margin:18px 0}
+.rp-professional .professional-demo dt{font-weight:800}
+.rp-professional .professional-demo dd{margin:0 0 14px}
+.rp-professional a:focus-visible,.rp-professional button:focus-visible,.rp-professional input:focus-visible,.rp-professional select:focus-visible,.rp-professional summary:focus-visible{outline:3px solid var(--blue-dark);outline-offset:3px}
+@media(max-width:760px){
+  .rp-professional .professional-main .home-section-card{padding:22px}
+  .rp-professional .professional-main button:not(.menu-toggle),.rp-professional .professional-main a.btn,.rp-professional .professional-demo button{max-width:100%;margin-right:4px}
+}
