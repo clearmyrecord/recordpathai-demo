@@ -52,7 +52,7 @@ export async function renderProfessionalDraft({client,caseRow,decision,today,PDF
   if(!allowed.test(path)||!["text","date"].includes(f.type))throw Error("Unapproved template field.");
   const page=pages[Number(f.page)-1],sx=page.getWidth()/mapping.pageWidth,sy=page.getHeight()/mapping.pageHeight;
   if(![f.x,f.y,f.width,f.height].every(Number.isFinite)||f.x<0||f.y<0||f.width<=0||f.height<=0||f.x+f.width>mapping.pageWidth+1||f.y+f.height>mapping.pageHeight+1)throw Error("Invalid form coordinates.");
-  let value=signatureReady&&!applicantSignature&&path==="generated.current_date"?"":path.split(".").reduce((a,k)=>a?.[k],data)||"";
+  let value=signatureReady&&path==="generated.current_date"&&!applicantSignature?"":path.split(".").reduce((a,k)=>a?.[k],data)||"";
   if(Number(f.page)===4&&path==="petitioner.address.line1")value=[value,data.petitioner.address.line2].filter(Boolean).join(", ");
   if(!value)continue;
   const w=f.width*sx,h=f.height*sy;let size=Math.min(10,h-2);
