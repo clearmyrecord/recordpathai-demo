@@ -140,7 +140,7 @@ test("professional client and case creation has three dedicated routes, not dash
   assert.ok(js.includes('"'+page+'"'));
   assert.match(html,/js\/professional-practice\.js\?v=three-step-/);
  }
- assert.match(js,/if\(!routeStep\)\{navigateWorkflow\(1/);
+ assert.match(js,/if\(!routeStep\)\{navigateWorkflow\(id==="case-intake"\?2:1/);
  assert.match(js,/if\(panel===packetPanel&&!routeStep\)\{navigateWorkflow\(3/);
  assert.match(js,/if\(routeStep!==3\)\{packetPanel\.d\.remove\(\)/);
  assert.match(js,/if\(!active\|\|routeStep!==1\|\|routeClient\)return/);
@@ -152,4 +152,15 @@ test("professional client and case creation has three dedicated routes, not dash
  assert.match(js,/if\(table==="professional_cases"\)q=q\.eq\("id",routeCase\.id\)/);
  assert.match(css,/professional-intake-mode>#saved-cases/);
  assert.doesNotMatch(js,/localStorage|sessionStorage|indexedDB/);
+});
+
+test("Add New Case opens Step 2 directly, while new clients start in Step 1",()=>{
+ const js=read("js/professional-practice.js"),html=read("professional-practice.html");
+ assert.match(html,/id="new-case"[^>]*>Add New Case/);
+ assert.match(js,/\$\("new-case"\)\.addEventListener\("click",\(\)=>navigateWorkflow\(2,/);
+ assert.match(js,/navigateWorkflow\(id==="case-intake"\?2:1/);
+ assert.match(js,/if\(routeStep===2&&routeClient\)sharedIntake=/);
+ assert.match(js,/picker\.addEventListener\("change",\(\)=>navigateWorkflow\(2,/);
+ assert.match(js,/\$\("case-save"\)\.disabled=!routeClient/);
+ assert.match(js,/Add a new client in Step 1/);
 });
