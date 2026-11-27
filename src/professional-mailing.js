@@ -16,7 +16,7 @@ const sha=v=>/^[a-f0-9]{64}$/.test(v||"");
 const sessionId=v=>/^cs_live_[A-Za-z0-9]+$/.test(v||"");
 const eventId=v=>/^evt_[A-Za-z0-9]+$/.test(v||"");
 const profileInput={state:"OH",county:"Wood",courtType:"court-of-common-pleas"};
-const back=caseId=>"https://recordpathai.com/professional-packet.html?caseId="+encodeURIComponent(caseId);
+const back=o=>"https://recordpathai.com/professional-packet.html?"+new URLSearchParams({caseId:o.case_id,org:o.org_id});
 const digest=b=>createHash("sha256").update(b).digest("hex");
 const recent=v=>Number.isFinite(Date.parse(v))&&Date.parse(v)<=Date.now()&&Date.parse(v)>Date.now()-30*86400000;
 const REQUIRED_REVIEW=["identity","docket","charges","discharge","exclusions","form","signature","authorization","court_fee_and_address"];
@@ -60,6 +60,8 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
    get("professional_case_decisions","case_id=eq."+caseId+"&select=*&limit=1"),
    get("professional_clients","id=eq."+c.client_id+"&select=id,org_id,attorney_id,authorization_confirmed&limit=1")]);
   if(!d||!sha(d.sha256)||d.page_count!==2||d.signature_mode!=="applicant_external"||d.attorney_signature_attested!==true||d.org_id!==c.org_id||d.attorney_id!==c.attorney_id||!r||r.exact_document_reviewed!==true||r.org_id!==c.org_id||r.attorney_id!==c.attorney_id||!decision||decision.decision!=="approved_for_unsigned_draft"||decision.entire_case_reviewed!==true||decision.org_id!==c.org_id||decision.attorney_id!==c.attorney_id||!client||client.authorization_confirmed!==true||client.org_id!==c.org_id||client.attorney_id!==c.attorney_id)throw Error("Exact signed and reviewed client case required");
+  const latest=await get("professional_signed_documents","case_id=eq."+caseId+"&org_id=eq."+c.org_id+"&attorney_id=eq."+c.attorney_id+"&select=id&order=created_at.desc,id.desc&limit=1");
+  if(latest?.id!==d.id)throw Error("A newer signed application requires independent review.");
   return {c,d};
  }
  async function paidCustomer(o){
@@ -175,7 +177,7 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
    let s;
    if(o.stripe_session_id){s=await stripe.checkout.sessions.retrieve(o.stripe_session_id);}
    else {
-    s=await stripe.checkout.sessions.create({mode:"payment",customer,customer_update:{address:"auto"},automatic_tax:{enabled:true},success_url:back(o.case_id),cancel_url:back(o.case_id),metadata:metadata(o),payment_intent_data:{metadata:metadata(o)},line_items:[{quantity:1,price_data:{currency:"usd",unit_amount:PROFESSIONAL_MAIL_SERVICE_CENTS,tax_behavior:"exclusive",product_data:{name:"RecordPathAI professional mailing and case alerts",tax_code:"txcd_20030000"}}},...(courtFee(o)>0?[{quantity:1,price_data:{currency:"usd",unit_amount:courtFee(o),tax_behavior:"inclusive",product_data:{name:"Court filing deposit",tax_code:"txcd_00000000"}}}]:[])]},{idempotencyKey:"rpai-pro-mail-"+o.case_id});
+    s=await stripe.checkout.sessions.create({mode:"payment",customer,customer_update:{address:"auto"},automatic_tax:{enabled:true},success_url:back(o),cancel_url:back(o),metadata:metadata(o),payment_intent_data:{metadata:metadata(o)},line_items:[{quantity:1,price_data:{currency:"usd",unit_amount:PROFESSIONAL_MAIL_SERVICE_CENTS,tax_behavior:"exclusive",product_data:{name:"RecordPathAI professional mailing and case alerts",tax_code:"txcd_20030000"}}},...(courtFee(o)>0?[{quantity:1,price_data:{currency:"usd",unit_amount:courtFee(o),tax_behavior:"inclusive",product_data:{name:"Court filing deposit",tax_code:"txcd_00000000"}}}]:[])]},{idempotencyKey:"rpai-pro-mail-"+o.case_id});
     if(!sessionId(s.id)||!matches(s,o)||s.customer!==customer||s.livemode!==true||s.amount_subtotal!==subtotal(o)||!Number.isSafeInteger(s.amount_total)||s.amount_total<subtotal(o))throw Error("Checkout mismatch");
     const saved=await change(o,"status=eq.approved&stripe_session_id=is.null",{stripe_session_id:s.id});
     if(saved.length!==1&&(await order(o.case_id))?.stripe_session_id!==s.id)throw Error("Checkout persistence failed");
@@ -229,7 +231,10 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
  }
  async function deliverAlerts(){
   if(!await alertStorageReady())return;
-  const paid=await rest(table,{query:"?status=in.(paid_hold,submitted_to_lob)&order=created_at.desc&limit=100"});
+  let cursor=null;
+  while(true){
+  const paid=await rest(table,{query:"?status=in.(paid_hold,submitted_to_lob)&order=case_id.asc&limit=100"+(cursor?"&case_id=gt."+encodeURIComponent(cursor):"")});
+  if(!paid.length)break;
   for(const o of paid){
    try{
     if(!eventId(o.stripe_event_id)||!verifiedProfessionalMailPayment(await stripe.checkout.sessions.retrieve(o.stripe_session_id,{expand:["payment_intent.latest_charge"]}),o))continue;
@@ -253,6 +258,9 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
      await rest(ledger,{method:"PATCH",query:"?case_id=eq."+o.case_id+"&event_key=eq."+encodeURIComponent(key)+"&channel=eq."+channel+"&status=eq.claimed",body:{status:receipt?"provider_accepted":"held",provider_id:receipt?.id||null}});
     }
    }catch{/* Isolate a failed case; no unverified send. */}
+  }
+  if(paid.length<100)break;
+  const next=paid.at(-1)?.case_id;if(!uuid(next)||next===cursor)break;cursor=next;
   }
  }
  async function fulfill(){
