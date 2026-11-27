@@ -4407,6 +4407,13 @@ app.use((req, res, next) => {
   }
   next();
 });
+// Never reuse stale account-entry pages or scripts across production releases.
+app.use((req,res,next)=>{
+  if (["/professional.html","/professional-account.html","/signup.html","/login.html","/js/professional-account.js","/js/user-store.js","/js/auth.js"].includes(req.path.toLowerCase())) {
+    res.setHeader("Cache-Control","private, no-store, max-age=0");
+  }
+  next();
+});
 app.use(express.static(process.cwd(), { dotfiles: "deny" }));
 
 app.get("/", (req, res) => {
