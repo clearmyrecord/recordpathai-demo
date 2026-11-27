@@ -245,8 +245,6 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
   return await reconcilePaidPacketCheckout(session,res,event);
 });
 
-registerProfessionalReviewRoutes(app,{express,publicSupabaseConfig,supabaseRestConfig,requireApiUser,getBearerToken});
-
 app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:"8mb"}),async(req,res)=>{
   const user=await requireApiUser(req,res);
   if(!user)return;
@@ -352,6 +350,9 @@ app.post("/api/packet/sandbox-stripe-webhook",express.raw({type:"application/jso
     return res.json({received:true,ignored:true});
   return reconcileSandboxProof(object.id,res,event.id);
 });
+
+// Professional routes are independent of the consumer raw Stripe webhook.
+registerProfessionalReviewRoutes(app,{express,publicSupabaseConfig,supabaseRestConfig,requireApiUser,getBearerToken});
 
 app.use(express.json());
  
