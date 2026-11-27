@@ -86,11 +86,26 @@ export function registerProfessionalLiveBilling(app,{context,env=process.env,str
    const outstanding=s=>!["canceled","incomplete_expired"].includes(s.status);
    if(list.some(outstanding))return res.status(409).json({ok:false,error:"Manage your existing subscription rather than creating another."});
    if(await ctx.rest("rpc/professional_set_test_lease","",{service:true,body:{p_org:row.org_id,p_user:ctx.user.id}})===true)return res.status(409).json({ok:false,error:"Internal testing access is active. No subscription payment is required. Refresh your account to open RecordWatch."});
-   const sessions=await stripe.checkout.sessions.list({customer:row.stripe_customer_id,status:"open",limit:100});
-   if(sessions.has_more||sessions.data.length>1)throw Error("Open sessions require review");
-   let session=sessions.data[0];
    const belongs=s=>s.livemode===true&&s.mode==="subscription"&&s.customer===row.stripe_customer_id&&s.metadata?.product_family==="recordpathai_professional"&&s.metadata.org_id===row.org_id&&["solo","firm"].includes(s.metadata.plan);
-   if(session&&!belongs(session))throw Error("Existing checkout requires review");
+   const knownFiling=async s=>{
+    const m=s.metadata||{},uuid=v=>typeof v==="string"&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(v);
+    if(s.livemode!==true||s.mode!=="payment"||s.customer!==row.stripe_customer_id||m.productType!=="recordpathai-professional-conviction-mail"||m.orgId!==row.org_id||m.userId!==ctx.user.id||!uuid(m.caseId)||!/^cs_live_[A-Za-z0-9]+$/.test(s.id))return false;
+    const [o]=await ctx.rest("professional_mail_orders","select=case_id,org_id,user_id,document_id,signed_sha,court_fee_cents,stripe_session_id&case_id=eq."+m.caseId+"&org_id=eq."+row.org_id+"&user_id=eq."+ctx.user.id+"&stripe_session_id=eq."+s.id+"&limit=1",{service:true});
+    return Boolean(o&&o.case_id===m.caseId&&o.org_id===row.org_id&&o.user_id===ctx.user.id&&o.stripe_session_id===s.id&&m.documentId===o.document_id&&m.signedPdfSha===o.signed_sha&&m.serviceFeeCents==="1000"&&m.courtFeeCents===String(o.court_fee_cents)&&[0,10000].includes(o.court_fee_cents)&&s.amount_subtotal===1000+o.court_fee_cents);
+   };
+   const subscriptionSessions=async(status,firstOnly=false)=>{
+    let cursor;const found=[];
+    for(let page=0;page<100;page++){
+     const batch=await stripe.checkout.sessions.list({customer:row.stripe_customer_id,limit:100,...(status?{status}:{}),...(cursor?{starting_after:cursor}:{})});
+     for(const s of batch.data){if(belongs(s)){found.push(s);if(firstOnly)return found;}else if(!await knownFiling(s))throw Error("Unexpected checkout history");}
+     if(!batch.has_more)return found;
+     const next=batch.data.at(-1)?.id;if(!next||next===cursor)throw Error("Checkout history cursor unavailable");cursor=next;
+    }
+    throw Error("Checkout history requires review");
+   };
+   const sessions=await subscriptionSessions("open");
+   if(sessions.length>1)throw Error("Open sessions require review");
+   let session=sessions[0];
    const price=plan===row.plan?a.price:await stripe.prices.retrieve(LIVE_PROFESSIONAL_PRICES[plan].id);
    if(!verifiedLivePrice(price,plan))throw Error("Selected price unavailable");
    if(session&&session.metadata.plan!==plan){
@@ -107,10 +122,8 @@ export function registerProfessionalLiveBilling(app,{context,env=process.env,str
     row.plan=plan;
    }
    if(!session){
-    const prior=await stripe.checkout.sessions.list({customer:row.stripe_customer_id,limit:1});
-    const last=prior.data[0];
+    const [last]=await subscriptionSessions(undefined,true);
     if(last?.status==="open")throw Error("Unexpected open checkout");
-    if(last&&!belongs(last))throw Error("Unexpected checkout history");
     const metadata={product_family:"recordpathai_professional",org_id:row.org_id,plan:row.plan};
     // One deterministic request per last known checkout and chosen plan.
     // Keep the lock on uncertain creation; a retry must reconcile provider state.
