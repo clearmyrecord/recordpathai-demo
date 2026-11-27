@@ -195,10 +195,11 @@ smoke_check() {
 # Authentication can be unavailable even when static pages return HTTP 200.
 # Surface it explicitly without ever logging public keys, tokens or credentials.
 check_professional_pages() {
-  smoke_check "professional.html" "Create professional account" "Professional homepage" &&
-  smoke_check "professional-account.html" "Submit verification request" "Professional registration" &&
+  smoke_check "professional.html" 'href="signup.html?returnUrl=professional-account.html" class="nav-cta">Get started' "Professional signup-first homepage" &&
+  smoke_check "signup.html" 'id="professionalExistingAccount"' "Professional account registration" &&
+  smoke_check "professional-account.html" 'id="confirm-account" hidden' "Professional account confirmation before subscription" &&
   smoke_check "professional-practice.html" "Attorney case workflow" "Professional practice" &&
-  smoke_check "js/professional-account.js" "live-billing/" "Professional account script" &&
+  smoke_check "js/professional-account.js" 'if(action==="checkout"&&confirmedAccountId!==user.id)' "Professional checkout account binding" &&
   smoke_check "js/professional-practice.js" "Download official form for signature" "Professional workspace script"
 }
 report_auth_readiness() {
