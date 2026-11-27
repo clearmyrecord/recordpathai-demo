@@ -123,7 +123,8 @@ async function refresh(){
     const bytes=await renderProfessionalDraft({client:ok(freshClient),caseRow:ok(freshCase),decision:ok(freshDecision),today:new Date().toISOString().slice(0,10),PDFLib:window.PDFLib,signatureReady:true});
     if(!active||token!==epoch||org!==orgId()||!signConsent.checked)return;
     await saveGeneratedPacket(bytes,row.id,"unsigned_application",token,org);
-    await refresh();notice("Unsigned application saved in RecordWatch. Open it below to obtain the applicant signature.");
+    const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));const a=document.createElement("a");a.href=url;a.download="wood-county-official-unsigned-application.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
+    await refresh();notice("Unsigned application downloaded and saved in RecordWatch. Obtain the applicant signature before filing.");
    });
    add(card,"h4","Signed document review");
    add(card,"p","Obtain the actual applicant signature on the official form outside this tool. Upload the exact signed official two-page PDF; watermarked review drafts are not accepted.");
