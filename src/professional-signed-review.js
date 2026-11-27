@@ -51,9 +51,9 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
   if(!mode){res.status(503).json({ok:false,error:"Professional review configuration unavailable."});return null;}
   const user=await requireApiUser(req,res);if(!user)return null;
   const token=getBearerToken(req);if(!uuid(user.id)||!token){res.status(401).end();return null;}
-  async function rest(table,query,{service=false,body}={}){
+  async function rest(table,query,{service=false,body,method=body?"POST":"GET"}={}){
    const key=service?config.key:pub.anonKey;
-   const r=await fetch(config.url.replace(/\/+$/,"")+"/rest/v1/"+table+"?"+query,{method:body?"POST":"GET",headers:{apikey:key,Authorization:"Bearer "+(service?config.key:token),"Content-Type":"application/json",Prefer:"return=representation"},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(12000)});
+   const r=await fetch(config.url.replace(/\/+$/,"")+"/rest/v1/"+table+"?"+query,{method,headers:{apikey:key,Authorization:"Bearer "+(service?config.key:token),"Content-Type":"application/json",Prefer:"return=representation"},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(12000)});
    if(!r.ok)throw Error("Private review request rejected");
    return r.json();
   }
@@ -72,6 +72,21 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
   if(ctx.mode!=="staging"){res.status(503).json({ok:false,error:"Sandbox subscription routes are staging-only."});return null;}
   return ctx;
  }});
+ // A held decision may be reconsidered only by its assigned authenticated user.
+ // The existing RLS read checks enforce AAL2 and current organization access.
+ app.post("/api/professional/case/:id/resume-review",express.json({limit:"4kb"}),async(req,res)=>{
+  try{
+   const ctx=await context(req,res);if(!ctx)return;
+   if(ctx.mode!=="production"||!uuid(req.params.id)||req.body?.entire_case_reviewed!==true)return res.status(400).json({ok:false,error:"Confirm the complete case review."});
+   const [c]=await ctx.rest("professional_cases","select=id,org_id,attorney_id,outcome,court_id&id=eq."+req.params.id+"&attorney_id=eq."+ctx.user.id+"&limit=1");
+   if(!c||c.court_id!=="oh-wood-common-pleas"||!["conviction","dismissal","not_guilty"].includes(c.outcome))return res.status(403).json({ok:false,error:"Supported assigned case required."});
+   const [d]=await ctx.rest("professional_case_decisions","select=id,decision,org_id,attorney_id&case_id=eq."+c.id+"&attorney_id=eq."+ctx.user.id+"&org_id=eq."+c.org_id+"&limit=1");
+   if(!d||d.decision!=="hold")return res.status(409).json({ok:false,error:"Case is not on hold."});
+   const rows=await ctx.rest("professional_case_decisions","id=eq."+d.id+"&case_id=eq."+c.id+"&org_id=eq."+c.org_id+"&attorney_id=eq."+ctx.user.id+"&decision=eq.hold",{service:true,method:"PATCH",body:{decision:"approved_for_unsigned_draft",entire_case_reviewed:true}});
+   if(rows.length!==1)return res.status(409).json({ok:false,error:"Review state changed; reload."});
+   return res.json({ok:true,decision:"approved_for_unsigned_draft"});
+  }catch{return res.status(503).json({ok:false,error:"Unable to save the renewed review."});}
+ });
  // Generated packets are private case archives, not signed or independently reviewed documents.
  app.post("/api/professional/recordwatch/generated-packet",express.raw({type:"application/pdf",limit:"2mb"}),async(req,res)=>{
   try{
@@ -87,6 +102,23 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
    const rows=await ctx.rest("professional_generated_packets","select="+GENERATED_META,{service:true,body:{org_id:c.org_id,case_id:c.id,attorney_id:ctx.user.id,kind,sha256:sha,pdf_bytes:"\\x"+req.body.toString("hex"),page_count:2}});
    return res.json({ok:true,document:rows[0],note:"Saved privately. Not proof of a signature, payment, or filing."});
   }catch{return res.status(503).json({ok:false,error:"Generated packet could not be saved in RecordWatch."});}
+ });
+ app.get("/api/professional/recordwatch/generated-packet/:id/preview/:page",async(req,res)=>{
+  try{
+   const ctx=await context(req,res);if(!ctx)return;
+   const id=req.params.id,page=Number(req.params.page);
+   if(ctx.mode!=="production"||!uuid(id)||![1,2].includes(page))return res.status(404).end();
+   const [d]=await ctx.rest("professional_generated_packets","select="+GENERATED_META+"&id=eq."+id+"&attorney_id=eq."+ctx.user.id+"&kind=eq.review_draft&limit=1");
+   if(!d||!await ctx.ownedCase(d.case_id))return res.status(404).end();
+   const [row]=await ctx.rest("professional_generated_packets","select=pdf_bytes,sha256&id=eq."+id+"&case_id=eq."+d.case_id+"&attorney_id=eq."+ctx.user.id+"&limit=1",{service:true});
+   if(!row||typeof row.pdf_bytes!=="string"||!/^\\x[0-9a-f]+$/i.test(row.pdf_bytes))return res.status(503).end();
+   const bytes=Buffer.from(row.pdf_bytes.slice(2),"hex");
+   if(bytes.length>PROFESSIONAL_PDF_MAX||digest(bytes)!==d.sha256||row.sha256!==d.sha256)return res.status(403).end();
+   const {renderWatermarkedPreviewPage}=await import("./packet-preview.js");
+   const png=await renderWatermarkedPreviewPage(bytes,page,d.page_count,{professional:true});
+   if(!await ctx.ownedCase(d.case_id))return res.status(403).end();
+   res.setHeader("Cache-Control","private, no-store");res.setHeader("X-Content-Type-Options","nosniff");return res.type("image/png").send(png);
+  }catch{return res.status(503).end();}
  });
  app.get("/api/professional/recordwatch/generated-packet/:id",async(req,res)=>{
   try{
