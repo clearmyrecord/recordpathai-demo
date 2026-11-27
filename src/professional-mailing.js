@@ -60,6 +60,37 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
   if(!c||c.outcome!=="conviction"||c.court_id!=="oh-wood-common-pleas"){send(res,403,"Supported assigned conviction required.");return null;}
   return c;
  }
+ // Private review tools reuse the existing operations-key boundary. Never expose
+ // applicant identity, signed bytes, or court details in public order status.
+ app.get("/api/operator/professional-mail/review-queue",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;res.setHeader("Cache-Control","no-store, private");
+  try{
+   const reviewed=await rest("professional_signed_reviews",{query:"?exact_document_reviewed=eq.true&select=case_id,document_id,org_id,created_at&order=created_at.asc&limit=100"});
+   const pending=[];
+   for(const r of reviewed){try{if(await order(r.case_id))continue;const {c,d}=await facts(r.case_id,r.document_id);pending.push({caseId:c.id,documentId:d.id,signedSha:d.sha256,reviewedAt:r.created_at});}catch{}}
+   return res.json({ok:true,pending});
+  }catch{return send(res,503,"Private review queue unavailable.");}
+ });
+ app.get("/api/operator/professional-mail/review/:caseId/:documentId",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;res.setHeader("Cache-Control","no-store, private");
+  try{
+   const {c,d}=await facts(req.params.caseId,req.params.documentId);
+   const [caseDetails,client]=await Promise.all([get("professional_cases","id=eq."+c.id+"&select=*&limit=1"),get("professional_clients","id=eq."+c.client_id+"&select=*&limit=1")]);
+   return res.json({ok:true,case:caseDetails,client,document:d,orderStatus:(await order(c.id))?.status||"awaiting_independent_review"});
+  }catch{return send(res,404,"Reviewed conviction not available.");}
+ });
+ app.get("/api/operator/professional-mail/review-pdf/:caseId/:documentId",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;res.setHeader("Cache-Control","no-store, private");
+  try{
+   const {d}=await facts(req.params.caseId,req.params.documentId);
+   const row=await get("professional_signed_documents","id=eq."+d.id+"&select=pdf_bytes,sha256&limit=1");
+   if(typeof row?.pdf_bytes!=="string"||!/^\\\\x[0-9a-f]+$/i.test(row.pdf_bytes)||row.pdf_bytes.length>4194306)return send(res,409,"Exact signed document unavailable.");
+   const bytes=Buffer.from(row.pdf_bytes.slice(2),"hex");
+   if(bytes.length<500||digest(bytes)!==d.sha256||row.sha256!==d.sha256)return send(res,409,"Exact signed document mismatch.");
+   res.setHeader("X-Content-Type-Options","nosniff");res.setHeader("Content-Disposition",'attachment; filename="professional-signed-application.pdf"');
+   return res.type("application/pdf").send(bytes);
+  }catch{return send(res,503,"Private document unavailable.");}
+ });
  app.post("/api/operator/professional-mail/approve",express.json({limit:"16kb"}),async(req,res)=>{
   if(!requireOperationsKey(req,res))return;
   try{
