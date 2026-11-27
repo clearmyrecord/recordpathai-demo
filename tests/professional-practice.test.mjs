@@ -97,7 +97,7 @@ test("professional filing packet follows consumer preparation, preview and check
  assert.match(js,/\/preview\/.*page/);
  assert.match(js,/Confirm My Reviewed Pages/);
  assert.match(js,/\$0 — included/);
- assert.match(js,/Pay and Mail — \$100/);
+ assert.match(js,/Pay and Mail — \$110/);
  assert.match(server,/\/api\/professional\/signed-review\/:id\/preview\/:page/);
  assert.match(server,/renderWatermarkedPreviewPage\(bytes,page,d\.page_count,\{professional:true\}\)/);
  assert.match(server,/private, no-store/);
