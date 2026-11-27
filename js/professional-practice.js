@@ -1,13 +1,18 @@
 import {renderProfessionalDraft} from "./professional-wood-draft.js";
 const $=id=>document.getElementById(id), notice=t=>$("notice").textContent=t;
 const production="pfyxjhdlqgpzzzdssqpk.supabase.co";
-let api,orgs=[],epoch=0,active=false;
-const clear=()=>{epoch++;active=false;$("app").hidden=true;$("client-form").reset();$("case-form").reset();$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();orgs=[];};
+let api,orgs=[],epoch=0,active=false,renewal=null;
+const clear=()=>{if(renewal)clearInterval(renewal);renewal=null;epoch++;active=false;$("app").hidden=true;$("client-form").reset();$("case-form").reset();$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();orgs=[];};
 const fail=()=>{clear();notice("Access or request unavailable. No filing or payment was made. Reload or contact the pilot operator.");};
 const ok=r=>{if(r.error)throw Error("Request rejected");return r.data;};
 const orgId=()=>$("org").value;
 const option=(value,label)=>{const o=document.createElement("option");o.value=value;o.textContent=label;return o;};
 const add=(el,tag,text)=>{const n=document.createElement(tag);n.textContent=text;el.append(n);return n;};
+async function refreshPaidLease(){
+ const session=ok(await api.auth.getSession()).session;if(!session?.access_token)return false;
+ const r=await fetch("/api/professional/live-billing/refresh",{method:"POST",headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"});
+ if(!r.ok)return false;const data=await r.json();return data.ok===true&&data.mode==="live"&&data.active===true;
+}
 async function load(){
  clear();const seq=epoch;
  const config=await window.RecordPathSupabase.getConfig();
@@ -18,12 +23,16 @@ async function load(){
  if(user.error||!user.data.user){$("login").hidden=false;notice("Sign in to an approved professional account.");return;}
  $("login").hidden=true;$("logout").hidden=false;
  if(ok(await api.auth.mfa.getAuthenticatorAssuranceLevel()).currentLevel!=="aal2"){notice("Verified MFA session required. Return to Professional account to verify your session.");return;}
- const [o,m]=await Promise.all([api.from("professional_pilot_orgs").select("id,pilot_code,client_intake_enabled"),api.from("professional_pilot_members").select("org_id,role,attorney_verified")]);
+ const paidRows=ok(await api.from("professional_live_billing").select("org_id").limit(2));
+ if(paidRows.length){if(paidRows.length!==1||!await refreshPaidLease()){notice("A current paid subscription is required. Visit Professional account to manage billing.");return;}}
+ if(seq!==epoch)return;
+ const [o,m]=await Promise.all([api.from("professional_pilot_orgs").select("id,pilot_code,client_intake_enabled,access_kind"),api.from("professional_pilot_members").select("org_id,role,attorney_verified")]);
  if(seq!==epoch)return;
  const members=ok(m);orgs=ok(o).filter(x=>x.client_intake_enabled&&members.some(y=>y.org_id===x.id&&y.role==="attorney"&&y.attorney_verified));
  if(!orgs.length){notice("No approved attorney intake access. Credential, partner agreement, legal and security verification are required.");return;}
  for(const org of orgs)$("org").append(option(org.id,org.pilot_code));
  active=true;$("app").hidden=false;await refresh();
+ if(paidRows.length&&active)renewal=setInterval(async()=>{try{if(active&&!await refreshPaidLease()){clear();notice("Subscription access expired. Return to Professional account.");}}catch{fail();}},10*60*1000);
 }
 async function refresh(){
  if(!active)return;
@@ -50,7 +59,7 @@ async function refresh(){
    button("Hold for review",()=>decide("hold"));
    if(row.outcome!=="mixed")button("Approve unsigned draft",()=>decide("approved_for_unsigned_draft"));
   }else if(decision.decision==="approved_for_unsigned_draft"){
-   add(card,"p","Professional pilot preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". File directly with the court; no payment collected here.");
+   add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". File directly with the court; no payment collected here.");
    button("Download unsigned review draft",async()=>{
     const token=epoch;
     const [freshClient,freshCase,freshDecision]=await Promise.all([api.from("professional_clients").select("*").eq("id",client.id).single(),api.from("professional_cases").select("*").eq("id",row.id).single(),api.from("professional_case_decisions").select("*").eq("case_id",row.id).single()]);
