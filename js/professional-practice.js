@@ -111,6 +111,36 @@ async function saveGeneratedPacket(bytes,caseId,kind,seq,org){
  if(!active||seq!==epoch||org!==orgId())throw Error("Workspace changed");
  return result.document;
 }
+// Deleting a parent with linked documents, events or payments is rejected by
+// the database's existing foreign keys. Archiving only changes list visibility.
+function recordRemovalButton(parent,{kind,row,org,seq,archived=false}){
+ const isCase=kind==="case",table=isCase?"professional_cases":"professional_clients",archiveTable=isCase?"professional_case_archives":"professional_client_archives",key=isCase?"case_id":"client_id",label=isCase?row.case_number:row.full_name;
+ const btn=add(parent,"button",archived?"Restore "+kind:"Delete "+kind);btn.type="button";btn.className=archived?"btn secondary":"btn secondary professional-delete-record";
+ const current=()=>active&&org===orgId()&&seq===epoch;
+ btn.addEventListener("click",async()=>{
+  if(!current()||btn.disabled)return;
+  if(!window.confirm(archived?"Restore "+label+" to your saved records?":"Delete "+kind+" "+label+"? Records without linked history are permanently deleted. Records with linked history can be archived instead. This does not cancel a filing, payment or alert."))return;
+  if(!current())return;btn.disabled=true;
+  try{
+   if(archived){
+    const restored=ok(await api.from(archiveTable).delete().eq(key,row.id).eq("org_id",org).select(key).maybeSingle());
+    if(restored?.[key]!==row.id)throw Error("Restore not confirmed.");
+   }else{
+    const result=await api.from(table).delete().eq("id",row.id).eq("org_id",org).select("id").maybeSingle();
+    if(result.error){
+     if(result.error.code!=="23503")throw Error("Deletion could not be verified.");
+     if(!current()||!window.confirm(label+" has linked records. Archive this "+kind+" instead? It will be removed from the saved list, but its history will be retained and can be restored. Linked cases, active reminders, alerts and filing orders are not cancelled."))return;
+     if(!current())return;
+     const saved=ok(await api.from(archiveTable).insert({[key]:row.id,org_id:org}).select(key).single());
+     if(saved?.[key]!==row.id)throw Error("Archive not confirmed.");
+    }else if(result.data?.id!==row.id)throw Error("Deletion not confirmed.");
+   }
+   if(current()){notice(archived?"Record restored.":"Record removed from the saved list.");await refresh();}
+  }catch(error){if(current())notice("Unable to "+(archived?"restore":"remove")+" this record. Refresh and check your workspace access.");}
+  finally{btn.disabled=false;}
+ });
+ return btn;
+}
 async function refresh(){
  if(!active)return;
  const seq=++epoch,org=orgId();
@@ -128,7 +158,21 @@ async function refresh(){
  };
  const [a,b,c,d,docs,reviewRows,counselRows,enrollRows,taskRows,verifiedRows,observedRows,generatedRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>scoped(t).order("created_at",{ascending:false}).limit(100)),scoped("professional_signed_documents","id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").order("created_at",{ascending:false}).limit(100),scoped("professional_signed_reviews","*").limit(100),scoped("professional_counsel_profiles","*").limit(1),scoped("professional_watch_enrollments","*").limit(100),scoped("professional_watch_tasks","*").order("due_date").limit(500),scoped("professional_verified_court_events","id,case_id,event_type,occurred_on,evidence_url,verified_at").order("occurred_on",{ascending:false}).limit(500),scoped("professional_watch_observations").limit(100),scoped("professional_generated_packets","id,case_id,kind,sha256,page_count,created_at").order("created_at",{ascending:false}).limit(500)]);
  if(seq!==epoch||!active||org!==orgId())return;
- const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0],enrollments=ok(enrollRows),tasks=ok(taskRows),verified=ok(verifiedRows),observations=ok(observedRows),generated=ok(generatedRows);
+ const allClients=ok(a),allCases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0],enrollments=ok(enrollRows),tasks=ok(taskRows),verified=ok(verifiedRows),observations=ok(observedRows),generated=ok(generatedRows);
+ const archiveRows=async(table,key,rows)=>rows.length?ok(await api.from(table).select(key).eq("org_id",org).in(key,rows.map(r=>r.id))):[];
+ const [clientArchives,caseArchives]=await Promise.all([archiveRows("professional_client_archives","client_id",allClients),archiveRows("professional_case_archives","case_id",allCases)]);
+ if(seq!==epoch||!active||org!==orgId())return;
+ const hiddenClients=new Set(clientArchives.map(r=>r.client_id)),hiddenCases=new Set(caseArchives.map(r=>r.case_id));
+ const clients=allClients.filter(c=>!hiddenClients.has(c.id)||routeStep===3&&routeCase?.client_id===c.id),cases=allCases.filter(c=>!hiddenCases.has(c.id)||routeStep===3&&routeCase?.id===c.id);
+ if(routeStep!==3&&routeClient&&hiddenClients.has(routeClient.id)){navigateWorkflow(0);return;}
+ const archivedList=$("professional-archived-records");if(archivedList)archivedList.remove();
+ if(!routeStep){
+  const archived=add($("saved-cases"),"details","");archived.id="professional-archived-records";archived.className="professional-case-panel professional-archived-records";
+  add(archived,"summary","Archived records ("+(clientArchives.length+caseArchives.length)+")");add(archived,"p","Archived records are retained and can be restored. Archiving does not cancel orders, alerts or court filings.");
+  for(const [kind,rows,hidden] of [["client",allClients,hiddenClients],["case",allCases,hiddenCases]])for(const row of rows.filter(r=>hidden.has(r.id))){
+   const item=add(archived,"div","");item.className="professional-archive-row";add(item,"strong",kind==="client"?row.full_name:"Case "+row.case_number);recordRemovalButton(item,{kind,row,org,seq,archived:true});
+  }
+ }
  if(routeStep&&routeClient&&!clients.some(c=>c.id===routeClient.id)){if(routeStep===3){fail();return;}clients.push(routeClient);}
  if(routeStep===3&&routeCase){const current=cases.find(c=>c.id===routeCase.id);if(!current){fail();return;}routeCase=current;}
  $("client-filter").replaceChildren(option("","All clients"));
@@ -136,7 +180,7 @@ async function refresh(){
  if(clients.some(c=>c.id===selectedClient))$("clients").value=selectedClient;
  if(clients.some(c=>c.id===selectedFilter))$("client-filter").value=selectedFilter;
  if(!clients.length)add($("client-list"),"p","No saved clients yet. Add a client to start the three-step application.");
- for(const client of clients){const card=add($("client-list"),"article","");card.className="saved-case-card";add(card,"h3",client.full_name).className="saved-case-title";const own=cases.filter(c=>c.client_id===client.id);add(card,"p",own.length+" saved case"+(own.length===1?"":"s")+(own.length?"":" · Ready for Step 2 — Record Details"));const actions=add(card,"div","");actions.className="saved-case-actions";const view=add(actions,"button",own.length?"View client cases":"Continue to Record Details");view.type="button";view.className="btn";view.addEventListener("click",()=>{if(!active||seq!==epoch||org!==orgId())return;if(!own.length){$("clients").value=client.id;showIntake("case-intake");}else{hideIntake();packetCaseId=null;setStep(0);$("client-filter").value=client.id;$("case-filter").value="";refresh().catch(fail);$("saved-cases").scrollIntoView({block:"start"});}});if(own.length){const next=add(actions,"button","Add case");next.type="button";next.className="btn secondary";next.addEventListener("click",()=>{if(!active||seq!==epoch||org!==orgId())return;$("clients").value=client.id;showIntake("case-intake");});}}
+ for(const client of clients){const card=add($("client-list"),"article","");card.className="saved-case-card";add(card,"h3",client.full_name).className="saved-case-title";const own=cases.filter(c=>c.client_id===client.id);add(card,"p",own.length+" saved case"+(own.length===1?"":"s")+(own.length?"":" · Ready for Step 2 — Record Details"));const actions=add(card,"div","");actions.className="saved-case-actions";const view=add(actions,"button",own.length?"View client cases":"Continue to Record Details");view.type="button";view.className="btn";view.addEventListener("click",()=>{if(!active||seq!==epoch||org!==orgId())return;if(!own.length){$("clients").value=client.id;showIntake("case-intake");}else{hideIntake();packetCaseId=null;setStep(0);$("client-filter").value=client.id;$("case-filter").value="";refresh().catch(fail);$("saved-cases").scrollIntoView({block:"start"});}});if(own.length){const next=add(actions,"button","Add case");next.type="button";next.className="btn secondary";next.addEventListener("click",()=>{if(!active||seq!==epoch||org!==orgId())return;$("clients").value=client.id;showIntake("case-intake");});}if(!routeStep)recordRemovalButton(actions,{kind:"client",row:client,org,seq});}
  const visible=cases.filter(c=>(routeStep!==3||c.id===packetCaseId)&&(!caseFilter()||c.client_id===caseFilter())&&c.case_number.toLowerCase().includes($("case-filter").value.trim().toLowerCase()));
  $("case-summary").textContent=clients.length+" saved clients · "+cases.length+" saved cases · "+visible.length+" shown (most recent 100 records).";
  $("client-count").textContent=String(clients.length);$("case-count").textContent=String(cases.length);$("packet-count").textContent=String(generated.length);$("watch-count").textContent=String(enrollments.filter(e=>e.enabled).length);
@@ -144,7 +188,7 @@ async function refresh(){
  $("role").textContent="Secure professional account · assigned records only";
 
  for(const row of visible){
-  const client=clients.find(x=>x.id===row.client_id);if(!client)continue;
+  const client=allClients.find(x=>x.id===row.client_id)||clients.find(x=>x.id===row.client_id);if(!client)continue;
   const shell=document.createElement("article");shell.className="saved-case-card";shell.dataset.caseId=row.id;
   const summary=add(shell,"div","");summary.className="saved-case-header";const identity=add(summary,"div","");add(identity,"p","Case Number").className="eyebrow-mini";add(identity,"h3",row.case_number).className="saved-case-title";add(identity,"p",client.full_name).className="muted";
   const eligibilityBadge=add(summary,"span","Needs review");eligibilityBadge.className="case-status-badge needs-review";
@@ -160,7 +204,7 @@ async function refresh(){
   let loadCurrentPreview=null;
   const openPanel=panel=>{if(panel===packetPanel&&!routeStep){navigateWorkflow(3,{caseId:row.id});return;}hideIntake();packetCaseId=panel===packetPanel?row.id:null;for(const el of $("cases").children)el.classList.toggle("packet-focused",el===shell&&packetCaseId===row.id);setStep(panel===packetPanel?3:0);for(const p of [reviewPanel,watchPanel,packetPanel])p.d.open=p===panel;panel.d.scrollIntoView({block:"start"});if(panel===packetPanel&&loadCurrentPreview)void loadCurrentPreview().catch(()=>{});};
   const nav=(label,p,primary=false)=>{const b=add(actions,"button",label);b.type="button";b.className=primary?"btn":"btn secondary";b.addEventListener("click",()=>{if(active&&org===orgId())openPanel(p)});};
-  nav("Resume",packetStatus==="Not generated"||packetStatus==="Reviewed"?packetPanel:watchPanel,true);nav("Record Details",reviewPanel);nav("Open Packet",packetPanel);nav("Open RecordWatch",watchPanel);
+  nav("Resume",packetStatus==="Not generated"||packetStatus==="Reviewed"?packetPanel:watchPanel,true);nav("Record Details",reviewPanel);nav("Open Packet",packetPanel);nav("Open RecordWatch",watchPanel);if(!routeStep)recordRemovalButton(actions,{kind:"case",row,org,seq});
   card.classList.add("professional-record-review");
   const reviewDate=value=>value?(window.RecordPathRuleDateUtils?.formatDate(value)||String(value)):"Not entered";
   const readableValue=value=>value===true?"Yes":value===false?"No":value===null||value===undefined||value===""?"Not entered":Array.isArray(value)?(value.length?value.map(readableValue).join(", "):"None recorded"):typeof value==="object"?JSON.stringify(value):String(value);
