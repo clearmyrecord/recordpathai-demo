@@ -1,3 +1,4 @@
+import {mountMailTracking,loadMailTrackingSummaries} from "./professional-mail-tracking.js";
 import {renderProfessionalDraft,prepareProfessionalDraftData} from "./professional-wood-draft.js";
 import {mountProfessionalRecordIntake,mountProfessionalPersonalIntake,buildProfessionalRecordPayload,sameRecordSnapshot} from "./professional-record-intake.js";
 let sharedIntake=null;
@@ -210,6 +211,9 @@ async function refresh(){
  if(!visible.length)add($("cases"),"p","No matching saved cases. Add a client or enter record details to get started.");
  $("role").textContent="Secure professional account · assigned records only";
 
+ const trackingCards=[];
+ const trackingCurrent=()=>active&&seq===epoch&&org===orgId();
+ const trackingSession=async()=>ok(await api.auth.getSession()).session?.access_token;
  for(const row of visible){
   const client=allClients.find(x=>x.id===row.client_id)||clients.find(x=>x.id===row.client_id);if(!client)continue;
   const shell=document.createElement("article");shell.className="saved-case-card";shell.dataset.caseId=row.id;
@@ -218,6 +222,7 @@ async function refresh(){
   const statuses=add(shell,"div","");statuses.className="saved-case-status-row";
   const packetStatus=documents.some(d=>d.case_id===row.id)?"Signed document saved":generated.some(d=>d.case_id===row.id)?"Generated":decisions.some(d=>d.case_id===row.id&&d.decision==="approved_for_unsigned_draft")?"Reviewed":"Not generated";
   const watchEnabled=enrollments.some(e=>e.case_id===row.id&&e.enabled);add(statuses,"span","Packet: "+packetStatus).className="case-status-badge "+(packetStatus==="Generated"?"generated":"not-screened");add(statuses,"span","RecordWatch: "+(watchEnabled?"Active":"Not activated")).className="case-status-badge "+(watchEnabled?"generated":"not-screened");
+  const mailingBadge=!routeStep?add(statuses,"span","Mailing: Checking…"):null;if(mailingBadge)mailingBadge.className="case-status-badge not-screened";
   const meta=add(shell,"div","");meta.className="saved-case-detail-grid";const field=(label,value)=>{const el=add(meta,"div","");el.className="saved-case-meta";add(el,"strong",label);return add(el,"span",value||"Not available");};
   const detailFields=row.record_details?.fields||{};const actualCourt=detailFields.courtName||(row.court_id==="oh-wood-common-pleas"?"Wood County Court of Common Pleas":"Review required");
   field("Court",actualCourt);field("County / State",[detailFields.county,detailFields.caseState].filter(Boolean).join(", ")||(row.court_id==="oh-wood-common-pleas"?"Wood, OH":"Not entered"));field("Primary Charge",row.charge_name);const estimated=field("Estimated Eligibility Date","Not available");field("Last Updated",new Date(row.updated_at||row.created_at).toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"}));
@@ -272,6 +277,7 @@ async function refresh(){
   const button=(label,fn)=>{const btn=add(card,"button",label);btn.type="button";btn.addEventListener("click",async()=>{if(!active||org!==orgId())return;btn.disabled=true;try{await fn();}catch{notice("Action rejected. Check saved information and access.");}finally{btn.disabled=false;}});return btn;};
   card=watchPanel.body;
   add(card,"h4","RecordWatch Professional");
+  if(mailingBadge)trackingCards.push(mountMailTracking({parent:card,badge:mailingBadge,row,org,session:trackingSession,current:trackingCurrent}));
   const enrollment=enrollments.find(e=>e.case_id===row.id);
   const observed=observations.find(e=>e.case_id===row.id);
   if(enrollment?.enabled){
@@ -524,6 +530,7 @@ async function refresh(){
   const back=add(packetPanel.body,"button","Save & return to RecordWatch");back.type="button";back.className="btn secondary";back.addEventListener("click",returnDashboard);
   $("cases").append(shell);if(packetCaseId===row.id){shell.classList.add("packet-focused");packetPanel.d.open=true;setStep(3);}
  }
+ if(!routeStep)void loadMailTrackingSummaries({cards:trackingCards,org,session:trackingSession,current:trackingCurrent});
  notice(internalTestAccess?"Internal testing workspace — no paid subscription. Use fictional client records only; live mailing is unavailable.":"Professional workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
 }
 function normalizedClientName(value){return String(value||"").trim().replace(/\s+/g," ").toLowerCase();}
