@@ -18,7 +18,7 @@ function showMfaSetup(totp){
  $("mfa-code-heading").textContent="Step 2 — Enter your six-digit code";
 }
 $("mfa-qr").addEventListener("error",()=>{$("mfa-qr").hidden=true;$("mfa-setup-details").querySelector("details").open=true;});
-function clear(){epoch++;factorId=null;user=null;clearMfaSetup();$("mfa-code-heading").textContent="Enter your six-digit code";for(const id of ["signed-out","mfa","request","submitted","logout","secret","verify-form","practice-link","live-billing","billing-checkout","billing-portal","billing-refresh","billing-consent-label"])$(id).hidden=true;$("secret").textContent="";$("request-form").reset();$("verify-form").reset();$("application-state").textContent="";$("billing-state").textContent="";$("billing-consent").checked=false;}
+function clear(){epoch++;factorId=null;user=null;clearMfaSetup();$("mfa-start").hidden=true;$("mfa-back").hidden=true;$("mfa-error").hidden=true;$("mfa-error").textContent="";$("mfa-code-heading").textContent="Enter your six-digit code";for(const id of ["signed-out","mfa","request","submitted","logout","secret","verify-form","practice-link","live-billing","billing-checkout","billing-portal","billing-refresh","billing-consent-label"])$(id).hidden=true;$("secret").textContent="";$("request-form").reset();$("verify-form").reset();$("application-state").textContent="";$("billing-state").textContent="";$("billing-consent").checked=false;}
 async function load(){
  clear();const token=epoch;
  const config=await window.RecordPathSupabase.getConfig();
@@ -34,8 +34,8 @@ async function load(){
  if(assurance.currentLevel!=="aal2"){
   $("mfa").hidden=false;const factors=ok(await api.auth.mfa.listFactors());if(token!==epoch)return;
   const existing=factors.totp?.find(f=>f.status==="verified");
-  if(existing){factorId=existing.id;$("setup").hidden=true;$("verify-form").hidden=false;say("Enter the code from your enrolled authenticator.");}
-  else{$("setup").hidden=false;say("Set up your authenticator before applying.");}
+  if(existing){factorId=existing.id;$("mfa-start").hidden=true;$("setup").hidden=true;$("verify-form").hidden=false;say("Open your authenticator app and enter the current six-digit RecordPathAI code.");}
+  else{$("mfa-start").hidden=false;$("setup").hidden=false;say("Follow the three steps below to set up two-step verification.");}
   return;
  }
  const row=ok(await api.from("professional_access_requests").select("status,created_at,plan").eq("user_id",user.id).maybeSingle());
@@ -70,12 +70,14 @@ $("setup").addEventListener("click",()=>action($("setup"),async()=>{
  if(!user||!api)return;const token=epoch;
  const factors=ok(await api.auth.mfa.listFactors());
  if(factors.totp?.some(f=>f.status==="verified")){await load();return;}
- const data=ok(await api.auth.mfa.enroll({factorType:"totp",friendlyName:"RecordPathAI Professional "+Date.now()}));
- if(token!==epoch)return;factorId=data.id;showMfaSetup(data.totp);$("verify-form").hidden=false;$("setup").hidden=true;say("Scan the QR code or add the setup key in your authenticator app. Then enter the six-digit code it generates.");
+ const data=ok(await api.auth.mfa.enroll({factorType:"totp",friendlyName:"RecordPathAI Professional "+Date.now(),issuer:"RecordPathAI"}));
+ if(token!==epoch)return;factorId=data.id;showMfaSetup(data.totp);$("mfa-start").hidden=true;$("verify-form").hidden=true;$("setup").hidden=true;$("mfa-code-heading").textContent="3. Enter your six-digit code";say("Add RecordPathAI in your authenticator app before continuing.");
 }));
+$("mfa-continue").addEventListener("click",()=>{if(!user||!factorId)return;$("mfa-setup-details").hidden=true;$("verify-form").hidden=false;$("mfa-back").hidden=false;$("mfa-error").hidden=true;say("Enter the six-digit number shown in your app, not the long setup key.");$("verify-form").elements.code.focus();});
+$("mfa-back").addEventListener("click",()=>{if(!user||!factorId)return;$("verify-form").reset();$("verify-form").hidden=true;$("mfa-error").hidden=true;$("mfa-setup-details").hidden=false;say("Add RecordPathAI to your authenticator app.");});
 $("verify-form").addEventListener("submit",e=>{e.preventDefault();action(e.currentTarget.querySelector("button"),async()=>{
  if(!factorId||!user)return;const code=String(new FormData($("verify-form")).get("code")||"");if(!/^\d{6}$/.test(code))throw Error("Invalid code");
- const challenge=ok(await api.auth.mfa.challenge({factorId}));ok(await api.auth.mfa.verify({factorId,challengeId:challenge.id,code}));clearMfaSetup();await load();
+ $("mfa-error").hidden=true;try{const challenge=ok(await api.auth.mfa.challenge({factorId}));ok(await api.auth.mfa.verify({factorId,challengeId:challenge.id,code}));}catch{$("mfa-error").textContent="That code could not be verified. Make sure you are using the current six-digit code for RecordPathAI Professional, then try again. If it is about to change, wait for a fresh code.";$("mfa-error").hidden=false;return;}clearMfaSetup();await load();
 });});
 $("request-form").addEventListener("submit",e=>{e.preventDefault();action(e.currentTarget.querySelector("button"),async()=>{
  if(!user||!api)return;const v=Object.fromEntries(new FormData($("request-form")));if(v.verification_consent!=="on")throw Error("Consent required");
