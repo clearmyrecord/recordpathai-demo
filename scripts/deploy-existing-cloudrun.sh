@@ -200,7 +200,9 @@ check_professional_pages() {
   smoke_check "professional-account.html" 'id="confirm-account" hidden' "Professional account confirmation before subscription" &&
   smoke_check "professional-practice.html" "Attorney case workflow" "Professional practice" &&
   smoke_check "js/professional-account.js" 'if(action==="checkout"&&confirmedAccountId!==user.id)' "Professional checkout account binding" &&
-  smoke_check "js/professional-practice.js" "Download official form for signature" "Professional workspace script"
+  smoke_check "professional-packet.html" "Your Filing Packet" "Professional packet page" &&
+  smoke_check "js/professional-practice.js" "Prepare My Real Signed Packet for Private Review" "Professional signed packet workflow" &&
+  smoke_check "js/professional-practice.js" 'Pay and Mail — $110' "Professional conviction checkout"
 }
 report_auth_readiness() {
   local status
