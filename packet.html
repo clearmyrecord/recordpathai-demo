@@ -3961,14 +3961,33 @@ document.addEventListener("DOMContentLoaded", async function () {
         const heading=document.createElement("strong");
         heading.textContent=payload?.ready===true
           ?"Approved packet: checkout available"
-          :"Independent packet review pending — no charge taken";
+          :payload?.reviewState==="pending_review"?"Signed application received — review pending"
+          :payload?.reviewState==="preview_required"?"Approved — confirm your preview"
+          :payload?.reviewState==="draft_required"?"Signed application required"
+          :"Checkout requirements not yet met";
         panel.append(heading);
         const message=document.createElement("p");
         message.textContent=payload?.ready===true
           ?"Your exact signed PDF and watermarked preview are approved. Continue to the secure Stripe checkout." + (Number.isSafeInteger(payload?.quote?.totalCents) ? " Total due: $"+(payload.quote.totalCents/100).toFixed(2)+"." : "")
           :"The eligibility estimate does not authorize payment. Complete the outstanding requirements below:";
+        if(payload?.reviewState==="pending_review")message.textContent="Your signed application is saved in RecordWatch and is waiting for independent review. You do not need to sign or upload it again unless you change the saved case. No payment has been taken.";
+        if(payload?.reviewState==="preview_required")message.textContent="The review is complete. Open both watermarked pages in Step 2 and confirm the exact application before paying.";
         panel.append(message);
         if(payload?.ready===true)return;
+        const retry=document.createElement("button");retry.type="button";retry.className="sig-small-btn";retry.textContent="Check review status";
+        retry.addEventListener("click",async()=>{
+          retry.disabled=true;
+          try{
+            const selected=await resolveCheckoutCase(),caseId=selected?.checkoutCase?.saved_case_id;
+            const next=await inspectPacketReadiness(caseId);
+            if(next?.reviewState==="preview_required"||next?.ready===true)await openApprovedPacketPreview();
+            setCheckoutError("");
+          }catch(error){setStatus(error?.message||"Review status unavailable.","error");}
+          finally{retry.disabled=false;}
+        });
+        if(payload?.reviewState==="pending_review"||payload?.reviewState==="preview_required"){
+          panel.append(retry);return;
+        }
         const reasons=Array.isArray(payload?.missing)?payload.missing:[];
         const items=new Set();
         for(const reason of reasons){
@@ -4229,6 +4248,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           const reviewCase=await resolveCheckoutCase();
           const review=await inspectPacketReadiness(reviewCase?.checkoutCase?.saved_case_id);
           if(review.ready!==true){
+            if(review.reviewState==="pending_review"||review.reviewState==="preview_required"){
+              setStatus(review.reviewState==="pending_review"?"Signed application saved. Independent review is pending; no payment was taken.":"Review approved. Confirm your signed preview in Step 2 before paying.");
+              if(review.reviewState==="preview_required")await openApprovedPacketPreview();
+              document.getElementById("packetReviewStatus")?.scrollIntoView({block:"nearest"});
+              return;
+            }
             const blockers = Array.isArray(review.missing) ? review.missing.slice(0, 3).join(" ") : "";
             const message = "Checkout is not available yet. " +
               (blockers || "Independent packet review has not been approved.") +
