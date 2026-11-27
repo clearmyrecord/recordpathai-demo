@@ -12,7 +12,7 @@ test("paid plan selection does not require attorney credentials or MFA before ch
  assert.match(html,/\$99<small>\/month/);
  assert.match(html,/\$249<small>\/month/);
  assert.match(js,/confirmedAccountId=user\.id;\s*\$\("confirm-account"\)\.hidden=true/);
- assert.match(js,/\$\("plan-choice"\)\.hidden=Boolean\(data\.subscription_exists\)/);
+ assert.match(js,/\$\("plan-choice"\)\.hidden=Boolean\(data\.subscription_exists\|\|data\.test_access\)/);
  assert.match(js,/if\(pilot\)\{\s*if\(!await ensureMfa/);
  assert.match(js,/if\(secure\)\{[^\n]*ensureMfa/);
  assert.match(js,/data.unregistered/);
@@ -26,7 +26,7 @@ test("unpaid and paid provisioning uses actual Stripe account and service-only R
  const routes={};const user={id:"00000000-0000-4000-8000-000000000123",email:"fixture@example.invalid",email_confirmed_at:"2026-01-01"};
  const price={id:LIVE_PROFESSIONAL_PRICES.solo.id,livemode:true,active:true,currency:"usd",unit_amount:9900,recurring:{interval:"month",interval_count:1}};
  const customer={id:"cus_fixture",livemode:true,metadata:{product_family:"recordpathai_professional",authorized_user:user.id}};
- let row=null,creates=0,checkout=0,signedIn=true,paid=false,leaseCalls=0,lock=null,expired=0,open=null,last=null;
+ let row=null,creates=0,checkout=0,signedIn=true,paid=false,leaseCalls=0,lock=null,expired=0,open=null,last=null,testAccess=false;
  const firmPrice={...price,id:LIVE_PROFESSIONAL_PRICES.firm.id,unit_amount:24900};
  const selectedPrice=id=>id===firmPrice.id?firmPrice:price;
  const ctx={user,mode:"production",rest:async(table,query,opts)=>{
@@ -38,6 +38,7 @@ test("unpaid and paid provisioning uses actual Stripe account and service-only R
   if(table==="rpc/professional_create_self_service"){assert.equal(opts.body.p_user,user.id);assert.equal(opts.body.p_plan,"solo");row={org_id:"org",authorized_user:user.id,plan:"solo",stripe_customer_id:customer.id,approved:true};return "org";}
   if(table==="professional_pilot_orgs")return [{active:true,access_kind:"paid",self_service_terms_at:"2026-01-01"}];
   if(table==="professional_pilot_members")return [{active:true,role:"staff",attorney_verified:false}];
+  if(table==="rpc/professional_set_test_lease"){assert.equal(opts.body.p_org,row.org_id);assert.equal(opts.body.p_user,user.id);return testAccess;}
   if(table==="rpc/professional_set_paid_lease"){leaseCalls++;assert.equal(opts.body.p_user,user.id);assert.equal(opts.body.p_customer,customer.id);assert.equal(opts.body.p_verified,paid);if(paid)assert.equal(opts.body.p_subscription,"sub_fixture");return paid;}
   throw Error(table);
  }};
@@ -55,7 +56,8 @@ test("unpaid and paid provisioning uses actual Stripe account and service-only R
  res=await invoke("checkout",{...consent,"x-professional-account-id":""});assert.equal(res.statusCode,403);assert.equal(creates,0);
  res=await invoke("checkout",{...consent,"x-professional-account-id":"00000000-0000-4000-8000-000000000999"});assert.equal(res.statusCode,403);assert.equal(creates,0);
  res=await invoke("checkout",consent);assert.equal(res.statusCode,200);assert.equal(res.body.mode,"live");assert.equal(creates,1);assert.equal(checkout,1);
- res=await invoke("refresh");assert.equal(res.body.active,false);assert.equal(leaseCalls,1);
+ res=await invoke("refresh");assert.equal(res.body.active,false);assert.equal(res.body.test_access,false);assert.equal(leaseCalls,1);
+ testAccess=true;res=await invoke("refresh");assert.equal(res.body.active,true);assert.equal(res.body.test_access,true);assert.equal(res.body.subscription_exists,false);assert.equal(leaseCalls,1);testAccess=false;
  res=await invoke("checkout",consent);assert.equal(res.statusCode,200);assert.equal(checkout,1);
  res=await invoke("checkout",{...consent,"x-professional-plan":"firm"});assert.equal(res.statusCode,200);assert.equal(row.plan,"firm");assert.equal(expired,1);assert.equal(checkout,2);assert.equal(creates,1);
  res=await invoke("checkout",consent);assert.equal(res.statusCode,200);assert.equal(row.plan,"solo");assert.equal(expired,2);assert.equal(checkout,3);assert.equal(lock,null);
