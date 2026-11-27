@@ -161,23 +161,47 @@ async function refresh(){
   const openPanel=panel=>{if(panel===packetPanel&&!routeStep){navigateWorkflow(3,{caseId:row.id});return;}hideIntake();packetCaseId=panel===packetPanel?row.id:null;for(const el of $("cases").children)el.classList.toggle("packet-focused",el===shell&&packetCaseId===row.id);setStep(panel===packetPanel?3:0);for(const p of [reviewPanel,watchPanel,packetPanel])p.d.open=p===panel;panel.d.scrollIntoView({block:"start"});if(panel===packetPanel&&loadCurrentPreview)void loadCurrentPreview().catch(()=>{});};
   const nav=(label,p,primary=false)=>{const b=add(actions,"button",label);b.type="button";b.className=primary?"btn":"btn secondary";b.addEventListener("click",()=>{if(active&&org===orgId())openPanel(p)});};
   nav("Resume",packetStatus==="Not generated"||packetStatus==="Reviewed"?packetPanel:watchPanel,true);nav("Record Details",reviewPanel);nav("Open Packet",packetPanel);nav("Open RecordWatch",watchPanel);
-  add(card,"p",row.outcome+" · "+row.charge_name+" · "+row.charge_code+" · "+row.charge_level+" · disposition "+row.disposition_date+(row.final_discharge_date?" · discharge "+row.final_discharge_date:""));
-  if(client.other_names)add(card,"p","Other names used: "+client.other_names);
-  add(card,"p","Mailing: "+[client.line1,client.line2,client.city,client.state,client.zip].filter(Boolean).join(", ")+" · "+client.email+" · "+client.phone);
-  if(row.record_details?.schemaVersion===1){const detail=document.createElement("details");add(detail,"summary","View all saved Step 2 fields");card.append(detail);const renderValues=(parent,obj)=>{for(const [key,val] of Object.entries(obj||{})){const line=add(parent,"p","");add(line,"strong",key.replace(/([a-z])([A-Z])/g,"$1 $2").replaceAll("_"," ") + ": ");line.append(document.createTextNode(val===true?"Yes":val===false?"No":String(val||"Not entered")));}};renderValues(detail,detailFields);for(const [i,charge] of row.record_details.charges.entries()){add(detail,"h4","Charge "+(i+1));renderValues(detail,charge);}}
+  card.classList.add("professional-record-review");
+  const reviewDate=value=>value?(window.RecordPathRuleDateUtils?.formatDate(value)||String(value)):"Not entered";
+  const readableValue=value=>value===true?"Yes":value===false?"No":value===null||value===undefined||value===""?"Not entered":Array.isArray(value)?(value.length?value.map(readableValue).join(", "):"None recorded"):typeof value==="object"?JSON.stringify(value):String(value);
+  const reviewField=(grid,label,value,wide=false)=>{const line=add(grid,"div","");line.className="professional-review-field"+(wide?" professional-review-field-wide":"");add(line,"dt",label);add(line,"dd",readableValue(value));return line;};
+  const reviewGroup=(parent,heading)=>{const group=add(parent,"section","");group.className="professional-review-group";add(group,"h4",heading);const grid=add(group,"dl","");grid.className="professional-review-grid";return {group,grid};};
+  const record=reviewGroup(card,"Case information");
+  const outcomeNames={conviction:"Conviction",dismissal:"Dismissed",not_guilty:"Not guilty",mixed:"Multiple or unresolved outcomes"};
+  for(const [label,value,wide] of [["Case number",row.case_number],["Outcome",outcomeNames[row.outcome]||row.outcome],["Primary charge",row.charge_name,true],["Statute",row.charge_code],["Degree",row.charge_level],["Disposition date",reviewDate(row.disposition_date)],["Final discharge date",reviewDate(row.final_discharge_date)],["Court",actualCourt,true],["County / state",[detailFields.county,detailFields.caseState].filter(Boolean).join(", ")|| (row.court_id==="oh-wood-common-pleas"?"Wood, OH":null)],["Judge",row.judge_name||detailFields.judgeName]])reviewField(record.grid,label,value,wide);
+  const contactDetails=reviewGroup(card,"Client & mailing information");
+  reviewField(contactDetails.grid,"Client name",client.full_name,true);
+  if(client.other_names)reviewField(contactDetails.grid,"Other names used",client.other_names,true);
+  reviewField(contactDetails.grid,"Mailing address",[client.line1,client.line2,client.city,client.state,client.zip].filter(Boolean).join(", "),true);
+  reviewField(contactDetails.grid,"Email",client.email,true);
+  reviewField(contactDetails.grid,"Phone",client.phone,true);
+  if(row.record_details?.schemaVersion===1){
+   const detail=document.createElement("details");detail.className="professional-review-all-fields";add(detail,"summary","View all saved Step 2 fields");card.append(detail);
+   const renderValues=(parent,obj)=>{const grid=add(parent,"dl","");grid.className="professional-review-grid";for(const [key,val] of Object.entries(obj||{})){const label=key.replace(/([a-z])([A-Z])/g,"$1 $2").replaceAll("_"," ").replace(/^./,c=>c.toUpperCase());reviewField(grid,label,readableValue(val),true);}};
+   const court=add(detail,"section","");add(court,"h4","Saved court and case fields");renderValues(court,detailFields);
+   if(Array.isArray(row.record_details.charges))for(const [i,charge] of row.record_details.charges.entries()){const offense=add(detail,"section","");add(offense,"h4","Charge "+(i+1));renderValues(offense,charge);}
+  }
+  const eligibilitySection=add(card,"section","");eligibilitySection.className="professional-review-group professional-review-eligibility";add(eligibilitySection,"h4","Eligibility screening");
   let packetEligibility=null;
-  if(row.outcome==="mixed")add(card,"p","Eligibility and filing review required: unsupported court, multiple charges, incomplete or unresolved record information. All entered details are saved.");
+  if(row.outcome==="mixed")add(eligibilitySection,"p","Eligibility and filing review required: unsupported court, multiple charges, incomplete or unresolved record information. All entered details are saved.");
   else if(window.RecordPathEligibilityEngine?.resolveEligibilityForCase){
    const disposition={dismissal:"dismissed",not_guilty:"not guilty",conviction:"convicted"}[row.outcome]||"";
    const result=window.RecordPathEligibilityEngine.resolveEligibilityForCase({id:row.id,court:{caseState:"OH",county:"Wood",courtName:"Wood County Court of Common Pleas",caseNumber:row.case_number},charges:[{chargeName:row.charge_name,statuteCode:row.charge_code,chargeLevel:row.charge_level,disposition,dispositionDate:row.disposition_date,finalDischargeDate:row.final_discharge_date||"",probationCompletedDate:row.probation_end_date||""}],outcome:{outcome:disposition,dispositionDate:row.disposition_date,finalDischargeDate:row.final_discharge_date||""}});
    packetEligibility=result;
    eligibilityBadge.textContent=result.status||"Needs review";eligibilityBadge.className="case-status-badge "+(String(result.status||"").toLowerCase()==="eligible"?"eligible":"needs-review");estimated.textContent=result.formattedEligibilityDate||"Not available";
-   add(card,"h4","Eligibility screening");add(card,"p",result.status+" · "+(result.formattedEligibilityDate||"Date not available")+" · "+(result.ruleCitation||"Review local rules"));
-   for(const flag of result.flags||[])add(card,"p",flag);
-   add(card,"p","Estimate using the same consumer eligibility engine. Full charge inventory, exclusions and other eligibility requirements must be reviewed before filing.");
-  }else add(card,"p","Eligibility screening unavailable. Do not rely on an estimate.");
+   const clearEligibility=result.isEligibleNow===true&&!result.needsReview&&!(result.flags||[]).length;
+   const status=add(eligibilitySection,"div","");status.className="professional-review-result"+(clearEligibility?" is-eligible":"");
+   add(status,"span","Screening result");add(status,"strong",result.status||"Needs review");
+   const grid=add(eligibilitySection,"dl","");grid.className="professional-review-grid";
+   reviewField(grid,"Estimated eligibility date",result.formattedEligibilityDate||"Date not available",true);
+   reviewField(grid,"Relief type",result.reliefType||"Review required",true);
+   reviewField(grid,"Required waiting period",result.waitingPeriodText||"Review required",true);
+   reviewField(grid,"Applicable rule",result.ruleCitation||"Review local rules",true);
+   if((result.flags||[]).length){const warnings=add(eligibilitySection,"div","");warnings.className="professional-review-warnings";add(warnings,"strong","Items requiring attention");const list=add(warnings,"ul","");for(const flag of result.flags)add(list,"li",flag);}
+   add(eligibilitySection,"p","Estimate using the same consumer eligibility engine. Full charge inventory, exclusions and other eligibility requirements must be reviewed before filing.").className="professional-review-note";
+  }else add(eligibilitySection,"p","Eligibility screening unavailable. Do not rely on an estimate.");
   const decision=decisions.find(x=>x.case_id===row.id);
-  add(card,"p",decision?"Review: "+decision.decision.replaceAll("_"," "):"Awaiting authorized review");
+  const reviewStatus=add(eligibilitySection,"div","");reviewStatus.className="professional-review-status";add(reviewStatus,"span","Case review");add(reviewStatus,"strong",decision?.decision==="approved_for_unsigned_draft"?"Approved for unsigned draft":decision?decision.decision.replaceAll("_"," "):"Awaiting authorized review");
   const button=(label,fn)=>{const btn=add(card,"button",label);btn.type="button";btn.addEventListener("click",async()=>{if(!active||org!==orgId())return;btn.disabled=true;try{await fn();}catch{notice("Action rejected. Check saved information and access.");}finally{btn.disabled=false;}});return btn;};
   card=watchPanel.body;
   add(card,"h4","RecordWatch Professional");
