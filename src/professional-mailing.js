@@ -10,7 +10,7 @@ const sha=v=>/^[a-f0-9]{64}$/.test(v||"");
 const sessionId=v=>/^cs_live_[A-Za-z0-9]+$/.test(v||"");
 const eventId=v=>/^evt_[A-Za-z0-9]+$/.test(v||"");
 const profileInput={state:"OH",county:"Wood",courtType:"court-of-common-pleas"};
-const back="https://recordpathai.com/professional-practice.html";
+const back=caseId=>"https://recordpathai.com/professional-packet.html?caseId="+encodeURIComponent(caseId);
 const digest=b=>createHash("sha256").update(b).digest("hex");
 const recent=v=>Number.isFinite(Date.parse(v))&&Date.parse(v)<=Date.now()&&Date.parse(v)>Date.now()-30*86400000;
 const REQUIRED_REVIEW=["identity","docket","charges","discharge","exclusions","form","signature","authorization","court_fee_and_address"];
@@ -129,7 +129,7 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
    let s;
    if(o.stripe_session_id){s=await stripe.checkout.sessions.retrieve(o.stripe_session_id);}
    else {
-    s=await stripe.checkout.sessions.create({mode:"payment",customer,customer_update:{address:"auto"},success_url:back,cancel_url:back,metadata:metadata(o),payment_intent_data:{metadata:metadata(o)},line_items:[{quantity:1,price_data:{currency:"usd",unit_amount:PROFESSIONAL_MAIL_COURT_CENTS,tax_behavior:"inclusive",product_data:{name:"Court filing deposit",tax_code:"txcd_00000000"}}}]},{idempotencyKey:"rpai-pro-mail-"+o.case_id});
+    s=await stripe.checkout.sessions.create({mode:"payment",customer,customer_update:{address:"auto"},success_url:back(o.case_id),cancel_url:back(o.case_id),metadata:metadata(o),payment_intent_data:{metadata:metadata(o)},line_items:[{quantity:1,price_data:{currency:"usd",unit_amount:PROFESSIONAL_MAIL_COURT_CENTS,tax_behavior:"inclusive",product_data:{name:"Court filing deposit",tax_code:"txcd_00000000"}}}]},{idempotencyKey:"rpai-pro-mail-"+o.case_id});
     if(!sessionId(s.id)||!matches(s,o)||s.customer!==customer||s.livemode!==true||s.amount_subtotal!==PROFESSIONAL_MAIL_COURT_CENTS||s.amount_total!==PROFESSIONAL_MAIL_COURT_CENTS)throw Error("Checkout mismatch");
     const saved=await change(o,"status=eq.approved&stripe_session_id=is.null",{stripe_session_id:s.id});
     if(saved.length!==1&&(await order(o.case_id))?.stripe_session_id!==s.id)throw Error("Checkout persistence failed");
