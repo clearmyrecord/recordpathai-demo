@@ -27,10 +27,17 @@
   if(t.lobReference)field("Lob reference",t.lobReference);
   if(t.expectedDeliveryDate)field("Estimated delivery",t.expectedDeliveryDate);
   if(t.lobReference)field("Postal tracking",t.providerStatus==="checked"?"Checked against Lob":t.providerStatus==="unavailable"?"Provider status unavailable":"Refresh for current provider events");
+  if(data.packet_payment_verified&&Number.isFinite(data.preparation_fee_cents)&&Number.isFinite(data.court_fee_cents))field("Recorded checkout total","$"+((data.preparation_fee_cents+data.court_fee_cents)/100).toFixed(2));
   if(data.last_updated_at)field("Saved order updated",formatted(data.last_updated_at));
   if(Array.isArray(data.steps)&&data.steps.length){
    const steps=add(target,"div","");steps.className="recordwatch-fulfillment-steps";
-   for(const stage of data.steps){
+   for(const saved of data.steps){
+    const stage={...saved};
+    const names=t.providerStatus==="checked"?(t.providerEvents||[]).map(e=>e.name):[];
+    if(stage.id==="paid"&&t.paymentCheck==="not_verified"){stage.state="attention";stage.description="The recorded payment could not be reverified with Stripe; contact support.";}
+    if(stage.id==="mailed"&&names.some(n=>["Mailed","In Transit","In Local Area","Processed for Delivery","Delivered"].includes(n))){stage.state="complete";stage.description="Postal progress confirmed by Lob.";}
+    if(stage.id==="delivered"&&names.includes("Delivered")){stage.state="complete";stage.description="Delivery scan confirmed by Lob; court acceptance is separate.";}
+    if(stage.id==="delivered"&&["Returned to Sender","Failed"].includes(t.latestEvent?.name)){stage.state="attention";stage.description="Mailing exception reported by Lob; contact support.";}
     const item=add(steps,"div","");item.className="recordwatch-fulfillment-stage "+(["complete","attention","pending"].includes(stage.state)?stage.state:"pending");
     add(item,"strong",stage.label+" · "+(stage.state==="complete"?"Recorded":stage.state==="attention"?"Needs attention":"Pending"));
     add(item,"span",stage.description||"Status unavailable");
@@ -39,12 +46,13 @@
   if(t.providerEvents?.length){add(target,"h4","Verified Lob tracking events");const list=add(target,"ol","");for(const event of [...t.providerEvents].reverse())add(list,"li",event.name+" · "+formatted(event.time));}
   add(target,"p","Postal delivery is not confirmation of court filing or record relief. A Lob reference is not a USPS tracking number.").className="muted";
  }
- let generation=0;
+ let generation=0,activeOwner=null;
  async function session(){
   const client=await window.RecordPathSupabase.getClient();
   const r=await client.auth.getSession();
   const s=r.data?.session;
   if(!s?.access_token||!s.user?.id)throw Error("Sign in required");
+  if(activeOwner===null)activeOwner=s.user.id;
   return s;
  }
  async function fetchStatus(id,live,s){
@@ -92,6 +100,6 @@
    await Promise.all(Array.from({length:Math.min(4,cards.length)},async()=>{while(index<cards.length&&seq===generation){const card=cards[index++];if(card.current())await card.load(false,s);}}));
   }catch{for(const card of cards)if(card.current())void card.load(false);}})();
  }
- document.addEventListener("recordpath:auth-change",()=>{generation++;for(const slot of document.querySelectorAll("[data-consumer-mail-tracking]")){slot.replaceChildren();delete slot.dataset.trackingMounted;}});
+ document.addEventListener("recordpath:auth-change",event=>{const owner=event.detail?.user?.id||null;if(owner&&(!activeOwner||activeOwner===owner)){activeOwner=owner;return;}generation++;activeOwner=owner;for(const slot of document.querySelectorAll("[data-consumer-mail-tracking]")){slot.replaceChildren();delete slot.dataset.trackingMounted;}});
  window.RecordPathConsumerMailTracking={mountCards,label,render};
 })();
