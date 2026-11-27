@@ -1,3 +1,4 @@
+import {registerProfessionalBillingRoutes} from "./professional-billing-sandbox.js";
 import {createHash} from "node:crypto";
 import {isOfficialWoodConvictionFormPair,isOfficialWoodDismissalFormPair,normalizeWoodFormHeading} from "./wood-form-pages.js";
 const HOST="ckrqmlnckhagskpumjbh.supabase.co";
@@ -47,6 +48,7 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
   }
   return {user,rest,ownedCase};
  }
+ registerProfessionalBillingRoutes(app,{context});
  app.post("/api/professional/signed-review",express.raw({type:"application/pdf",limit:"2mb"}),async(req,res)=>{
   try{
    const ctx=await context(req,res);if(!ctx)return;
