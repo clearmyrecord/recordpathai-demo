@@ -263,3 +263,14 @@ test("archive recovery is independent of the newest 100 dashboard records",async
  assert.deepEqual(rows.map(r=>r.id),ids);assert.equal(pageReads,3);assert.equal(parentReads,3);
  assert.match(js,/\["client",archivedClients\],\["case",archivedCases\]/);
 });
+
+test("professional signature pad matches the consumer's full width and 180px drawing height",()=>{
+ const consumer=read("packet.html").match(/#signaturePad\s*\{([^}]+)\}/)[1];
+ const professional=read("assets/professional-modern.css").match(/\.professional-signature-pad\{([^}]+)\}/)[1];
+ for(const css of [consumer,professional]){assert.match(css,/width:\s*100%/);assert.match(css,/height:\s*180px/);assert.match(css,/touch-action:\s*none/);}
+ assert.match(professional,/max-width:none/);assert.match(professional,/border-radius:12px/);
+ const js=read("js/professional-practice.js");
+ assert.doesNotMatch(js,/max-width:640px;height:160px/);
+ assert.match(js,/resizeBlankSignature=\(\)=>\{if\(signatureInk\|\|drawing\)return/);
+ assert.match(js,/resizeBlankSignature\(\);drawing=true/);
+});
