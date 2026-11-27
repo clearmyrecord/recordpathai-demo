@@ -3792,7 +3792,7 @@ window.chargeLibrary=[...ohioChargeReferences,...window.chargeLibrary.map(r=>({.
      results.append(item);
     }
    }
-   input.addEventListener("input",event=>{event.stopPropagation();render();});input.addEventListener("change",event=>event.stopPropagation());state.addEventListener("change",()=>{if(box.isConnected)render();});render();input.focus();
+   input.addEventListener("input",event=>{event.stopPropagation();render();});input.addEventListener("change",event=>event.stopPropagation());input.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();event.stopPropagation();render();}});state.addEventListener("change",()=>{if(box.isConnected)render();});render();input.focus();
   });
  }
  root.RecordPathChargeLibrary={entries,search,mount};
