@@ -25,3 +25,14 @@ test("real application cannot self-approve, change ownership or bypass MFA; clie
  assert.doesNotMatch(sql,/grant\s+[^;]*(update|delete)[^;]*to authenticated/i);
  assert.match(base,/professional_real_intake_release_hold check \(client_intake_enabled=false\)/);
 });
+
+test("professional entry points always open signup and existing users explicitly confirm account",()=>{
+ const landing=read("professional.html"),signup=read("signup.html");
+ assert.match(landing,/href="signup\.html\?returnUrl=professional-account\.html" class="nav-cta">Get started/);
+ assert.match(landing,/href="signup\.html\?returnUrl=professional-account\.html%3Fplan%3Dsolo"/);
+ assert.match(landing,/href="signup\.html\?returnUrl=professional-account\.html%3Fplan%3Dfirm"/);
+ assert.match(signup,/if \(store\.isLoggedIn\(\)\) \{\s*if \(professionalSignup\) \{/);
+ assert.match(signup,/professionalExisting\.hidden = false;[\s\S]*?return;\s*\}\s*store\.clearReturnUrl\(\);/);
+ assert.match(signup,/id="professionalContinue"/);
+ assert.match(signup,/id="professionalSwitch"/);
+});
