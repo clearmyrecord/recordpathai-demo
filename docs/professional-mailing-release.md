@@ -1,6 +1,6 @@
 # Professional conviction Pay and Mail — release runbook
 
-Professional subscribers pay no per-packet preparation charge. Optional Wood County conviction mailing is $10 service + $100 court deposit, plus applicable tax on the service. The nonconviction workflow remains manual and has no court fee for qualifying dismissals/not-guilty cases. Complimentary pilots are not eligible for this paid checkout.
+Professional subscribers pay no per-packet preparation charge. Supported Wood County conviction mailing is included in the paid subscription; Stripe collects exactly the $100 court deposit. The nonconviction workflow remains manual and has no court fee for qualifying dismissals/not-guilty cases. Complimentary pilots are not eligible for this paid checkout.
 
 ## Release gates
 - Deploy the tested main commit through the existing Cloud Run workflow; confirm the new revision serves the professional routes.
@@ -14,7 +14,7 @@ Use the existing operations authorization header (never expose its value in a br
 - GET /api/operator/professional-mail/review-queue lists cases with a recorded exact signed-document review.
 - GET /api/operator/professional-mail/review/:caseId/:documentId and /review-pdf/:caseId/:documentId expose the exact private review facts and PDF to authorized operators only.
 - POST /api/operator/professional-mail/approve records the case/document IDs, real reviewer_reference, independent_review_confirmed=true and review_checks with identity, docket, charges, discharge, exclusions, form, signature, authorization, court_fee_and_address all verified. Review the actual applicant identity, complete docket, statutory eligibility, signed application, filing authority and fee/address; do not submit example evidence.
-- The subscriber sees the approved order in Step 3, authorizes mailing, and opens a Stripe-hosted checkout. Payment is accepted only for the matched signed document and case, with the $10 service and $100 court deposit.
+- The subscriber sees the approved order in Step 3, authorizes mailing, and opens a Stripe-hosted checkout. Payment is accepted only for the matched signed document and case, with only the $100 court deposit. Legacy $110 sessions require operator reconciliation; do not reopen or create a duplicate payment.
 - The existing signed Stripe webhook puts a paid order in paid_hold. The existing scheduled fulfillment route also processes professional orders. The worker rechecks the unrefunded captured payment and exact reviewed PDF, atomically claims once, and creates a Lob check using the shared court-profile builder.
 - A claimed order without Lob confirmation requires manual provider reconciliation. Do not automatically retry or collect another payment. One order per case is intentional until support verifies cancellation, refund or correction.
 - RecordWatch shows the private order state, Lob check reference, estimated delivery if available, and provider tracking events. Lob acceptance is not proof of court filing.
