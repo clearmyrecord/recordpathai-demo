@@ -11,6 +11,7 @@ import { verifiedPacketSession, verifiedRecordwatchSession, safeCheckoutRedirect
 import { RECORDWATCH_LIFETIME_CENTS, RECORDWATCH_LIFETIME_PRICE_ENV, assertRecordwatchLifetimePrice, paidRecordwatchLifetimeCheckout, lifetimeCaseEntitled, lifetimeCasePurchaseAvailable, lifetimePurchaseGeneration } from "./src/recordwatch-lifetime.js";
 import { quotePacketPricing } from "./src/packet-pricing.js";
 import { projectPacketFulfillment } from "./src/packet-fulfillment-tracking.js";
+import {consumerTrackingSnapshot,checkConsumerTracking} from "./src/consumer-mail-tracking.js";
 import { evaluatePacketRelease, caseReviewFingerprint, savedChargeOutcome, expectedFormType, validCaseId } from "./src/packet-release.js";
 import { AFFILIATE_COMMISSION_BPS, AFFILIATE_ATTRIBUTION_DAYS, AFFILIATE_HOLD_DAYS, normalizeAffiliateCode, newAffiliateCode, eligibleAffiliatePurchase, affiliateCommissionCents, commissionAvailableAfter } from "./src/affiliate-program.js";
 import { affiliatePayoutAmount } from "./src/affiliate-payouts.js";
@@ -425,18 +426,22 @@ app.get("/api/packet/filing-status",async(req,res)=>{
       }),
       supabaseRest("packet_fulfillment_jobs",{
         query:"?"+identity+
-        "&select=id,status,stripe_session_id,created_at,updated_at,court_fee_cents,payment_method,lob_check_id,lob_letter_id,mailed_at"+
+        "&select=id,user_id,case_id,status,stripe_session_id,created_at,updated_at,court_fee_cents,payment_method,lob_check_id,lob_letter_id,mailed_at"+
         "&order=created_at.desc&limit=1"
       })
     ]);
     const latest=(rows)=>Array.isArray(rows)?rows[0]||null:null;
+    const job=latest(jobs);
     const timeline=projectPacketFulfillment({
-      draft:latest(drafts),review:latest(reviews),job:latest(jobs)
+      draft:latest(drafts),review:latest(reviews),job
     });
+    if(job&&(job.user_id!==user.id||job.case_id!==caseId))throw Error("Order scope mismatch");
+    const mailingTracking=req.query?.live==="1"?await checkConsumerTracking(timeline,job,{stripe}):consumerTrackingSnapshot(timeline);
+    if(req.query?.live==="1")await getSavedCaseReviewFacts(user.id,caseId);
     res.setHeader("Cache-Control","no-store, private");
     res.setHeader("X-Content-Type-Options","nosniff");
     return res.json({ok:true,case_id:caseId,source:"verified_private_records",
-      ...timeline,packet_library:{
+      ...timeline,mailing_tracking:mailingTracking,packet_library:{
         generated:timeline.signed_pdf_uploaded,
         generated_at:latest(drafts)?.private_review_authorized_at||null,
         page_count:latest(drafts)?.pdf_pages||null,
