@@ -7,6 +7,10 @@
 .rp-professional .home-conversion-list{margin-bottom:0}
 .rp-professional .home-feature .home-btn{color:#fff;margin-top:auto}
 .rp-professional .home-feature .home-btn:hover{color:#fff}
+/* Quiet CTAs are active links on light surfaces, not disabled controls. */
+.rp-professional .home-feature .home-btn.home-btn-quiet{background:#fff;color:#233d70;border-color:#9bb5dc;box-shadow:none}
+.rp-professional .home-feature .home-btn.home-btn-quiet:hover{background:#e4efff;color:#16468f;border-color:#779bd0}
+.rp-professional .home-feature .home-btn:focus-visible{outline:3px solid #16468f;outline-offset:3px}
 .rp-professional .home-feature{display:flex;flex-direction:column;align-items:flex-start}
 .rp-professional .home-feature p{flex:1}
 .rp-professional .professional-price{font-size:clamp(32px,4vw,46px);font-weight:800;letter-spacing:-.04em;line-height:1.2;color:var(--text);margin:8px 0 16px}
