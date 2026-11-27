@@ -84,7 +84,8 @@ async function refresh(){
   const actions=add(shell,"div","");actions.className="saved-case-actions";
   const section=(label)=>{const d=document.createElement("details");d.className="professional-case-panel";add(d,"summary",label);const body=add(d,"div","");shell.append(d);return {d,body};};
   const reviewPanel=section("Record details & eligibility screening"),watchPanel=section("RecordWatch"),packetPanel=section("Step 3 — Packet");let card=reviewPanel.body;
-  const openPanel=panel=>{hideIntake();packetCaseId=panel===packetPanel?row.id:null;setStep(panel===packetPanel?3:0);for(const p of [reviewPanel,watchPanel,packetPanel])p.d.open=p===panel;panel.d.scrollIntoView({block:"nearest"});};
+  let loadCurrentPreview=null;
+  const openPanel=panel=>{hideIntake();packetCaseId=panel===packetPanel?row.id:null;for(const el of $("cases").children)el.classList.toggle("packet-focused",el===shell&&packetCaseId===row.id);setStep(panel===packetPanel?3:0);for(const p of [reviewPanel,watchPanel,packetPanel])p.d.open=p===panel;panel.d.scrollIntoView({block:"start"});if(panel===packetPanel&&loadCurrentPreview)void loadCurrentPreview().catch(()=>{});};
   const nav=(label,p,primary=false)=>{const b=add(actions,"button",label);b.type="button";b.className=primary?"btn":"btn secondary";b.addEventListener("click",()=>{if(active&&org===orgId())openPanel(p)});};
   nav("Resume",packetStatus==="Not generated"||packetStatus==="Reviewed"?packetPanel:watchPanel,true);nav("Record Details",reviewPanel);nav("Open Packet",packetPanel);nav("Open RecordWatch",watchPanel);
   add(card,"p",row.outcome+" · "+row.charge_name+" · "+row.charge_code+" · "+row.charge_level+" · disposition "+row.disposition_date+(row.final_discharge_date?" · discharge "+row.final_discharge_date:""));
@@ -131,6 +132,7 @@ async function refresh(){
 
   card=packetPanel.body;card.classList.add("professional-packet-page");
   add(card,"h2","Your Filing Packet");
+  add(card,"h3","Eligibility Status");
   add(card,"p","Client: "+client.full_name+" · Case: "+row.case_number+" · Eligibility: "+eligibilityBadge.textContent+" · Estimated date: "+estimated.textContent);
   add(card,"p","RecordPathAI packet preparation: $0 — included with professional access. Applicable court fees are separate: "+(row.outcome==="conviction"?"$100 for a qualifying conviction":row.outcome==="mixed"?"Requires review":"$0 for qualifying dismissal or not-guilty cases")+".");
   const fees=add(card,"section","");fees.className="professional-packet-fees";add(fees,"h3","Your packet and court fees");
@@ -231,13 +233,13 @@ async function refresh(){
         const response=await fetch("/api/professional/signed-review/"+encodeURIComponent(doc.id)+"/preview/"+page,{headers,cache:"no-store"});
         if(!response.ok)throw Error("Preview unavailable");const blob=await response.blob();
         if(!active||token!==epoch||org!==orgId())return;if(blob.type!=="image/png")throw Error("Unexpected preview");
-        const url=URL.createObjectURL(blob);const img=document.createElement("img");img.alt="Watermarked signed application — page "+page;img.onload=img.onerror=()=>URL.revokeObjectURL(url);img.src=url;previewPages.append(img);
+        const url=URL.createObjectURL(blob);const img=document.createElement("img");img.alt="Watermarked signed application — page "+page;img.src=url;previewPages.append(img);try{await img.decode();}finally{URL.revokeObjectURL(url);}if(!active||token!==epoch||org!==orgId())return;
        }
        downloaded=true;previewStatus.textContent="Both pages loaded. Review the exact document.";
       }catch{previewPages.replaceChildren();previewStatus.textContent="Unable to load the signed application preview. Retry before confirming.";throw Error("Preview unavailable");}
     };
     button("Reload Signed Application Preview (View Only)",loadPreview);
-    if(packetCaseId===row.id&&doc===rowDocs[0])void loadPreview().catch(()=>{});
+    if(doc===rowDocs[0]){loadCurrentPreview=loadPreview;if(packetCaseId===row.id)void loadPreview().catch(()=>{});}
     if(!rowReviews.some(r=>r.document_id===doc.id)){
       const reviewLabel=add(card,"label","");const reviewed=document.createElement("input");reviewed.type="checkbox";reviewLabel.append(reviewed,document.createTextNode(" I inspected this exact signed PDF, confirmed the signature and information, and accept responsibility for any subsequent manual filing."));
       button("Confirm My Reviewed Pages",async()=>{if(!reviewed.checked||!downloaded)throw Error("Open and review both pages first");ok(await api.from("professional_signed_reviews").insert({document_id:doc.id,org_id:org,case_id:row.id,exact_document_reviewed:true}));await refresh();});
