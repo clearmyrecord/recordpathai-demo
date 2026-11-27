@@ -1,4 +1,4 @@
-import {renderProfessionalDraft} from "./professional-wood-draft.js";
+import {renderProfessionalDraft,prepareProfessionalDraftData} from "./professional-wood-draft.js";
 import {mountProfessionalRecordIntake,mountProfessionalPersonalIntake,buildProfessionalRecordPayload,sameRecordSnapshot} from "./professional-record-intake.js";
 let sharedIntake=null;
 const $=id=>document.getElementById(id), notice=t=>$("notice").textContent=t;
@@ -149,6 +149,19 @@ async function refresh(){
    const decide=async value=>{if(!checked.checked)throw Error("Review required");ok(await api.from("professional_case_decisions").insert({org_id:org,case_id:row.id,decision:value,entire_case_reviewed:true}));await refresh();};
    button("Hold for review",()=>decide("hold"));
    if(row.outcome!=="mixed")button("Approve unsigned draft",()=>decide("approved_for_unsigned_draft"));
+  }else if(decision.decision==="hold"){
+   add(prepare,"p","This saved case is on hold. No document or payment was created.");
+   if(row.court_id==="oh-wood-common-pleas"&&["conviction","dismissal","not_guilty"].includes(row.outcome)){
+    const label=add(prepare,"label",""),confirmed=document.createElement("input");confirmed.type="checkbox";label.append(confirmed,document.createTextNode(" I have completed a renewed review of the entire case, final charges, eligibility and filing requirements."));
+    button("Complete review & prepare application",async()=>{
+     if(!confirmed.checked)throw Error("Renewed review required");
+     const session=ok(await api.auth.getSession()).session;if(!session?.access_token)throw Error("Session unavailable");
+     const response=await fetch("/api/professional/case/"+encodeURIComponent(row.id)+"/resume-review",{method:"POST",headers:{Authorization:"Bearer "+session.access_token,"Content-Type":"application/json"},body:JSON.stringify({entire_case_reviewed:true}),cache:"no-store"});
+     if(!response.ok||(await response.json()).decision!=="approved_for_unsigned_draft")throw Error("Review not saved");
+     packetCaseId=row.id;await refresh();
+    });
+   }else add(prepare,"p","This court or outcome requires separate review before a supported packet can be prepared.");
+   add(preview,"p","Preview will be available after the renewed review.");add(payment,"p","No checkout is available while the case is on hold.");
   }else if(decision.decision==="approved_for_unsigned_draft"){
    card=payment;
    add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". File directly with the court; no payment collected here.");
@@ -175,13 +188,56 @@ async function refresh(){
     }catch{mailStatus.textContent="Mailing status unavailable. Do not pay again."}})();
    }
    card=prepare;
-   button("Generate and save review draft",async()=>{
-    const token=epoch;
+   let draftReviewed=false,reviewSnapshot=null,signatureInk=false;
+   const currentDraft=async()=>{
     const [freshClient,freshCase,freshDecision]=await Promise.all([api.from("professional_clients").select("*").eq("id",client.id).single(),api.from("professional_cases").select("*").eq("id",row.id).single(),api.from("professional_case_decisions").select("*").eq("case_id",row.id).single()]);
-    const bytes=await renderProfessionalDraft({client:ok(freshClient),caseRow:ok(freshCase),decision:ok(freshDecision),today:new Date().toISOString().slice(0,10),PDFLib:window.PDFLib});
-    if(!active||token!==epoch||org!==orgId())return;
-    await saveGeneratedPacket(bytes,row.id,"review_draft",token,org);
-    await refresh();notice("Review draft saved in RecordWatch. Open it from the case’s saved packet library.");
+    return {client:ok(freshClient),caseRow:ok(freshCase),decision:ok(freshDecision),today:new Date().toISOString().slice(0,10),PDFLib:window.PDFLib};
+   };
+   const draftPages=add(preview,"div","");draftPages.className="professional-preview-pages";
+   const draftStatus=add(preview,"p","Generate the watermarked unsigned application to review both pages before signing.");draftStatus.setAttribute("role","status");
+   let loadingDraft=false;
+   const generateDraft=async()=>{
+    if(loadingDraft)return;loadingDraft=true;draftReviewed=false;reviewSnapshot=null;draftPages.replaceChildren();draftStatus.textContent="Preparing both official form pages…";
+    const token=epoch;
+    try{
+     const fresh=await currentDraft(),snapshot=JSON.stringify(prepareProfessionalDraftData(fresh.client,fresh.caseRow,fresh.decision,fresh.today));
+     const bytes=await renderProfessionalDraft(fresh);
+     if(!active||token!==epoch||org!==orgId())return;
+     const doc=await saveGeneratedPacket(bytes,row.id,"review_draft",token,org);
+     const session=ok(await api.auth.getSession()).session;if(!session?.access_token)throw Error("Session unavailable");
+     for(const page of [1,2]){
+      const response=await fetch("/api/professional/recordwatch/generated-packet/"+encodeURIComponent(doc.id)+"/preview/"+page,{headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"});
+      if(!response.ok)throw Error("Preview unavailable");const blob=await response.blob();
+      if(!active||token!==epoch||org!==orgId())return;if(blob.type!=="image/png")throw Error("Unexpected preview format");
+      const url=URL.createObjectURL(blob),img=document.createElement("img");img.alt="Watermarked unsigned application — page "+page;img.src=url;draftPages.append(img);try{await img.decode();}finally{URL.revokeObjectURL(url);}
+     }
+     if(!active||token!==epoch||org!==orgId())return;
+     reviewSnapshot=snapshot;draftReviewed=true;draftStatus.textContent="Both official pages loaded and saved in RecordWatch. Review them before signing.";
+    }catch{draftPages.replaceChildren();draftStatus.textContent="Unable to prepare or display the application. Retry; check the saved case details.";throw Error("Draft preview unavailable");}finally{loadingDraft=false;}
+   };
+   button("Generate & preview application",generateDraft);
+   add(prepare,"h4","Applicant signature");
+   add(prepare,"p","The applicant must personally draw their own signature. Do not sign for another person. Review both official pages before signing.");
+   const canvas=document.createElement("canvas");canvas.width=640;canvas.height=160;canvas.style.cssText="width:100%;max-width:640px;height:160px;border:1px solid #cfd9ea;background:#fff;border-radius:8px;touch-action:none";canvas.setAttribute("aria-label","Draw your actual applicant signature");prepare.append(canvas);
+   const pen=canvas.getContext("2d");pen.strokeStyle="#142b49";pen.lineWidth=3;pen.lineCap="round";pen.lineJoin="round";let drawing=false,last=null;
+   const point=e=>{const rect=canvas.getBoundingClientRect();return [(e.clientX-rect.left)*canvas.width/rect.width,(e.clientY-rect.top)*canvas.height/rect.height];};
+   canvas.addEventListener("pointerdown",e=>{if(!e.isPrimary||e.button!==0)return;e.preventDefault();drawing=true;last=point(e);canvas.setPointerCapture(e.pointerId);});
+   canvas.addEventListener("pointermove",e=>{if(!drawing||!e.isPrimary)return;e.preventDefault();const next=point(e);if(Math.hypot(next[0]-last[0],next[1]-last[1])>0.5){pen.beginPath();pen.moveTo(...last);pen.lineTo(...next);pen.stroke();signatureInk=true;last=next;}});
+   for(const event of ["pointerup","pointercancel","lostpointercapture"])canvas.addEventListener(event,()=>{drawing=false;last=null;});
+   button("Clear signature",async()=>{pen.clearRect(0,0,canvas.width,canvas.height);signatureInk=false;});
+   const signatureLabel=add(prepare,"label",""),signatureConsent=document.createElement("input");signatureConsent.type="checkbox";signatureLabel.append(signatureConsent,document.createTextNode(" I confirm that the applicant personally drew this signature, reviewed both official pages and intends to sign this application."));
+   button("Sign & preview my application",async()=>{
+    if(!signatureInk||!signatureConsent.checked||!draftReviewed||!reviewSnapshot){draftStatus.textContent="Generate and review both pages, draw the applicant signature, and confirm the signature statement.";throw Error("Signature and preview required");}
+    const token=epoch,fresh=await currentDraft();
+    if(JSON.stringify(prepareProfessionalDraftData(fresh.client,fresh.caseRow,fresh.decision,fresh.today))!==reviewSnapshot){draftReviewed=false;throw Error("Record details changed; regenerate preview");}
+    const png=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));if(!png)throw Error("Signature unavailable");
+    const applicantSignature=new Uint8Array(await png.arrayBuffer());
+    const bytes=await renderProfessionalDraft({...fresh,signatureReady:true,applicantSignature});
+    if(!active||token!==epoch||org!==orgId()||!signatureConsent.checked||!signatureInk||!draftReviewed)return;
+    const session=ok(await api.auth.getSession()).session;if(!session?.access_token)throw Error("Session unavailable");
+    const response=await fetch("/api/professional/signed-review",{method:"POST",headers:{Authorization:"Bearer "+session.access_token,"Content-Type":"application/pdf","x-professional-case-id":row.id,"x-professional-signature-attested":"yes"},body:bytes,cache:"no-store"});
+    if(!response.ok||(await response.json()).ok!==true)throw Error("Signed application not saved");
+    pen.clearRect(0,0,canvas.width,canvas.height);signatureInk=false;packetCaseId=row.id;await refresh();
    });
    const signLabel=add(card,"label","");const signConsent=document.createElement("input");signConsent.type="checkbox";signLabel.append(signConsent,document.createTextNode(" I reviewed the official form and will obtain the required applicant signature and date before filing."));
    button("Download official form for signature",async()=>{
@@ -195,7 +251,7 @@ async function refresh(){
     await refresh();notice("Unsigned application downloaded and saved in RecordWatch. Obtain the applicant signature before filing.");
    });
    add(card,"h4","Signed document review");
-   add(card,"p","Obtain the actual applicant signature on the official form outside this tool. Upload the exact signed official two-page PDF; watermarked review drafts are not accepted.");
+   add(card,"p","Alternatively obtain the actual applicant signature outside this tool and upload the exact signed official two-page PDF. Watermarked review drafts are not accepted.");
    const file=document.createElement("input");file.type="file";file.accept="application/pdf";file.setAttribute("aria-label","Signed two-page official PDF");card.append(file);
    const label=add(card,"label","");const attested=document.createElement("input");attested.type="checkbox";label.append(attested,document.createTextNode(" I attest that the applicant signed this exact official application."));
    const auth=async()=>{const session=ok(await api.auth.getSession()).session;if(!session?.access_token)throw Error("Session unavailable");return {Authorization:"Bearer "+session.access_token};};
@@ -221,7 +277,11 @@ async function refresh(){
    }
    const rowDocs=documents.filter(x=>x.case_id===row.id);
    const rowReviews=signedReviews.filter(x=>x.case_id===row.id);
-   if(!rowDocs.length)add(card,"p","Upload the signed application in Step 1. The actual two-page preview will be available here.");
+   if(!rowDocs.length){
+    add(card,"p","Sign the reviewed application in Step 1, or upload an externally signed PDF. The signed two-page preview will appear here.");
+    loadCurrentPreview=generateDraft;
+    if(packetCaseId===row.id)void generateDraft().catch(()=>{});
+   }
    for(const doc of rowDocs){
     add(card,"p",(doc.signature_mode==="counsel_assumption_staging"?"Counsel assumption — not filing-ready · ":"Applicant-signed · ")+"PDF SHA-256: "+doc.sha256+" · "+(rowReviews.some(r=>r.document_id===doc.id)?"Reviewed":"Awaiting exact-document review"));
     let downloaded=false;
