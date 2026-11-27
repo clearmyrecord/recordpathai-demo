@@ -104,24 +104,28 @@ test("professional filing packet follows consumer preparation, preview and check
  assert.doesNotMatch(js,/localStorage|sessionStorage/);
 });
 
-test("held professional cases have an explicit renewed-review action, not a dead end",()=>{
+test("held professional cases resume review in the consumer-style signed submission",()=>{
  const js=read("js/professional-practice.js"),server=read("src/professional-signed-review.js");
- assert.match(js,/decision\.decision==="hold"/);
- assert.match(js,/Complete review & prepare application/);
- assert.match(js,/if\(!confirmed\.checked\)throw Error/);
+ assert.match(js,/current\?\.decision==="hold"/);
+ assert.match(js,/await confirmCaseReview\(\)/);
+ assert.match(js,/!contactConfirmed\.checked\|\|!caseReviewed\.checked/);
  assert.match(server,/req\.body\?\.entire_case_reviewed!==true/);
  assert.match(server,/decision=eq\.hold/);
  assert.match(server,/attorney_id=eq\."\+ctx\.user\.id/);
  assert.match(server,/!\["conviction","dismissal","not_guilty"\]\.includes\(c\.outcome\)/);
 });
-test("professional applicant signature is gated by both draft pages and explicit applicant consent",()=>{
- const js=read("js/professional-practice.js"),server=read("src/professional-signed-review.js");
- assert.match(js,/Generate & preview application/);
- assert.match(js,/draftReviewed=true/);
- assert.match(js,/!signatureInk\|\|!signatureConsent\.checked\|\|!draftReviewed/);
- assert.match(js,/!==reviewSnapshot/);
+test("professional Step 1 submits the real signature directly and automatically loads the signed Step 2 preview",()=>{
+ const js=read("js/professional-practice.js"),consumer=read("packet.html"),server=read("src/professional-signed-review.js");
+ for(const label of ["Prepare My Real Signed Packet for Private Review","Draw your signature below","Confirm My Reviewed Pages Before Payment","Choose how your approved packet is fulfilled"]){assert.ok(consumer.includes(label));assert.ok(js.includes(label));}
+ assert.doesNotMatch(js,/Approve unsigned draft|Generate & preview application|draftReviewed/);
+ assert.match(js,/!signatureInk\|\|!signatureConsent\.checked\|\|!contactConfirmed\.checked\|\|!caseReviewed\.checked/);
+ assert.match(js,/!==shownSnapshot/);
  assert.match(js,/signatureReady:true,applicantSignature/);
  assert.match(js,/x-professional-signature-attested/);
+ assert.match(js,/Signed packet saved\. Loading Step 2 preview/);
+ assert.match(js,/void loadPreview\(\)\.catch/);
+ assert.match(js,/digitalChoice=deliveryOption\("digital"/);
+ assert.match(js,/if\(!checkoutReady\)/);
  assert.match(server,/generated-packet\/:id\/preview\/:page/);
  assert.match(server,/kind=eq\.review_draft/);
  assert.match(server,/digest\(bytes\)!==d\.sha256/);
