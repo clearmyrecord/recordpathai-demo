@@ -2,12 +2,16 @@ import {registerProfessionalBillingRoutes} from "./professional-billing-sandbox.
 import {createHash} from "node:crypto";
 import {isOfficialWoodConvictionFormPair,isOfficialWoodDismissalFormPair,normalizeWoodFormHeading} from "./wood-form-pages.js";
 const HOST="ckrqmlnckhagskpumjbh.supabase.co";
+const PRODUCTION_HOST="pfyxjhdlqgpzzzdssqpk.supabase.co";
 const META="id,org_id,case_id,attorney_id,sha256,page_count,attorney_signature_attested,created_at,signature_mode,counsel_name,counsel_bar_number";
 export const PROFESSIONAL_PDF_MAX=2097152;
 const uuid=v=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const digest=b=>createHash("sha256").update(b).digest("hex");
 export function professionalStagingReady(config,publicConfig){
  try{return new URL(config.url).origin==="https://"+HOST&&new URL(publicConfig.url).origin==="https://"+HOST&&Boolean(config.key&&publicConfig.anonKey);}catch{return false;}
+}
+export function professionalProductionReady(config,publicConfig){
+ try{return new URL(config.url).origin==="https://"+PRODUCTION_HOST&&new URL(publicConfig.url).origin==="https://"+PRODUCTION_HOST&&Boolean(config.key&&publicConfig.anonKey);}catch{return false;}
 }
 export async function validateProfessionalSignedPdf(bytes,outcome,parse,counsel=null){
  if(!Buffer.isBuffer(bytes)||bytes.length<500||bytes.length>PROFESSIONAL_PDF_MAX||bytes.subarray(0,5).toString()!=="%PDF-"||!bytes.subarray(-2048).includes(Buffer.from("%%EOF")))throw Error("Invalid PDF");
@@ -30,7 +34,8 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
  async function context(req,res){
   res.setHeader("Cache-Control","no-store, private");
   const config=supabaseRestConfig(),pub=publicSupabaseConfig();
-  if(!professionalStagingReady(config,pub)){res.status(503).json({ok:false,error:"Professional review is restricted to staging."});return null;}
+  const mode=professionalStagingReady(config,pub)?"staging":professionalProductionReady(config,pub)?"production":null;
+  if(!mode){res.status(503).json({ok:false,error:"Professional review configuration unavailable."});return null;}
   const user=await requireApiUser(req,res);if(!user)return null;
   const token=getBearerToken(req);if(!uuid(user.id)||!token){res.status(401).end();return null;}
   async function rest(table,query,{service=false,body}={}){
@@ -46,9 +51,13 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
    const [d]=await rest("professional_case_decisions","select=id&case_id=eq."+caseId+"&attorney_id=eq."+user.id+"&decision=eq.approved_for_unsigned_draft&entire_case_reviewed=eq.true&limit=1");
    return d?c:null;
   }
-  return {user,rest,ownedCase};
+  return {user,rest,ownedCase,mode};
  }
- registerProfessionalBillingRoutes(app,{context});
+ registerProfessionalBillingRoutes(app,{context:async(req,res)=>{
+  const ctx=await context(req,res);if(!ctx)return null;
+  if(ctx.mode!=="staging"){res.status(503).json({ok:false,error:"Sandbox subscription routes are staging-only."});return null;}
+  return ctx;
+ }});
  app.post("/api/professional/signed-review",express.raw({type:"application/pdf",limit:"2mb"}),async(req,res)=>{
   try{
    const ctx=await context(req,res);if(!ctx)return;
@@ -57,6 +66,7 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
    if(req.get("x-professional-signature-attested")!=="yes")return res.status(400).json({ok:false,error:"Attest that the identified signer signed the official document."});
    const mode=req.get("x-professional-signature-mode")||"applicant_external";
    if(!["applicant_external","counsel_assumption_staging"].includes(mode))return res.status(400).end();
+   if(ctx.mode==="production"&&mode!=="applicant_external")return res.status(409).json({ok:false,error:"Court acceptance of attorney-only signing is not verified; no production counsel-assumption signature."});
    let counsel=null;
    if(mode==="counsel_assumption_staging"){
     [counsel]=await ctx.rest("professional_counsel_profiles","select=org_id,attorney_id,full_name,ohio_bar_number,verified_at&org_id=eq."+c.org_id+"&attorney_id=eq."+ctx.user.id+"&limit=1");
