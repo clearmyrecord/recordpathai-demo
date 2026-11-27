@@ -27,6 +27,17 @@ export function verifiedProfessionalMailPayment(s,o){
  const pi=s?.payment_intent,c=pi?.latest_charge;
  return Boolean(o&&sessionId(s?.id)&&s.id===o.stripe_session_id&&s.livemode===true&&s.mode==="payment"&&s.status==="complete"&&s.payment_status==="paid"&&s.currency==="usd"&&s.amount_subtotal===subtotal(o)&&Number.isSafeInteger(s.amount_total)&&s.amount_total>=subtotal(o)&&matches(s,o)&&pi?.livemode===true&&pi.status==="succeeded"&&pi.currency==="usd"&&pi.amount===s.amount_total&&pi.amount_received===s.amount_total&&c?.livemode===true&&c.paid===true&&c.status==="succeeded"&&c.payment_intent===pi.id&&c.currency==="usd"&&c.amount===s.amount_total&&c.amount_captured===s.amount_total&&c.amount_refunded===0&&c.refunded===false&&c.disputed===false);
 }
+export async function professionalVerifiedEventKeys(rest,o,consentAt){
+ const keys=[];
+ let eventCursor=null;
+ while(true){
+  const events=await rest("professional_verified_court_events",{query:"?case_id=eq."+o.case_id+"&org_id=eq."+o.org_id+"&attorney_id=eq."+o.user_id+"&verified_at=gte."+encodeURIComponent(consentAt)+"&select=id&order=id.asc&limit=30"+(eventCursor?"&id=gt."+encodeURIComponent(eventCursor):"")});
+  if(!Array.isArray(events)||events.some(e=>!uuid(e.id)))throw Error("Invalid verified event page");
+  for(const e of events){if(eventCursor&&e.id<=eventCursor)throw Error("Invalid verified event cursor");keys.push("court:"+e.id);eventCursor=e.id;}
+  if(events.length<30)break;
+ }
+ return keys;
+}
 export function registerProfessionalMailing(app,{express,context,rest,config,stripe,requireOperationsKey,lobBankVerified,env=process.env,network=fetch}){
  const table="professional_mail_orders";
  const get=async(t,q)=>(await rest(t,{query:"?"+q}))[0]||null;
@@ -241,14 +252,7 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
     const p=await preferences(o);if(!p||!p.email_enabled&&!p.sms_enabled)continue;
     const recipient=await verifiedRecipient(o.user_id);
     const keys=["payment_confirmed",...(o.status==="submitted_to_lob"?["mail_submitted"]:[])];
-    let eventCursor=null;
-    while(true){
-     const events=await rest("professional_verified_court_events",{query:"?case_id=eq."+o.case_id+"&org_id=eq."+o.org_id+"&attorney_id=eq."+o.user_id+"&verified_at=gte."+encodeURIComponent(p.consent_at)+"&select=id&order=id.asc&limit=30"+(eventCursor?"&id=gt."+encodeURIComponent(eventCursor):"")});
-     if(!Array.isArray(events)||events.some(e=>!uuid(e.id)))throw Error("Invalid verified event page");
-     keys.push(...events.map(e=>"court:"+e.id));
-     if(events.length<30)break;
-     const next=events.at(-1).id;if(eventCursor&&next<=eventCursor)throw Error("Invalid verified event cursor");eventCursor=next;
-    }
+    keys.push(...await professionalVerifiedEventKeys(rest,o,p.consent_at));
     for(const key of keys)for(const channel of ["email","sms"]){
      const current=await preferences(o);
      if(!current||channel==="email"&&(!current.email_enabled||!recipient.email||current.email!==recipient.email)||channel==="sms"&&(!current.sms_enabled||!recipient.phone||current.phone!==recipient.phone||await suppressed(recipient.phone)))continue;
