@@ -565,7 +565,7 @@ app.get("/api/operator/packet/review-queue",async(req,res)=>{
         const rows=await supabaseRest("packet_releases",{query:"?case_id=eq."+encodeURIComponent(d.case_id)+"&user_id=eq."+encodeURIComponent(d.user_id)+"&select=status,signed_pdf_sha256,case_snapshot_sha256&limit=1"});
         const release=Array.isArray(rows)?rows[0]:null;
         if(release?.status==="approved"&&release.signed_pdf_sha256===source.signedPdfSha&&release.case_snapshot_sha256===source.caseSnapshotSha)continue;
-        pending.push({caseId:d.case_id,userId:d.user_id,submittedAt:d.private_review_authorized_at,pageCount:source.pageCount});
+        pending.push({caseId:d.case_id,userId:d.user_id,submittedAt:d.private_review_authorized_at,pageCount:source.pageCount,signedPdfSha:source.signedPdfSha,caseSnapshotSha:source.caseSnapshotSha});
       }catch{/* Stale or invalid drafts cannot be released. */}
     }
     return res.json({ok:true,pending});
@@ -1841,6 +1841,7 @@ async function packetReleaseStatus(userId,caseId,deliveryMode="mail") {
     if(!review && !customerDismissalReviewAllowed(facts)){
       const quote=quotePacketPricing({state:facts.savedCase.case_state,county:facts.savedCase.county,
         courtType:facts.savedCase.court_type,formType:expectedFormType(facts.savedCase,facts.charges)});
+      if(deliveryMode==="digital"&&Number.isSafeInteger(quote.courtFeeCents)){quote.totalCents=5000;quote.courtFeeCollectedCents=0;quote.directCourtPaymentRequired=quote.courtFeeCents>0;}
       try{
         await savedDraftPreviewForCase(userId,caseId);
         return {ready:false,reviewState:"pending_review",missing:["Your signed application is saved and awaiting independent review. No action is required until review is complete."],quote,profileId:quote.profileId};
