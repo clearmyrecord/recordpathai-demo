@@ -141,6 +141,25 @@ function recordRemovalButton(parent,{kind,row,org,seq,archived=false}){
  });
  return btn;
 }
+// Archive recovery must not be limited to the newest 100 dashboard parents.
+async function loadArchivedRecords({archiveTable,parentTable,key,label,org,seq}){
+ const records=[];let cursor=null;
+ while(active&&seq===epoch&&org===orgId()){
+  let q=api.from(archiveTable).select(key).eq("org_id",org).order(key,{ascending:true}).limit(100);
+  if(cursor)q=q.gt(key,cursor);
+  const page=ok(await q);
+  if(!active||seq!==epoch||org!==orgId())return [];
+  if(!page.length)break;
+  const ids=page.map(row=>row[key]),last=ids.at(-1);
+  if(ids.some(id=>!uuid(id))||(cursor&&last<=cursor))throw Error("Invalid archive cursor");
+  const parents=ok(await api.from(parentTable).select("id,"+label).eq("org_id",org).in("id",ids));
+  if(!active||seq!==epoch||org!==orgId())return [];
+  if(parents.length!==ids.length||ids.some(id=>!parents.some(p=>p.id===id)))throw Error("Archived record unavailable");
+  records.push(...parents);cursor=last;
+  if(page.length<100)break;
+ }
+ return records;
+}
 async function refresh(){
  if(!active)return;
  const seq=++epoch,org=orgId();
@@ -160,7 +179,11 @@ async function refresh(){
  if(seq!==epoch||!active||org!==orgId())return;
  const allClients=ok(a),allCases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0],enrollments=ok(enrollRows),tasks=ok(taskRows),verified=ok(verifiedRows),observations=ok(observedRows),generated=ok(generatedRows);
  const archiveRows=async(table,key,rows)=>rows.length?ok(await api.from(table).select(key).eq("org_id",org).in(key,rows.map(r=>r.id))):[];
- const [clientArchives,caseArchives]=await Promise.all([archiveRows("professional_client_archives","client_id",allClients),archiveRows("professional_case_archives","case_id",allCases)]);
+ const [clientArchives,caseArchives]=await Promise.all([archiveRows("professional_client_archives","client_id",[...allClients,...(routeClient?[routeClient]:[])]),archiveRows("professional_case_archives","case_id",allCases)]);
+ const [archivedClients,archivedCases]=!routeStep?await Promise.all([
+  loadArchivedRecords({archiveTable:"professional_client_archives",parentTable:"professional_clients",key:"client_id",label:"full_name",org,seq}),
+  loadArchivedRecords({archiveTable:"professional_case_archives",parentTable:"professional_cases",key:"case_id",label:"case_number",org,seq})
+ ]):[[],[]];
  if(seq!==epoch||!active||org!==orgId())return;
  const hiddenClients=new Set(clientArchives.map(r=>r.client_id)),hiddenCases=new Set(caseArchives.map(r=>r.case_id));
  const clients=allClients.filter(c=>!hiddenClients.has(c.id)||routeStep===3&&routeCase?.client_id===c.id),cases=allCases.filter(c=>!hiddenCases.has(c.id)||routeStep===3&&routeCase?.id===c.id);
@@ -168,8 +191,8 @@ async function refresh(){
  const archivedList=$("professional-archived-records");if(archivedList)archivedList.remove();
  if(!routeStep){
   const archived=add($("saved-cases"),"details","");archived.id="professional-archived-records";archived.className="professional-case-panel professional-archived-records";
-  add(archived,"summary","Archived records ("+(clientArchives.length+caseArchives.length)+")");add(archived,"p","Archived records are retained and can be restored. Archiving does not cancel orders, alerts or court filings.");
-  for(const [kind,rows,hidden] of [["client",allClients,hiddenClients],["case",allCases,hiddenCases]])for(const row of rows.filter(r=>hidden.has(r.id))){
+  add(archived,"summary","Archived records ("+(archivedClients.length+archivedCases.length)+")");add(archived,"p","Archived records are retained and can be restored. Archiving does not cancel orders, alerts or court filings.");
+  for(const [kind,rows] of [["client",archivedClients],["case",archivedCases]])for(const row of rows){
    const item=add(archived,"div","");item.className="professional-archive-row";add(item,"strong",kind==="client"?row.full_name:"Case "+row.case_number);recordRemovalButton(item,{kind,row,org,seq,archived:true});
   }
  }
