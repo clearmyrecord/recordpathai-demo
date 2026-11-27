@@ -89,7 +89,7 @@ test("professional and consumer charge intake ask for only one completion date",
 
 test("professional filing packet follows consumer preparation, preview and checkout layout",()=>{
  const js=read("js/professional-practice.js"),consumer=read("packet.html"),css=read("assets/professional-modern.css"),server=read("src/professional-signed-review.js");
- for(const label of ["Your Filing Packet","Your packet and court fees","Preview Your Actual Application (View Only)","Checkout After Independent Approval"]){assert.ok(consumer.includes(label));assert.ok(js.includes(label));}
+ for(const label of ["Your Filing Packet","Your packet and court fees","Preview Your Actual Application (View Only)","Checkout After Independent Approval"]){assert.ok(consumer.includes(label));assert.ok((js+read("professional-packet.html")).includes(label));}
  assert.match(js,/professional-packet-mode/);
  assert.match(css,/\.professional-packet-mode #cases>\.saved-case-card:not\(\.packet-focused\)/);
  assert.match(js,/for\(const page of \[1,2\]\)/);
@@ -167,4 +167,19 @@ test("Add New Case opens Step 2 directly, while new clients start in Step 1",()=
  assert.match(js,/picker\.addEventListener\("change",\(\)=>navigateWorkflow\(2,/);
  assert.match(js,/\$\("case-save"\)\.disabled=!routeClient/);
  assert.match(js,/Add a new client in Step 1/);
+});
+
+test("professional packet mirrors the consumer sections without consumer account scripts",()=>{
+ const js=read("js/professional-practice.js"),consumer=read("packet.html"),css=read("assets/professional-modern.css"),html=read("professional-packet.html");
+ const headings=["Eligibility Status","Intake Summary","All Saved Offenses","Generate Packet"];
+ let previous=-1;
+ for(const heading of headings){assert.ok(consumer.includes(heading));const pos=js.indexOf('packetCard("'+heading+'")');assert.ok(pos>previous);previous=pos;}
+ for(const label of ["Relief Type","Required Waiting Period","Estimated Eligible Date","RecordWatch background tracking","Missing requirements","Selected Record","Residence State","Current packet record"])assert.ok(js.includes(label));
+ assert.match(js,/row\.record_details\.charges/);
+ assert.match(js,/charge\.final_disposition/);
+ assert.match(js,/client\.line2/);
+ assert.match(js,/watchEnabled\?"Enabled":"Not activated"/);
+ assert.match(css,/\.professional-date-grid\{display:grid;grid-template-columns:repeat\(4/);
+ assert.match(css,/\.professional-summary-grid/);
+ assert.doesNotMatch(html,/js\/user-store\.js/);
 });
