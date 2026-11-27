@@ -63,3 +63,13 @@
 .rp-professional #partners .home-bottom-card .home-eyebrow{margin-bottom:12px}
 .rp-professional #partners .home-bottom-card .home-btn{white-space:normal;text-align:center}
 .rp-professional .home-hero .home-note strong{color:var(--text)}
+
+/* Match consumer saved-case cards while keeping professional-specific case actions scoped. */
+.rp-professional .professional-main #cases .saved-case-card{border:1px solid var(--line);border-radius:28px;padding:24px;background:linear-gradient(180deg,#fff,#f8fbff);}
+.rp-professional .professional-main #cases .saved-case-card h3{margin:0 0 8px}
+.rp-professional .professional-main #cases .saved-case-header p{margin:0 0 6px}
+.rp-professional .professional-main .saved-case-actions button.btn:not(.menu-toggle){background:#16468f;color:#fff;border-color:#16468f;box-shadow:none;margin:0}
+.rp-professional .professional-main .saved-case-actions button.btn.secondary:not(.menu-toggle){background:#fff;color:#16468f;border-color:var(--line)}
+.rp-professional .professional-main .professional-case-panel{border-top:1px solid var(--line);padding:16px 0;margin-top:8px}
+.rp-professional .professional-main .professional-case-panel>summary{font-weight:800;cursor:pointer;color:var(--blue-dark)}
+.rp-professional .professional-main #client-intake,.rp-professional .professional-main #case-intake{scroll-margin-top:24px}
