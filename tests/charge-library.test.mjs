@@ -34,3 +34,8 @@ test("consumer and professional intake share lookup with manual entry and no inf
  assert.doesNotMatch(script,/data-field="(?:degree|final_disposition|disposition_date|discharge_date|isTraffic|isSexOffense)"/);
  assert.match(read("charge-library.html"),/Other states currently have general names only/);
 });
+
+test("pressing Enter in charge search cannot submit the surrounding case form",()=>{
+ const script=read("js/charge-library.js");
+ assert.match(script,/input\.addEventListener\("keydown",event=>\{if\(event\.key==="Enter"\)\{event\.preventDefault\(\);event\.stopPropagation\(\);render\(\);\}\}\)/);
+});
