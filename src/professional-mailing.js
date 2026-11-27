@@ -27,7 +27,7 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
  const order=caseId=>get(table,"case_id=eq."+caseId+"&limit=1");
  const change=async(o,filter,body)=>await rest(table,{method:"PATCH",query:"?case_id=eq."+o.case_id+"&"+filter,body});
  const send=(res,code,error)=>res.status(code).json({ok:false,error});
- const enabled=async()=>Boolean(stripe&&env.STRIPE_SECRET_KEY?.startsWith("sk_live_")&&env.SUPABASE_SERVICE_ROLE_KEY&&config()?.url==="https://pfyxjhdlqgpzzzdssqpk.supabase.co"&&env.RECORDPATH_PROFESSIONAL_MAILING_ENABLED==="true"&&requireLobLiveDispatch(env)&&findCourtProfile(profileInput)?.lobChecksAuthorized&& (await get("packet_dispatch_controls","id=eq.true&select=live_dispatch_enabled"))?.live_dispatch_enabled===true&&await lobBankVerified());
+ const enabled=async()=>Boolean(stripe&&env.STRIPE_SECRET_KEY?.startsWith("sk_live_")&&env.SUPABASE_SERVICE_ROLE_KEY&&config()?.url==="https://pfyxjhdlqgpzzzdssqpk.supabase.co"&&env.RECORDPATH_PROFESSIONAL_MAILING_ENABLED==="true"&&env.RECORDPATH_ENABLE_AUTOMATIC_FULFILLMENT==="true"&&Boolean(env.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_"))&&requireLobLiveDispatch(env)&&findCourtProfile(profileInput)?.lobChecksAuthorized&& (await get("packet_dispatch_controls","id=eq.true&select=live_dispatch_enabled"))?.live_dispatch_enabled===true&&await lobBankVerified());
  async function facts(caseId,docId){
   if(!uuid(caseId)||!uuid(docId))throw Error("Invalid case or document");
   const c=await get("professional_cases","id=eq."+caseId+"&select=id,org_id,attorney_id,client_id,court_id,outcome,case_number&limit=1");
@@ -84,7 +84,7 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
   try{
    const {d}=await facts(req.params.caseId,req.params.documentId);
    const row=await get("professional_signed_documents","id=eq."+d.id+"&select=pdf_bytes,sha256&limit=1");
-   if(typeof row?.pdf_bytes!=="string"||!/^\\\\x[0-9a-f]+$/i.test(row.pdf_bytes)||row.pdf_bytes.length>4194306)return send(res,409,"Exact signed document unavailable.");
+   if(typeof row?.pdf_bytes!=="string"||!row.pdf_bytes.startsWith("\\x")||!/^[0-9a-f]+$/i.test(row.pdf_bytes.slice(2))||row.pdf_bytes.length>4194306)return send(res,409,"Exact signed document unavailable.");
    const bytes=Buffer.from(row.pdf_bytes.slice(2),"hex");
    if(bytes.length<500||digest(bytes)!==d.sha256||row.sha256!==d.sha256)return send(res,409,"Exact signed document mismatch.");
    res.setHeader("X-Content-Type-Options","nosniff");res.setHeader("Content-Disposition",'attachment; filename="professional-signed-application.pdf"');
