@@ -57,7 +57,8 @@ test("unpaid and paid provisioning uses actual Stripe account and service-only R
  res=await invoke("checkout",{...consent,"x-professional-account-id":"00000000-0000-4000-8000-000000000999"});assert.equal(res.statusCode,403);assert.equal(creates,0);
  res=await invoke("checkout",consent);assert.equal(res.statusCode,200);assert.equal(res.body.mode,"live");assert.equal(creates,1);assert.equal(checkout,1);
  res=await invoke("refresh");assert.equal(res.body.active,false);assert.equal(res.body.test_access,false);assert.equal(leaseCalls,1);
- testAccess=true;res=await invoke("refresh");assert.equal(res.body.active,true);assert.equal(res.body.test_access,true);assert.equal(res.body.subscription_exists,false);assert.equal(leaseCalls,1);testAccess=false;
+ testAccess=true;res=await invoke("refresh");assert.equal(res.body.active,true);assert.equal(res.body.test_access,true);assert.equal(res.body.subscription_exists,false);assert.equal(leaseCalls,1);
+ res=await invoke("checkout",consent);assert.equal(res.statusCode,409);assert.match(res.body.error,/No subscription payment is required/);assert.equal(checkout,1);assert.equal(lock,null);testAccess=false;
  res=await invoke("checkout",consent);assert.equal(res.statusCode,200);assert.equal(checkout,1);
  res=await invoke("checkout",{...consent,"x-professional-plan":"firm"});assert.equal(res.statusCode,200);assert.equal(row.plan,"firm");assert.equal(expired,1);assert.equal(checkout,2);assert.equal(creates,1);
  res=await invoke("checkout",consent);assert.equal(res.statusCode,200);assert.equal(row.plan,"solo");assert.equal(expired,2);assert.equal(checkout,3);assert.equal(lock,null);
