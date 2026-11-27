@@ -219,7 +219,7 @@ async function refresh(){
   const flags=result?.flags||[];
   if(flags.length){const list=add(banner,"ul","");for(const flag of flags)add(list,"li",flag);}
   const dates=add(screening,"div","");dates.className="professional-date-grid";
-  for(const [label,value] of [["Relief Type",result?.reliefType], [nonconviction?"Dismissal / disposition date":"Sentence completion / discharge date",result?fmtDate(result.completionDate):"Review required"],["Required Waiting Period",result?.waitingPeriodText],["Estimated Eligible Date",result?.formattedEligibilityDate]]){
+  for(const [label,value] of [["Relief Type",result?.reliefType], [row.outcome==="dismissal"?"Dismissal Disposition Date":nonconviction?"Disposition Date":"Sentence completion / discharge date",result?fmtDate(result.completionDate):"Review required"],["Required Waiting Period",result?.waitingPeriodText],["Estimated Eligible Date",result?.formattedEligibilityDate]]){
    const box=add(dates,"div","");box.className="professional-date-box";add(box,"span",label);add(box,"strong",value||"Review required");
   }
   add(screening,"p",eligible?"Eligible now":result?.status||"More information needed").className="professional-meta-note";
@@ -238,7 +238,7 @@ async function refresh(){
   const charges=Array.isArray(row.record_details?.charges)&&row.record_details.charges.length?row.record_details.charges:[{charge_name:row.charge_name,charge_code:row.charge_code,degree:row.charge_level,disposition:outcomeLabel,disposition_date:row.disposition_date,discharge_date:row.final_discharge_date}];
   for(const [i,charge] of charges.entries()){const item=add(offenses,"article","");item.className="professional-offense-item";const head=add(item,"div","");head.className="professional-offense-head";add(head,"h3","Offense "+(i+1)+": "+(charge.charge_name||"Not entered"));if(i===0&&charges.length===1)add(head,"span","Current packet record").className="professional-record-tag";
    const grid=add(item,"div","");grid.className="professional-offense-grid";
-   for(const [label,value] of [["Case Number",row.case_number],["Statute",charge.charge_code],["Degree",charge.degree],["Outcome",charge.disposition||charge.outcome||(charges.length===1?outcomeLabel:"Not entered")],["Disposition Date",fmtDate(charge.disposition_date)],["Discharge Date",fmtDate(charge.discharge_date)],["Court",actualCourt],["County",detailFields.county]]){const line=add(grid,"div","");add(line,"strong",label+": ");line.append(document.createTextNode(value||"Not entered"));}
+   for(const [label,value] of [["Case Number",row.case_number],["Statute",charge.charge_code],["Degree",charge.degree],["Outcome",charge.final_disposition||charge.disposition||charge.outcome||(charges.length===1?outcomeLabel:"Not entered")],["Disposition Date",fmtDate(charge.disposition_date)],["Discharge Date",fmtDate(charge.discharge_date)],["Court",actualCourt],["County",detailFields.county]]){const line=add(grid,"div","");add(line,"strong",label+": ");line.append(document.createTextNode(value||"Not entered"));}
   }
   card=packetCard("Generate Packet");
   add(card,"p","RecordPathAI packet preparation: $0 — included with professional access. Applicable court fees are separate: "+(row.outcome==="conviction"?"$100 for a qualifying Wood County conviction":row.outcome==="mixed"?"Requires review":"$0 for qualifying Wood County dismissal or not-guilty cases")+".");
