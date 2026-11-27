@@ -2,7 +2,7 @@
 begin;
 create table public.professional_pilot_orgs (
  id uuid primary key default gen_random_uuid(),
- pilot_code text not null unique check (pilot_code ~ '^PRO-[A-Z0-9]{4,16}),
+ pilot_code text not null unique check (pilot_code ~ '^PRO-[A-Z0-9]{4,16}$'),
  active boolean not null default false,
  starts_at timestamptz not null default now(),
  ends_at timestamptz not null default (now()+interval '90 days'),
