@@ -20,6 +20,12 @@
   function renderTimeline(data){
     var steps=el("recordwatchFilingSteps");
     steps.replaceChildren();
+    if(window.RecordPathConsumerMailTracking){
+      window.RecordPathConsumerMailTracking.render(steps,data);
+      el("recordwatchFilingStatus").textContent=window.RecordPathConsumerMailTracking.label(data)+" — "+(data.summary||"");
+      el("recordwatchFilingReference").textContent="";
+      return;
+    }
     if(!Array.isArray(data.steps))return;
     data.steps.forEach(function(stage){
       var item=document.createElement("div");
@@ -72,7 +78,7 @@
       selectedOwner=owner;select.value=caseId;
       if(!caseId){status.textContent="Choose a saved case to view its packet.";return;}
       link.href="packet.html?caseId="+encodeURIComponent(caseId);link.hidden=false;
-      const response=await fetch("/api/packet/filing-status?case_id="+encodeURIComponent(caseId),{
+      const response=await fetch("/api/packet/filing-status?case_id="+encodeURIComponent(caseId)+"&live=1",{
         method:"GET",cache:"no-store",headers:{"Authorization":"Bearer "+token}
       });
       const data=await response.json().catch(()=>({}));

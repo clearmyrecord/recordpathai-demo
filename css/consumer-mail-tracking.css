@@ -1,0 +1,13 @@
+/* Shared case-level mailing tracking for consumer dashboards. */
+.consumer-mail-tracking{margin-top:1rem;border:1px solid #d6e1ef;border-radius:12px;padding:1rem;min-width:0;background:#f7faff}
+.consumer-mail-tracking>.case-status-badge{display:inline-block;margin:0 0 .75rem;white-space:normal;line-height:1.4}
+.consumer-mail-tracking details summary{cursor:pointer;font-weight:700;color:#173b65}
+.consumer-mail-tracking details[open] summary{margin-bottom:.75rem}
+.consumer-mail-tracking-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin:.8rem 0}
+.consumer-mail-tracking-grid>div{display:grid;gap:.3rem;padding:.75rem;background:#fff;border:1px solid #e1e8f1;border-radius:8px;overflow-wrap:anywhere}
+.consumer-mail-tracking-grid strong{font-size:.78rem;color:#526780}
+.consumer-mail-tracking .recordwatch-fulfillment-steps{margin:.75rem 0;grid-template-columns:1fr}
+.consumer-mail-tracking .recordwatch-fulfillment-stage{min-width:0}
+.consumer-mail-tracking ol{padding-left:1.3rem}
+.consumer-mail-tracking li{margin:.4rem 0;overflow-wrap:anywhere}
+.consumer-mail-tracking button{margin-top:.5rem}
