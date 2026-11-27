@@ -78,3 +78,28 @@ test("No draft is a guided Step 1 state, not a checkout error",()=>{
   assert.ok(submit.indexOf('result.ok!==true') < submit.indexOf('await openApprovedPacketPreview()'));
   assert.match(html,/Your signed packet was received\./);
 });
+
+test("a valid saved draft with no release is pending review, not a snapshot mismatch",()=>{
+ const status=server.split('async function packetReleaseStatus(')[1]?.split('function previewFailure(',1)[0];
+ assert.ok(status);
+ assert.match(status,/if\(!review && !customerDismissalReviewAllowed\(facts\)\)/);
+ assert.match(status,/await savedDraftPreviewForCase\(userId,caseId\)/);
+ assert.match(status,/ready:false,reviewState:"pending_review"/);
+ assert.match(status,/reviewState:error\?\.httpStatus===409\?"draft_required":"unavailable"/);
+ assert.match(status,/return evaluatePacketRelease/);
+ assert.match(html,/Signed application received — review pending/);
+ assert.match(html,/Check review status/);
+ const handler=html.split('if\(review.ready!==true\)')[1]||html.split('if(review.ready!==true)')[1];
+ assert.ok(handler);
+ assert.match(handler,/review.reviewState==="pending_review"/);
+});
+test("consumer operator review queue and PDF are private, unchanged and cannot create approval",()=>{
+ const queue=server.split('app.get("/api/operator/packet/review-queue"')[1]?.split('app.post("/api/operator/packet/release"',1)[0];
+ assert.ok(queue);
+ assert.equal((queue.match(/requireOperationsKey\(req,res\)/g)||[]).length,2);
+ assert.match(queue,/savedDraftPreviewForCase/);
+ assert.match(queue,/fetchExactApprovedPreviewPdf\(source\)/);
+ assert.match(queue,/fresh.signedPdfSha!==source.signedPdfSha/);
+ assert.match(queue,/fresh.caseSnapshotSha!==source.caseSnapshotSha/);
+ assert.doesNotMatch(queue,/method:"POST"|stripe\.checkout|api\.lob\.com/);
+});

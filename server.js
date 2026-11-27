@@ -469,6 +469,7 @@ app.get("/api/packet/checkout-readiness",async(req,res)=>{
     ok:ready,ready,
     missing,quote:result.quote,
     previewConfirmed:confirmed,
+    reviewState:ready?"ready":result.ready?"preview_required":result.reviewState||"blocked",
     profileId:result.profileId||null
   });
 });
@@ -549,6 +550,40 @@ app.get("/api/operator/packet/fingerprint",async(req,res)=>{
       caseFingerprint:caseReviewFingerprint(facts.savedCase,facts.charges),
       chargeCount:facts.charges.length});
   }catch(error){return res.status(409).json({ok:false,error:"Saved case cannot be reviewed."});}
+});
+// Private operator queue: locate submitted, unchanged PDFs that require review.
+// A queue entry is not a legal eligibility decision or payment authorization.
+app.get("/api/operator/packet/review-queue",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  res.setHeader("Cache-Control","no-store, private");
+  try{
+    const drafts=await supabaseRest("packet_drafts",{query:"?select=case_id,user_id,private_review_authorized_at&order=private_review_authorized_at.desc&limit=100"});
+    const pending=[];
+    for(const d of Array.isArray(drafts)?drafts:[]){
+      try{
+        const source=await savedDraftPreviewForCase(d.user_id,d.case_id);
+        const rows=await supabaseRest("packet_releases",{query:"?case_id=eq."+encodeURIComponent(d.case_id)+"&user_id=eq."+encodeURIComponent(d.user_id)+"&select=status,signed_pdf_sha256,case_snapshot_sha256&limit=1"});
+        const release=Array.isArray(rows)?rows[0]:null;
+        if(release?.status==="approved"&&release.signed_pdf_sha256===source.signedPdfSha&&release.case_snapshot_sha256===source.caseSnapshotSha)continue;
+        pending.push({caseId:d.case_id,userId:d.user_id,submittedAt:d.private_review_authorized_at,pageCount:source.pageCount,signedPdfSha:source.signedPdfSha,caseSnapshotSha:source.caseSnapshotSha});
+      }catch{/* Stale or invalid drafts cannot be released. */}
+    }
+    return res.json({ok:true,pending});
+  }catch{return res.status(503).json({ok:false,error:"Private review queue unavailable."});}
+});
+app.get("/api/operator/packet/review-pdf",async(req,res)=>{
+  if(!requireOperationsKey(req,res))return;
+  res.setHeader("Cache-Control","no-store, private");
+  res.setHeader("X-Content-Type-Options","nosniff");
+  try{
+    const userId=safe(req.query.user_id),caseId=safe(req.query.case_id);
+    const source=await savedDraftPreviewForCase(userId,caseId);
+    const bytes=await fetchExactApprovedPreviewPdf(source);
+    const fresh=await savedDraftPreviewForCase(userId,caseId);
+    if(fresh.signedPdfSha!==source.signedPdfSha||fresh.caseSnapshotSha!==source.caseSnapshotSha)throw previewFailure("The submitted application changed during review.");
+    res.setHeader("Content-Disposition",'attachment; filename="private-review-packet.pdf"');
+    return res.type("application/pdf").send(bytes);
+  }catch(error){return previewResponseError(res,error);}
 });
 app.post("/api/operator/packet/release",async(req,res)=>{
   if(!requireOperationsKey(req,res))return;
@@ -1800,6 +1835,20 @@ async function packetReleaseStatus(userId,caseId,deliveryMode="mail") {
       query:"?case_id=eq."+encodeURIComponent(caseId)+"&user_id=eq."+encodeURIComponent(userId)+"&limit=1"
     });
     const review=Array.isArray(rows)?rows[0]:null;
+    // An absent release is normal after the applicant submits the signed PDF.
+    // Check the actual saved draft before implying case details have changed.
+    // The customer-dismissal digital exception below remains unchanged.
+    if(!review && !customerDismissalReviewAllowed(facts)){
+      const quote=quotePacketPricing({state:facts.savedCase.case_state,county:facts.savedCase.county,
+        courtType:facts.savedCase.court_type,formType:expectedFormType(facts.savedCase,facts.charges)});
+      if(deliveryMode==="digital"&&Number.isSafeInteger(quote.courtFeeCents)){quote.totalCents=5000;quote.courtFeeCollectedCents=0;quote.directCourtPaymentRequired=quote.courtFeeCents>0;}
+      try{
+        await savedDraftPreviewForCase(userId,caseId);
+        return {ready:false,reviewState:"pending_review",missing:["Your signed application is saved and awaiting independent review. No action is required until review is complete."],quote,profileId:quote.profileId};
+      }catch(error){
+        return {ready:false,reviewState:error?.httpStatus===409?"draft_required":"unavailable",missing:[error?.httpStatus===409?error.message:"Private application status is temporarily unavailable."],quote,profileId:quote.profileId};
+      }
+    }
     const runtime={
       stripeLiveEnabled:(deliveryMode==="digital"
         ? digitalCheckoutConfigured()
