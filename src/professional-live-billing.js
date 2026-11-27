@@ -16,6 +16,7 @@ export function registerProfessionalLiveBilling(app,{context,env=process.env,str
   const ctx=await context(req,res);if(!ctx)return null;
   if(ctx.mode!=="production"){res.status(503).json({ok:false,error:"Live professional billing requires production."});return null;}
   if(!ctx.user.email_confirmed_at){res.status(403).json({ok:false,error:"Confirm your email first."});return null;}
+  if(create&&req.get("x-professional-account-id")!==ctx.user.id){res.status(403).json({ok:false,error:"Confirm the signed-in RecordPathAI account before starting checkout."});return null;}
   let rows=await ctx.rest("professional_live_billing","select=org_id,authorized_user,plan,stripe_customer_id,approved&authorized_user=eq."+ctx.user.id+"&limit=2",{service:true});
   if(!rows.length&&!create){res.json({ok:true,mode:"live",active:false,subscription_exists:false,unregistered:true});return null;}
   const key=env.STRIPE_SECRET_KEY||"";
