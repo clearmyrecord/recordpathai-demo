@@ -6,12 +6,12 @@ on:
     branches: [main]
 permissions:
   contents: read
-concurrency:
-  group: recordpathai-existing-production
-  cancel-in-progress: false
 jobs:
   verify:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
+    concurrency:
+      group: recordpathai-existing-production
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
