@@ -49,7 +49,7 @@ async function load(){
  confirmedAccountId=user.id;
  $("confirm-account").hidden=true;$("submitted").hidden=false;$("live-billing").hidden=false;$("billing-refresh").hidden=false;
  $("verified-billing-account").textContent="Email verified: "+user.email+". Your subscription will be linked to this account.";$("verified-billing-account").hidden=false;
- say("Email verified — choose your subscription to continue.");
+ say("Email verified — checking your existing Professional Suite access.");
  await refreshBilling(token);
 
 }
@@ -78,12 +78,13 @@ async function refreshBilling(token=epoch){
   const data=await liveRequest("refresh");if(token!==epoch)return;
   if(confirmedAccountId!==user.id&&!data.subscription_exists){$("submitted").hidden=true;$("confirm-account").hidden=false;return;}
   $("confirm-account").hidden=true;$("submitted").hidden=false;$("live-billing").hidden=false;$("billing-refresh").hidden=false;$("pilot-link").hidden=false;
-  if(data.unregistered){if(!planInitialized){selectPlan(preferredPlan||"solo");planInitialized=true;}$("billing-state").textContent="Your verified account is ready. Choose a monthly subscription. No attorney credentials or manual approval required.";$("plan-choice").hidden=false;$("billing-checkout").hidden=false;$("billing-consent-label").hidden=false;return;}
+  if(data.unregistered){say("Email verified — choose a subscription to activate Professional Suite.");if(!planInitialized){selectPlan(preferredPlan||"solo");planInitialized=true;}$("billing-state").textContent="Your verified account is ready. Choose a monthly subscription. No attorney credentials or manual approval required.";$("plan-choice").hidden=false;$("billing-checkout").hidden=false;$("billing-consent-label").hidden=false;return;}
   if(!planInitialized){selectPlan(preferredPlan||data.plan||"solo");planInitialized=true;}
   $("plan-choice").hidden=Boolean(data.subscription_exists||data.test_access);
   $("billing-state").textContent=data.test_access?"Internal testing access active — no subscription payment required.":data.subscription_exists?(data.plan==="solo"?"Individual":"Firm")+" · $"+(data.amount_cents/100).toFixed(2)+"/month plus applicable tax · "+(data.active?"Subscription verified":"Existing subscription requires attention"):"Choose either monthly package. Your account is verified and ready to subscribe.";
   $("billing-checkout").hidden=Boolean(data.subscription_exists||data.test_access);$("billing-consent-label").hidden=Boolean(data.subscription_exists||data.test_access);$("billing-portal").hidden=!data.subscription_exists;
   if(data.active){
+   say(data.test_access?"Internal testing access active — no subscription payment required.":"Your subscription is verified. Open RecordWatch to continue.");
    $("practice-link").hidden=false;$("practice-link").href="professional-account.html?secure=1";$("practice-link").textContent="Open RecordWatch";
    if(secure){$("submitted").hidden=true;$("pilot-link").hidden=true;if(await ensureMfa(token)&&token===epoch)location.replace("professional-practice.html");}
   }
