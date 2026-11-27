@@ -1,13 +1,13 @@
 import {renderProfessionalDraft} from "./professional-wood-draft.js";
 const $=id=>document.getElementById(id), notice=t=>$("notice").textContent=t;
 const production="pfyxjhdlqgpzzzdssqpk.supabase.co";
-let api,orgs=[],epoch=0,active=false,renewal=null,packetCaseId=null;
+let api,orgs=[],epoch=0,active=false,renewal=null,packetCaseId=null,internalTestAccess=false;
 const caseFilter=()=>$("client-filter").value;
 const setStep=n=>{$("professional-steps").hidden=!n;for(const [i,id] of ["step-personal","step-record","step-packet"].entries()){if(i+1===n)$(id).setAttribute("aria-current","step");else $(id).removeAttribute("aria-current");}};
 const hideIntake=()=>{for(const id of ["client-intake","case-intake"])$(id).hidden=true;};
 const returnDashboard=()=>{$("client-form").reset();$("case-form").reset();hideIntake();packetCaseId=null;setStep(0);$("case-filter").value="";$("client-filter").value="";refresh().catch(fail);$("saved-clients").scrollIntoView({block:"start"});};
 const showIntake=id=>{if(!active)return;if(id==="client-intake")$("client-form").reset();else{const selected=$("clients").value;$("case-form").reset();if(selected)$("clients").value=selected;}hideIntake();packetCaseId=null;setStep(id==="client-intake"?1:2);$(id).hidden=false;$(id).scrollIntoView({block:"start"});};
-const clear=()=>{hideIntake();packetCaseId=null;setStep(0);$("client-list").replaceChildren();for(const id of ["client-count","case-count","packet-count","watch-count"])$(id).textContent="0";if(renewal)clearInterval(renewal);renewal=null;epoch++;active=false;$("app").hidden=true;$("client-form").reset();$("case-form").reset();$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();$("client-filter").replaceChildren(option("","All clients"));$("case-filter").value="";$("case-summary").textContent="";orgs=[];};
+const clear=()=>{hideIntake();packetCaseId=null;setStep(0);$("client-list").replaceChildren();for(const id of ["client-count","case-count","packet-count","watch-count"])$(id).textContent="0";if(renewal)clearInterval(renewal);renewal=null;epoch++;active=false;internalTestAccess=false;$("app").hidden=true;$("client-form").reset();$("case-form").reset();$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();$("client-filter").replaceChildren(option("","All clients"));$("case-filter").value="";$("case-summary").textContent="";orgs=[];};
 const fail=()=>{clear();notice("Access or request unavailable. No filing or payment was made. Reload or contact the pilot operator.");};
 const ok=r=>{if(r.error)throw Error("Request rejected");return r.data;};
 const orgId=()=>$("org").value;
@@ -16,7 +16,7 @@ const add=(el,tag,text)=>{const n=document.createElement(tag);n.textContent=text
 async function refreshPaidLease(){
  const session=ok(await api.auth.getSession()).session;if(!session?.access_token)return false;
  const r=await fetch("/api/professional/live-billing/refresh",{method:"POST",headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"});
- if(!r.ok)return false;const data=await r.json();return data.ok===true&&data.mode==="live"&&data.active===true;
+ if(!r.ok)return false;const data=await r.json();internalTestAccess=data.ok===true&&data.active===true&&data.test_access===true;return data.ok===true&&data.mode==="live"&&data.active===true;
 }
 async function load(){
  clear();const seq=epoch;
@@ -134,7 +134,7 @@ async function refresh(){
   }else if(decision.decision==="approved_for_unsigned_draft"){
    card=packetPanel.body;
    add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". File directly with the court; no payment collected here.");
-   if(row.outcome==="conviction"&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
+   if(row.outcome==="conviction"&&!internalTestAccess&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
     add(card,"h4","Optional Pay and Mail");
     add(card,"p","RecordPathAI mailing: $10 · court filing deposit: $100 · combined $110 before applicable tax. No $50 preparation fee.");
     const mailStatus=add(card,"p","Checking private mailing status…");mailStatus.setAttribute("role","status");
@@ -233,7 +233,7 @@ async function refresh(){
   const back=add(packetPanel.body,"button","Save & return to RecordWatch");back.type="button";back.className="btn secondary";back.addEventListener("click",returnDashboard);
   $("cases").append(shell);if(packetCaseId===row.id){packetPanel.d.open=true;setStep(3);}
  }
- notice("Professional workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
+ notice(internalTestAccess?"Internal testing workspace — no paid subscription. Use fictional client records only; live mailing is unavailable.":"Professional workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
 }
 function bindForm(id,table,build){
  $(id).addEventListener("submit",async e=>{
