@@ -1,4 +1,4 @@
-// Professional unsigned review drafts only; no signature fabrication, checkout or filing.
+// Professional official unsigned forms and marked review drafts; no automatic signature or filing.
 const BASE="assets/forms/ohio/wood/court-of-common-pleas/";
 const templates=Object.freeze({
  conviction:{pdf:BASE+"application-for-sealing-2953-32-conviction-print.pdf",map:"templates/ohio/wood-county/sealing-conviction.json"},
@@ -16,8 +16,9 @@ export function prepareProfessionalDraftData(c,m,d,today){
  generated:{current_date:date(today)}};
  return {template:templates[m.outcome],data,courtFeeCents:m.outcome==="conviction"?10000:0};
 }
-export async function renderProfessionalDraft({client,caseRow,decision,today,PDFLib,fetcher=fetch,counsel=null,typedSignature=null}){
+export async function renderProfessionalDraft({client,caseRow,decision,today,PDFLib,fetcher=fetch,counsel=null,typedSignature=null,signatureReady=false}){
  const {template,data}=prepareProfessionalDraftData(client,caseRow,decision,today);
+ if(signatureReady&&counsel)throw Error('Official unsigned export cannot carry an assumed counsel signature');
  if(counsel&&(!counsel.full_name||counsel.org_id!==caseRow.org_id||counsel.attorney_id!==caseRow.attorney_id||!counsel.verified_at||!/^\d{7}$/.test(counsel.ohio_bar_number)||typedSignature!==counsel.full_name))throw Error("Verified attorney identity and explicit signature required.");
  const [p,r]=await Promise.all([fetcher(template.pdf,{cache:"no-store",credentials:"same-origin"}),fetcher(template.map,{cache:"no-store",credentials:"same-origin"})]);
  if(!p.ok||!r.ok)throw Error("Official template unavailable.");
@@ -44,7 +45,7 @@ export async function renderProfessionalDraft({client,caseRow,decision,today,PDF
   if(!allowed.test(path)||!["text","date"].includes(f.type))throw Error("Unapproved template field.");
   const page=pages[Number(f.page)-1],sx=page.getWidth()/mapping.pageWidth,sy=page.getHeight()/mapping.pageHeight;
   if(![f.x,f.y,f.width,f.height].every(Number.isFinite)||f.x<0||f.y<0||f.width<=0||f.height<=0||f.x+f.width>mapping.pageWidth+1||f.y+f.height>mapping.pageHeight+1)throw Error("Invalid form coordinates.");
-  let value=path.split(".").reduce((a,k)=>a?.[k],data)||"";
+  let value=signatureReady&&path==="generated.current_date"?"":path.split(".").reduce((a,k)=>a?.[k],data)||"";
   if(Number(f.page)===4&&path==="petitioner.address.line1")value=[value,data.petitioner.address.line2].filter(Boolean).join(", ");
   if(!value)continue;
   const w=f.width*sx,h=f.height*sy;let size=Math.min(10,h-2);
@@ -53,7 +54,7 @@ export async function renderProfessionalDraft({client,caseRow,decision,today,PDF
   page.drawText(value,{x:f.x*sx,y:page.getHeight()-(f.y+f.height)*sy+Math.max(1,(h-size)/2),size,font,color:rgb(0,0,0)});
  }
  pdf.removePage(1);pdf.removePage(0);
- for(const page of pdf.getPages())page.drawText(counsel?"COUNSEL SIGNATURE ASSUMPTION - DO NOT FILE":"UNSIGNED REVIEW DRAFT - DO NOT FILE",{x:30,y:14,size:9,font:bold,color:rgb(.65,.1,.1)});
+ if(!signatureReady)for(const page of pdf.getPages())page.drawText(counsel?"COUNSEL SIGNATURE ASSUMPTION - DO NOT FILE":"UNSIGNED REVIEW DRAFT - DO NOT FILE",{x:30,y:14,size:9,font:bold,color:rgb(.65,.1,.1)});
  if(counsel)pdf.getPages()[1].drawText("Counsel Ohio registration: "+counsel.ohio_bar_number,{x:30,y:27,size:8,font,color:rgb(0,0,0)});
  return pdf.save();
 }
