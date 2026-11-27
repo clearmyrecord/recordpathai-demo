@@ -220,3 +220,10 @@
 .rp-professional .professional-review-all-fields>summary{font-size:14px;font-weight:700;color:#1c489d;cursor:pointer}
 .rp-professional .professional-review-all-fields>section{padding-top:14px}
 @media(max-width:420px){.rp-professional .professional-review-grid{grid-template-columns:1fr}.rp-professional .professional-record-review .professional-review-group{padding:10px}}
+
+/* Destructive actions remain visually distinct from filing actions. */
+.rp-professional .professional-main .saved-case-actions button.professional-delete-record{background:#fff;color:#a12632;border:1px solid #e8c1c6;box-shadow:none}
+.rp-professional .professional-main .saved-case-actions button.professional-delete-record:hover{background:#fff3f3}
+.rp-professional .professional-archived-records{margin-top:20px;border-top:1px solid #d5e1f1;padding-top:16px}
+.rp-professional .professional-archive-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid #d5e1f1;border-radius:12px;margin-top:8px;flex-wrap:wrap;overflow-wrap:anywhere}
+.rp-professional .professional-archive-row button{margin:0}
