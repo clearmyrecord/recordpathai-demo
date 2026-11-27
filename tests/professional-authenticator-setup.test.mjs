@@ -32,3 +32,15 @@ test("QR renders locally, rejects external URL, and secret disappears on cleanup
  assert.equal(details.open,true);
  assert.match(js,/function clear\(\)\{[^\n]*clearMfaSetup\(\)/);
 });
+
+test("first-time setup presents sequential steps and keeps the verification field out of setup",()=>{
+ const html=read("professional-account.html");
+ assert.match(html,/1\. Open or install an authenticator app/);
+ assert.match(html,/2\. Add RecordPathAI to the app/);
+ assert.match(html,/This long key belongs in the authenticator app only/);
+ assert.match(html,/id="mfa-continue"[^>]*>I can see my six-digit code/);
+ assert.match(js,/showMfaSetup\(data.totp\);\$\("mfa-start"\).hidden=true;\$\("verify-form"\).hidden=true/);
+ assert.match(js,/\$\("mfa-continue"\).addEventListener\("click"[\s\S]*?\$\("verify-form"\).hidden=false/);
+ assert.match(js,/\$\("mfa-back"\).addEventListener\("click"/);
+ assert.match(js,/That code could not be verified/);
+});
