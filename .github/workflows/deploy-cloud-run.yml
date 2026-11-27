@@ -6,9 +6,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('recordpathai-auto-release-pr-{0}', github.event.pull_request.number) || 'recordpathai-existing-production' }}
-  cancel-in-progress: false
 jobs:
   validate:
     name: Gate production on tests, dependency audit, and rollback regression
@@ -92,6 +89,9 @@ jobs:
     name: Release tested commit to existing Cloud Run service
     if: github.ref == 'refs/heads/main'
     needs: [validate, container-smoke]
+    concurrency:
+      group: recordpathai-existing-production
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production
