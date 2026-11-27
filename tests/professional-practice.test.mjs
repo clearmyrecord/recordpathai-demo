@@ -218,3 +218,17 @@ test("client submit lock targets Save, never an inserted match button",()=>{
  assert.ok(submit.includes("submitting=true;btn.disabled=true"));
  assert.ok(submit.includes("finally{submitting=false;btn.disabled=false;}"));
 });
+
+test("professional record details use labeled sections without changing saved case or screening logic",()=>{
+ const js=read("js/professional-practice.js"),css=read("assets/professional-modern.css");
+ const panel=js.slice(js.indexOf('card.classList.add("professional-record-review")'),js.indexOf('const button=(label,fn)'));
+ for(const label of ["Case information","Client & mailing information","Eligibility screening","Disposition date","Final discharge date","Estimated eligibility date","Applicable rule","Case review","View all saved Step 2 fields"])assert.ok(panel.includes(label));
+ assert.match(panel,/add\(line,"dt",label\);add\(line,"dd",readableValue\(value\)\)/);
+ assert.match(panel,/row\.record_details\.charges\.entries\(\)/);
+ assert.match(panel,/value===false\?"No"/);
+ assert.match(panel,/resolveEligibilityForCase/);
+ assert.match(panel,/result\.isEligibleNow===true&&!result\.needsReview/);
+ assert.match(panel,/Approved for unsigned draft/);
+ assert.doesNotMatch(panel,/\.insert\(|\.update\(|\.delete\(/);
+ assert.match(css,/professional-review-grid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+});
