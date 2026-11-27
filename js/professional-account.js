@@ -5,7 +5,7 @@ const $=id=>document.getElementById(id);
 const say=t=>$("status").textContent=t;
 const ok=r=>{if(r.error)throw Error("Request failed");return r.data;};
 let api,user,factorId,epoch=0;
-function clear(){epoch++;factorId=null;user=null;for(const id of ["signed-out","mfa","request","submitted","logout","secret","verify-form"])$(id).hidden=true;$("secret").textContent="";$("request-form").reset();$("verify-form").reset();$("application-state").textContent="";}
+function clear(){epoch++;factorId=null;user=null;for(const id of ["signed-out","mfa","request","submitted","logout","secret","verify-form","practice-link"])$(id).hidden=true;$("secret").textContent="";$("request-form").reset();$("verify-form").reset();$("application-state").textContent="";}
 async function load(){
  clear();const token=epoch;
  const config=await window.RecordPathSupabase.getConfig();
@@ -27,7 +27,7 @@ async function load(){
  }
  const row=ok(await api.from("professional_access_requests").select("status,created_at,plan").eq("user_id",user.id).maybeSingle());
  if(token!==epoch)return;
- if(row){$("submitted").hidden=false;$("application-state").textContent="Status: "+row.status+" · Requested plan: "+row.plan.replaceAll("_"," ")+" · Submitted "+new Date(row.created_at).toLocaleDateString();say("Your professional application is saved in the account service.");}
+ if(row){$("submitted").hidden=false;$("practice-link").hidden=row.status!=="approved";$("application-state").textContent="Status: "+row.status+" · Requested plan: "+row.plan.replaceAll("_"," ")+" · Submitted "+new Date(row.created_at).toLocaleDateString();say("Your professional application is saved in the account service.");}
  else{$("request").hidden=false;say("Identity session verified. Complete your professional verification request.");}
 }
 async function action(button,fn){button.disabled=true;try{await fn();}catch{say("Unable to complete this step. Check your session or code, then try again.");}finally{button.disabled=false;}}
