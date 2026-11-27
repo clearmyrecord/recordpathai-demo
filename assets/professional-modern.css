@@ -52,3 +52,14 @@
 .rp-professional #mfa-setup-details summary{font-weight:800;color:var(--blue-dark);cursor:pointer}
 .rp-professional #secret{padding:12px;background:white;border:1px solid var(--line);border-radius:12px;color:var(--text)}
 .rp-professional #verify-form input[name="code"]{max-width:240px;font-size:24px;letter-spacing:.3em;font-variant-numeric:tabular-nums}
+
+/* Attorney-facing sales landing: use the existing brand palette and components. */
+.rp-professional #pricing .home-feature ul{list-style:none;padding:0;margin:0 0 22px;width:100%;color:var(--text);font-size:14px;line-height:1.55}
+.rp-professional #pricing .home-feature li{position:relative;padding:0 0 12px 24px}
+.rp-professional #pricing .home-feature li::before{content:"✓";position:absolute;left:0;color:var(--blue-dark);font-weight:800}
+.rp-professional #pricing .home-feature p{flex:0}
+.rp-professional #pricing .home-feature:nth-child(2){border-color:#9bbcf1;box-shadow:0 12px 32px rgba(79,136,232,.13)}
+.rp-professional #pricing .home-feature .home-btn{width:100%;margin-top:auto}
+.rp-professional #partners .home-bottom-card .home-eyebrow{margin-bottom:12px}
+.rp-professional #partners .home-bottom-card .home-btn{white-space:normal;text-align:center}
+.rp-professional .home-hero .home-note strong{color:var(--text)}
