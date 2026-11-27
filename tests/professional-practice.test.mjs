@@ -47,21 +47,27 @@ test("professional dashboard follows consumer saved-case-first navigation and se
 });
 
 
-test("every professional intake field is explicitly mapped and verified against a fresh Supabase read before advancing",()=>{
- const js=read("js/professional-practice.js"),html=read("professional-practice.html");
- for(const [form,table] of [["client-form","professional_clients"],["case-form","professional_cases"]]){
-  const formSource=html.match(new RegExp('<form id="'+form+'"[\\s\\S]*?<\\/form>'))[0];
-  const fields=[...formSource.matchAll(/\bname="([a-z_]+)"/g)].map(m=>m[1]);
-  const mapping=js.split("\n").find(line=>line.startsWith('bindForm("'+form+'","'+table+'"'));
-  assert.ok(mapping);
-  for(const field of fields)assert.ok(mapping.includes(field+":v."+field),"Missing database mapping: "+field);
- }
- const handler=js.slice(js.indexOf("function bindForm(id,table,build)"),js.indexOf('bindForm("client-form"'));
- assert.match(handler,/api\.from\(table\)\.insert\(payload\)\.select\("\*"\)\.single\(\)/);
- assert.match(handler,/api\.from\(table\)\.select\("\*"\)\.eq\("id",saved\.id\)\.eq\("org_id",org\)\.single\(\)/);
- assert.match(handler,/Object\.entries\(payload\)\.some\(\(\[key,value\]\)=>persisted\[key\]!==value\)/);
- assert.ok(handler.indexOf("Supabase readback mismatch")<handler.indexOf("form.reset()"));
- assert.match(handler,/persisted\.case_number/);
- assert.match(handler,/persisted\.client_id/);
- assert.doesNotMatch(js,/localStorage|sessionStorage|indexedDB|document\.cookie|RecordPathUserStore/);
+test("professional reuses actual consumer Step 2 sections and charge template with full Supabase readback",()=>{
+ const js=read("js/professional-practice.js"),html=read("professional-practice.html"),consumer=read("record-details.html"),shared=read("js/professional-record-intake.js");
+ assert.match(html,/id="recordDetailsForm"/);
+ assert.match(consumer,/id="sharedRecordChargeTemplate"/);
+ assert.match(consumer,/getElementById\("sharedRecordChargeTemplate"\)\.content\.cloneNode/);
+ for(const id of ["courtSectionTitle","recordCollectionTitle","chargesSectionTitle","sentencingSectionTitle","arrestSectionTitle"]){assert.ok(consumer.includes('aria-labelledby="'+id+'"'));assert.ok(shared.includes('"'+id+'"'));}
+ assert.match(shared,/fetch\("record-details\.html",\{cache:"no-store"/);
+ assert.match(shared,/RecordPathRecordDetailsFields\.capture\(mount\)/);
+ assert.match(shared,/record_details:snapshot/);
+ assert.match(js,/sameRecordSnapshot\(snapshot,persisted\.record_details\)/);
+ assert.match(js,/api\.from\("professional_cases"\)\.insert\(payload\)/);
+ assert.match(js,/persisted\.case_number/);
+ assert.match(js,/persisted\.client_id/);
+ assert.match(js,/row\.record_details\.charges\.entries\(\)/);
+ const form=html.match(/<form id="client-form"[\s\S]*?<\/form>/)[0];
+ const mapping=js.split("\n").find(line=>line.startsWith('bindForm("client-form","professional_clients"'));
+ for(const m of form.matchAll(/\bname="([a-z_]+)"/g))assert.ok(mapping.includes(m[1]+":v."+m[1]));
+ assert.doesNotMatch(js+shared,/localStorage|sessionStorage|indexedDB|document\.cookie|RecordPathUserStore/);
+ const sql=read("sql/professional-full-record-intake.sql");
+ assert.match(sql,/jsonb_array_length\(new\.record_details->'charges'\)=1/);
+ assert.match(sql,/new\.outcome:='mixed'/);
+ assert.match(sql,/f->>'allChargesConfirmed'='yes'/);
+ assert.match(sql,/f->>'proceedingsStatus'='none'/);
 });
