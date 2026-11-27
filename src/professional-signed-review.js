@@ -1,3 +1,4 @@
+import {registerProfessionalMailing} from "./professional-mailing.js";
 import {registerProfessionalLiveBilling} from "./professional-live-billing.js";
 import {registerProfessionalBillingRoutes} from "./professional-billing-sandbox.js";
 import {createHash} from "node:crypto";
@@ -42,7 +43,7 @@ async function parsePdf(bytes){
  const doc=await getDocument({data:new Uint8Array(bytes),useSystemFonts:true,isEvalSupported:false}).promise;
  try{if(doc.numPages!==2)throw Error("Two pages required");const out=[];for(let i=1;i<=2;i++){const page=await doc.getPage(i);const t=await page.getTextContent();out.push(t.items.map(x=>String(x.str||"")).join(" "));}return out;}finally{await doc.destroy();}
 }
-export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConfig,supabaseRestConfig,requireApiUser,getBearerToken,parse=parsePdf}){
+export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConfig,supabaseRestConfig,requireApiUser,getBearerToken,parse=parsePdf,mailing=null}){
  async function context(req,res){
   res.setHeader("Cache-Control","no-store, private");
   const config=supabaseRestConfig(),pub=publicSupabaseConfig();
@@ -137,4 +138,5 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
    res.setHeader("X-Content-Type-Options","nosniff");res.setHeader("Content-Disposition",'attachment; filename="professional-signed-review.pdf"');return res.type("application/pdf").send(bytes);
   }catch{return res.status(503).end();}
  });
+ return mailing?registerProfessionalMailing(app,{express,context,...mailing}):null;
 }
