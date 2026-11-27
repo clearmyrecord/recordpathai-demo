@@ -31,7 +31,7 @@ async function load(){
  if(token!==epoch)return;
  if(result.error||!result.data.user){const target="professional-account.html"+location.search;for(const a of $("signed-out").querySelectorAll("a")){const base=a.getAttribute("href").split("?")[0];a.href=base+"?returnUrl="+encodeURIComponent(target);}$("signed-out").hidden=false;say("Sign in or create your regular RecordPathAI account.");return;}
  user=result.data.user;$("logout").hidden=false;
- if(!user.email_confirmed_at){say("Confirm your account email before applying.");return;}
+ if(!user.email_confirmed_at){say("Confirm your account email before subscribing. No payment can be collected until your email is verified.");return;}
  if(pilot){
   if(!await ensureMfa(token))return;
   const row=ok(await api.from("professional_access_requests").select("status,created_at,plan").eq("user_id",user.id).maybeSingle());
@@ -43,7 +43,7 @@ async function load(){
   return;
  }
  $("submitted").hidden=false;$("live-billing").hidden=false;$("billing-refresh").hidden=false;$("pilot-link").hidden=false;
- say("Choose a plan or manage your existing subscription.");
+ say("Signed in as "+user.email+". Your subscription will be linked to this RecordPathAI account.");
  await refreshBilling(token);
 }
 async function ensureMfa(token){
@@ -60,7 +60,7 @@ async function ensureMfa(token){
 }
 
 async function liveRequest(action,consent=false){
- const session=ok(await api.auth.getSession()).session;if(!session?.access_token)throw Error("Session required");
+ const session=ok(await api.auth.getSession()).session;if(!user?.id||!user.email_confirmed_at||!session?.access_token||session.user?.id!==user.id)throw Error("Verified account session required");
  const r=await fetch("/api/professional/live-billing/"+action,{method:"POST",headers:{Authorization:"Bearer "+session.access_token,...(consent?{"x-professional-live-consent":"yes","x-professional-plan":$("paid-plan").value,"x-professional-terms":"accepted-v1"}:{})},cache:"no-store"});
  const data=await r.json();if(!r.ok||!data.ok||data.mode!=="live")throw Error("Billing unavailable");return data;
 }
@@ -68,7 +68,7 @@ async function refreshBilling(token=epoch){
  $("billing-checkout").hidden=true;$("billing-portal").hidden=true;$("billing-consent-label").hidden=true;$("practice-link").hidden=true;$("plan-choice").hidden=true;
  try{
   const data=await liveRequest("refresh");if(token!==epoch)return;
-  if(data.unregistered){$("paid-plan").value=preferredPlan;$("billing-state").textContent="Choose a monthly subscription. No attorney credentials or manual approval required.";$("plan-choice").hidden=false;$("billing-checkout").hidden=false;$("billing-consent-label").hidden=false;return;}
+  if(data.unregistered){$("paid-plan").value=preferredPlan;$("billing-state").textContent="Your verified account is ready. Choose a monthly subscription. No attorney credentials or manual approval required.";$("plan-choice").hidden=false;$("billing-checkout").hidden=false;$("billing-consent-label").hidden=false;return;}
   $("paid-plan").value=data.plan;
   $("billing-state").textContent=(data.plan==="solo"?"Individual":"Firm")+" · $"+(data.amount_cents/100).toFixed(2)+"/month plus applicable tax · "+(data.active?"Subscription verified":data.subscription_exists?"Existing subscription requires attention":"Ready to subscribe");
   $("billing-checkout").hidden=data.subscription_exists;$("billing-consent-label").hidden=data.subscription_exists;$("billing-portal").hidden=!data.subscription_exists;
