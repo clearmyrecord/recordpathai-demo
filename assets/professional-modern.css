@@ -111,3 +111,25 @@
 .rp-professional .professional-preview-pages:not(:empty){max-height:680px;overflow:auto;background:#e7edf6;padding:12px;border-radius:9px;display:grid;gap:14px}
 .rp-professional .professional-preview-pages img{display:block;max-width:100%;width:100%;height:auto;border:1px solid #b8c9e8;background:#fff}
 @media(max-width:700px){.rp-professional .professional-packet-contact{grid-template-columns:1fr}.rp-professional .professional-packet-stage,.rp-professional .professional-packet-fees{padding:14px}}
+
+/* Dedicated intake routes use the consumer's focused card and progress treatment.
+   Dashboard actions are navigation only; forms mount only on their own route. */
+.rp-professional-workflow .professional-main{max-width:1080px}
+.rp-professional-workflow .professional-workflow-hero{padding:clamp(24px,4vw,44px)}
+.rp-professional-workflow .professional-workflow-hero h1{font-size:clamp(32px,5vw,58px);font-weight:800;margin:14px 0}
+.rp-professional-workflow .professional-workflow-hero p:not(.home-eyebrow){max-width:700px;margin:0;line-height:1.65}
+.rp-professional .professional-intake-mode>.dashboard-grid,.rp-professional .professional-intake-mode>#saved-clients,.rp-professional .professional-intake-mode>#saved-cases,.rp-professional .professional-intake-mode>.home-section-card:not(#client-intake):not(#case-intake){display:none}
+.rp-professional-workflow .professional-steps{display:grid;gap:12px;padding:16px}
+.rp-professional-workflow .workflow-progress-header{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--text);font-weight:800}
+.rp-professional-workflow .workflow-progress-header #workflow-progress{flex:none;min-width:0;padding:0}
+.rp-professional-workflow .workflow-step-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.rp-professional-workflow .workflow-step-grid>span{display:grid;min-width:0;padding:14px;gap:5px;border:1px solid #dbe3f0;background:#fff;font-size:14px}
+.rp-professional-workflow .workflow-step-grid>span.step-completed{background:#e5f4ec;color:#176a38;border-color:#bce5ce}
+.rp-professional-workflow .workflow-step-grid>span.step-locked{background:#f0f4fa;color:#667796}
+.rp-professional-workflow .workflow-step-grid>span[aria-current=step]{background:#e8f1ff;color:#16468f;border-color:#a8c6f3}
+.rp-professional-workflow .step-status{font-size:12px}
+.rp-professional-workflow .workflow-note{padding:16px;border-radius:14px;background:#e8f1ff;border:1px solid #dbe3f0;line-height:1.55}
+.rp-professional-workflow .professional-shared-personal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px}
+.rp-professional-workflow .professional-shared-personal .field-full,.rp-professional-workflow .professional-shared-personal .full-width{grid-column:1/-1}
+.rp-professional-workflow #client-form>button,.rp-professional-workflow #case-save{display:flex;width:100%;margin:18px 0 0}
+@media(max-width:640px){.rp-professional-workflow .workflow-step-grid,.rp-professional-workflow .professional-shared-personal{grid-template-columns:1fr}}
