@@ -12,17 +12,32 @@ export function verifiedLiveSubscription(s,row,now=Math.floor(Date.now()/1000)){
  return Boolean(expected&&s?.livemode===true&&s.status==="active"&&s.customer===row.stripe_customer_id&&s.metadata?.product_family==="recordpathai_professional"&&s.metadata.org_id===row.org_id&&s.metadata.plan===row.plan&&s.items?.data?.length===1&&s.items.data[0].price?.id===expected.id&&s.items.data[0].quantity===1&&Number.isFinite(s.current_period_end)&&s.current_period_end>now&&invoice?.livemode===true&&invoice.status==="paid"&&invoice.subscription===s.id&&invoice.currency==="usd"&&invoice.amount_paid>=expected.cents&&charge?.livemode===true&&charge.paid===true&&charge.status==="succeeded"&&charge.currency==="usd"&&charge.amount_captured>=expected.cents&&charge.amount_refunded===0&&charge.refunded===false&&charge.disputed===false);
 }
 export function registerProfessionalLiveBilling(app,{context,env=process.env,stripeFactory=k=>new Stripe(k,{apiVersion:"2023-10-16"})}){
- async function authorized(req,res){
+ async function authorized(req,res,{create=false}={}){
   const ctx=await context(req,res);if(!ctx)return null;
   if(ctx.mode!=="production"){res.status(503).json({ok:false,error:"Live professional billing requires production."});return null;}
-  const rows=await ctx.rest("professional_live_billing","select=org_id,authorized_user,plan,stripe_customer_id,approved&authorized_user=eq."+ctx.user.id+"&approved=eq.true&limit=2");
-  if(rows.length!==1){res.status(403).json({ok:false,error:"An operator-approved professional billing account is required."});return null;}
-  const row=rows[0],key=env.STRIPE_SECRET_KEY||"";
+  if(!ctx.user.email_confirmed_at){res.status(403).json({ok:false,error:"Confirm your email first."});return null;}
+  let rows=await ctx.rest("professional_live_billing","select=org_id,authorized_user,plan,stripe_customer_id,approved&authorized_user=eq."+ctx.user.id+"&limit=2",{service:true});
+  if(!rows.length&&!create){res.json({ok:true,mode:"live",active:false,subscription_exists:false,unregistered:true});return null;}
+  const key=env.STRIPE_SECRET_KEY||"";
   if(!key.startsWith("sk_live_")||!env.SUPABASE_SERVICE_ROLE_KEY){res.status(503).json({ok:false,error:"Live billing service is not configured."});return null;}
-  const [org]=await ctx.rest("professional_pilot_orgs","select=id,active,access_kind,activation_reviewed_at&id=eq."+row.org_id+"&limit=1",{service:true});
-  if(!org?.active||org.access_kind!=="paid"||!org.activation_reviewed_at)throw Error("Professional organization not approved");
   const stripe=stripeFactory(key);
   const account=await stripe.accounts.retrieve();if(account.id!==ACCOUNT)throw Error("Unexpected Stripe account");
+  if(!rows.length&&create){
+   const plan=req.get("x-professional-plan");
+   if(!["solo","firm"].includes(plan)||req.get("x-professional-terms")!=="accepted-v1"){res.status(400).json({ok:false,error:"Choose a plan and accept the software terms."});return null;}
+   const candidatePrice=await stripe.prices.retrieve(LIVE_PROFESSIONAL_PRICES[plan].id);
+   if(!verifiedLivePrice(candidatePrice,plan))throw Error("Invalid live price");
+   const customer=await stripe.customers.create({email:ctx.user.email,metadata:{product_family:"recordpathai_professional",authorized_user:ctx.user.id}},{idempotencyKey:"rpai-professional-customer-"+ctx.user.id});
+   if(customer.livemode!==true||customer.metadata?.authorized_user!==ctx.user.id)throw Error("Invalid customer");
+   await ctx.rest("rpc/professional_create_self_service","",{service:true,body:{p_user:ctx.user.id,p_customer:customer.id,p_plan:plan}});
+   rows=await ctx.rest("professional_live_billing","select=org_id,authorized_user,plan,stripe_customer_id,approved&authorized_user=eq."+ctx.user.id+"&limit=2",{service:true});
+  }
+  if(rows.length!==1||!rows[0].approved)throw Error("Professional account unavailable");
+  const row=rows[0];
+  const [org]=await ctx.rest("professional_pilot_orgs","select=id,active,access_kind,activation_reviewed_at,self_service_terms_at&id=eq."+row.org_id+"&limit=1",{service:true});
+  if(!org?.active||org.access_kind!=="paid"||(!org.activation_reviewed_at&&!org.self_service_terms_at))throw Error("Professional organization unavailable");
+  const [member]=await ctx.rest("professional_pilot_members","select=org_id,user_id,active,role,attorney_verified&org_id=eq."+row.org_id+"&user_id=eq."+ctx.user.id+"&limit=1",{service:true});
+  if(!member?.active||!((member.role==="attorney"&&member.attorney_verified)||(member.role==="staff"&&!member.attorney_verified&&org.self_service_terms_at)))throw Error("Professional membership unavailable");
   const expected=LIVE_PROFESSIONAL_PRICES[row.plan];
   if(!expected||!["solo","firm"].includes(row.plan))throw Error("Invalid plan");
   const [price,customer]=await Promise.all([stripe.prices.retrieve(expected.id),stripe.customers.retrieve(row.stripe_customer_id)]);
@@ -52,7 +67,7 @@ export function registerProfessionalLiveBilling(app,{context,env=process.env,str
  }catch{return res.status(503).json({ok:false,error:"Live subscription verification unavailable. Existing access expires automatically."});}});
  app.post("/api/professional/live-billing/checkout",async(req,res)=>{try{
   if(req.get("x-professional-live-consent")!=="yes")return res.status(400).end();
-  const a=await authorized(req,res);if(!a)return;
+  const a=await authorized(req,res,{create:true});if(!a)return;
   const {stripe,row,price}=a,list=await allSubscriptions(a);
   if(list.some(s=>!["canceled","incomplete_expired"].includes(s.status)))return res.status(409).json({ok:false,error:"Manage your existing subscription rather than creating another."});
   const sessions=await stripe.checkout.sessions.list({customer:row.stripe_customer_id,status:"open",limit:100});
