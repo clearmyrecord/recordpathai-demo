@@ -63,10 +63,11 @@ test("mocked professional order moves from approved review through Stripe and ex
   if(t==="professional_clients")return [{id:c.client_id,org_id:o.org_id,attorney_id:o.user_id,authorization_confirmed:true}];
   if(t==="professional_live_billing")return [{org_id:o.org_id,authorized_user:o.user_id,stripe_customer_id:customer,plan:"solo",approved:true}];
   if(t==="packet_dispatch_controls")return [{live_dispatch_enabled:true}];
+  if(["professional_mail_alert_preferences","professional_mail_alert_deliveries"].includes(t))return [];
   throw Error(t);
  };
  const stripe={customers:{retrieve:async()=>({id:customer,livemode:true,metadata:{authorized_user:o.user_id,product_family:"recordpathai_professional"}})},subscriptions:{list:async()=>({has_more:false,data:[{id:"sub_fixture",livemode:true,status:"active",customer,metadata:{product_family:"recordpathai_professional",org_id:o.org_id,plan:"solo"},items:{data:[{price:{id:price},quantity:1}]},current_period_end:Math.floor(Date.now()/1000)+3600,latest_invoice:{livemode:true,status:"paid",subscription:"sub_fixture",currency:"usd",amount_paid:9900,charge:{livemode:true,paid:true,status:"succeeded",currency:"usd",amount_captured:9900,amount_refunded:0,refunded:false,disputed:false}}}]})},checkout:{sessions:{create:async(p)=>{created++;assert.equal(p.customer,customer);assert.equal(p.metadata.serviceFeeCents,"1000");assert.equal(p.automatic_tax.enabled,true);assert.deepEqual(p.line_items.map(i=>i.price_data.unit_amount),[1000,10000]);assert.match(p.line_items[0].price_data.product_data.name,/mailing and case alerts/);latest={...session,customer,metadata:p.metadata,status:"open",payment_status:"unpaid",url:"https://checkout.stripe.com/c/pay/fixture"};return latest;},retrieve:async()=>paid?{...latest,status:"complete",payment_status:"paid",payment_intent:{...session.payment_intent,latest_charge:{...charge,refunded:refund,amount_refunded:refund?11000:0}}}:latest}}};
- const env={STRIPE_SECRET_KEY:"sk_live_fixture",SUPABASE_SERVICE_ROLE_KEY:"fixture",RECORDPATH_PROFESSIONAL_MAILING_ENABLED:"true",RECORDPATH_ENABLE_AUTOMATIC_FULFILLMENT:"true",STRIPE_WEBHOOK_SECRET:"whsec_fixture",RECORDPATH_ENABLE_LIVE_DISPATCH:"true",LOB_LIVE_CHECKS_ENABLED:"true",LOB_CHECK_ATTACHMENTS_APPROVED:"true",LOB_LIVE_API_KEY:"live_fixture",LOB_VERIFIED_BANK_ID:"bank_fixture",LOB_FROM_ADDRESS_JSON:JSON.stringify({name:"Fixture",address_line1:"Fixture",address_city:"Fixture",address_state:"OH",address_zip:"43402"})};
+ const env={STRIPE_SECRET_KEY:"sk_live_fixture",SUPABASE_SERVICE_ROLE_KEY:"fixture",RECORDPATH_PROFESSIONAL_MAILING_ENABLED:"true",RECORDPATH_PROFESSIONAL_ALERTS_ENABLED:"true",RECORDWATCH_ALERTS_LIVE_ENABLED:"true",RESEND_API_KEY:"fixture",RECORDWATCH_EMAIL_FROM:"alerts@example.invalid",TWILIO_ACCOUNT_SID:"AC"+"a".repeat(32),TWILIO_AUTH_TOKEN:"fixture",TWILIO_MESSAGING_SERVICE_SID:"MG"+"b".repeat(32),RECORDWATCH_SMS_CAMPAIGN_APPROVED:"true",RECORDPATH_ENABLE_AUTOMATIC_FULFILLMENT:"true",STRIPE_WEBHOOK_SECRET:"whsec_fixture",RECORDPATH_ENABLE_LIVE_DISPATCH:"true",LOB_LIVE_CHECKS_ENABLED:"true",LOB_CHECK_ATTACHMENTS_APPROVED:"true",LOB_LIVE_API_KEY:"live_fixture",LOB_VERIFIED_BANK_ID:"bank_fixture",LOB_FROM_ADDRESS_JSON:JSON.stringify({name:"Fixture",address_line1:"Fixture",address_city:"Fixture",address_state:"OH",address_zip:"43402"})};
  const cfg={url:"https://pfyxjhdlqgpzzzdssqpk.supabase.co",key:"fixture"};
  const network=async(url,init)=>{
   if(url.includes("/bucket/"))return {ok:true,json:async()=>({public:false})};
@@ -84,4 +85,27 @@ test("mocked professional order moves from approved review through Stripe and ex
  refund=true;assert.deepEqual(await svc.fulfill(),{submitted:0,held:1});assert.equal(claims,0);assert.equal(mailings,0);
  refund=false;assert.deepEqual(await svc.fulfill(),{submitted:1,held:0});assert.equal(claims,1);assert.equal(mailings,1);assert.equal(order.lob_check_id,"chk_fixture");
  assert.deepEqual(await svc.fulfill(),{submitted:0,held:0});assert.equal(mailings,1);
+});
+
+test("no-fee professional mailing verifies only the ten dollar bundle, never a court deposit",()=>{
+ const order={...o,court_fee_cents:0};
+ const letterCharge={...charge,amount:1000,amount_captured:1000};
+ const letterSession={...session,amount_subtotal:1000,amount_total:1000,metadata:{...session.metadata,courtFeeCents:"0"},payment_intent:{...session.payment_intent,amount:1000,amount_received:1000,latest_charge:letterCharge}};
+ assert.equal(verifiedProfessionalMailPayment(letterSession,order),true);
+ assert.equal(verifiedProfessionalMailPayment(session,order),false);
+ assert.equal(verifiedProfessionalMailPayment(letterSession,o),false);
+ assert.equal(verifiedProfessionalMailPayment({...letterSession,payment_intent:{...letterSession.payment_intent,latest_charge:{...letterCharge,amount_refunded:100}}},order),false);
+});
+test("professional alert consent and delivery fail closed and share signed STOP suppression",()=>{
+ const src=readFileSync(new URL("../src/professional-mailing.js",import.meta.url),"utf8"),sql=readFileSync(new URL("../sql/professional-mailing-addons.sql",import.meta.url),"utf8"),server=readFileSync(new URL("../server.js",import.meta.url),"utf8");
+ assert.match(src,/buildCourtLetterRequest/);
+ assert.match(src,/LOB_LIVE_LETTERS_ENABLED/);
+ assert.match(src,/phone_confirmed_at/);
+ assert.match(src,/consentConfirmed!==true/);
+ assert.match(src,/await suppressed\(recipient.phone\)/);
+ assert.match(src,/resolution=ignore-duplicates/);
+ assert.match(src,/verifiedProfessionalMailPayment/);
+ assert.match(sql,/primary key\(case_id,event_key,channel\)/);
+ assert.match(sql,/professional_mail_alert_preferences enable row level security/);
+ assert.match(server,/professional_mail_alert_preferences/);
 });
