@@ -2106,7 +2106,9 @@ const ohioChargeReferences=[
   "category": "Drug offenses",
   "aliases": [
    "drug trafficking",
-   "drug distribution"
+   "drug distribution",
+   "Trafficking in Drugs",
+   "Aggravated Trafficking in Drugs"
   ],
   "source": "https://codes.ohio.gov/ohio-revised-code/section-2925.03",
   "referenceEdition": "2025 Ohio Revised Code section index",
@@ -3738,14 +3740,27 @@ window.chargeLibrary=[...ohioChargeReferences,...window.chargeLibrary.map(r=>({.
    return {...e,score};
   }).filter(Boolean).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name)||String(a.code||"").localeCompare(String(b.code||""))).slice(0,Math.max(1,Math.min(500,Number(limit)||20)));
  }
+ function exactStatute(name,state){
+  const q=normalize(name);if(!q)return null;
+  const matches=entries(state).filter(row=>row.state&&row.code&&[row.name,...(row.aliases||[])].some(v=>normalize(v)===q));
+  return matches.length===1?matches[0]:null;
+ }
+ function sameSection(value,base){const a=normalize(value),b=normalize(base);return Boolean(b&&(a===b||a.startsWith(b+" ")));}
+ const mounts=new WeakMap();
  function mount(form){
-  if(!form||form.dataset.chargeLibraryMounted==="1")return;
+  if(!form)return;
   const state=form.querySelector("#caseState"),scope=form.ownerDocument;
   const names=form.querySelector("#chargeNameSuggestions")||scope.getElementById("chargeNameSuggestions");
   const codes=form.querySelector("#offenseCodeSuggestions")||scope.getElementById("offenseCodeSuggestions");
   if(!state||!names||!codes)return;
+  const prior=mounts.get(form);if(prior?.state===state){prior.update();return prior;}
+  prior?.controller.abort();
+  const controller=new AbortController(),signal=controller.signal;
+  const automatic=new WeakMap(),suppressed=new WeakSet();
   form.dataset.chargeLibraryMounted="1";
+  let lastState=null;
   const update=()=>{
+   if(lastState===state.value)return;lastState=state.value;
    const data=entries(state.value),seen=new Set();
    const options=[],statutes=[];
    for(const row of data){
@@ -3757,7 +3772,25 @@ window.chargeLibrary=[...ohioChargeReferences,...window.chargeLibrary.map(r=>({.
    }
    names.replaceChildren(...options);codes.replaceChildren(...statutes);
   };
-  state.addEventListener("change",update);state.addEventListener("input",update);update();
+  const binding={state,controller,update};mounts.set(form,binding);
+  state.addEventListener("change",update,{signal});state.addEventListener("input",update,{signal});update();
+  // Capture before consumer autosave reads the card; do not change hydrated records.
+  function syncName(event){
+   const input=event.target;if(!input?.matches?.('[data-field="charge_name"],[data-field="original_charge_name"]')||suppressed.has(input))return;
+   const card=input.closest(".record-card");if(!card)return;
+   const original=input.dataset.field==="original_charge_name";
+   const code=card.querySelector(original?'[data-field="original_charge_code"]':'[data-field="charge_code"]');if(!code)return;
+   const previous=automatic.get(code);const autoOwned=Boolean(previous&&code.value===previous.value);
+   const row=exactStatute(input.value,state.value);
+   if(!row){if(autoOwned){code.value="";automatic.delete(code);}return;}
+   if(sameSection(code.value,row.code))return;
+   if(!code.value||autoOwned){code.value=row.code;automatic.set(code,{value:row.code,state:state.value});return;}
+   if(event.type==="change"&&root.confirm("Replace the entered statute "+code.value+" with "+row.code+" for "+input.value+"? Verify the exact docket subsection.")){code.value=row.code;automatic.set(code,{value:row.code,state:state.value});}
+  }
+  form.addEventListener("input",syncName,{capture:true,signal});form.addEventListener("change",syncName,{capture:true,signal});
+  form.addEventListener("input",event=>{if(event.target?.matches?.('[data-field="charge_code"],[data-field="original_charge_code"]'))automatic.delete(event.target);},{capture:true,signal});
+  form.addEventListener("focusin",update,{signal});
+  state.addEventListener("change",()=>{for(const code of form.querySelectorAll('[data-field="charge_code"],[data-field="original_charge_code"]')){const previous=automatic.get(code);if(previous&&previous.state!==state.value&&code.value===previous.value){code.value="";automatic.delete(code);}}},{capture:true,signal});
   // Explicit per-charge lookup; do not overwrite an existing court-record value.
   form.addEventListener("click",e=>{
    const trigger=e.target.closest?.("[data-charge-library-open]");if(!trigger||!form.contains(trigger))return;
@@ -3784,17 +3817,18 @@ window.chargeLibrary=[...ohioChargeReferences,...window.chargeLibrary.map(r=>({.
       if((name.value&&name.value!==row.name)||(row.code&&code.value&&code.value!==chosenCode)||(!row.code&&code.value&&name.value!==row.name)){
        if(!root.confirm("Replace the entered final charge name"+(row.code?" and statute":" (the entered statute will remain unchanged)")+"? Check the exact court record before continuing."))return;
       }
-      name.value=row.name;if(row.code)code.value=chosenCode;
-      name.dispatchEvent(new Event("change",{bubbles:true}));if(row.code)code.dispatchEvent(new Event("change",{bubbles:true}));
+      name.value=row.name;if(row.code){code.value=chosenCode;if(!preserveSubsection)automatic.set(code,{value:chosenCode,state:state.value});}else automatic.delete(code);
+      suppressed.add(name);try{name.dispatchEvent(new Event("change",{bubbles:true}));if(row.code)code.dispatchEvent(new Event("change",{bubbles:true}));}finally{suppressed.delete(name);}
       box.hidden=true;
      });item.append(button);
      if(row.code&&row.source){const a=scope.createElement("a");a.href=row.source;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Official statute";item.append(a);}
      results.append(item);
     }
    }
-   input.addEventListener("input",event=>{event.stopPropagation();render();});input.addEventListener("change",event=>event.stopPropagation());input.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();event.stopPropagation();render();}});state.addEventListener("change",()=>{if(box.isConnected)render();});render();input.focus();
-  });
+   input.addEventListener("input",event=>{event.stopPropagation();render();});input.addEventListener("change",event=>event.stopPropagation());input.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();event.stopPropagation();render();}});state.addEventListener("change",()=>{if(box.isConnected)render();},{signal});render();input.focus();
+  },{signal});
+  return binding;
  }
- root.RecordPathChargeLibrary={entries,search,mount};
+ root.RecordPathChargeLibrary={entries,search,exactStatute,sameSection,mount};
  root.searchChargeLibrary=(query,state)=>search(query,state,8);
 })(window);
