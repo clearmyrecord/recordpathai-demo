@@ -27,7 +27,7 @@ export async function mountProfessionalRecordIntake(mount){
  for(const id of ["caseState","county","courtName","courtType"]){const el=mount.querySelector("#"+id);el.addEventListener("change",()=>window.RecordPathRecordCollection?.update());el.addEventListener("input",()=>window.RecordPathRecordCollection?.update());}
  for(const el of mount.querySelectorAll("input,select,textarea"))el.setAttribute("autocomplete","off");
  const reset=()=>{list.replaceChildren();addCharge();window.RecordPathRecordCollection?.update();};
- reset();await window.RecordPathRecordCollection?.init();
+ reset();window.RecordPathChargeLibrary?.mount(mount);await window.RecordPathRecordCollection?.init();
  return {reset,capture:()=>window.RecordPathRecordDetailsFields.capture(mount)};
 }
 export function buildProfessionalRecordPayload(snapshot,org,client){
