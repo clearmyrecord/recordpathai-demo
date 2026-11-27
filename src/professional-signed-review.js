@@ -1,18 +1,22 @@
 import {createHash} from "node:crypto";
 import {isOfficialWoodConvictionFormPair,isOfficialWoodDismissalFormPair,normalizeWoodFormHeading} from "./wood-form-pages.js";
 const HOST="ckrqmlnckhagskpumjbh.supabase.co";
-const META="id,org_id,case_id,attorney_id,sha256,page_count,attorney_signature_attested,created_at";
+const META="id,org_id,case_id,attorney_id,sha256,page_count,attorney_signature_attested,created_at,signature_mode,counsel_name,counsel_bar_number";
 export const PROFESSIONAL_PDF_MAX=2097152;
 const uuid=v=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const digest=b=>createHash("sha256").update(b).digest("hex");
 export function professionalStagingReady(config,publicConfig){
  try{return new URL(config.url).origin==="https://"+HOST&&new URL(publicConfig.url).origin==="https://"+HOST&&Boolean(config.key&&publicConfig.anonKey);}catch{return false;}
 }
-export async function validateProfessionalSignedPdf(bytes,outcome,parse){
+export async function validateProfessionalSignedPdf(bytes,outcome,parse,counsel=null){
  if(!Buffer.isBuffer(bytes)||bytes.length<500||bytes.length>PROFESSIONAL_PDF_MAX||bytes.subarray(0,5).toString()!=="%PDF-"||!bytes.subarray(-2048).includes(Buffer.from("%%EOF")))throw Error("Invalid PDF");
  if(!["conviction","dismissal","not_guilty"].includes(outcome))throw Error("Outcome requires review");
  const texts=await parse(bytes);
  if(texts.some(t=>normalizeWoodFormHeading(t).includes("UNSIGNEDREVIEWDRAFT")))throw Error("Unsigned draft");
+ const combined=texts.join(" ");
+ const counselMarked=texts.some(t=>normalizeWoodFormHeading(t).includes("COUNSELSIGNATUREASSUMPTIONDONOTFILE"));
+ if(Boolean(counsel)!==counselMarked)throw Error("Signature mode mismatch");
+ if(counsel&&(!texts.every(t=>normalizeWoodFormHeading(t).includes("COUNSELSIGNATUREASSUMPTIONDONOTFILE"))||!normalizeWoodFormHeading(combined).includes(normalizeWoodFormHeading("/s/ "+counsel.full_name+" (counsel)"))||!combined.replace(/\s/g,"").includes(counsel.ohio_bar_number)))throw Error("Counsel identity missing");
  if(!(outcome==="conviction"?isOfficialWoodConvictionFormPair(texts):isOfficialWoodDismissalFormPair(texts)))throw Error("Wrong official form pair");
  return digest(bytes);
 }
@@ -48,12 +52,19 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
    const ctx=await context(req,res);if(!ctx)return;
    const c=await ctx.ownedCase(req.get("x-professional-case-id"));
    if(!c)return res.status(403).json({ok:false,error:"Approved assigned case required."});
-   if(req.get("x-professional-signature-attested")!=="yes")return res.status(400).json({ok:false,error:"Attest that the applicant actually signed the official document."});
-   let sha;try{sha=await validateProfessionalSignedPdf(req.body,c.outcome,parse);}catch{return res.status(400).json({ok:false,error:"Use the correct two-page signed official application; unsigned review drafts are not accepted."});}
+   if(req.get("x-professional-signature-attested")!=="yes")return res.status(400).json({ok:false,error:"Attest that the identified signer signed the official document."});
+   const mode=req.get("x-professional-signature-mode")||"applicant_external";
+   if(!["applicant_external","counsel_assumption_staging"].includes(mode))return res.status(400).end();
+   let counsel=null;
+   if(mode==="counsel_assumption_staging"){
+    [counsel]=await ctx.rest("professional_counsel_profiles","select=org_id,attorney_id,full_name,ohio_bar_number,verified_at&org_id=eq."+c.org_id+"&attorney_id=eq."+ctx.user.id+"&limit=1");
+    if(!counsel||req.get("x-professional-counsel-consent")!=="yes")return res.status(403).json({ok:false,error:"Verified counsel and explicit signature consent required."});
+   }
+   let sha;try{sha=await validateProfessionalSignedPdf(req.body,c.outcome,parse,counsel);}catch{return res.status(400).json({ok:false,error:"Use the correct two-page signed official application; unsigned review drafts are not accepted."});}
    const fresh=await ctx.ownedCase(c.id);if(!fresh)return res.status(403).end();
    const existing=await ctx.rest("professional_signed_documents","select="+META+"&case_id=eq."+c.id+"&sha256=eq."+sha+"&limit=1");
    if(existing.length)return res.json({ok:true,document:existing[0]});
-   const rows=await ctx.rest("professional_signed_documents","select="+META,{service:true,body:{org_id:c.org_id,case_id:c.id,attorney_id:ctx.user.id,sha256:sha,pdf_bytes:"\\x"+req.body.toString("hex"),page_count:2,attorney_signature_attested:true}});
+   const rows=await ctx.rest("professional_signed_documents","select="+META,{service:true,body:{org_id:c.org_id,case_id:c.id,attorney_id:ctx.user.id,sha256:sha,pdf_bytes:"\\x"+req.body.toString("hex"),page_count:2,attorney_signature_attested:true,signature_mode:mode,counsel_name:counsel?.full_name||null,counsel_bar_number:counsel?.ohio_bar_number||null}});
    return res.json({ok:true,document:rows[0],note:"Stored for private review; signature is attorney-attested, not independently authenticated."});
   }catch{return res.status(503).json({ok:false,error:"Private review upload unavailable. No filing or payment made."});}
  });
