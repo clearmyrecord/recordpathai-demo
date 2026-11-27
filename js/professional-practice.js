@@ -106,11 +106,21 @@ async function refresh(){
  const seq=++epoch,org=orgId();
  const selectedClient=$("clients").value,selectedFilter=caseFilter();
  $("clients").replaceChildren();$("cases").replaceChildren();$("client-list").replaceChildren();
- const [a,b,c,d,docs,reviewRows,counselRows,enrollRows,taskRows,verifiedRows,observedRows,generatedRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100),api.from("professional_counsel_profiles").select("*").eq("org_id",org).limit(1),api.from("professional_watch_enrollments").select("*").eq("org_id",org).limit(100),api.from("professional_watch_tasks").select("*").eq("org_id",org).order("due_date").limit(500),api.from("professional_verified_court_events").select("id,case_id,event_type,occurred_on,evidence_url,verified_at").eq("org_id",org).order("occurred_on",{ascending:false}).limit(500),api.from("professional_watch_observations").select("*").limit(100),api.from("professional_generated_packets").select("id,case_id,kind,sha256,page_count,created_at").eq("org_id",org).order("created_at",{ascending:false}).limit(500)]);
+ const scoped=(table,fields="*")=>{
+  let q=api.from(table).select(fields);
+  if(table!=="professional_watch_observations")q=q.eq("org_id",org);
+  if(routeStep===3&&routeCase){
+   if(table==="professional_clients")q=q.eq("id",routeCase.client_id);
+   else if(table==="professional_cases")q=q.eq("id",routeCase.id);
+   else if(table!=="professional_counsel_profiles")q=q.eq("case_id",routeCase.id);
+  }
+  return q;
+ };
+ const [a,b,c,d,docs,reviewRows,counselRows,enrollRows,taskRows,verifiedRows,observedRows,generatedRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>scoped(t).order("created_at",{ascending:false}).limit(100)),scoped("professional_signed_documents","id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").order("created_at",{ascending:false}).limit(100),scoped("professional_signed_reviews","*").limit(100),scoped("professional_counsel_profiles","*").limit(1),scoped("professional_watch_enrollments","*").limit(100),scoped("professional_watch_tasks","*").order("due_date").limit(500),scoped("professional_verified_court_events","id,case_id,event_type,occurred_on,evidence_url,verified_at").order("occurred_on",{ascending:false}).limit(500),scoped("professional_watch_observations").limit(100),scoped("professional_generated_packets","id,case_id,kind,sha256,page_count,created_at").order("created_at",{ascending:false}).limit(500)]);
  if(seq!==epoch||!active||org!==orgId())return;
  const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0],enrollments=ok(enrollRows),tasks=ok(taskRows),verified=ok(verifiedRows),observations=ok(observedRows),generated=ok(generatedRows);
- if(routeStep&&routeClient&&!clients.some(c=>c.id===routeClient.id))clients.push(routeClient);
- if(routeStep===3&&routeCase&&!cases.some(c=>c.id===routeCase.id))cases.push(routeCase);
+ if(routeStep&&routeClient&&!clients.some(c=>c.id===routeClient.id)){if(routeStep===3){fail();return;}clients.push(routeClient);}
+ if(routeStep===3&&routeCase){const current=cases.find(c=>c.id===routeCase.id);if(!current){fail();return;}routeCase=current;}
  $("client-filter").replaceChildren(option("","All clients"));
  for(const client of clients){$("clients").append(option(client.id,client.full_name));$("client-filter").append(option(client.id,client.full_name));}
  if(clients.some(c=>c.id===selectedClient))$("clients").value=selectedClient;
@@ -183,7 +193,7 @@ async function refresh(){
   add(card,"p","Reminders use attorney-entered dates. Official events require independent verification; no live docket feed or email/SMS dispatch is connected.");
   const docketInfo=window.RecordPathRecordCollection.linkFor({state:detailFields.caseState||(row.court_id==="oh-wood-common-pleas"?"OH":""),county:detailFields.county||(row.court_id==="oh-wood-common-pleas"?"Wood":""),courtType:detailFields.courtType||(row.court_id==="oh-wood-common-pleas"?"court-of-common-pleas":""),courtName:actualCourt});if(docketInfo.url){const docket=add(card,"a",docketInfo.label);docket.href=docketInfo.url;docket.target="_blank";docket.rel="noopener noreferrer";}else add(card,"p",docketInfo.note);
 
-  if(!routeStep){packetPanel.d.remove();$("cases").append(shell);continue;}
+  if(routeStep!==3){packetPanel.d.remove();$("cases").append(shell);continue;}
   card=packetPanel.body;card.classList.add("professional-packet-page");
   add(card,"h2","Your Filing Packet");
   add(card,"h3","Eligibility Status");
@@ -398,7 +408,7 @@ $("case-form").addEventListener("submit",async e=>{
   const saved=ok(await api.from("professional_cases").insert(payload).select("id").single());
   if(!saved?.id)throw Error("Case save not confirmed");
   const persisted=ok(await api.from("professional_cases").select("*").eq("id",saved.id).eq("org_id",org).single());
-  if(!persisted||persisted.id!==saved.id||persisted.client_id!==client||!sameRecordSnapshot(snapshot,persisted.record_details))throw Error("Supabase full record readback mismatch");
+  if(!persisted||persisted.id!==saved.id||persisted.client_id!==client||persisted.case_number!==payload.case_number||!sameRecordSnapshot(snapshot,persisted.record_details))throw Error("Supabase full record readback mismatch");
   if(!active||org!==orgId()||seq!==epoch)return;
   $("case-form").reset();sharedIntake.reset();navigateWorkflow(3,{caseId:persisted.id});
  }catch(error){notice(error?.message?.startsWith("Enter")?error.message:"Unable to save and verify full record details. Check the court, dates and required fields.");}
