@@ -1,3 +1,4 @@
+import {registerProfessionalReviewRoutes} from "./src/professional-signed-review.js";
 import { paidSandboxProofSession, createPaidSandboxProof } from "./src/paid-sandbox-proof.js";
 import express from "express";
 import Stripe from "stripe";
@@ -243,6 +244,8 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
   const session=event.data?.object;
   return await reconcilePaidPacketCheckout(session,res,event);
 });
+
+registerProfessionalReviewRoutes(app,{express,publicSupabaseConfig,supabaseRestConfig,requireApiUser,getBearerToken});
 
 app.post("/api/packet/private-upload",express.raw({type:"application/pdf",limit:"8mb"}),async(req,res)=>{
   const user=await requireApiUser(req,res);
