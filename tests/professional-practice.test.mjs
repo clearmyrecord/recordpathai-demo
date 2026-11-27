@@ -89,7 +89,7 @@ test("professional and consumer charge intake ask for only one completion date",
 
 test("professional filing packet follows consumer preparation, preview and checkout layout",()=>{
  const js=read("js/professional-practice.js"),consumer=read("packet.html"),css=read("assets/professional-modern.css"),server=read("src/professional-signed-review.js");
- for(const label of ["Your Filing Packet","Your packet and court fees","Preview Your Actual Application (View Only)","Checkout After Independent Approval"]){assert.ok(consumer.includes(label));assert.ok(js.includes(label));}
+ for(const label of ["Your Filing Packet","Your packet and court fees","Preview Your Actual Application (View Only)","Checkout After Independent Approval"]){assert.ok(consumer.includes(label));assert.ok((js+read("professional-packet.html")).includes(label));}
  assert.match(js,/professional-packet-mode/);
  assert.match(css,/\.professional-packet-mode #cases>\.saved-case-card:not\(\.packet-focused\)/);
  assert.match(js,/for\(const page of \[1,2\]\)/);
@@ -104,26 +104,82 @@ test("professional filing packet follows consumer preparation, preview and check
  assert.doesNotMatch(js,/localStorage|sessionStorage/);
 });
 
-test("held professional cases have an explicit renewed-review action, not a dead end",()=>{
+test("held professional cases resume review in the consumer-style signed submission",()=>{
  const js=read("js/professional-practice.js"),server=read("src/professional-signed-review.js");
- assert.match(js,/decision\.decision==="hold"/);
- assert.match(js,/Complete review & prepare application/);
- assert.match(js,/if\(!confirmed\.checked\)throw Error/);
+ assert.match(js,/current\?\.decision==="hold"/);
+ assert.match(js,/await confirmCaseReview\(\)/);
+ assert.match(js,/!contactConfirmed\.checked\|\|!caseReviewed\.checked/);
  assert.match(server,/req\.body\?\.entire_case_reviewed!==true/);
  assert.match(server,/decision=eq\.hold/);
  assert.match(server,/attorney_id=eq\."\+ctx\.user\.id/);
  assert.match(server,/!\["conviction","dismissal","not_guilty"\]\.includes\(c\.outcome\)/);
 });
-test("professional applicant signature is gated by both draft pages and explicit applicant consent",()=>{
- const js=read("js/professional-practice.js"),server=read("src/professional-signed-review.js");
- assert.match(js,/Generate & preview application/);
- assert.match(js,/draftReviewed=true/);
- assert.match(js,/!signatureInk\|\|!signatureConsent\.checked\|\|!draftReviewed/);
- assert.match(js,/!==reviewSnapshot/);
+test("professional Step 1 submits the real signature directly and automatically loads the signed Step 2 preview",()=>{
+ const js=read("js/professional-practice.js"),consumer=read("packet.html"),server=read("src/professional-signed-review.js");
+ for(const label of ["Prepare My Real Signed Packet for Private Review","Draw your signature below","Confirm My Reviewed Pages Before Payment","Choose how your approved packet is fulfilled"]){assert.ok(consumer.includes(label));assert.ok(js.includes(label));}
+ assert.doesNotMatch(js,/Approve unsigned draft|Generate & preview application|draftReviewed/);
+ assert.match(js,/!signatureInk\|\|!signatureConsent\.checked\|\|!contactConfirmed\.checked\|\|!caseReviewed\.checked/);
+ assert.match(js,/!==shownSnapshot/);
  assert.match(js,/signatureReady:true,applicantSignature/);
  assert.match(js,/x-professional-signature-attested/);
+ assert.match(js,/Signed packet saved\. Loading Step 2 preview/);
+ assert.match(js,/void loadPreview\(\)\.catch/);
+ assert.match(js,/digitalChoice=deliveryOption\("digital"/);
+ assert.match(js,/if\(!checkoutReady\)/);
  assert.match(server,/generated-packet\/:id\/preview\/:page/);
  assert.match(server,/kind=eq\.review_draft/);
  assert.match(server,/digest\(bytes\)!==d\.sha256/);
  assert.doesNotMatch(js,/localStorage|sessionStorage|indexedDB/);
+});
+
+test("professional client and case creation has three dedicated routes, not dashboard intake",()=>{
+ const js=read("js/professional-practice.js"),css=read("assets/professional-modern.css");
+ const pages=["professional-eligibility.html","professional-record-details.html","professional-packet.html"];
+ const titles=["Your Personal Information","Your Case Information","Your Filing Packet"];
+ for(const [i,page] of pages.entries()){
+  const html=read(page);
+  assert.ok(html.includes('data-workflow-step="'+(i+1)+'"'));
+  assert.ok(html.includes(titles[i]));
+  assert.ok(html.includes('id="professional-steps"'));
+  assert.ok(js.includes('"'+page+'"'));
+  assert.match(html,/js\/professional-practice\.js\?v=three-step-/);
+ }
+ assert.match(js,/if\(!routeStep\)\{navigateWorkflow\(id==="case-intake"\?2:1/);
+ assert.match(js,/if\(panel===packetPanel&&!routeStep\)\{navigateWorkflow\(3/);
+ assert.match(js,/if\(routeStep!==3\)\{packetPanel\.d\.remove\(\)/);
+ assert.match(js,/if\(!active\|\|routeStep!==1\|\|routeClient\)return/);
+ assert.match(js,/if\(!active\|\|routeStep!==2\|\|!routeClient\|\|!sharedIntake\)return/);
+ assert.match(js,/navigateWorkflow\(2,\{clientId:saved\.id\}\)/);
+ assert.match(js,/navigateWorkflow\(3,\{caseId:persisted\.id\}\)/);
+ assert.match(js,/routeClient\.authorization_confirmed!==true/);
+ assert.match(js,/\.eq\("org_id",orgId\(\)\)\.eq\("id",clientId\)\.maybeSingle\(\)/);
+ assert.match(js,/if\(table==="professional_cases"\)q=q\.eq\("id",routeCase\.id\)/);
+ assert.match(css,/professional-intake-mode>#saved-cases/);
+ assert.doesNotMatch(js,/localStorage|sessionStorage|indexedDB/);
+});
+
+test("Add New Case opens Step 2 directly, while new clients start in Step 1",()=>{
+ const js=read("js/professional-practice.js"),html=read("professional-practice.html");
+ assert.match(html,/id="new-case"[^>]*>Add New Case/);
+ assert.match(js,/\$\("new-case"\)\.addEventListener\("click",\(\)=>navigateWorkflow\(2,/);
+ assert.match(js,/navigateWorkflow\(id==="case-intake"\?2:1/);
+ assert.match(js,/if\(routeStep===2&&routeClient\)sharedIntake=/);
+ assert.match(js,/picker\.addEventListener\("change",\(\)=>navigateWorkflow\(2,/);
+ assert.match(js,/\$\("case-save"\)\.disabled=!routeClient/);
+ assert.match(js,/Add a new client in Step 1/);
+});
+
+test("professional packet mirrors the consumer sections without consumer account scripts",()=>{
+ const js=read("js/professional-practice.js"),consumer=read("packet.html"),css=read("assets/professional-modern.css"),html=read("professional-packet.html");
+ const headings=["Eligibility Status","Intake Summary","All Saved Offenses","Generate Packet"];
+ let previous=-1;
+ for(const heading of headings){assert.ok(consumer.includes(heading));const pos=js.indexOf('packetCard("'+heading+'")');assert.ok(pos>previous);previous=pos;}
+ for(const label of ["Relief Type","Required Waiting Period","Estimated Eligible Date","RecordWatch background tracking","Missing requirements","Selected Record","Residence State","Current packet record"])assert.ok(js.includes(label));
+ assert.match(js,/row\.record_details\.charges/);
+ assert.match(js,/charge\.final_disposition/);
+ assert.match(js,/client\.line2/);
+ assert.match(js,/watchEnabled\?"Enabled":"Not activated"/);
+ assert.match(css,/\.professional-date-grid\{display:grid;grid-template-columns:repeat\(4/);
+ assert.match(css,/\.professional-summary-grid/);
+ assert.doesNotMatch(html,/js\/user-store\.js/);
 });

@@ -3966,6 +3966,14 @@ app.post("/api/recordwatch/inbound-sms",
         body:{sms_enabled:false,sms_opted_out_at:null,sms_consent_at:null,updated_at:now}
       });
     }
+    // Professional recipients use the same signed STOP/START suppression.
+    // START removes the provider block, never re-enables consent.
+    if(process.env.RECORDPATH_PROFESSIONAL_ALERTS_ENABLED==="true"){
+      await supabaseRest("professional_mail_alert_preferences",{
+        method:"PATCH",query:"?phone=eq."+encodeURIComponent(phone),
+        body:{sms_enabled:false,updated_at:now}
+      });
+    }
     for(const pref of recordwatchMemory.preferences){
       if(canonicalSmsPhone(pref.phone_number||pref.notification_phone)===phone){
         pref.sms_enabled=false;pref.sms_consent_at=null;
