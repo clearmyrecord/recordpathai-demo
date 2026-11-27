@@ -1,4 +1,5 @@
 import {registerProfessionalMailing} from "./professional-mailing.js";
+import {registerProfessionalMailTracking} from "./professional-mail-tracking.js";
 import {registerProfessionalLiveBilling} from "./professional-live-billing.js";
 import {registerProfessionalBillingRoutes} from "./professional-billing-sandbox.js";
 import {createHash} from "node:crypto";
@@ -186,5 +187,6 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
    res.setHeader("X-Content-Type-Options","nosniff");res.setHeader("Content-Disposition",'attachment; filename="professional-signed-review.pdf"');return res.type("application/pdf").send(bytes);
   }catch{return res.status(503).end();}
  });
+ if(mailing)registerProfessionalMailTracking(app,{context,...mailing});
  return mailing?registerProfessionalMailing(app,{express,context,...mailing}):null;
 }
