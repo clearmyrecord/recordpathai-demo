@@ -3734,7 +3734,7 @@ window.chargeLibrary=[...ohioChargeReferences,...window.chargeLibrary.map(r=>({.
    const hay=[name,code,...aliases].join(" ");
    const subsectionMatch=Boolean(code&&q.startsWith(code+" ")&&/^[a-z0-9 ]+$/.test(q.slice(code.length+1)));
    if(!subsectionMatch&&!terms.every(t=>hay.includes(t)))return null;
-   const score=(code===q?100:code&&q.startsWith(code+" ")?90:code&&code.startsWith(q)?70:0)+(name===q?50:name.startsWith(q)?30:name.includes(q)?20:10)+(aliases.includes(q)?40:aliases.some(a=>a.includes(q))?15:0)+(e.state?5:0);
+   const score=(code===q?100:code&&q.startsWith(code+" ")?90:code&&code.startsWith(q)?70:0)+(name===q?50:name.startsWith(q)?30:name.includes(q)?20:10)+(aliases.includes(q)?40:aliases.some(a=>a.includes(q))?15:0)+(e.state?25:0);
    return {...e,score};
   }).filter(Boolean).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name)||String(a.code||"").localeCompare(String(b.code||""))).slice(0,Math.max(1,Math.min(500,Number(limit)||20)));
  }
