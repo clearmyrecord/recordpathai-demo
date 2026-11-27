@@ -183,3 +183,18 @@ test("professional packet mirrors the consumer sections without consumer account
  assert.match(css,/\.professional-summary-grid/);
  assert.doesNotMatch(html,/js\/user-store\.js/);
 });
+
+test("new professional client intake checks scoped existing identity before insert",()=>{
+ const js=read("js/professional-practice.js");
+ const lookup=js.slice(js.indexOf("async function findExistingClientMatches"),js.indexOf("function bindForm"));
+ assert.match(lookup,/api.auth.getUser\(\)/);
+ assert.match(lookup,/\.eq\("org_id",org\)\.eq\("attorney_id",user.id\)\.eq\("dob",payload.dob\)/);
+ assert.match(lookup,/normalizedClientName\(c.full_name\)===name/);
+ assert.match(lookup,/normalizedClientPhone\(c.phone\)===phone/);
+ const submit=js.slice(js.indexOf("function bindForm"),js.indexOf('bindForm("client-form"'));
+ assert.ok(submit.indexOf("await findExistingClientMatches")<submit.indexOf(".insert(payload)"));
+ assert.match(submit,/if\(matches.length\)/);
+ assert.match(submit,/navigateWorkflow\(1,\{clientId:match.id\}\)/);
+ assert.match(submit,/form.prepend\(panel\);panel.scrollIntoView\(\{block:"nearest"\}\);return;/);
+ assert.match(js,/navigateWorkflow\(2,\{clientId:routeClient.id\}\)/);
+});
