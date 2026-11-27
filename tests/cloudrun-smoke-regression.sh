@@ -107,10 +107,11 @@ case "$url" in
   */self-search.html)marker="Find your own court records";page="self-search.html";;
   */pilot-demo.html)marker="Illustrative demo";page="pilot-demo.html";;
   */js/pilot-demo.js)marker="DEMO-2006-001";page="pilot-demo.js";;
-  */professional.html)marker="Create professional account";page="professional.html";;
-  */professional-account.html)marker="Submit verification request";page="professional-account.html";;
+  */professional.html)marker='href="signup.html?returnUrl=professional-account.html" class="nav-cta">Get started';page="professional.html";;
+  */signup.html)marker='id="professionalExistingAccount"';page="signup.html";;
+  */professional-account.html)marker='id="confirm-account" hidden';page="professional-account.html";;
   */professional-practice.html)marker="Attorney case workflow";page="professional-practice.html";;
-  */js/professional-account.js)marker="live-billing/";page="professional-account.js";;
+  */js/professional-account.js)marker='if(action==="checkout"&&confirmedAccountId!==user.id)';page="professional-account.js";;
   */js/professional-practice.js)marker="Download official form for signature";page="professional-practice.js";;
   *)echo "Unknown requested path $url" >&2;exit 81;;
 esac
