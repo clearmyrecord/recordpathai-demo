@@ -239,25 +239,50 @@ async function refresh(){
   }else if(decision.decision==="approved_for_unsigned_draft"){
    card=payment;
    add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". Choose included digital delivery or Pay and Mail when the court-specific route is available.");
-   if(row.outcome==="conviction"&&!internalTestAccess&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
+   if(["conviction","dismissal","not_guilty"].includes(row.outcome)&&row.court_id==="oh-wood-common-pleas"&&!internalTestAccess&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
+    const courtFee=row.outcome==="conviction"?100:0;
     add(card,"h4","Optional Pay and Mail");
-    add(card,"p","Preparation: included. Mailing + SMS/email case alerts: $10. Court filing deposit: $100. Total: $110 before applicable tax.");
+    add(card,"p","Preparation: included. Mailing + SMS/email case alerts: $10. Court filing deposit: $"+courtFee+". Total: $"+(courtFee+10)+" before applicable tax.");
     const mailStatus=add(card,"p","Checking private mailing status…");mailStatus.setAttribute("role","status");
-    const consentLabel=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";consentLabel.append(consent,document.createTextNode(" I authorize mailing the independently approved signed application and agree to pay the $100 court deposit plus $10 for mailing and SMS/email case alerts, plus applicable tax."));consentLabel.hidden=true;
-    const pay=button("Pay and Mail — $110 + applicable tax",async()=>{
+    const consentLabel=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";consentLabel.append(consent,document.createTextNode(" I authorize mailing the independently approved signed application and agree to pay $"+(courtFee+10)+" plus applicable service tax, including $"+courtFee+" court deposit and $10 mailing and case alerts."));consentLabel.hidden=true;
+    const pay=button(courtFee?"Pay and Mail — $110 + applicable tax":"Pay and Mail — $10 + applicable tax",async()=>{
      if(!consent.checked||!active||org!==orgId())throw Error("Consent required");
      const token=epoch,session=ok(await api.auth.getSession()).session;if(!session?.access_token||token!==epoch||!active||org!==orgId())throw Error("Session changed");
      const response=await fetch("/api/professional/mail/"+encodeURIComponent(row.id)+"/checkout",{method:"POST",headers:{Authorization:"Bearer "+session.access_token,"x-professional-mail-consent":"yes"},cache:"no-store"});
      const data=await response.json();if(!response.ok||!data.ok||token!==epoch||!active||org!==orgId()||new URL(data.url).origin!=="https://checkout.stripe.com")throw Error("Checkout unavailable");location.assign(data.url);
     });pay.hidden=true;
+    const alertBox=add(card,"section","");alertBox.hidden=true;
+    add(alertBox,"h4","SMS and email case alerts");
+    add(alertBox,"p","Opt in separately to email and SMS alerts to your verified professional account contacts. Messages contain no client or case details. SMS frequency varies; message and data rates may apply. Reply STOP to opt out, HELP for help. Consent is optional and can be withdrawn here.");
+    const emailLabel=add(alertBox,"label",""),emailOpt=document.createElement("input");emailOpt.type="checkbox";emailLabel.append(emailOpt,document.createTextNode(" Email case updates"));
+    const smsLabel=add(alertBox,"label",""),smsOpt=document.createElement("input");smsOpt.type="checkbox";smsLabel.append(smsOpt,document.createTextNode(" SMS case updates to my verified number"));
+    const alertStatus=add(alertBox,"p","");alertStatus.setAttribute("role","status");
+    const alertButton=add(alertBox,"button","Save alert preferences");alertButton.type="button";
+    const alertUrl="/api/professional/mail/"+encodeURIComponent(row.id)+"/alerts";
+    async function alertHeaders(){const session=ok(await api.auth.getSession()).session;if(!session?.access_token||!active||org!==orgId())throw Error("Session changed");return {Authorization:"Bearer "+session.access_token,"Content-Type":"application/json"};}
+    alertButton.addEventListener("click",async()=>{
+     alertButton.disabled=true;
+     try{
+      const result=await fetch(alertUrl,{method:"POST",headers:await alertHeaders(),body:JSON.stringify({emailEnabled:emailOpt.checked&&!emailOpt.disabled,smsEnabled:smsOpt.checked&&!smsOpt.disabled,consentConfirmed:true}),cache:"no-store"});
+      const data=await result.json();if(!result.ok||!data.ok)throw Error(data.error||"Preferences unavailable");
+      alertStatus.textContent="Alert preferences saved. Delivery requires a verified payment.";
+     }catch(error){alertStatus.textContent=error.message||"Unable to save preferences.";}finally{alertButton.disabled=false;}
+    });
+    async function loadAlertPreferences(){
+     const response=await fetch(alertUrl,{headers:await alertHeaders(),cache:"no-store"});const data=await response.json();
+     if(!response.ok||!data.ok)return;
+     alertBox.hidden=false;emailOpt.disabled=!data.emailAvailable;smsOpt.disabled=!data.smsAvailable;emailOpt.checked=data.emailEnabled&&data.emailAvailable;smsOpt.checked=data.smsEnabled&&data.smsAvailable;
+     if(!data.smsAvailable)alertStatus.textContent="SMS requires a verified, non-suppressed account phone number. Email can be enabled independently.";
+    }
     void (async()=>{try{
      const token=epoch,session=ok(await api.auth.getSession()).session;if(!session?.access_token||!active||org!==orgId()||token!==epoch)return;
      const response=await fetch("/api/professional/mail/"+encodeURIComponent(row.id),{headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"});
      const data=await response.json();if(!response.ok||!data.ok)throw Error("Unavailable");
      if(!active||org!==orgId()||token!==epoch)return;
      const labels={awaiting_independent_review:"Awaiting independent signed application review",approved:"Reviewed — mailing readiness check",paid_hold:"Payment verified — awaiting mailing",dispatch_claimed:"Mailing being reconciled — do not pay again",submitted_to_lob:"Accepted by Lob for processing — court filing not yet confirmed"};
-     mailStatus.textContent=(labels[data.status]||"Mailing status unavailable")+(data.lobCheckId?" · Lob reference: "+data.lobCheckId:"")+(data.expectedDeliveryDate?" · Estimated delivery: "+data.expectedDeliveryDate:"");
+     mailStatus.textContent=(labels[data.status]||"Mailing status unavailable")+((data.lobCheckId||data.lobLetterId)?" · Lob reference: "+(data.lobCheckId||data.lobLetterId):"")+(data.expectedDeliveryDate?" · Estimated delivery: "+data.expectedDeliveryDate:"");
      if(data.checkoutReady===true){consentLabel.hidden=false;pay.hidden=false;mailStatus.textContent="Approved for secure mailing checkout";}
+     if(data.status!=="awaiting_independent_review")await loadAlertPreferences().catch(()=>{});
      if(Array.isArray(data.providerEvents))for(const e of data.providerEvents){if(e.name) add(mailStatus,"span"," · "+e.name+(e.time?" ("+e.time+")":""));}
     }catch{mailStatus.textContent="Mailing status unavailable. Do not pay again."}})();
    }
