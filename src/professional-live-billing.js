@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 const ACCOUNT="acct_1TNJc5EGlcQZ3lmX";
 const BACK="https://recordpathai.com/professional-account.html";
+const PORTAL="bpc_1UgEGjEGlcQZ3lmXEuDTCSHU";
 export const LIVE_PROFESSIONAL_PRICES=Object.freeze({solo:{id:"price_1UgEDMEGlcQZ3lmXWhFcmLh2",cents:9900},firm:{id:"price_1UgEDNEGlcQZ3lmXCqXidQQy",cents:24900},filing:{id:"price_1UgEDPEGlcQZ3lmX4KtXbLzk",cents:1000}});
 export function verifiedLivePrice(price,plan){
  const expected=LIVE_PROFESSIONAL_PRICES[plan];
@@ -18,6 +19,8 @@ export function registerProfessionalLiveBilling(app,{context,env=process.env,str
   if(rows.length!==1){res.status(403).json({ok:false,error:"An operator-approved professional billing account is required."});return null;}
   const row=rows[0],key=env.STRIPE_SECRET_KEY||"";
   if(!key.startsWith("sk_live_")||!env.SUPABASE_SERVICE_ROLE_KEY){res.status(503).json({ok:false,error:"Live billing service is not configured."});return null;}
+  const [org]=await ctx.rest("professional_pilot_orgs","select=id,active,access_kind,activation_reviewed_at&id=eq."+row.org_id+"&limit=1",{service:true});
+  if(!org?.active||org.access_kind!=="paid"||!org.activation_reviewed_at)throw Error("Professional organization not approved");
   const stripe=stripeFactory(key);
   const account=await stripe.accounts.retrieve();if(account.id!==ACCOUNT)throw Error("Unexpected Stripe account");
   const expected=LIVE_PROFESSIONAL_PRICES[row.plan];
@@ -60,13 +63,16 @@ export function registerProfessionalLiveBilling(app,{context,env=process.env,str
    const metadata={product_family:"recordpathai_professional",org_id:row.org_id,plan:row.plan};
    session=await stripe.checkout.sessions.create({mode:"subscription",customer:row.stripe_customer_id,line_items:[{price:price.id,quantity:1}],automatic_tax:{enabled:true},customer_update:{address:"auto"},success_url:BACK,cancel_url:BACK,metadata,subscription_data:{metadata},client_reference_id:row.org_id},{idempotencyKey:"rpai-pro-live-"+row.org_id+"-"+row.plan+"-"+new Date().toISOString().slice(0,10)});
   }
-  if(session.livemode!==true||session.status!=="open"||new URL(session.url).origin!=="https://checkout.stripe.com")throw Error("Unexpected checkout");
+  const items=await stripe.checkout.sessions.listLineItems(session.id,{limit:2});
+  if(items.has_more||items.data.length!==1||items.data[0].price?.id!==price.id||items.data[0].quantity!==1||session.customer!==row.stripe_customer_id||session.livemode!==true||session.status!=="open"||new URL(session.url).origin!=="https://checkout.stripe.com")throw Error("Unexpected checkout");
   return res.json({ok:true,mode:"live",url:session.url});
  }catch{return res.status(503).json({ok:false,error:"Professional checkout unavailable."});}});
  app.post("/api/professional/live-billing/portal",async(req,res)=>{try{
   if(req.get("x-professional-live-consent")!=="yes")return res.status(400).end();
   const a=await authorized(req,res);if(!a)return;
-  const session=await a.stripe.billingPortal.sessions.create({customer:a.row.stripe_customer_id,return_url:BACK});
+  const cfg=await a.stripe.billingPortal.configurations.retrieve(PORTAL);
+  if(cfg.livemode!==true||!cfg.active||cfg.metadata?.product_family!=="recordpathai_professional"||cfg.features?.subscription_update?.enabled!==false||!cfg.features?.subscription_cancel?.enabled)throw Error("Unexpected portal configuration");
+  const session=await a.stripe.billingPortal.sessions.create({customer:a.row.stripe_customer_id,configuration:PORTAL,return_url:BACK});
   if(new URL(session.url).origin!=="https://billing.stripe.com")throw Error("Unexpected portal");
   return res.json({ok:true,mode:"live",url:session.url});
  }catch{return res.status(503).json({ok:false,error:"Professional billing portal unavailable."});}});
