@@ -127,3 +127,29 @@ test("professional applicant signature is gated by both draft pages and explicit
  assert.match(server,/digest\(bytes\)!==d\.sha256/);
  assert.doesNotMatch(js,/localStorage|sessionStorage|indexedDB/);
 });
+
+test("professional client and case creation has three dedicated routes, not dashboard intake",()=>{
+ const js=read("js/professional-practice.js"),css=read("assets/professional-modern.css");
+ const pages=["professional-eligibility.html","professional-record-details.html","professional-packet.html"];
+ const titles=["Your Personal Information","Your Case Information","Your Filing Packet"];
+ for(const [i,page] of pages.entries()){
+  const html=read(page);
+  assert.ok(html.includes('data-workflow-step="'+(i+1)+'"'));
+  assert.ok(html.includes(titles[i]));
+  assert.ok(html.includes('id="professional-steps"'));
+  assert.ok(js.includes('"'+page+'"'));
+  assert.match(html,/js\/professional-practice\.js\?v=three-step-/);
+ }
+ assert.match(js,/if\(!routeStep\)\{navigateWorkflow\(1/);
+ assert.match(js,/if\(panel===packetPanel&&!routeStep\)\{navigateWorkflow\(3/);
+ assert.match(js,/if\(routeStep!==3\)\{packetPanel\.d\.remove\(\)/);
+ assert.match(js,/if\(!active\|\|routeStep!==1\|\|routeClient\)return/);
+ assert.match(js,/if\(!active\|\|routeStep!==2\|\|!routeClient\|\|!sharedIntake\)return/);
+ assert.match(js,/navigateWorkflow\(2,\{clientId:saved\.id\}\)/);
+ assert.match(js,/navigateWorkflow\(3,\{caseId:persisted\.id\}\)/);
+ assert.match(js,/routeClient\.authorization_confirmed!==true/);
+ assert.match(js,/\.eq\("org_id",orgId\(\)\)\.eq\("id",clientId\)\.maybeSingle\(\)/);
+ assert.match(js,/if\(table==="professional_cases"\)q=q\.eq\("id",routeCase\.id\)/);
+ assert.match(css,/professional-intake-mode>#saved-cases/);
+ assert.doesNotMatch(js,/localStorage|sessionStorage|indexedDB/);
+});
