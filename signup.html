@@ -53,6 +53,7 @@
     <section class="page-hero"><div class="container hero-card"><span class="eyebrow">Account</span><h1>Create your account</h1><p>Create a secure Supabase-backed account to save progress, pay, download packets, use RecordWatch, and track cases.</p></div></section>
     <section class="page-section"><div class="container"><section class="page-card auth-card">
       <div id="authPrompt" class="info-banner" style="display:none;"></div>
+      <section id="professionalExistingAccount" hidden><h2>Step 1 — Confirm your professional account</h2><p id="professionalAccountIdentity"></p><p>Your subscription will be connected to this account. Continue only if this is the account you want to use for your professional practice.</p><div class="button-row"><a id="professionalContinue" class="btn btn-primary" href="professional-account.html">Continue to subscription</a><button id="professionalSwitch" class="btn btn-secondary" type="button">Sign out and create or use another account</button></div></section>
       <form id="signupForm" class="form-grid">
         <div class="field field-full"><label for="fullName">Full legal name</label><input id="fullName" type="text" autocomplete="name" required /></div>
         <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" required /></div>
@@ -71,6 +72,9 @@
     document.addEventListener("DOMContentLoaded", function () {
       const store = window.RecordPathUserStore;
       const returnUrl = store.getReturnUrl("dashboard.html");
+      const professionalSignup = /^professional-account\.html(?:\?|$)/.test(returnUrl);
+      const professionalExisting = document.getElementById("professionalExistingAccount");
+      const professionalSwitch = document.getElementById("professionalSwitch");
       const promptBanner = document.getElementById("authPrompt");
       const status = document.getElementById("authStatus");
       const form = document.getElementById("signupForm");
@@ -108,7 +112,21 @@
         sessionStorage.removeItem("recordPathAuthPrompt");
       }
       document.getElementById("loginLink").href = RecordPathAuth.loginUrl(returnUrl);
-      ["fullName", "email", "phone"].forEach(function (id) {
+      if (professionalSignup) {
+        document.querySelector(".page-hero h1").textContent = "Step 1 — Create your professional account";
+        document.querySelector(".page-hero p").textContent = "Register for free or sign in with an existing RecordPathAI account. Confirm your email before selecting and paying for a subscription.";
+        document.getElementById("professionalContinue").href = returnUrl;
+        professionalSwitch.addEventListener("click", async function () {
+          professionalSwitch.disabled = true;
+          try {
+            const api = await window.RecordPathSupabase.getClient();
+            const {error} = await api.auth.signOut();
+            if (error) throw error;
+            window.location.replace("signup.html?returnUrl=" + encodeURIComponent(returnUrl));
+          } catch (error) { feedback("Unable to sign out. Try again.", true); professionalSwitch.disabled = false; }
+        });
+      }
+      if (!professionalSignup) ["fullName", "email", "phone"].forEach(function (id) {
         const value = localStorage.getItem(id);
         if (value && document.getElementById(id)) document.getElementById(id).value = value;
       });
@@ -151,6 +169,15 @@
           catch (error) { feedback(error.message || "Authentication service is unavailable.", true); return; }
         }
         if (store.isLoggedIn()) {
+          if (professionalSignup) {
+            form.hidden = true;
+            form.style.display = "none";
+            professionalExisting.hidden = false;
+            const current = store.getCurrentUser();
+            document.getElementById("professionalAccountIdentity").textContent = current?.email ? "Signed in as " + current.email : "You already have a signed-in RecordPathAI account.";
+            document.querySelector(".page-hero h1").textContent = "Step 1 — Confirm your professional account";
+            return;
+          }
           store.clearReturnUrl();
           window.location.replace(returnUrl);
           return;
