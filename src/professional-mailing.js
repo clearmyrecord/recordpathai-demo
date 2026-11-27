@@ -240,8 +240,15 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
     if(!eventId(o.stripe_event_id)||!verifiedProfessionalMailPayment(await stripe.checkout.sessions.retrieve(o.stripe_session_id,{expand:["payment_intent.latest_charge"]}),o))continue;
     const p=await preferences(o);if(!p||!p.email_enabled&&!p.sms_enabled)continue;
     const recipient=await verifiedRecipient(o.user_id);
-    const events=await rest("professional_verified_court_events",{query:"?case_id=eq."+o.case_id+"&org_id=eq."+o.org_id+"&attorney_id=eq."+o.user_id+"&verified_at=gte."+encodeURIComponent(p.consent_at)+"&select=id&limit=30"});
-    const keys=["payment_confirmed",...(o.status==="submitted_to_lob"?["mail_submitted"]:[]),...events.map(e=>"court:"+e.id)];
+    const keys=["payment_confirmed",...(o.status==="submitted_to_lob"?["mail_submitted"]:[])];
+    let eventCursor=null;
+    while(true){
+     const events=await rest("professional_verified_court_events",{query:"?case_id=eq."+o.case_id+"&org_id=eq."+o.org_id+"&attorney_id=eq."+o.user_id+"&verified_at=gte."+encodeURIComponent(p.consent_at)+"&select=id&order=id.asc&limit=30"+(eventCursor?"&id=gt."+encodeURIComponent(eventCursor):"")});
+     if(!Array.isArray(events)||events.some(e=>!uuid(e.id)))throw Error("Invalid verified event page");
+     keys.push(...events.map(e=>"court:"+e.id));
+     if(events.length<30)break;
+     const next=events.at(-1).id;if(eventCursor&&next<=eventCursor)throw Error("Invalid verified event cursor");eventCursor=next;
+    }
     for(const key of keys)for(const channel of ["email","sms"]){
      const current=await preferences(o);
      if(!current||channel==="email"&&(!current.email_enabled||!recipient.email||current.email!==recipient.email)||channel==="sms"&&(!current.sms_enabled||!recipient.phone||current.phone!==recipient.phone||await suppressed(recipient.phone)))continue;
