@@ -125,6 +125,22 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
    return res.json({ok:true,document:rows[0],note:"Stored for private review; signature is attorney-attested, not independently authenticated."});
   }catch{return res.status(503).json({ok:false,error:"Private review upload unavailable. No filing or payment made."});}
  });
+ app.get("/api/professional/signed-review/:id/preview/:page",async(req,res)=>{
+  try{
+   const ctx=await context(req,res);if(!ctx)return;
+   const id=req.params.id,page=Number(req.params.page);if(!uuid(id)||![1,2].includes(page))return res.status(400).end();
+   const [d]=await ctx.rest("professional_signed_documents","select="+META+"&id=eq."+id+"&attorney_id=eq."+ctx.user.id+"&limit=1");
+   if(!d||!await ctx.ownedCase(d.case_id))return res.status(404).end();
+   const [row]=await ctx.rest("professional_signed_documents","select=pdf_bytes,sha256&id=eq."+id+"&attorney_id=eq."+ctx.user.id+"&limit=1",{service:true});
+   if(!row||typeof row.pdf_bytes!=="string"||!/^\\x[0-9a-f]+$/i.test(row.pdf_bytes))return res.status(503).end();
+   const bytes=Buffer.from(row.pdf_bytes.slice(2),"hex");
+   if(bytes.length>PROFESSIONAL_PDF_MAX||digest(bytes)!==d.sha256||row.sha256!==d.sha256||!await ctx.ownedCase(d.case_id))return res.status(403).end();
+   const {renderWatermarkedPreviewPage}=await import("./packet-preview.js");
+   const png=await renderWatermarkedPreviewPage(bytes,page,d.page_count,{professional:true});
+   if(!await ctx.ownedCase(d.case_id))return res.status(403).end();
+   res.setHeader("Cache-Control","private, no-store");res.setHeader("X-Content-Type-Options","nosniff");return res.type("image/png").send(png);
+  }catch{return res.status(503).end();}
+ });
  app.get("/api/professional/signed-review/:id",async(req,res)=>{
   try{
    const ctx=await context(req,res);if(!ctx)return;
