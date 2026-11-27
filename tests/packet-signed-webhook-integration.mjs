@@ -9,6 +9,7 @@ import express from "express";
 import Stripe from "stripe";
 import {verifiedPacketSession,PACKET_PRICE_CENTS} from "../src/payment-security.js";
 import {validCaseId} from "../src/packet-release.js";
+import {PROFESSIONAL_MAIL_PRODUCT} from "../src/professional-mailing.js";
 
 const source=readFileSync(new URL("../server.js",import.meta.url),"utf8");
 const reconcilerStart=source.indexOf("async function reconcilePaidPacketCheckout(session,res,verifiedEvent){");
@@ -52,6 +53,7 @@ async function harness(t,session=baseSession){
   const writes=[];
   const lookups=[];
   const affiliateCalls=[];
+  const professionalCalls=[];
   let current={...session,metadata:{...session.metadata}};
   let failLookup=false;
   // Distinct mocked boundary, shared production reconciler and webhook source.
@@ -90,7 +92,8 @@ async function harness(t,session=baseSession){
   const context=vm.createContext({
     app,express,stripe,supabaseRest,
     packetDatabaseReady:()=>true,
-    verifiedPacketSession,validCaseId,PACKET_PRICE_CENTS,
+    verifiedPacketSession,validCaseId,PACKET_PRICE_CENTS,PROFESSIONAL_MAIL_PRODUCT,
+    professionalMailing:{reconcile:async(session,res,event)=>{professionalCalls.push({session,event});return res.json({received:true,product:PROFESSIONAL_MAIL_PRODUCT});}},
     recordAffiliateCommission:async(...args)=>{affiliateCalls.push(args);},
     voidAffiliateCommission:async()=>{},
     process:{env:{STRIPE_WEBHOOK_SECRET:syntheticSecret}},
@@ -110,13 +113,13 @@ async function harness(t,session=baseSession){
       payload,secret:syntheticSecret
     });
     const wire=tamper?payload.replace("evt_SYNTHETIC_NEVER_STRIPE","evt_TAMPERED"):payload;
-    const response=await fetch(url,{method:"POST",
+    const response=await fetch(url,{method:"POST",signal:AbortSignal.timeout(10000),
       headers:{"content-type":"application/json",
         "stripe-signature":invalidSignature?"t=1,v1=invalid":signature},
       body:wire});
     return {status:response.status,body:await response.json()};
   }
-  return {send,rows,receipts,writes,lookups,affiliateCalls,setSession:s=>{current=s;},
+  return {send,rows,receipts,writes,lookups,affiliateCalls,professionalCalls,setSession:s=>{current=s;},
     failLookup:()=>{failLookup=true;}};
 }
 
@@ -234,4 +237,19 @@ test("digital-only $50 webhook rejects disguised court-fee collection and mispri
     assert.equal(result.status,400);
     assert.equal(h.rows.size,0);
   }
+});
+
+
+test("only a correctly signed professional checkout reaches the separate professional reconciler",async t=>{
+  const h=await harness(t);
+  const pro=eventFor({...baseSession,metadata:{productType:PROFESSIONAL_MAIL_PRODUCT}});
+  assert.equal((await h.send(pro,{invalidSignature:true})).status,400);
+  assert.equal(h.professionalCalls.length,0);
+  const result=await h.send(pro);
+  assert.equal(result.status,200);
+  assert.equal(result.body.product,PROFESSIONAL_MAIL_PRODUCT);
+  assert.equal(h.professionalCalls.length,1);
+  assert.equal(h.professionalCalls[0].event.id,pro.id);
+  assert.equal(h.rows.size,0);
+  assert.equal(h.receipts.size,0);
 });
