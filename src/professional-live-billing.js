@@ -34,6 +34,7 @@ export function registerProfessionalLiveBilling(app,{context,env=process.env,str
   }
   if(rows.length!==1||!rows[0].approved)throw Error("Professional account unavailable");
   const row=rows[0];
+  if(row.authorized_user!==ctx.user.id){res.status(403).json({ok:false,error:"Subscription must belong to the signed-in account."});return null;}
   const [org]=await ctx.rest("professional_pilot_orgs","select=id,active,access_kind,activation_reviewed_at,self_service_terms_at&id=eq."+row.org_id+"&limit=1",{service:true});
   if(!org?.active||org.access_kind!=="paid"||(!org.activation_reviewed_at&&!org.self_service_terms_at))throw Error("Professional organization unavailable");
   const [member]=await ctx.rest("professional_pilot_members","select=org_id,user_id,active,role,attorney_verified&org_id=eq."+row.org_id+"&user_id=eq."+ctx.user.id+"&limit=1",{service:true});
