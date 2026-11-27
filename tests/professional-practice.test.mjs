@@ -103,3 +103,27 @@ test("professional filing packet follows consumer preparation, preview and check
  assert.match(server,/private, no-store/);
  assert.doesNotMatch(js,/localStorage|sessionStorage/);
 });
+
+test("held professional cases have an explicit renewed-review action, not a dead end",()=>{
+ const js=read("js/professional-practice.js"),server=read("src/professional-signed-review.js");
+ assert.match(js,/decision\.decision==="hold"/);
+ assert.match(js,/Complete review & prepare application/);
+ assert.match(js,/if\(!confirmed\.checked\)throw Error/);
+ assert.match(server,/req\.body\?\.entire_case_reviewed!==true/);
+ assert.match(server,/decision=eq\.hold/);
+ assert.match(server,/attorney_id=eq\."\+ctx\.user\.id/);
+ assert.match(server,/!\["conviction","dismissal","not_guilty"\]\.includes\(c\.outcome\)/);
+});
+test("professional applicant signature is gated by both draft pages and explicit applicant consent",()=>{
+ const js=read("js/professional-practice.js"),server=read("src/professional-signed-review.js");
+ assert.match(js,/Generate & preview application/);
+ assert.match(js,/draftReviewed=true/);
+ assert.match(js,/!signatureInk\|\|!signatureConsent\.checked\|\|!draftReviewed/);
+ assert.match(js,/!==reviewSnapshot/);
+ assert.match(js,/signatureReady:true,applicantSignature/);
+ assert.match(js,/x-professional-signature-attested/);
+ assert.match(server,/generated-packet\/:id\/preview\/:page/);
+ assert.match(server,/kind=eq\.review_draft/);
+ assert.match(server,/digest\(bytes\)!==d\.sha256/);
+ assert.doesNotMatch(js,/localStorage|sessionStorage|indexedDB/);
+});
