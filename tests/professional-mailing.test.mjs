@@ -109,3 +109,5 @@ test("professional alert consent and delivery fail closed and share signed STOP 
  assert.match(sql,/professional_mail_alert_preferences enable row level security/);
  assert.match(server,/professional_mail_alert_preferences/);
 });
+
+test("checkout returns to the same workspace and alert delivery paginates paid cases",()=>{const src=readFileSync(new URL("../src/professional-mailing.js",import.meta.url),"utf8");assert.match(src,/new URLSearchParams\(\{caseId:o\.case_id,org:o\.org_id\}\)/);assert.match(src,/success_url:back\(o\),cancel_url:back\(o\)/);assert.match(src,/order=case_id\.asc&limit=100/);assert.match(src,/case_id=gt\./);assert.match(src,/newer signed application requires independent review/);});
