@@ -42,7 +42,15 @@ test("actual applicant signature is placed once on official mapped page four and
   const bytes=await renderProfessionalDraft({...params,signatureReady:true,applicantSignature:signature});
   assert.equal(bytes[0],2);assert.equal(images.length,1);assert.equal(images[0].i,3);
   assert.ok(images[0].options.width>0&&images[0].options.height>0);
-  assert.ok(calls.some(x=>x.i===3&&x.value==="11/26/2026"));
+  const {template}=prepareProfessionalDraftData(client,{...base,outcome},decision,"2026-11-26");
+  const dateFields=JSON.parse(read(template.map)).mappings.filter(f=>(f.dataPath||f.name)==="generated.current_date");
+  assert.ok(dateFields.length>0);
+  for(const f of dateFields)assert.ok(calls.some(x=>x.i===Number(f.page)-1&&x.value==="11/26/2026"),"Missing date at mapped page "+f.page);
+  calls=[];images=[];
+  pages.unshift(...Array.from({length:2},(_,i)=>({getWidth:()=>612,getHeight:()=>792,drawText:(value,options)=>calls.push({i,value,options}),drawImage:(image,options)=>images.push({i,image,options})})));
+  await renderProfessionalDraft({...params,signatureReady:true});
+  assert.equal(images.length,0);
+  assert.ok(!calls.some(x=>x.value==="11/26/2026"),"Unsigned export must leave signature date blank");
   assert.ok(!calls.some(x=>x.value.includes("DO NOT FILE")));
  }
 });
