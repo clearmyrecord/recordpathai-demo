@@ -45,3 +45,23 @@ test("professional dashboard follows consumer saved-case-first navigation and se
  assert.match(js,/professional_generated_packets/);
  assert.doesNotMatch(js,/localStorage|sessionStorage|RecordPathUserStore\.setActiveCase/);
 });
+
+
+test("every professional intake field is explicitly mapped and verified against a fresh Supabase read before advancing",()=>{
+ const js=read("js/professional-practice.js"),html=read("professional-practice.html");
+ for(const [form,table] of [["client-form","professional_clients"],["case-form","professional_cases"]]){
+  const formSource=html.match(new RegExp('<form id="'+form+'"[\\s\\S]*?<\\/form>'))[0];
+  const fields=[...formSource.matchAll(/\bname="([a-z_]+)"/g)].map(m=>m[1]);
+  const mapping=js.split("\n").find(line=>line.startsWith('bindForm("'+form+'","'+table+'"'));
+  assert.ok(mapping);
+  for(const field of fields)assert.ok(mapping.includes(field+":v."+field),"Missing database mapping: "+field);
+ }
+ const handler=js.slice(js.indexOf("function bindForm(id,table,build)"),js.indexOf('bindForm("client-form"'));
+ assert.match(handler,/api\.from\(table\)\.insert\(payload\)\.select\("\*"\)\.single\(\)/);
+ assert.match(handler,/api\.from\(table\)\.select\("\*"\)\.eq\("id",saved\.id\)\.eq\("org_id",org\)\.single\(\)/);
+ assert.match(handler,/Object\.entries\(payload\)\.some\(\(\[key,value\]\)=>persisted\[key\]!==value\)/);
+ assert.ok(handler.indexOf("Supabase readback mismatch")<handler.indexOf("form.reset()"));
+ assert.match(handler,/persisted\.case_number/);
+ assert.match(handler,/persisted\.client_id/);
+ assert.doesNotMatch(js,/localStorage|sessionStorage|indexedDB|document\.cookie|RecordPathUserStore/);
+});
