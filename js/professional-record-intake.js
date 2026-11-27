@@ -43,3 +43,18 @@ export function sameRecordSnapshot(a,b){
  const sorted=x=>Array.isArray(x)?x.map(sorted):x&&typeof x==="object"?Object.fromEntries(Object.keys(x).sort().map(k=>[k,sorted(x[k])])):x;
  return JSON.stringify(sorted(a))===JSON.stringify(sorted(b));
 }
+
+export async function mountProfessionalPersonalIntake(mount){
+ const r=await fetch("eligibility.html",{cache:"no-store",credentials:"same-origin"});
+ if(!r.ok)throw Error("Shared personal intake unavailable");
+ const doc=new DOMParser().parseFromString(await r.text(),"text/html");
+ const form=doc.getElementById("user-profile-form");
+ if(!form)throw Error("Shared personal form unavailable");
+ const fieldMap={fullName:["full_name",120,true],dateOfBirth:["dob",0,true],otherNames:["other_names",240,false],email:["email",120,true],phone:["phone",24,true],address1:["line1",100,true],address2:["line2",40,false],city:["city",60,true],residenceState:["state",0,true],zip:["zip",10,true]};
+ mount.replaceChildren(...Array.from(form.children,el=>document.importNode(el,true)));
+ for(const [id,[name,max,required]] of Object.entries(fieldMap)){
+  const el=mount.querySelector("#"+id);if(!el)throw Error("Shared personal field missing: "+id);
+  el.name=name;el.required=required;if(max)el.maxLength=max;el.setAttribute("autocomplete","off");el.removeAttribute("data-path");
+  if(id==="zip")el.pattern="[0-9]{5}(-[0-9]{4})?";
+ }
+}
