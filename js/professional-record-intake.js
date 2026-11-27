@@ -19,8 +19,6 @@ export async function mountProfessionalRecordIntake(mount){
  function addCharge(data={}){
   if(list.children.length>=50)return;
   const card=document.createElement("section");card.className="record-card";card.append(document.importNode(template.content,true));
-  // Preserve the separately entered probation date rather than copying discharge into it.
-  const field=document.createElement("div");field.className="field";const label=document.createElement("label");label.textContent="Probation termination date (if applicable)";const input=document.createElement("input");input.type="date";input.dataset.field="probation_end_date";label.append(input);field.append(label);card.querySelector(".record-grid").insertBefore(field,card.querySelector(".flag-box"));
   for(const el of card.querySelectorAll("[data-field]")){if(el.type==="checkbox")el.checked=data[el.dataset.field]===true;else el.value=data[el.dataset.field]??"";el.setAttribute("autocomplete","off");}
   card.querySelector(".remove-offense-btn").addEventListener("click",()=>{if(list.children.length>1){card.remove();renumber();}});
   list.append(card);renumber();
@@ -37,7 +35,7 @@ export function buildProfessionalRecordPayload(snapshot,org,client){
  if(!f||!c||!client||!f.caseNumber||!f.caseState||!f.county||!f.courtName||!f.courtType)throw Error("Enter the client, case number, state, county and official court type.");
  if(!snapshot.charges.some(ch=>Object.values(ch).some(v=>v===true||typeof v==="string"&&v.trim())))throw Error("Enter at least one charge.");
  // The database derives the canonical summary and filing hold from this complete snapshot.
- return {org_id:org,client_id:client,case_number:f.caseNumber,judge_name:f.judgeName||"",charge_name:c.charge_name||"",charge_code:c.charge_code||"",charge_level:c.degree||"",outcome:"mixed",disposition_date:c.disposition_date||null,final_discharge_date:c.discharge_date||null,probation_end_date:c.probation_end_date||null,record_details:snapshot};
+ return {org_id:org,client_id:client,case_number:f.caseNumber,judge_name:f.judgeName||"",charge_name:c.charge_name||"",charge_code:c.charge_code||"",charge_level:c.degree||"",outcome:"mixed",disposition_date:c.disposition_date||null,final_discharge_date:c.discharge_date||null,probation_end_date:null,record_details:snapshot};
 }
 export function sameRecordSnapshot(a,b){
  const sorted=x=>Array.isArray(x)?x.map(sorted):x&&typeof x==="object"?Object.fromEntries(Object.keys(x).sort().map(k=>[k,sorted(x[k])])):x;
