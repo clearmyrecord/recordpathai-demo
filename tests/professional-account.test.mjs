@@ -11,7 +11,10 @@ test("professional registration uses production auth and real verification reque
  assert.match(js,/professional_access_requests"\)\.insert/);
  assert.doesNotMatch(js,/localStorage|sessionStorage|\.innerHTML/);
  assert.match(html,/Do not enter any client or case information/);
- assert.match(landing,/href="professional-account.html">Create professional account/);
+ assert.match(landing,/href="signup\.html\?returnUrl=professional-account\.html">Create professional account/);
+ assert.doesNotMatch(landing,/Optional product walkthrough|professional-pilot-demo\.js/);
+ assert.match(js,/if\(!user\.email_confirmed_at\)/);
+ assert.match(js,/session\.user\?\.id!==user\.id/);
 });
 test("real application cannot self-approve, change ownership or bypass MFA; client access remains held",()=>{
  const sql=read("sql/professional-access-production.sql"),base=read("sql/professional-production-foundation.sql");
