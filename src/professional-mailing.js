@@ -1,6 +1,8 @@
 import {createHash} from "node:crypto";
 import {buildCourtCheckRequest,buildCourtLetterRequest,requireLobLiveDispatch} from "./lob-checks.js";
 import {findCourtProfile} from "./court-profiles.js";
+import {providerReadiness,sendPremiumEmail,sendPremiumSms} from "./recordwatch-alert-dispatch.js";
+import {canonicalSmsPhone,validAlertEmail} from "./recordwatch-alerts.js";
 import {verifiedLiveSubscription} from "./professional-live-billing.js";
 export const PROFESSIONAL_MAIL_SERVICE_CENTS=1000;
 export const PROFESSIONAL_MAIL_COURT_CENTS=10000;
@@ -31,6 +33,22 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
  const order=caseId=>get(table,"case_id=eq."+caseId+"&limit=1");
  const change=async(o,filter,body)=>await rest(table,{method:"PATCH",query:"?case_id=eq."+o.case_id+"&"+filter,body});
  const send=(res,code,error)=>res.status(code).json({ok:false,error});
+ const prefTable="professional_mail_alert_preferences",ledger="professional_mail_alert_deliveries";
+ const alertsReady=()=>env.RECORDPATH_PROFESSIONAL_ALERTS_ENABLED==="true"&&providerReadiness(env).email_ready&&providerReadiness(env).sms_ready;
+ const preferences=o=>get(prefTable,"case_id=eq."+o.case_id+"&user_id=eq."+o.user_id+"&org_id=eq."+o.org_id+"&limit=1");
+ async function verifiedRecipient(userId){
+  const cfg=config();
+  const response=await network(cfg.url+"/auth/v1/admin/users/"+userId,{headers:{apikey:cfg.key,Authorization:"Bearer "+cfg.key},signal:AbortSignal.timeout(10000)});
+  if(!response.ok)throw Error("Recipient verification unavailable");
+  const u=await response.json();
+  if(u.id!==userId)throw Error("Recipient mismatch");
+  return {email:u.email_confirmed_at&&validAlertEmail(u.email)?u.email:null,phone:u.phone_confirmed_at?canonicalSmsPhone(u.phone)||null:null};
+ }
+ const suppressed=phone=>get("recordwatch_sms_suppressions","phone_number=eq."+encodeURIComponent(phone)+"&limit=1");
+ async function alertStorageReady(){
+  if(!alertsReady())return false;
+  try{await rest(prefTable,{query:"?select=case_id&limit=1"});await rest(ledger,{query:"?select=case_id&limit=1"});return true;}catch{return false;}
+ }
  const enabled=async(o={court_fee_cents:10000})=>Boolean(stripe&&env.STRIPE_SECRET_KEY?.startsWith("sk_live_")&&env.SUPABASE_SERVICE_ROLE_KEY&&config()?.url==="https://pfyxjhdlqgpzzzdssqpk.supabase.co"&&env.RECORDPATH_PROFESSIONAL_MAILING_ENABLED==="true"&&env.RECORDPATH_ENABLE_AUTOMATIC_FULFILLMENT==="true"&&Boolean(env.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_"))&& (await get("packet_dispatch_controls","id=eq.true&select=live_dispatch_enabled"))?.live_dispatch_enabled===true&& (courtFee(o)===10000?requireLobLiveDispatch(env)&&findCourtProfile(profileInput)?.lobChecksAuthorized&&await lobBankVerified():courtFee(o)===0&&env.RECORDPATH_ENABLE_LIVE_DISPATCH==="true"&&env.LOB_LIVE_LETTERS_ENABLED==="true"&&env.LOB_LIVE_API_KEY?.startsWith("live_")&&findCourtProfile(profileInput)?.dismissalMailingAccepted));
  async function facts(caseId,docId){
   if(!uuid(caseId)||!uuid(docId))throw Error("Invalid case or document");
@@ -113,13 +131,36 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
    const c=await owned(req,res,req.params.caseId);if(!c)return;
    const o=await order(c.id);
    if(o&&(o.user_id!==c.attorney_id||o.org_id!==c.org_id))return send(res,403,"Order ownership mismatch.");
-   let ready=false;try{ready=Boolean(o?.status==="approved"&&reviewed(o)&&courtFee(o)===feeForOutcome(c.outcome)&&await enabled(o));}catch{}
+   let ready=false;try{ready=Boolean(o?.status==="approved"&&reviewed(o)&&courtFee(o)===feeForOutcome(c.outcome)&&await enabled(o)&&await alertStorageReady());}catch{}
    const result={ok:true,status:o?.status||"awaiting_independent_review",checkoutReady:ready,serviceFeeCents:PROFESSIONAL_MAIL_SERVICE_CENTS,courtFeeCents:feeForOutcome(c.outcome),lobCheckId:o?.lob_check_id||null,lobLetterId:o?.lob_letter_id||null};
    if((o?.lob_check_id||o?.lob_letter_id)&&env.LOB_LIVE_API_KEY?.startsWith("live_")){
     try{const r=await network("https://api.lob.com/v1/"+(o.lob_letter_id?"letters/"+o.lob_letter_id:"checks/"+o.lob_check_id),{headers:{Authorization:"Basic "+Buffer.from(env.LOB_LIVE_API_KEY+":").toString("base64")},signal:AbortSignal.timeout(10000)});if(r.ok){const data=await r.json();if(data.id===(o.lob_letter_id||o.lob_check_id)){result.expectedDeliveryDate=data.expected_delivery_date||null;result.providerEvents=Array.isArray(data.tracking_events)?data.tracking_events.slice(-10).map(e=>({name:e.name,time:e.time})):[];}}}catch{}
    }
    return res.json(result);
   }catch{return send(res,503,"Mailing status unavailable. Do not pay again.");}
+ });
+ app.get("/api/professional/mail/:caseId/alerts",async(req,res)=>{
+  res.setHeader("Cache-Control","no-store, private");
+  try{
+   const c=await owned(req,res,req.params.caseId);if(!c)return;
+   const o=await order(c.id);if(!o||o.user_id!==c.attorney_id||o.org_id!==c.org_id)return send(res,409,"Approved order required.");
+   const [recipient,p]=await Promise.all([verifiedRecipient(o.user_id),preferences(o)]);
+   return res.json({ok:true,emailAvailable:Boolean(recipient.email),smsAvailable:Boolean(recipient.phone&&!await suppressed(recipient.phone)),emailEnabled:p?.email_enabled===true,smsEnabled:p?.sms_enabled===true});
+  }catch{return send(res,503,"Alert preferences unavailable.");}
+ });
+ app.post("/api/professional/mail/:caseId/alerts",express.json({limit:"4kb"}),async(req,res)=>{
+  res.setHeader("Cache-Control","no-store, private");
+  try{
+   const c=await owned(req,res,req.params.caseId);if(!c)return;
+   const o=await order(c.id);if(!o||o.user_id!==c.attorney_id||o.org_id!==c.org_id)return send(res,409,"Approved order required.");
+   const {emailEnabled,smsEnabled,consentConfirmed}=req.body||{};
+   if(typeof emailEnabled!=="boolean"||typeof smsEnabled!=="boolean"||((emailEnabled||smsEnabled)&&consentConfirmed!==true))return send(res,400,"Explicit notification consent required.");
+   const recipient=await verifiedRecipient(o.user_id);
+   if(emailEnabled&&!recipient.email||smsEnabled&&(!recipient.phone||await suppressed(recipient.phone)))return send(res,409,"Verified account contact and active SMS consent required.");
+   const rows=await rest(prefTable,{method:"POST",query:"?on_conflict=case_id",prefer:"resolution=merge-duplicates,return=representation",body:{case_id:o.case_id,user_id:o.user_id,org_id:o.org_id,email:emailEnabled?recipient.email:null,phone:smsEnabled?recipient.phone:null,email_enabled:emailEnabled,sms_enabled:smsEnabled,consent_at:new Date().toISOString(),updated_at:new Date().toISOString()}});
+   if(rows.length!==1)return send(res,503,"Preferences not saved.");
+   return res.json({ok:true,emailEnabled,smsEnabled});
+  }catch{return send(res,503,"Unable to save alert preferences.");}
  });
  app.post("/api/professional/mail/:caseId/checkout",async(req,res)=>{
   try{
@@ -129,6 +170,7 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
    const o=await order(c.id);
    if(!o||o.user_id!==c.attorney_id||o.org_id!==c.org_id||o.status!=="approved"||!reviewed(o)||courtFee(o)!==feeForOutcome(c.outcome))return send(res,409,"Independent signed-packet approval required; check existing orders.");
    const {d}=await facts(o.case_id,o.document_id);if(d.sha256!==o.signed_sha)return send(res,409,"Approved document changed.");
+   if(!await alertStorageReady())return send(res,503,"Mailing and alert bundle is not ready.");
    const customer=await paidCustomer(o);
    let s;
    if(o.stripe_session_id){s=await stripe.checkout.sessions.retrieve(o.stripe_session_id);}
@@ -185,11 +227,40 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
   const saved=await change(o,"status=eq.dispatch_claimed",{status:"submitted_to_lob",[key]:receipt.id});
   return saved.length===1&&saved[0][key]===receipt.id;
  }
+ async function deliverAlerts(){
+  if(!await alertStorageReady())return;
+  const paid=await rest(table,{query:"?status=in.(paid_hold,submitted_to_lob)&order=created_at.desc&limit=100"});
+  for(const o of paid){
+   try{
+    if(!eventId(o.stripe_event_id)||!verifiedProfessionalMailPayment(await stripe.checkout.sessions.retrieve(o.stripe_session_id,{expand:["payment_intent.latest_charge"]}),o))continue;
+    const p=await preferences(o);if(!p||!p.email_enabled&&!p.sms_enabled)continue;
+    const recipient=await verifiedRecipient(o.user_id);
+    const events=await rest("professional_verified_court_events",{query:"?case_id=eq."+o.case_id+"&org_id=eq."+o.org_id+"&attorney_id=eq."+o.user_id+"&verified_at=gte."+encodeURIComponent(p.consent_at)+"&select=id&limit=30"});
+    const keys=["payment_confirmed",...(o.status==="submitted_to_lob"?["mail_submitted"]:[]),...events.map(e=>"court:"+e.id)];
+    for(const key of keys)for(const channel of ["email","sms"]){
+     const current=await preferences(o);
+     if(!current||channel==="email"&&(!current.email_enabled||!recipient.email||current.email!==recipient.email)||channel==="sms"&&(!current.sms_enabled||!recipient.phone||current.phone!==recipient.phone||await suppressed(recipient.phone)))continue;
+     let claimed;try{claimed=await rest(ledger,{method:"POST",query:"?on_conflict=case_id,event_key,channel",prefer:"resolution=ignore-duplicates,return=representation",body:{case_id:o.case_id,event_key:key,channel}});}catch{continue;}
+     if(claimed.length!==1)continue;
+     let receipt=null;
+     try{
+      if(!verifiedProfessionalMailPayment(await stripe.checkout.sessions.retrieve(o.stripe_session_id,{expand:["payment_intent.latest_charge"]}),o))throw Error("Payment revoked");
+      const latest=await preferences(o);
+      if(!latest||channel==="email"&&(!latest.email_enabled||latest.email!==recipient.email)||channel==="sms"&&(!latest.sms_enabled||latest.phone!==recipient.phone||await suppressed(recipient.phone)))throw Error("Consent revoked");
+      const message="A RecordWatch Professional filing update is available. Sign in to view your workspace.";
+      receipt=channel==="email"?await sendPremiumEmail({to:recipient.email,subject:"RecordWatch Professional update",message,env,fetchFn:network,professional:true}):await sendPremiumSms({to:recipient.phone,message:message+" Reply STOP to opt out; HELP for help. Msg & data rates may apply.",env,fetchFn:network});
+     }catch{/* Never retry an ambiguous provider response automatically. */}
+     await rest(ledger,{method:"PATCH",query:"?case_id=eq."+o.case_id+"&event_key=eq."+encodeURIComponent(key)+"&channel=eq."+channel+"&status=eq.claimed",body:{status:receipt?"provider_accepted":"held",provider_id:receipt?.id||null}});
+    }
+   }catch{/* Isolate a failed case; no unverified send. */}
+  }
+ }
  async function fulfill(){
   const counts={submitted:0,held:0};
   if(!await enabled({court_fee_cents:10000})&&!await enabled({court_fee_cents:0}))return counts;
   const jobs=await rest(table,{query:"?status=eq.paid_hold&attempted_at=is.null&order=created_at.asc&limit=3"});
   for(const o of jobs){try{if(await dispatch(o))counts.submitted++;else counts.held++;}catch{counts.held++;}}
+  try{await deliverAlerts();}catch{/* Delivery ledger preserves claimed sends. */}
   return counts;
  }
  app.post("/api/operator/professional-mail/fulfill-paid",async(req,res)=>{
