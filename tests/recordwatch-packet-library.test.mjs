@@ -1,0 +1,55 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import vm from "node:vm";
+import {createHash} from "node:crypto";
+import {readFileSync} from "node:fs";
+import {validateGeneratedProfessionalPacket} from "../src/professional-signed-review.js";
+import {verifiedPacketSession} from "../src/payment-security.js";
+const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
+const bytes=Buffer.from("%PDF-1.7\n"+" ".repeat(600)+"\n%%EOF");
+const sha=createHash("sha256").update(bytes).digest("hex");
+const address="Address Verification Personal Identifiers Name of Party PO Box Apartment Number";
+const app="State of Ohio Case Judge Name of Offense Charge Offense Code Degree of Offense Respectfully Submitted";
+const dismiss=app+" Dismissal Not Guilty Charges Were Dismissed";
+const mark=" UNSIGNED REVIEW DRAFT - DO NOT FILE";
+test("generated archive distinguishes marked draft from unsigned application and cannot claim counsel signature",async()=>{
+ assert.equal(await validateGeneratedProfessionalPacket(bytes,"dismissal","review_draft",async()=>[address+mark,dismiss+mark]),sha);
+ assert.equal(await validateGeneratedProfessionalPacket(bytes,"not_guilty","unsigned_application",async()=>[address,dismiss]),sha);
+ for(const [kind,pages] of [["review_draft",[address,dismiss]],["unsigned_application",[address+mark,dismiss+mark]],["review_draft",[address+mark,dismiss]],["unsigned_application",[address,dismiss+" COUNSEL SIGNATURE ASSUMPTION - DO NOT FILE"]],["signed",[address,dismiss]]])await assert.rejects(validateGeneratedProfessionalPacket(bytes,"dismissal",kind,async()=>pages));
+ await assert.rejects(validateGeneratedProfessionalPacket(bytes,"conviction","unsigned_application",async()=>[address,dismiss]));
+});
+test("RecordWatch professional archive is separate from signatures and uses assigned-case policy",()=>{
+ const sql=read("sql/professional-recordwatch-packet-library.sql");
+ assert.match(sql,/enable row level security/);
+ assert.match(sql,/encode\(sha256\(pdf_bytes\),'hex'\)=sha256/);
+ assert.match(sql,/grant select\(id,org_id,case_id,attorney_id,kind,sha256,page_count,created_at\)/);
+ assert.match(sql,/auth.jwt\(\)->>'aal'\)='aal2'/);
+ assert.match(sql,/c.id=professional_generated_packets.case_id/);
+ const js=read("js/professional-practice.js");
+ assert.match(js,/window.RecordPathEligibilityEngine.resolveEligibilityForCase/);
+ assert.match(js,/c.client_id===caseFilter\(\)/);
+ assert.match(js,/await saveGeneratedPacket\(bytes,row.id,"review_draft"/);
+ assert.match(js,/await saveGeneratedPacket\(bytes,row.id,"unsigned_application"/);
+ assert.match(js,/professional_generated_packets/);
+ assert.match(js,/Open saved /);
+});
+test("consumer RecordWatch retrieves exact purchased bytes after live Stripe verification, not current draft",async()=>{
+ const server=read("server.js");const begin=server.indexOf('app.post("/api/packet/download-approved"'),end=server.indexOf('app.post("/api/packet/verify-payment"',begin);
+ const user="11111111-1111-4111-8111-111111111111",caseId="22222222-2222-4222-8222-222222222222",jobId="33333333-3333-4333-8333-333333333333";
+ let route,jobExists=true,refund=false,otherCase=false,live=true,readCount=0,caseCheck=0;
+ const session={id:"cs_live_fixture",status:"complete",payment_status:"paid",livemode:true,currency:"usd",amount_total:5000,metadata:{userId:user,saved_case_id:caseId,productType:"record-sealing-packet",serviceFeeCents:"5000",courtFeeCents:"0",fulfillmentMode:"mail",signedPdfSha:sha},payment_intent:{latest_charge:{paid:true,refunded:false,disputed:false,amount_refunded:0}}};
+ const ctx=vm.createContext({app:{post:(_,fn)=>{route=fn;}},requireApiUser:async()=>({id:user}),packetDatabaseReady:()=>true,safe:v=>String(v||""),validCaseId:v=>/^[0-9a-f-]{36}$/.test(v),getSavedCaseReviewFacts:async(u,c)=>{caseCheck++;assert.equal(u,user);assert.equal(c,caseId);},supabaseRest:async(table,{query})=>{assert.equal(table,"packet_fulfillment_jobs");assert.ok(query.includes("id=eq."+jobId)&&query.includes("case_id=eq."+caseId)&&query.includes("user_id=eq."+user));return jobExists?[{status:"paid_hold",stripe_session_id:"cs_live_fixture"}]:[];},stripe:{checkout:{sessions:{retrieve:async()=>({...session,livemode:live,metadata:{...session.metadata,saved_case_id:otherCase?"other":caseId},payment_intent:{latest_charge:{...session.payment_intent.latest_charge,refunded:refund}}})}}},verifiedPacketSession,fetchExactApprovedPreviewPdf:async v=>{readCount++;assert.equal(v.path,"private/packets/"+caseId+"/"+sha+".pdf");assert.equal(v.signedPdfSha,sha);return bytes;},console});
+ vm.runInContext(server.slice(begin,end),ctx);
+ async function run(){const res={code:200,headers:{},status(n){this.code=n;return this},setHeader(k,v){this.headers[k]=v},type(t){this.headers.type=t;return this},send(v){this.body=v;return this},json(v){this.body=v;return this}};await route({body:{case_id:caseId,recordwatch_job_id:jobId}},res);return res;}
+ let r=await run();assert.equal(r.code,200);assert.equal(r.body,bytes);assert.equal(readCount,1);assert.equal(caseCheck,1);
+ refund=true;r=await run();assert.equal(r.code,403);refund=false;
+ otherCase=true;r=await run();assert.equal(r.code,403);otherCase=false;
+ live=false;r=await run();assert.equal(r.code,409);live=true;
+ jobExists=false;r=await run();assert.equal(r.code,403);assert.equal(readCount,1);
+});
+test("RecordWatch lists explicit saved cases and restores signed preview without re-signing",()=>{
+ const tracker=read("js/recordwatch-filing-tracker.js"),html=read("recordwatch-dashboard.html"),packet=read("packet.html");
+ assert.match(html,/id="recordwatchPacketCase"/);assert.match(html,/id="recordwatchPacketDownload"/);
+ assert.match(tracker,/getSupabaseCases\(\)/);assert.match(tracker,/recordwatch_job_id:job.jobId/);assert.match(tracker,/auth.data\?\.session\?\.user\?\.id!==job.owner/);
+ assert.match(packet,/get\("savedPacket"\)==="1"&&isInternalUuid\(accountSelectedCaseId\)/);
+});
