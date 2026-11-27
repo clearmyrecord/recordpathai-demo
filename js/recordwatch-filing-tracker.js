@@ -83,6 +83,7 @@
       const lib=data.packet_library||{};
       el("recordwatchPacketSaved").textContent=lib.generated?"Signed packet saved privately"+(lib.generated_at?" · "+new Date(lib.generated_at).toLocaleDateString():"")+(lib.page_count?" · "+lib.page_count+" pages":"")+". Reopen for review or checkout.":"No signed packet saved. Open packet preparation to generate one.";
       link.textContent=lib.generated?"Open saved packet":"Prepare packet";
+      link.href="packet.html?caseId="+encodeURIComponent(caseId)+(lib.generated?"&savedPacket=1":"");
       if(UUID.test(lib.paid_download_job||"")){selectedJob={caseId,jobId:lib.paid_download_job,owner};el("recordwatchPacketDownload").hidden=false;}
     }catch(error){
       if(seq!==epoch)return;resetLibrary();
