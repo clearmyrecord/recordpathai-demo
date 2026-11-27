@@ -107,6 +107,11 @@ case "$url" in
   */self-search.html)marker="Find your own court records";page="self-search.html";;
   */pilot-demo.html)marker="Illustrative demo";page="pilot-demo.html";;
   */js/pilot-demo.js)marker="DEMO-2006-001";page="pilot-demo.js";;
+  */professional.html)marker="Create professional account";page="professional.html";;
+  */professional-account.html)marker="Submit verification request";page="professional-account.html";;
+  */professional-practice.html)marker="Attorney case workflow";page="professional-practice.html";;
+  */js/professional-account.js)marker="live-billing/";page="professional-account.js";;
+  */js/professional-practice.js)marker="Download official form for signature";page="professional-practice.js";;
   *)echo "Unknown requested path $url" >&2;exit 81;;
 esac
 case "$url" in
@@ -115,6 +120,9 @@ case "$url" in
     ;;
   https://recordpathai-abc-uw.a.run.app/*)
     if [[ "${MOCK_FAIL_PRODUCTION:-}" == "$page" ]];then marker="page missing verification marker";fi
+    ;;
+  https://recordpathai.com/*)
+    if [[ "${MOCK_FAIL_CANONICAL:-}" == "$page" ]];then marker="page missing verification marker";fi
     ;;
   *)echo "Not a permitted local mock host" >&2;exit 82;;
 esac
@@ -244,4 +252,22 @@ grep -qF "recordpathai-new=100" "$MOCK_ACTIONS" || {
   exit 1
 }
 
+setup_case
+set +e
+MOCK_FAIL_STAGE=professional-practice.html bash scripts/deploy-existing-cloudrun.sh > "$TMP/professional-candidate.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" == 5 && ! -s "$MOCK_ACTIONS" ]] || { cat "$TMP/professional-candidate.log" >&2; exit 1; }
+setup_case
+set +e
+MOCK_FAIL_PRODUCTION=professional-account.html bash scripts/deploy-existing-cloudrun.sh > "$TMP/professional-production.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" == 5 && "$(cat "$MOCK_STATE")" == rolledback ]] || { cat "$TMP/professional-production.log" >&2; exit 1; }
+setup_case
+set +e
+MOCK_FAIL_CANONICAL=professional.html bash scripts/deploy-existing-cloudrun.sh > "$TMP/professional-canonical.log" 2>&1
+rc=$?
+set -e
+[[ "$rc" == 5 && "$(cat "$MOCK_STATE")" == rolledback ]] || { cat "$TMP/professional-canonical.log" >&2; exit 1; }
 echo "PASS: tagged candidate tested with zero traffic, healthy revision promoted, and errors roll back."

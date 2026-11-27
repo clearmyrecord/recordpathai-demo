@@ -30,6 +30,11 @@ jobs:
           test -f record-details.html
           test -f pilot-demo.html
           test -f js/pilot-demo.js
+          test -f professional.html
+          test -f professional-account.html
+          test -f professional-practice.html
+          node --check js/professional-account.js
+          node --check js/professional-practice.js
           grep -qi 'Illustrative demo' pilot-demo.html
           node -e 'if (require("./package.json").engines.node !== "22") process.exit(1)'
       - name: Install private PDF preview rendering prerequisites
@@ -68,7 +73,15 @@ jobs:
               curl -fsS --max-time 5 http://127.0.0.1:18080/record-details.html -o /tmp/recordpathai-case.html
               grep -Fq 'Your Case Information' /tmp/recordpathai-case.html
               curl -fsS --max-time 5 http://127.0.0.1:18080/api/config/supabase >/dev/null
-              echo "Production container and both updated intake steps passed."
+              curl -fsS --max-time 5 http://127.0.0.1:18080/professional.html -o /tmp/recordpathai-professional.html
+              grep -Fq "Create professional account" /tmp/recordpathai-professional.html
+              curl -fsS --max-time 5 http://127.0.0.1:18080/professional-account.html -o /tmp/recordpathai-professional-account.html
+              grep -Fq "Submit verification request" /tmp/recordpathai-professional-account.html
+              curl -fsS --max-time 5 http://127.0.0.1:18080/professional-practice.html -o /tmp/recordpathai-professional-practice.html
+              grep -Fq "Attorney case workflow" /tmp/recordpathai-professional-practice.html
+              status="$(curl -sS --max-time 5 -X POST -o /tmp/recordpathai-pro-billing.json -w '%{http_code}' http://127.0.0.1:18080/api/professional/live-billing/refresh)"
+              test "$status" = 401 || test "$status" = 503
+              echo "Production container, consumer intake and Professional pages passed."
               exit 0
             fi
             sleep 1
