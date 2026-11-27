@@ -133,3 +133,9 @@
 .rp-professional-workflow .professional-shared-personal .field-full,.rp-professional-workflow .professional-shared-personal .full-width{grid-column:1/-1}
 .rp-professional-workflow #client-form>button,.rp-professional-workflow #case-save{display:flex;width:100%;margin:18px 0 0}
 @media(max-width:640px){.rp-professional-workflow .workflow-step-grid,.rp-professional-workflow .professional-shared-personal{grid-template-columns:1fr}}
+
+.rp-professional .professional-packet-contact legend,.rp-professional .professional-delivery-choice legend{font-weight:800;color:#193f7b;padding:0 5px}
+.rp-professional .professional-delivery-choice{margin:10px 0 18px;border:1px solid #d6e0ef;border-radius:12px;padding:12px 15px;background:#fff}
+.rp-professional .professional-packet-stage .professional-delivery-choice label{margin:8px 0}
+.rp-professional .professional-packet-stage .professional-signature-pad{display:block;margin:10px 0 14px}
+.rp-professional .professional-packet-stage details{margin-top:16px}
