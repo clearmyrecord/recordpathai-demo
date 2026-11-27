@@ -64,6 +64,9 @@ test("professional reuses actual consumer Step 2 sections and charge template wi
  const form=html.match(/<form id="client-form"[\s\S]*?<\/form>/)[0];
  const mapping=js.split("\n").find(line=>line.startsWith('bindForm("client-form","professional_clients"'));
  for(const m of form.matchAll(/\bname="([a-z_]+)"/g))assert.ok(mapping.includes(m[1]+":v."+m[1]));
+ assert.match(shared,/fetch\("eligibility\.html",\{cache:"no-store"/);
+ assert.match(shared,/getElementById\("user-profile-form"\)/);
+ for(const field of ["full_name","dob","other_names","email","phone","line1","line2","city","state","zip"])assert.ok(mapping.includes(field+":v."+field),"Missing shared personal field: "+field);
  assert.doesNotMatch(js+shared,/localStorage|sessionStorage|indexedDB|document\.cookie|RecordPathUserStore/);
  const sql=read("sql/professional-full-record-intake.sql");
  assert.match(sql,/jsonb_array_length\(new\.record_details->'charges'\)=1/);
