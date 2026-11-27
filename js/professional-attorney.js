@@ -25,15 +25,38 @@ async function load(){
  for(const org of orgs)$("org").append(option(org.id,org.pilot_code));
  active=true;$("app").hidden=false;await refresh();
 }
+async function renderBilling(org,seq){
+ const panel=$("professional-billing");if(!panel)return;panel.replaceChildren();
+ add(panel,"p","Approved nonprofit pilot: complimentary for 90 days. Paid professional plans are sandbox-only; no live charge or entitlement.");
+ try{
+  const session=ok(await api.auth.getSession()).session;if(!session?.access_token)return;
+  const headers={Authorization:"Bearer "+session.access_token};
+  const response=await fetch("/api/professional/billing/status?org_id="+encodeURIComponent(org),{headers,cache:"no-store"});
+  if(!active||epoch!==seq||org!==orgId())return;
+  if(!response.ok){add(panel,"p","Sandbox billing is not configured for this organization.");return;}
+  const data=await response.json();if(!data.ok||data.mode!=="sandbox")return;
+  add(panel,"p",data.plan+" · $"+(data.amount_cents/100).toFixed(2)+"/month (test only) · "+data.subscription_status);
+  for(const [label,action] of [[data.test_active?"Manage test subscription":"Start test subscription",data.test_active?"portal":"checkout"]]){
+   const btn=add(panel,"button",label);btn.type="button";btn.addEventListener("click",async()=>{if(!active||epoch!==seq||org!==orgId())return;btn.disabled=true;
+    try{if(!window.confirm("Continue to Stripe test mode? No real card or payment should be used."))return;
+     const r=await fetch("/api/professional/billing/"+action+"?org_id="+encodeURIComponent(org),{method:"POST",headers:{...headers,"x-professional-sandbox-consent":"yes"},cache:"no-store"});
+     const result=await r.json();if(!r.ok||result.mode!=="sandbox"||!["https://checkout.stripe.com","https://billing.stripe.com"].includes(new URL(result.url).origin))throw Error("Unavailable");
+     location.assign(result.url);
+    }catch{notice("Test billing is unavailable.");}finally{btn.disabled=false;}
+   });
+  }
+ }catch{if(active&&epoch===seq)add(panel,"p","Sandbox billing verification unavailable.");}
+}
 async function refresh(){
  if(!active)return;
  const seq=++epoch,org=orgId();
  $("clients").replaceChildren();$("cases").replaceChildren();
- const [a,b,c,d,docs,reviewRows,counselRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100),api.from("professional_counsel_profiles").select("*").eq("org_id",org).limit(1)]);
+ const [a,b,c,d,docs,reviewRows,counselRows,watchRows,observationRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100),api.from("professional_counsel_profiles").select("*").eq("org_id",org).limit(1),api.from("professional_watch_enrollments").select("*").eq("org_id",org).limit(100),api.from("professional_watch_observations").select("case_id,checked_at,source_as_of,status,source_updated_at,source_changed").limit(100)]);
  if(seq!==epoch||!active||org!==orgId())return;
- const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0];
+ const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0],watch=ok(watchRows),observations=ok(observationRows);
  for(const client of clients)$("clients").append(option(client.id,client.full_name));
  $("role").textContent="Verified attorney · assigned records only";
+ void renderBilling(org,seq);
  for(const row of cases){
   const client=clients.find(x=>x.id===row.client_id);if(!client)continue;
   const card=document.createElement("article");add(card,"h3",client.full_name+" — "+row.case_number);
@@ -42,6 +65,15 @@ async function refresh(){
   const decision=decisions.find(x=>x.case_id===row.id);
   add(card,"p",decision?"Review: "+decision.decision.replaceAll("_"," "):"Awaiting attorney review");
   const button=(label,fn)=>{const btn=add(card,"button",label);btn.type="button";btn.addEventListener("click",async()=>{if(!active||org!==orgId())return;btn.disabled=true;try{await fn();}catch{notice("Action rejected. Check saved information and access.");}finally{btn.disabled=false;}});return btn;};
+  add(card,"h4","RecordWatch — authorized source monitoring");
+  const enrollment=watch.find(x=>x.case_id===row.id),obs=observations.find(x=>x.case_id===row.id);
+  if(enrollment?.enabled){add(card,"p",obs?({no_approved_feed:"No approved court import yet",no_verified_match:"No verified match in latest approved import",ambiguous_match:"Ambiguous source match — attorney review needed",verified_source_match:"Verified source match available — check docket directly"}[obs.status]||"Awaiting review")+" · checked "+obs.checked_at+(obs.source_as_of?" · source as of "+obs.source_as_of:"")+(obs.source_changed?" · newer source record detected":""):"Enrolled. Awaiting first source check.");
+   button("Pause source monitoring",async()=>{ok(await api.from("professional_watch_enrollments").update({enabled:false}).eq("case_id",row.id));await refresh();});
+  }else{
+   const lab=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";lab.append(consent,document.createTextNode(" I have client authorization for private source monitoring."));
+   button("Enable source monitoring",async()=>{if(!consent.checked)throw Error("Consent required");if(enrollment){ok(await api.from("professional_watch_enrollments").update({enabled:true}).eq("case_id",row.id));}else{ok(await api.from("professional_watch_enrollments").insert({org_id:org,case_id:row.id,consent_confirmed:true}));}await refresh();});
+  }
+  add(card,"p","Import-based checks are not a live docket or court ruling. Missing records never establish sealing or eligibility.");
   if(!decision){
    const label=add(card,"label","");const checked=document.createElement("input");checked.type="checkbox";label.append(checked,document.createTextNode(" I reviewed the complete docket, charge inventory, eligibility and filing requirements."));
    const decide=async value=>{if(!checked.checked)throw Error("Review required");ok(await api.from("professional_case_decisions").insert({org_id:org,case_id:row.id,decision:value,entire_case_reviewed:true}));await refresh();};
@@ -105,7 +137,7 @@ async function refresh(){
   }
   $("cases").append(card);
  }
- notice("Staging workspace loaded. No payments, actual filings or live court monitoring.");
+ notice("Staging workspace loaded. No live payments or actual filings. Monitoring uses approved imports only.");
 }
 function bindForm(id,table,build){
  $(id).addEventListener("submit",async e=>{
