@@ -1,3 +1,4 @@
+import {registerProfessionalLiveBilling} from "./professional-live-billing.js";
 import {registerProfessionalBillingRoutes} from "./professional-billing-sandbox.js";
 import {createHash} from "node:crypto";
 import {isOfficialWoodConvictionFormPair,isOfficialWoodDismissalFormPair,normalizeWoodFormHeading} from "./wood-form-pages.js";
@@ -53,6 +54,7 @@ export function registerProfessionalReviewRoutes(app,{express,publicSupabaseConf
   }
   return {user,rest,ownedCase,mode};
  }
+ registerProfessionalLiveBilling(app,{context});
  registerProfessionalBillingRoutes(app,{context:async(req,res)=>{
   const ctx=await context(req,res);if(!ctx)return null;
   if(ctx.mode!=="staging"){res.status(503).json({ok:false,error:"Sandbox subscription routes are staging-only."});return null;}
