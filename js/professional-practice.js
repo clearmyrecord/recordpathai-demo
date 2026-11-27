@@ -38,9 +38,9 @@ async function refresh(){
  if(!active)return;
  const seq=++epoch,org=orgId();
  $("clients").replaceChildren();$("cases").replaceChildren();
- const [a,b,c,d,docs,reviewRows,counselRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100),api.from("professional_counsel_profiles").select("*").eq("org_id",org).limit(1)]);
+ const [a,b,c,d,docs,reviewRows,counselRows,enrollRows,taskRows,verifiedRows,observedRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100),api.from("professional_counsel_profiles").select("*").eq("org_id",org).limit(1),api.from("professional_watch_enrollments").select("*").eq("org_id",org).limit(100),api.from("professional_watch_tasks").select("*").eq("org_id",org).order("due_date").limit(500),api.from("professional_verified_court_events").select("id,case_id,event_type,occurred_on,evidence_url,verified_at").eq("org_id",org).order("occurred_on",{ascending:false}).limit(500),api.from("professional_watch_observations").select("*").limit(100)]);
  if(seq!==epoch||!active||org!==orgId())return;
- const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0];
+ const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0],enrollments=ok(enrollRows),tasks=ok(taskRows),verified=ok(verifiedRows),observations=ok(observedRows);
  for(const client of clients)$("clients").append(option(client.id,client.full_name));
  $("role").textContent="Verified attorney · assigned records only";
 
@@ -52,7 +52,31 @@ async function refresh(){
   const decision=decisions.find(x=>x.case_id===row.id);
   add(card,"p",decision?"Review: "+decision.decision.replaceAll("_"," "):"Awaiting attorney review");
   const button=(label,fn)=>{const btn=add(card,"button",label);btn.type="button";btn.addEventListener("click",async()=>{if(!active||org!==orgId())return;btn.disabled=true;try{await fn();}catch{notice("Action rejected. Check saved information and access.");}finally{btn.disabled=false;}});return btn;};
-  add(card,"p","RecordWatch automated source monitoring is not yet connected for this practice. Use manual status tracking and the court docket.");
+  add(card,"h4","RecordWatch Professional");
+  const enrollment=enrollments.find(e=>e.case_id===row.id);
+  const observed=observations.find(e=>e.case_id===row.id);
+  if(enrollment?.enabled){
+   const nowParts=Object.fromEntries(new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date()).map(p=>[p.type,p.value]));
+   const day=nowParts.year+"-"+nowParts.month+"-"+nowParts.day;
+   const next=new Date(day+"T00:00:00Z");next.setUTCDate(next.getUTCDate()+7);const week=next.toISOString().slice(0,10);
+   const ownTasks=tasks.filter(t=>t.case_id===row.id),ownEvents=verified.filter(v=>v.case_id===row.id);
+   add(card,"p",ownTasks.filter(t=>!t.completed&&t.due_date<day).length+" overdue · "+ownTasks.filter(t=>!t.completed&&t.due_date>=day&&t.due_date<=week).length+" due within seven days");
+   if(observed)add(card,"p","Last scheduled reminder summary: "+new Date(observed.checked_at).toLocaleString());
+   const kind=document.createElement("select");kind.setAttribute("aria-label","Reminder type");for(const [v,t] of [["follow_up","Follow-up"],["hearing","Hearing"],["filing_deadline","Filing deadline"]])kind.append(option(v,t));
+   const due=document.createElement("input");due.type="date";due.setAttribute("aria-label","Attorney-entered due date");due.value=day;card.append(kind,due);
+   button("Add case reminder",async()=>{if(!due.value)throw Error("Date required");ok(await api.from("professional_watch_tasks").insert({org_id:org,case_id:row.id,kind:kind.value,due_date:due.value}));await refresh();});
+   for(const task of ownTasks){add(card,"p",task.due_date+" · "+task.kind.replaceAll("_"," ")+" · "+(task.completed?"Completed":task.due_date<day?"Overdue":"Open"));button(task.completed?"Reopen reminder":"Complete reminder",async()=>{ok(await api.from("professional_watch_tasks").update({completed:!task.completed}).eq("id",task.id));await refresh();});}
+   add(card,"h4","Independently verified court events");
+   if(!ownEvents.length)add(card,"p","No independently verified event recorded. This does not indicate that the court has taken no action.");
+   for(const v of ownEvents){add(card,"p",v.occurred_on+" · "+v.event_type.replaceAll("_"," ")+" · verified "+new Date(v.verified_at).toLocaleDateString());
+    try{const u=new URL(v.evidence_url);if(u.protocol==="https:"&&["pub.clerkofcourt.co.wood.oh.us","clerkofcourt.co.wood.oh.us"].includes(u.hostname)&&!u.username&&!u.password){const a=add(card,"a","Official evidence");a.href=u.href;a.target="_blank";a.rel="noopener noreferrer";}}catch{}
+   }
+   button("Pause RecordWatch",async()=>{ok(await api.from("professional_watch_enrollments").update({enabled:false}).eq("case_id",row.id));await refresh();});
+  }else{const label=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";label.append(consent,document.createTextNode(" I have client authorization to store case reminders and independently verified court events."));
+   button("Enable RecordWatch",async()=>{if(!consent.checked)throw Error("Consent required");if(enrollment)ok(await api.from("professional_watch_enrollments").update({enabled:true}).eq("case_id",row.id));else ok(await api.from("professional_watch_enrollments").insert({org_id:org,case_id:row.id,consent_confirmed:true}));await refresh();});}
+  add(card,"p","Reminders use attorney-entered dates. Official events require independent verification; no live docket feed or email/SMS dispatch is connected.");
+  const docket=add(card,"a","Check official Wood County docket");docket.href="https://pub.clerkofcourt.co.wood.oh.us/eservices/home.page.2";docket.target="_blank";docket.rel="noopener noreferrer";
+
   if(!decision){
    const label=add(card,"label","");const checked=document.createElement("input");checked.type="checkbox";label.append(checked,document.createTextNode(" I reviewed the complete docket, charge inventory, eligibility and filing requirements."));
    const decide=async value=>{if(!checked.checked)throw Error("Review required");ok(await api.from("professional_case_decisions").insert({org_id:org,case_id:row.id,decision:value,entire_case_reviewed:true}));await refresh();};
@@ -66,6 +90,15 @@ async function refresh(){
     const bytes=await renderProfessionalDraft({client:ok(freshClient),caseRow:ok(freshCase),decision:ok(freshDecision),today:new Date().toISOString().slice(0,10),PDFLib:window.PDFLib});
     if(!active||token!==epoch||org!==orgId())return;
     const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));const a=document.createElement("a");a.href=url;a.download="wood-county-unsigned-review-draft.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+   });
+   const signLabel=add(card,"label","");const signConsent=document.createElement("input");signConsent.type="checkbox";signLabel.append(signConsent,document.createTextNode(" I reviewed the official form and will obtain the required applicant signature and date before filing."));
+   button("Download official form for signature",async()=>{
+    if(!signConsent.checked)throw Error("Confirm signature requirement");
+    const token=epoch;
+    const [freshClient,freshCase,freshDecision]=await Promise.all([api.from("professional_clients").select("*").eq("id",client.id).single(),api.from("professional_cases").select("*").eq("id",row.id).single(),api.from("professional_case_decisions").select("*").eq("case_id",row.id).single()]);
+    const bytes=await renderProfessionalDraft({client:ok(freshClient),caseRow:ok(freshCase),decision:ok(freshDecision),today:new Date().toISOString().slice(0,10),PDFLib:window.PDFLib,signatureReady:true});
+    if(!active||token!==epoch||org!==orgId()||!signConsent.checked)return;
+    const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));const a=document.createElement("a");a.href=url;a.download="wood-county-official-unsigned-application.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
    });
    add(card,"h4","Signed document review");
    add(card,"p","Obtain the actual applicant signature on the official form outside this tool. Upload the exact signed official two-page PDF; watermarked review drafts are not accepted.");
@@ -94,6 +127,15 @@ async function refresh(){
       button("Record exact signed PDF review",async()=>{if(!reviewed.checked||!downloaded)throw Error("Open and review the PDF first");ok(await api.from("professional_signed_reviews").insert({document_id:doc.id,org_id:org,case_id:row.id,exact_document_reviewed:true}));await refresh();});
     }
    }
+   if(rowReviews.some(r=>rowDocs.some(d=>d.id===r.document_id&&d.signature_mode==="applicant_external"))){
+    add(card,"h4","Manual filing instructions");
+    add(card,"p","Mail the reviewed signed Address Verification and application to Wood County Clerk of Courts, One Courthouse Square, Bowling Green, OH 43402. Counsel must handle any required service or additional copies.");
+    if(row.outcome==="conviction"){
+     add(card,"p","Include the applicable $100 court deposit, payable to Wood County Clerk of Courts, with the case number on the check memo. Alternatively pay the court online and email the signed documents with the payment confirmation number to clerkofcourts@woodcountyohio.gov.");
+     const pay=add(card,"a","Official court payment instructions");pay.href="https://clerkofcourt.co.wood.oh.us/166/Make-a-Payment";pay.target="_blank";pay.rel="noopener noreferrer";
+    }else add(card,"p","Qualifying dismissal/not-guilty applications have no court fee. Do not include a court-fee check. No-fee email filing acceptance is unconfirmed; use the verified manual route.");
+    add(card,"p","RecordPathAI does not submit the application or charge for manual filing. Confirm clerk acceptance on the official docket.");
+   }
    const event=document.createElement("select");event.setAttribute("aria-label","Manual status event");
    for(const [v,t] of [["manual_filing_reported","Filing reported by attorney"],["manual_hearing_reported","Hearing reported by attorney"],["manual_order_reported","Order reported by attorney"],["manual_followup","Follow-up"]])if(v==="manual_followup"||rowReviews.some(r=>rowDocs.some(d=>d.id===r.document_id&&d.signature_mode==="applicant_external")))event.append(option(v,t));
    const date=document.createElement("input");date.type="date";date.setAttribute("aria-label","Event date");date.value=new Date().toISOString().slice(0,10);card.append(event,date);
@@ -102,7 +144,7 @@ async function refresh(){
   }
   $("cases").append(card);
  }
- notice("Approved attorney workspace loaded. Manual filing and status tracking only; no payment or automated filing.");
+ notice("Approved attorney workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
 }
 function bindForm(id,table,build){
  $(id).addEventListener("submit",async e=>{
