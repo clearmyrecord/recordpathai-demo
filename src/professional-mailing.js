@@ -13,6 +13,8 @@ const profileInput={state:"OH",county:"Wood",courtType:"court-of-common-pleas"};
 const back="https://recordpathai.com/professional-practice.html";
 const digest=b=>createHash("sha256").update(b).digest("hex");
 const recent=v=>Number.isFinite(Date.parse(v))&&Date.parse(v)<=Date.now()&&Date.parse(v)>Date.now()-30*86400000;
+const REQUIRED_REVIEW=["identity","docket","charges","discharge","exclusions","form","signature","authorization","court_fee_and_address"];
+const reviewed=o=>recent(o.reviewed_at)&&REQUIRED_REVIEW.every(k=>o.review_checks?.[k]===true);
 const metadata=o=>({productType:PROFESSIONAL_MAIL_PRODUCT,userId:o.user_id,caseId:o.case_id,orgId:o.org_id,documentId:o.document_id,signedPdfSha:o.signed_sha,serviceFeeCents:"1000",courtFeeCents:"10000"});
 const matches=(s,o)=>Object.entries(metadata(o)).every(([k,v])=>s?.metadata?.[k]===v);
 export function verifiedProfessionalMailPayment(s,o){
@@ -61,11 +63,11 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
  app.post("/api/operator/professional-mail/approve",express.json({limit:"16kb"}),async(req,res)=>{
   if(!requireOperationsKey(req,res))return;
   try{
-   const {case_id,document_id,reviewer_reference,independent_review_confirmed}=req.body||{};
-   if(independent_review_confirmed!==true||typeof reviewer_reference!=="string"||reviewer_reference.trim().length<12||reviewer_reference.length>500)return send(res,400,"Actual independent review evidence required.");
+   const {case_id,document_id,reviewer_reference,independent_review_confirmed,review_checks}=req.body||{};
+   if(independent_review_confirmed!==true||!REQUIRED_REVIEW.every(k=>review_checks?.[k]===true)||typeof reviewer_reference!=="string"||reviewer_reference.trim().length<12||reviewer_reference.length>500)return send(res,400,"Actual independent review evidence required.");
    const {c,d}=await facts(case_id,document_id);
    if(await order(c.id))return send(res,409,"Existing order requires operator reconciliation.");
-   const o={case_id:c.id,org_id:c.org_id,user_id:c.attorney_id,document_id:d.id,signed_sha:d.sha256,reviewer_reference:reviewer_reference.trim()};
+   const o={case_id:c.id,org_id:c.org_id,user_id:c.attorney_id,document_id:d.id,signed_sha:d.sha256,reviewer_reference:reviewer_reference.trim(),review_checks:Object.fromEntries(REQUIRED_REVIEW.map(k=>[k,true]))};
    const rows=await rest(table,{method:"POST",body:o});
    if(rows.length!==1)return send(res,503,"Approval not persisted.");
    return res.json({ok:true,status:"approved"});
@@ -76,7 +78,7 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
    const c=await owned(req,res,req.params.caseId);if(!c)return;
    const o=await order(c.id);
    if(o&&(o.user_id!==c.attorney_id||o.org_id!==c.org_id))return send(res,403,"Order ownership mismatch.");
-   let ready=false;try{ready=Boolean(o?.status==="approved"&&recent(o.reviewed_at)&&await enabled());}catch{}
+   let ready=false;try{ready=Boolean(o?.status==="approved"&&reviewed(o)&&await enabled());}catch{}
    const result={ok:true,status:o?.status||"awaiting_independent_review",checkoutReady:ready,serviceFeeCents:1000,courtFeeCents:10000,lobCheckId:o?.lob_check_id||null};
    if(o?.lob_check_id&&env.LOB_LIVE_API_KEY?.startsWith("live_")){
     try{const r=await network("https://api.lob.com/v1/checks/"+o.lob_check_id,{headers:{Authorization:"Basic "+Buffer.from(env.LOB_LIVE_API_KEY+":").toString("base64")},signal:AbortSignal.timeout(10000)});if(r.ok){const data=await r.json();if(data.id===o.lob_check_id){result.expectedDeliveryDate=data.expected_delivery_date||null;result.providerEvents=Array.isArray(data.tracking_events)?data.tracking_events.slice(-10).map(e=>({name:e.name,time:e.time})):[];}}}catch{}
@@ -90,7 +92,7 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
    if(req.get("x-professional-mail-consent")!=="yes")return send(res,400,"Explicit mailing and payment consent required.");
    if(!await enabled())return send(res,503,"Professional mailing is not enabled.");
    const o=await order(c.id);
-   if(!o||o.user_id!==c.attorney_id||o.org_id!==c.org_id||o.status!=="approved"||!recent(o.reviewed_at))return send(res,409,"Independent signed-packet approval required; check existing orders.");
+   if(!o||o.user_id!==c.attorney_id||o.org_id!==c.org_id||o.status!=="approved"||!reviewed(o))return send(res,409,"Independent signed-packet approval required; check existing orders.");
    const {d}=await facts(o.case_id,o.document_id);if(d.sha256!==o.signed_sha)return send(res,409,"Approved document changed.");
    const customer=await paidCustomer(o);
    let s;
@@ -118,7 +120,7 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
   }catch{return send(res,503,"Professional payment reconciliation unavailable; retry.");}
  }
  async function dispatch(o){
-  if(!await enabled()||o.status!=="paid_hold"||!eventId(o.stripe_event_id)||!recent(o.reviewed_at)||o.attempted_at)return false;
+  if(!await enabled()||o.status!=="paid_hold"||!eventId(o.stripe_event_id)||!reviewed(o)||o.attempted_at)return false;
   const {c,d}=await facts(o.case_id,o.document_id);if(d.sha256!==o.signed_sha||c.org_id!==o.org_id||c.attorney_id!==o.user_id)return false;
   const live=await stripe.checkout.sessions.retrieve(o.stripe_session_id,{expand:["payment_intent.latest_charge"]});if(!verifiedProfessionalMailPayment(live,o))return false;
   const row=await get("professional_signed_documents","id=eq."+d.id+"&select=pdf_bytes,sha256&limit=1");
