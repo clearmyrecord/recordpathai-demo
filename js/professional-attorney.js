@@ -27,7 +27,7 @@ async function load(){
 }
 async function renderBilling(org,seq){
  const panel=$("professional-billing");if(!panel)return;panel.replaceChildren();
- add(panel,"p","Approved nonprofit pilot: complimentary for 90 days. Paid professional plans are sandbox-only; no live charge or entitlement.");
+ add(panel,"p","Approved legal aid/university pilot: $0 for 90 days; court fees and actual postage separate. Paid plans include unlimited preparation and RecordWatch. Optional automated filing is $10 plus applicable court fees. Sandbox only; no live charge or entitlement.");
  try{
   const session=ok(await api.auth.getSession()).session;if(!session?.access_token)return;
   const headers={Authorization:"Bearer "+session.access_token};
@@ -80,6 +80,16 @@ async function refresh(){
    button("Hold for review",()=>decide("hold"));
    if(row.outcome!=="mixed")button("Approve unsigned draft",()=>decide("approved_for_unsigned_draft"));
   }else if(decision.decision==="approved_for_unsigned_draft"){
+   add(card,"p","Professional preparation: included. Self-filing: no additional software fee. Optional automated filing: $10 plus applicable court fees (paid subscriber).");
+   const quoteLine=add(card,"p","Court cost when filed: "+(row.outcome==="conviction"?"$100":"$0")+" · no filing or payment available in staging.");
+   button("Verify subscriber filing quote",async()=>{
+    const token=epoch,session=ok(await api.auth.getSession()).session;if(!session?.access_token)throw Error("Session required");
+    const response=await fetch("/api/professional/billing/filing-quote?org_id="+encodeURIComponent(org)+"&case_id="+encodeURIComponent(row.id)+"&delivery=automated",{headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"});
+    const q=await response.json();if(!active||token!==epoch||org!==orgId())return;
+    if(!response.ok||!q.ok||q.mode!=="sandbox"){quoteLine.textContent="Verified active test subscription required for a paid-subscriber quote. Approved pilot court costs and actual postage are separate.";return;}
+    quoteLine.textContent="Verified sandbox quote: preparation $0; automated filing $"+(q.serviceFeeCents/100).toFixed(2)+"; court $"+(q.courtFeeCents/100).toFixed(2)+"; total $"+(q.totalCents/100).toFixed(2)+". Quote only — no charge or dispatch.";
+   });
+
    button("Download unsigned review draft",async()=>{
     const token=epoch;
     const [freshClient,freshCase,freshDecision]=await Promise.all([api.from("professional_clients").select("*").eq("id",client.id).single(),api.from("professional_cases").select("*").eq("id",row.id).single(),api.from("professional_case_decisions").select("*").eq("case_id",row.id).single()]);
