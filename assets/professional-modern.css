@@ -141,7 +141,7 @@
 .rp-professional .professional-packet-contact legend,.rp-professional .professional-delivery-choice legend{font-weight:800;color:#193f7b;padding:0 5px}
 .rp-professional .professional-delivery-choice{margin:10px 0 18px;border:1px solid #d6e0ef;border-radius:12px;padding:12px 15px;background:#fff}
 .rp-professional .professional-packet-stage .professional-delivery-choice label{margin:8px 0}
-.rp-professional .professional-packet-stage .professional-signature-pad{display:block;margin:10px 0 14px}
+.rp-professional .professional-packet-stage .professional-signature-pad{display:block;width:100%;max-width:none;min-width:0;height:180px;box-sizing:border-box;border:1px solid #cfd9ea;border-radius:12px;background:#fff;touch-action:none;margin:10px 0 14px}
 .rp-professional .professional-packet-stage details{margin-top:16px}
 
 /* Match the consumer packet's independent white cards and information hierarchy. */
