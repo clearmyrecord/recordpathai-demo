@@ -428,10 +428,31 @@ async function refresh(){
  }
  notice(internalTestAccess?"Internal testing workspace — no paid subscription. Use fictional client records only; live mailing is unavailable.":"Professional workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
 }
+function normalizedClientName(value){return String(value||"").trim().replace(/\s+/g," ").toLowerCase();}
+function normalizedClientPhone(value){const digits=String(value||"").replace(/\D/g,"");return digits.length===11&&digits.startsWith("1")?digits.slice(1):digits;}
+async function findExistingClientMatches(payload,org){
+ const result=await api.auth.getUser();const user=ok(result).user;if(!user?.id)throw Error("Session unavailable");
+ const rows=ok(await api.from("professional_clients").select("id,full_name,dob,email,phone,authorization_confirmed").eq("org_id",org).eq("attorney_id",user.id).eq("dob",payload.dob));
+ const name=normalizedClientName(payload.full_name),phone=normalizedClientPhone(payload.phone),email=String(payload.email||"").trim().toLowerCase();
+ return rows.filter(c=>normalizedClientName(c.full_name)===name&&((phone&&normalizedClientPhone(c.phone)===phone)||(email&&String(c.email||"").trim().toLowerCase()===email)));
+}
 function bindForm(id,table,build){
  $(id).addEventListener("submit",async e=>{
  e.preventDefault();if(!active||routeStep!==1||routeClient)return;const form=e.currentTarget,btn=form.querySelector("button");btn.disabled=true;
- try{const org=orgId(),seq=epoch,values=Object.fromEntries(new FormData(form));const payload=build(values,org);const saved=ok(await api.from(table).insert(payload).select("*").single());if(!saved?.id)throw Error("Save not confirmed");const persisted=ok(await api.from(table).select("*").eq("id",saved.id).eq("org_id",org).single());if(!persisted||persisted.id!==saved.id||(table==="professional_cases"&&persisted.court_id!=="oh-wood-common-pleas")||Object.entries(payload).some(([key,value])=>persisted[key]!==value))throw Error("Supabase readback mismatch");if(!active||org!==orgId()||seq!==epoch)return;form.reset();navigateWorkflow(2,{clientId:saved.id});}catch{notice("Unable to save. Confirm required fields and authorization.");}finally{btn.disabled=false;}
+ try{const org=orgId(),seq=epoch,values=Object.fromEntries(new FormData(form));const payload=build(values,org);if(table==="professional_clients"){
+   const matches=await findExistingClientMatches(payload,org);
+   if(!active||org!==orgId()||seq!==epoch)return;
+   if(matches.length){
+    const panel=document.createElement("section");panel.id="existing-client-matches";panel.className="professional-summary-box";panel.setAttribute("role","status");
+    form.querySelector("#existing-client-matches")?.remove();
+    add(panel,"h3","This client is already saved");
+    add(panel,"p","Select the existing client to add another filing. No duplicate client has been created. Review the saved contact information before continuing.");
+    for(const match of matches){const line=add(panel,"div","");add(line,"p",match.full_name+" — "+(match.email||"No email saved"));const use=add(line,"button","Use existing client");use.type="button";use.addEventListener("click",()=>{if(active&&org===orgId()&&seq===epoch)navigateWorkflow(1,{clientId:match.id});});}
+    form.prepend(panel);panel.scrollIntoView({block:"nearest"});return;
+   }
+  }
+  form.querySelector("#existing-client-matches")?.remove();
+  const saved=ok(await api.from(table).insert(payload).select("*").single());if(!saved?.id)throw Error("Save not confirmed");const persisted=ok(await api.from(table).select("*").eq("id",saved.id).eq("org_id",org).single());if(!persisted||persisted.id!==saved.id||(table==="professional_cases"&&persisted.court_id!=="oh-wood-common-pleas")||Object.entries(payload).some(([key,value])=>persisted[key]!==value))throw Error("Supabase readback mismatch");if(!active||org!==orgId()||seq!==epoch)return;form.reset();navigateWorkflow(2,{clientId:saved.id});}catch{notice("Unable to save. Confirm required fields and authorization.");}finally{btn.disabled=false;}
  });
 }
 bindForm("client-form","professional_clients",(v,org)=>({org_id:org,full_name:v.full_name,dob:v.dob,other_names:v.other_names||"",line1:v.line1,line2:v.line2||"",city:v.city,state:v.state,zip:v.zip,email:v.email,phone:v.phone,authorization_confirmed:v.authorization_confirmed==="on"}));
