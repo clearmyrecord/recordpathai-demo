@@ -2,7 +2,7 @@
 begin;
 alter table public.professional_pilot_orgs add column access_kind text not null default 'pilot' check(access_kind in ('pilot','paid'));
 alter table public.professional_pilot_orgs drop constraint professional_pilot_orgs_check;
-alter table public.professional_pilot_orgs add constraint professional_org_window check(ends_at>starts_at and (access_kind='paid' or ends_at<=starts_at+interval '90 days'));
+alter table public.professional_pilot_orgs add constraint professional_org_window check(ends_at>starts_at and (access_kind='paid' or ends_at<=starts_at+interval '7 days'));
 grant select(access_kind) on public.professional_pilot_orgs to authenticated;
 create table public.professional_live_billing(
  org_id uuid primary key references public.professional_pilot_orgs(id),

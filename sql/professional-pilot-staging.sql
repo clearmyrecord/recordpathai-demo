@@ -6,8 +6,8 @@ create table public.professional_pilot_orgs (
  pilot_code text not null unique check (pilot_code ~ '^DEMO-[A-Z0-9]{4,16}$'),
  active boolean not null default false,
  starts_at timestamptz not null default now(),
- ends_at timestamptz not null default (now()+interval '90 days'),
- check (ends_at>starts_at and ends_at<=starts_at+interval '90 days')
+ ends_at timestamptz not null default (now()+interval '7 days'),
+ check (ends_at>starts_at and ends_at<=starts_at+interval '7 days')
 );
 create table public.professional_pilot_members (
  org_id uuid not null references public.professional_pilot_orgs(id),
