@@ -73,3 +73,10 @@
 .rp-professional .professional-main .professional-case-panel{border-top:1px solid var(--line);padding:16px 0;margin-top:8px}
 .rp-professional .professional-main .professional-case-panel>summary{font-weight:800;cursor:pointer;color:var(--blue-dark)}
 .rp-professional .professional-main #client-intake,.rp-professional .professional-main #case-intake{scroll-margin-top:24px}
+
+/* Application progression, using the same blue-and-white case dashboard palette. */
+.rp-professional .professional-steps{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:20px 0;padding:14px;background:white;border:1px solid var(--line);border-radius:18px}
+.rp-professional .professional-steps span{flex:1;min-width:145px;padding:12px;border-radius:12px;color:var(--muted);font-weight:800}
+.rp-professional .professional-steps span[aria-current=step]{background:var(--blue-soft);color:var(--blue-dark);outline:1px solid var(--line)}
+.rp-professional #client-list .saved-case-card{padding:20px}
+.rp-professional #client-list .saved-case-actions{margin-top:10px}
