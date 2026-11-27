@@ -80,9 +80,9 @@ async function refreshBilling(token=epoch){
   $("confirm-account").hidden=true;$("submitted").hidden=false;$("live-billing").hidden=false;$("billing-refresh").hidden=false;$("pilot-link").hidden=false;
   if(data.unregistered){if(!planInitialized){selectPlan(preferredPlan||"solo");planInitialized=true;}$("billing-state").textContent="Your verified account is ready. Choose a monthly subscription. No attorney credentials or manual approval required.";$("plan-choice").hidden=false;$("billing-checkout").hidden=false;$("billing-consent-label").hidden=false;return;}
   if(!planInitialized){selectPlan(preferredPlan||data.plan||"solo");planInitialized=true;}
-  $("plan-choice").hidden=Boolean(data.subscription_exists);
-  $("billing-state").textContent=data.subscription_exists?(data.plan==="solo"?"Individual":"Firm")+" · $"+(data.amount_cents/100).toFixed(2)+"/month plus applicable tax · "+(data.active?"Subscription verified":"Existing subscription requires attention"):"Choose either monthly package. Your account is verified and ready to subscribe.";
-  $("billing-checkout").hidden=data.subscription_exists;$("billing-consent-label").hidden=data.subscription_exists;$("billing-portal").hidden=!data.subscription_exists;
+  $("plan-choice").hidden=Boolean(data.subscription_exists||data.test_access);
+  $("billing-state").textContent=data.test_access?"Internal testing access active — no subscription payment required.":data.subscription_exists?(data.plan==="solo"?"Individual":"Firm")+" · $"+(data.amount_cents/100).toFixed(2)+"/month plus applicable tax · "+(data.active?"Subscription verified":"Existing subscription requires attention"):"Choose either monthly package. Your account is verified and ready to subscribe.";
+  $("billing-checkout").hidden=Boolean(data.subscription_exists||data.test_access);$("billing-consent-label").hidden=Boolean(data.subscription_exists||data.test_access);$("billing-portal").hidden=!data.subscription_exists;
   if(data.active){
    $("practice-link").hidden=false;$("practice-link").href="professional-account.html?secure=1";$("practice-link").textContent="Open RecordWatch";
    if(secure){$("submitted").hidden=true;$("pilot-link").hidden=true;if(await ensureMfa(token)&&token===epoch)location.replace("professional-practice.html");}
