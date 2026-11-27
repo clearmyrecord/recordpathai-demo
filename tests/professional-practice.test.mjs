@@ -147,7 +147,7 @@ test("professional client and case creation has three dedicated routes, not dash
  assert.match(js,/if\(!routeStep\)\{navigateWorkflow\(id==="case-intake"\?2:1/);
  assert.match(js,/if\(panel===packetPanel&&!routeStep\)\{navigateWorkflow\(3/);
  assert.match(js,/if\(routeStep!==3\)\{packetPanel\.d\.remove\(\)/);
- assert.match(js,/if\(!active\|\|routeStep!==1\|\|routeClient\)return/);
+ assert.match(js,/if\(!active\|\|routeStep!==1\|\|routeClient\|\|submitting\)return/);
  assert.match(js,/if\(!active\|\|routeStep!==2\|\|!routeClient\|\|!sharedIntake\)return/);
  assert.match(js,/navigateWorkflow\(2,\{clientId:saved\.id\}\)/);
  assert.match(js,/navigateWorkflow\(3,\{caseId:persisted\.id\}\)/);
@@ -194,4 +194,27 @@ test("Step 3 uses compact aligned payment options and selection-specific pricing
  assert.match(css,/professional-delivery-option input\[type=radio\]\{[^}]*width:20px;height:20px;min-height:0/);
  assert.match(css,/professional-checkout-total/);
  assert.match(css,/professional-pay-and-mail:not\(\.menu-toggle\)\{width:100%/);
+});
+
+test("new professional client intake checks scoped existing identity before insert",()=>{
+ const js=read("js/professional-practice.js");
+ const lookup=js.slice(js.indexOf("async function findExistingClientMatches"),js.indexOf("function bindForm"));
+ assert.match(lookup,/api.auth.getUser\(\)/);
+ assert.match(lookup,/\.eq\("org_id",org\)\.eq\("attorney_id",user.id\)\.eq\("dob",payload.dob\)/);
+ assert.match(lookup,/normalizedClientName\(c.full_name\)===name/);
+ assert.match(lookup,/normalizedClientPhone\(c.phone\)===phone/);
+ const submit=js.slice(js.indexOf("function bindForm"),js.indexOf('bindForm("client-form"'));
+ assert.ok(submit.indexOf("await findExistingClientMatches")<submit.indexOf(".insert(payload)"));
+ assert.match(submit,/if\(matches.length\)/);
+ assert.match(submit,/navigateWorkflow\(1,\{clientId:match.id\}\)/);
+ assert.match(submit,/form.prepend\(panel\);panel.scrollIntoView\(\{block:"nearest"\}\);return;/);
+ assert.match(js,/navigateWorkflow\(2,\{clientId:routeClient.id\}\)/);
+});
+
+test("client submit lock targets Save, never an inserted match button",()=>{
+ const js=read("js/professional-practice.js");const submit=js.slice(js.indexOf("function bindForm"),js.indexOf('bindForm("client-form"'));
+ assert.ok(submit.includes("||submitting)return"));
+ assert.ok(submit.includes("form.querySelector('button[type=\"submit\"]')"));
+ assert.ok(submit.includes("submitting=true;btn.disabled=true"));
+ assert.ok(submit.includes("finally{submitting=false;btn.disabled=false;}"));
 });
