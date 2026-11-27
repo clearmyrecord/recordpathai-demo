@@ -3,7 +3,9 @@ const $=id=>document.getElementById(id), notice=t=>$("notice").textContent=t;
 const production="pfyxjhdlqgpzzzdssqpk.supabase.co";
 let api,orgs=[],epoch=0,active=false,renewal=null;
 const caseFilter=()=>$("client-filter").value;
-const clear=()=>{if(renewal)clearInterval(renewal);renewal=null;epoch++;active=false;$("app").hidden=true;$("client-form").reset();$("case-form").reset();$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();$("client-filter").replaceChildren(option("","All clients"));$("case-filter").value="";$("case-summary").textContent="";orgs=[];};
+const hideIntake=()=>{for(const id of ["client-intake","case-intake"])$(id).hidden=true;};
+const showIntake=id=>{if(!active)return;hideIntake();$(id).hidden=false;$(id).scrollIntoView({block:"start"});};
+const clear=()=>{hideIntake();for(const id of ["client-count","case-count","packet-count","watch-count"])$(id).textContent="0";if(renewal)clearInterval(renewal);renewal=null;epoch++;active=false;$("app").hidden=true;$("client-form").reset();$("case-form").reset();$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();$("client-filter").replaceChildren(option("","All clients"));$("case-filter").value="";$("case-summary").textContent="";orgs=[];};
 const fail=()=>{clear();notice("Access or request unavailable. No filing or payment was made. Reload or contact the pilot operator.");};
 const ok=r=>{if(r.error)throw Error("Request rejected");return r.data;};
 const orgId=()=>$("org").value;
@@ -56,18 +58,33 @@ async function refresh(){
  if(clients.some(c=>c.id===selectedFilter))$("client-filter").value=selectedFilter;
  const visible=cases.filter(c=>(!caseFilter()||c.client_id===caseFilter())&&c.case_number.toLowerCase().includes($("case-filter").value.trim().toLowerCase()));
  $("case-summary").textContent=clients.length+" saved clients · "+cases.length+" saved cases · "+visible.length+" shown (most recent 100 records).";
- if(!visible.length)add($("cases"),"p","No matching saved cases. Choose another client or save a new case above.");
+ $("client-count").textContent=String(clients.length);$("case-count").textContent=String(cases.length);$("packet-count").textContent=String(generated.length);$("watch-count").textContent=String(enrollments.filter(e=>e.enabled).length);
+ if(!visible.length)add($("cases"),"p","No matching saved cases. Add a client or enter record details to get started.");
  $("role").textContent="Secure professional account · assigned records only";
 
  for(const row of visible){
   const client=clients.find(x=>x.id===row.client_id);if(!client)continue;
-  const card=document.createElement("article");add(card,"h3",client.full_name+" — "+row.case_number);
+  const shell=document.createElement("article");shell.className="saved-case-card";
+  const summary=add(shell,"div","");summary.className="saved-case-header";const identity=add(summary,"div","");add(identity,"p","Case Number").className="eyebrow-mini";add(identity,"h3",row.case_number).className="saved-case-title";add(identity,"p",client.full_name).className="muted";
+  const eligibilityBadge=add(summary,"span","Needs review");eligibilityBadge.className="case-status-badge needs-review";
+  const statuses=add(shell,"div","");statuses.className="saved-case-status-row";
+  const packetStatus=documents.some(d=>d.case_id===row.id)?"Signed document saved":generated.some(d=>d.case_id===row.id)?"Generated":decisions.some(d=>d.case_id===row.id&&d.decision==="approved_for_unsigned_draft")?"Reviewed":"Not generated";
+  const watchEnabled=enrollments.some(e=>e.case_id===row.id&&e.enabled);add(statuses,"span","Packet: "+packetStatus).className="case-status-badge "+(packetStatus==="Generated"?"generated":"not-screened");add(statuses,"span","RecordWatch: "+(watchEnabled?"Active":"Not activated")).className="case-status-badge "+(watchEnabled?"generated":"not-screened");
+  const meta=add(shell,"div","");meta.className="saved-case-detail-grid";const field=(label,value)=>{const el=add(meta,"div","");el.className="saved-case-meta";add(el,"strong",label);return add(el,"span",value||"Not available");};
+  field("Court","Wood County Court of Common Pleas");field("County / State","Wood, OH");field("Primary Charge",row.charge_name);const estimated=field("Estimated Eligibility Date","Not available");field("Last Updated",new Date(row.updated_at||row.created_at).toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"}));
+  const actions=add(shell,"div","");actions.className="saved-case-actions";
+  const section=(label)=>{const d=document.createElement("details");d.className="professional-case-panel";add(d,"summary",label);const body=add(d,"div","");shell.append(d);return {d,body};};
+  const reviewPanel=section("Record details & eligibility screening"),watchPanel=section("RecordWatch"),packetPanel=section("Packet preparation & saved applications");let card=reviewPanel.body;
+  const openPanel=panel=>{for(const p of [reviewPanel,watchPanel,packetPanel])p.d.open=p===panel;panel.d.scrollIntoView({block:"nearest"});};
+  const nav=(label,p,primary=false)=>{const b=add(actions,"button",label);b.type="button";b.className=primary?"btn":"btn secondary";b.addEventListener("click",()=>{if(active&&org===orgId())openPanel(p)});};
+  nav("Resume",packetStatus==="Not generated"?reviewPanel:packetStatus==="Reviewed"?packetPanel:watchPanel,true);nav("Record Details",reviewPanel);nav("Open Packet",packetPanel);nav("Open RecordWatch",watchPanel);
   add(card,"p",row.outcome+" · "+row.charge_name+" · "+row.charge_code+" · "+row.charge_level+" · disposition "+row.disposition_date+(row.final_discharge_date?" · discharge "+row.final_discharge_date:""));
   add(card,"p","Mailing: "+[client.line1,client.line2,client.city,client.state,client.zip].filter(Boolean).join(", ")+" · "+client.email+" · "+client.phone);
   if(row.outcome==="mixed")add(card,"p","Eligibility: mixed dispositions require review before packet preparation.");
   else if(window.RecordPathEligibilityEngine?.resolveEligibilityForCase){
    const disposition={dismissal:"dismissed",not_guilty:"not guilty",conviction:"convicted"}[row.outcome]||"";
    const result=window.RecordPathEligibilityEngine.resolveEligibilityForCase({id:row.id,court:{caseState:"OH",county:"Wood",courtName:"Wood County Court of Common Pleas",caseNumber:row.case_number},charges:[{chargeName:row.charge_name,statuteCode:row.charge_code,chargeLevel:row.charge_level,disposition,dispositionDate:row.disposition_date,finalDischargeDate:row.final_discharge_date||"",probationCompletedDate:row.probation_end_date||""}],outcome:{outcome:disposition,dispositionDate:row.disposition_date,finalDischargeDate:row.final_discharge_date||""}});
+   eligibilityBadge.textContent=result.status||"Needs review";eligibilityBadge.className="case-status-badge "+(String(result.status||"").toLowerCase()==="eligible"?"eligible":"needs-review");estimated.textContent=result.formattedEligibilityDate||"Not available";
    add(card,"h4","Eligibility screening");add(card,"p",result.status+" · "+(result.formattedEligibilityDate||"Date not available")+" · "+(result.ruleCitation||"Review local rules"));
    for(const flag of result.flags||[])add(card,"p",flag);
    add(card,"p","Estimate using the same consumer eligibility engine. Full charge inventory, exclusions and other eligibility requirements must be reviewed before filing.");
@@ -75,6 +92,7 @@ async function refresh(){
   const decision=decisions.find(x=>x.case_id===row.id);
   add(card,"p",decision?"Review: "+decision.decision.replaceAll("_"," "):"Awaiting authorized review");
   const button=(label,fn)=>{const btn=add(card,"button",label);btn.type="button";btn.addEventListener("click",async()=>{if(!active||org!==orgId())return;btn.disabled=true;try{await fn();}catch{notice("Action rejected. Check saved information and access.");}finally{btn.disabled=false;}});return btn;};
+  card=watchPanel.body;
   add(card,"h4","RecordWatch Professional");
   const enrollment=enrollments.find(e=>e.case_id===row.id);
   const observed=observations.find(e=>e.case_id===row.id);
@@ -100,6 +118,7 @@ async function refresh(){
   add(card,"p","Reminders use attorney-entered dates. Official events require independent verification; no live docket feed or email/SMS dispatch is connected.");
   const docket=add(card,"a","Check official Wood County docket");docket.href="https://pub.clerkofcourt.co.wood.oh.us/eservices/home.page.2";docket.target="_blank";docket.rel="noopener noreferrer";
 
+  card=packetPanel.body;
   if(!decision){
    const label=add(card,"label","");const checked=document.createElement("input");checked.type="checkbox";label.append(checked,document.createTextNode(" I reviewed the complete docket, charge inventory, eligibility and filing requirements."));
    const decide=async value=>{if(!checked.checked)throw Error("Review required");ok(await api.from("professional_case_decisions").insert({org_id:org,case_id:row.id,decision:value,entire_case_reviewed:true}));await refresh();};
@@ -180,19 +199,22 @@ async function refresh(){
    button("Save manual event",async()=>{if(!date.value)throw Error("Date required");ok(await api.from("professional_case_events").insert({org_id:org,case_id:row.id,event_type:event.value,event_date:date.value}));await refresh();});
    for(const e of events.filter(x=>x.case_id===row.id))add(card,"p",e.event_date+" — "+e.event_type.replaceAll("_"," "));
   }
-  $("cases").append(card);
+  $("cases").append(shell);
  }
  notice("Professional workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
 }
 function bindForm(id,table,build){
  $(id).addEventListener("submit",async e=>{
  e.preventDefault();if(!active)return;const form=e.currentTarget,btn=form.querySelector("button");btn.disabled=true;
- try{const org=orgId(),values=Object.fromEntries(new FormData(form));ok(await api.from(table).insert(build(values,org)));form.reset();await refresh();}catch{notice("Unable to save. Confirm required fields and authorization.");}finally{btn.disabled=false;}
+ try{const org=orgId(),seq=epoch,values=Object.fromEntries(new FormData(form));const saved=ok(await api.from(table).insert(build(values,org)).select("id").single());if(!active||org!==orgId()||seq!==epoch)return;form.reset();await refresh();if(!active||org!==orgId())return;if(table==="professional_clients"){ $("clients").value=saved.id;showIntake("case-intake");notice("Client saved. Continue to record details."); }else{hideIntake();$("case-filter").value=values.case_number;$("client-filter").value=values.client_id;await refresh();const first=$("cases").querySelector("details");if(first)first.open=true;$("saved-cases").scrollIntoView({block:"start"});notice("Case saved. Review eligibility and continue to packet preparation.");}}catch{notice("Unable to save. Confirm required fields and authorization.");}finally{btn.disabled=false;}
  });
 }
 bindForm("client-form","professional_clients",(v,org)=>({org_id:org,...v,authorization_confirmed:v.authorization_confirmed==="on"}));
 bindForm("case-form","professional_cases",(v,org)=>({org_id:org,...v,final_discharge_date:v.final_discharge_date||null,probation_end_date:v.probation_end_date||null}));
-$("org").addEventListener("change",()=>{$("client-form").reset();$("case-form").reset();refresh().catch(fail);});
+$("new-client").addEventListener("click",()=>showIntake("client-intake"));
+$("new-case").addEventListener("click",()=>showIntake($("clients").options.length?"case-intake":"client-intake"));
+$("close-client").addEventListener("click",hideIntake);$("close-case").addEventListener("click",hideIntake);
+$("org").addEventListener("change",()=>{hideIntake();$("client-form").reset();$("case-form").reset();refresh().catch(fail);});
 $("refresh").addEventListener("click",()=>refresh().catch(fail));
 $("client-filter").addEventListener("change",()=>refresh().catch(fail));
 $("case-filter").addEventListener("change",()=>refresh().catch(fail));
