@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {createHash} from "node:crypto";
-import {verifiedProfessionalMailPayment,registerProfessionalMailing,PROFESSIONAL_MAIL_PRODUCT} from "../src/professional-mailing.js";
+import {verifiedProfessionalMailPayment,professionalVerifiedEventKeys,registerProfessionalMailing,PROFESSIONAL_MAIL_PRODUCT} from "../src/professional-mailing.js";
 const o={case_id:"00000000-0000-4000-8000-000000000001",org_id:"00000000-0000-4000-8000-000000000002",user_id:"00000000-0000-4000-8000-000000000003",document_id:"00000000-0000-4000-8000-000000000004",signed_sha:"a".repeat(64),stripe_session_id:"cs_live_fixture"};
 const charge={livemode:true,paid:true,status:"succeeded",payment_intent:"pi_fixture",currency:"usd",amount:11000,amount_captured:11000,amount_refunded:0,refunded:false,disputed:false};
 const session={id:o.stripe_session_id,livemode:true,mode:"payment",status:"complete",payment_status:"paid",currency:"usd",amount_subtotal:11000,amount_total:11000,metadata:{productType:PROFESSIONAL_MAIL_PRODUCT,userId:o.user_id,caseId:o.case_id,orgId:o.org_id,documentId:o.document_id,signedPdfSha:o.signed_sha,serviceFeeCents:"1000",courtFeeCents:"10000"},payment_intent:{id:"pi_fixture",livemode:true,status:"succeeded",currency:"usd",amount:11000,amount_received:11000,latest_charge:charge}};
@@ -118,4 +118,19 @@ test("paid professional alerts scan beyond the first 100 orders using a stable c
  assert.match(src,/&case_id=gt\./);
  assert.match(src,/paid\.at\(-1\)\?\.case_id/);
  assert.match(src,/cursor=next/);
+});
+
+test("verified court alerts cover all 73 events across stable pages, preserving case scope and consent date",async()=>{
+ const ids=Array.from({length:73},(_,i)=>"00000000-0000-4000-8000-"+String(i+1).padStart(12,"0"));
+ const consent="2026-11-01T00:00:00Z";let reads=0;
+ const keys=await professionalVerifiedEventKeys(async(table,{query})=>{
+  reads++;assert.equal(table,"professional_verified_court_events");
+  const q=new URLSearchParams(query);
+  assert.equal(q.get("case_id"),"eq."+o.case_id);assert.equal(q.get("org_id"),"eq."+o.org_id);assert.equal(q.get("attorney_id"),"eq."+o.user_id);
+  assert.equal(q.get("verified_at"),"gte."+consent);assert.equal(q.get("order"),"id.asc");
+  const cursor=q.get("id")?.slice(3)||"";
+  return ids.filter(id=>id>cursor).slice(0,30).map(id=>({id}));
+ },o,consent);
+ assert.equal(reads,3);assert.deepEqual(keys,ids.map(id=>"court:"+id));
+ await assert.rejects(professionalVerifiedEventKeys(async()=>ids.slice(0,30).map(id=>({id})),o,consent),/cursor/);
 });
