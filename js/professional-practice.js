@@ -35,14 +35,21 @@ async function load(){
  active=true;$("app").hidden=false;await refresh();
  if(paidRows.length&&active)renewal=setInterval(async()=>{try{if(active&&!await refreshPaidLease()){clear();notice("Subscription access expired. Return to Professional account.");}}catch{fail();}},10*60*1000);
 }
+async function saveGeneratedPacket(bytes,caseId,kind,seq,org){
+ const session=ok(await api.auth.getSession()).session;if(!session?.access_token||!active||seq!==epoch||org!==orgId())throw Error("Workspace changed");
+ const response=await fetch("/api/professional/recordwatch/generated-packet",{method:"POST",headers:{Authorization:"Bearer "+session.access_token,"Content-Type":"application/pdf","x-professional-case-id":caseId,"x-professional-packet-kind":kind},body:bytes,cache:"no-store"});
+ const result=await response.json().catch(()=>({}));if(!response.ok||result.ok!==true||result.document?.case_id!==caseId||result.document?.kind!==kind)throw Error("Generated packet not saved");
+ if(!active||seq!==epoch||org!==orgId())throw Error("Workspace changed");
+ return result.document;
+}
 async function refresh(){
  if(!active)return;
  const seq=++epoch,org=orgId();
  const selectedClient=$("clients").value,selectedFilter=caseFilter();
  $("clients").replaceChildren();$("cases").replaceChildren();
- const [a,b,c,d,docs,reviewRows,counselRows,enrollRows,taskRows,verifiedRows,observedRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100),api.from("professional_counsel_profiles").select("*").eq("org_id",org).limit(1),api.from("professional_watch_enrollments").select("*").eq("org_id",org).limit(100),api.from("professional_watch_tasks").select("*").eq("org_id",org).order("due_date").limit(500),api.from("professional_verified_court_events").select("id,case_id,event_type,occurred_on,evidence_url,verified_at").eq("org_id",org).order("occurred_on",{ascending:false}).limit(500),api.from("professional_watch_observations").select("*").limit(100)]);
+ const [a,b,c,d,docs,reviewRows,counselRows,enrollRows,taskRows,verifiedRows,observedRows,generatedRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100),api.from("professional_counsel_profiles").select("*").eq("org_id",org).limit(1),api.from("professional_watch_enrollments").select("*").eq("org_id",org).limit(100),api.from("professional_watch_tasks").select("*").eq("org_id",org).order("due_date").limit(500),api.from("professional_verified_court_events").select("id,case_id,event_type,occurred_on,evidence_url,verified_at").eq("org_id",org).order("occurred_on",{ascending:false}).limit(500),api.from("professional_watch_observations").select("*").limit(100),api.from("professional_generated_packets").select("id,case_id,kind,sha256,page_count,created_at").eq("org_id",org).order("created_at",{ascending:false}).limit(500)]);
  if(seq!==epoch||!active||org!==orgId())return;
- const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0],enrollments=ok(enrollRows),tasks=ok(taskRows),verified=ok(verifiedRows),observations=ok(observedRows);
+ const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0],enrollments=ok(enrollRows),tasks=ok(taskRows),verified=ok(verifiedRows),observations=ok(observedRows),generated=ok(generatedRows);
  $("client-filter").replaceChildren(option("","All clients"));
  for(const client of clients){$("clients").append(option(client.id,client.full_name));$("client-filter").append(option(client.id,client.full_name));}
  if(clients.some(c=>c.id===selectedClient))$("clients").value=selectedClient;
@@ -100,12 +107,13 @@ async function refresh(){
    if(row.outcome!=="mixed")button("Approve unsigned draft",()=>decide("approved_for_unsigned_draft"));
   }else if(decision.decision==="approved_for_unsigned_draft"){
    add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". File directly with the court; no payment collected here.");
-   button("Download unsigned review draft",async()=>{
+   button("Generate and save review draft",async()=>{
     const token=epoch;
     const [freshClient,freshCase,freshDecision]=await Promise.all([api.from("professional_clients").select("*").eq("id",client.id).single(),api.from("professional_cases").select("*").eq("id",row.id).single(),api.from("professional_case_decisions").select("*").eq("case_id",row.id).single()]);
     const bytes=await renderProfessionalDraft({client:ok(freshClient),caseRow:ok(freshCase),decision:ok(freshDecision),today:new Date().toISOString().slice(0,10),PDFLib:window.PDFLib});
     if(!active||token!==epoch||org!==orgId())return;
-    const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));const a=document.createElement("a");a.href=url;a.download="wood-county-unsigned-review-draft.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    await saveGeneratedPacket(bytes,row.id,"review_draft",token,org);
+    await refresh();notice("Review draft saved in RecordWatch. Open it from the case’s saved packet library.");
    });
    const signLabel=add(card,"label","");const signConsent=document.createElement("input");signConsent.type="checkbox";signLabel.append(signConsent,document.createTextNode(" I reviewed the official form and will obtain the required applicant signature and date before filing."));
    button("Download official form for signature",async()=>{
@@ -114,7 +122,8 @@ async function refresh(){
     const [freshClient,freshCase,freshDecision]=await Promise.all([api.from("professional_clients").select("*").eq("id",client.id).single(),api.from("professional_cases").select("*").eq("id",row.id).single(),api.from("professional_case_decisions").select("*").eq("case_id",row.id).single()]);
     const bytes=await renderProfessionalDraft({client:ok(freshClient),caseRow:ok(freshCase),decision:ok(freshDecision),today:new Date().toISOString().slice(0,10),PDFLib:window.PDFLib,signatureReady:true});
     if(!active||token!==epoch||org!==orgId()||!signConsent.checked)return;
-    const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));const a=document.createElement("a");a.href=url;a.download="wood-county-official-unsigned-application.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    await saveGeneratedPacket(bytes,row.id,"unsigned_application",token,org);
+    await refresh();notice("Unsigned application saved in RecordWatch. Open it below to obtain the applicant signature.");
    });
    add(card,"h4","Signed document review");
    add(card,"p","Obtain the actual applicant signature on the official form outside this tool. Upload the exact signed official two-page PDF; watermarked review drafts are not accepted.");
@@ -128,6 +137,18 @@ async function refresh(){
     const response=await fetch("/api/professional/signed-review",{method:"POST",headers:{...headers,"Content-Type":"application/pdf","x-professional-case-id":row.id,"x-professional-signature-attested":"yes"},body:selected,cache:"no-store"});
     if(!response.ok)throw Error("Upload rejected");file.value="";await refresh();
    });
+   add(card,"h4","Saved packets");
+   const saved=generated.filter(x=>x.case_id===row.id);
+   if(!saved.length)add(card,"p","No generated packet saved for this case yet.");
+   for(const doc of saved){
+    add(card,"p",(doc.kind==="review_draft"?"Review draft — not filing-ready":"Unsigned official application — signature required")+" · "+new Date(doc.created_at).toLocaleString()+" · "+doc.page_count+" pages");
+    button("Open saved "+(doc.kind==="review_draft"?"review draft":"unsigned application"),async()=>{
+     const token=epoch;const headers=await auth();const response=await fetch("/api/professional/recordwatch/generated-packet/"+encodeURIComponent(doc.id),{headers,cache:"no-store"});
+     if(!response.ok)throw Error("Saved packet unavailable");
+     const blob=await response.blob();if(!active||token!==epoch||org!==orgId()||blob.type!=="application/pdf")return;
+     const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=doc.kind==="review_draft"?"recordwatch-review-draft.pdf":"recordwatch-unsigned-application.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(u),5000);
+    });
+   }
    const rowDocs=documents.filter(x=>x.case_id===row.id);
    const rowReviews=signedReviews.filter(x=>x.case_id===row.id);
    for(const doc of rowDocs){
