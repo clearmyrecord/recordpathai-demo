@@ -190,7 +190,9 @@ test("Step 3 uses compact aligned payment options and selection-specific pricing
  assert.match(js,/quotedCourtFee\+10/);
  assert.match(js,/totalQuote.textContent=mail\?/);
  assert.match(js,/mailingQuote.textContent=mail\?money\(10\):"Not selected"/);
- assert.match(js,/disabledPay.disabled=true/);
+ assert.match(js,/pay.disabled=!checkoutReady/);
+ assert.match(js,/billing_access_required/);
+ assert.doesNotMatch(js,/supported&&!internalTestAccess/);
  assert.match(css,/professional-delivery-option input\[type=radio\]\{[^}]*width:20px;height:20px;min-height:0/);
  assert.match(css,/professional-checkout-total/);
  assert.match(css,/professional-pay-and-mail:not\(\.menu-toggle\)\{width:100%/);

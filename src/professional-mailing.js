@@ -75,6 +75,17 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
   if(latest?.id!==d.id)throw Error("A newer signed application requires independent review.");
   return {c,d};
  }
+ async function ownerMailGrant(o){
+  // Separate service-managed production grant; ordinary test access is insufficient.
+  const grant=await get("professional_owner_mail_access","org_id=eq."+o.org_id+"&user_id=eq."+o.user_id+"&revoked_at=is.null&limit=1");
+  if(!grant||grant.org_id!==o.org_id||grant.user_id!==o.user_id||!Number.isFinite(Date.parse(grant.expires_at))||Date.parse(grant.expires_at)<=Date.now())return false;
+  const [workspace,member,test]=await Promise.all([
+   get("professional_pilot_orgs","id=eq."+o.org_id+"&active=eq.true&access_kind=eq.paid&limit=1"),
+   get("professional_pilot_members","org_id=eq."+o.org_id+"&user_id=eq."+o.user_id+"&active=eq.true&limit=1"),
+   get("professional_test_access","org_id=eq."+o.org_id+"&user_id=eq."+o.user_id+"&revoked_at=is.null&limit=1")
+  ]);
+  return Boolean(workspace?.id===o.org_id&&workspace.active===true&&workspace.access_kind==="paid"&&member?.org_id===o.org_id&&member.user_id===o.user_id&&member.active===true&&test?.org_id===o.org_id&&test.user_id===o.user_id&&!test.revoked_at&&Date.parse(test.expires_at)>Date.now());
+ }
  async function paidCustomer(o){
   const b=await get("professional_live_billing","org_id=eq."+o.org_id+"&authorized_user=eq."+o.user_id+"&approved=eq.true&limit=1");
   if(!b||!["solo","firm"].includes(b.plan))throw Error("Paid account required");
@@ -83,7 +94,8 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
   const list=await stripe.subscriptions.list({customer:customer.id,status:"all",limit:100,expand:["data.latest_invoice"]});
   if(list.has_more)throw Error("Subscription history requires review");
   const outstanding=list.data.filter(s=>!["canceled","incomplete_expired"].includes(s.status));
-  if(outstanding.length!==1)throw Error("Active subscription required");
+  if(outstanding.length===0&&await ownerMailGrant(o))return customer.id;
+  if(outstanding.length!==1)throw Error("Active subscription or approved owner filing access required");
   const s=outstanding[0];if(typeof s.latest_invoice?.charge==="string")s.latest_invoice.charge=await stripe.charges.retrieve(s.latest_invoice.charge);
   if(!verifiedLiveSubscription(s,b))throw Error("Active subscription payment required");
   return customer.id;
@@ -144,8 +156,18 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
    const c=await owned(req,res,req.params.caseId);if(!c)return;
    const o=await order(c.id);
    if(o&&(o.user_id!==c.attorney_id||o.org_id!==c.org_id))return send(res,403,"Order ownership mismatch.");
-   let ready=false;try{ready=Boolean(o?.status==="approved"&&reviewed(o)&&courtFee(o)===feeForOutcome(c.outcome)&&await enabled(o)&&await alertStorageReady());}catch{}
-   const result={ok:true,status:o?.status||"awaiting_independent_review",checkoutReady:ready,serviceFeeCents:PROFESSIONAL_MAIL_SERVICE_CENTS,courtFeeCents:feeForOutcome(c.outcome),lobCheckId:o?.lob_check_id||null,lobLetterId:o?.lob_letter_id||null};
+   let ready=false,checkoutBlocker=null;
+   if(!o)checkoutBlocker="independent_review_required";
+   else if(o.status!=="approved")checkoutBlocker="existing_order";
+   else if(!reviewed(o)||courtFee(o)!==feeForOutcome(c.outcome))checkoutBlocker="independent_review_required";
+   else try{
+    const {d}=await facts(o.case_id,o.document_id);
+    if(d.sha256!==o.signed_sha)checkoutBlocker="independent_review_required";
+    else if(!await enabled(o))checkoutBlocker="mailing_not_enabled";
+    else if(!await alertStorageReady())checkoutBlocker="alerts_not_ready";
+    else {try{await paidCustomer(o);ready=true;}catch{checkoutBlocker="billing_access_required";}}
+   }catch{checkoutBlocker="review_or_service_unavailable";}
+   const result={ok:true,status:o?.status||"awaiting_independent_review",checkoutReady:ready,checkoutBlocker,serviceFeeCents:PROFESSIONAL_MAIL_SERVICE_CENTS,courtFeeCents:feeForOutcome(c.outcome),lobCheckId:o?.lob_check_id||null,lobLetterId:o?.lob_letter_id||null};
    if((o?.lob_check_id||o?.lob_letter_id)&&env.LOB_LIVE_API_KEY?.startsWith("live_")){
     try{const r=await network("https://api.lob.com/v1/"+(o.lob_letter_id?"letters/"+o.lob_letter_id:"checks/"+o.lob_check_id),{headers:{Authorization:"Basic "+Buffer.from(env.LOB_LIVE_API_KEY+":").toString("base64")},signal:AbortSignal.timeout(10000)});if(r.ok){const data=await r.json();if(data.id===(o.lob_letter_id||o.lob_check_id)){result.expectedDeliveryDate=data.expected_delivery_date||null;result.providerEvents=Array.isArray(data.tracking_events)?data.tracking_events.slice(-10).map(e=>({name:e.name,time:e.time})):[];}}}catch{}
    }

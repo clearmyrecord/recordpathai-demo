@@ -26,12 +26,13 @@ test("unpaid and paid provisioning uses actual Stripe account and service-only R
  const routes={};const user={id:"00000000-0000-4000-8000-000000000123",email:"fixture@example.invalid",email_confirmed_at:"2026-01-01"};
  const price={id:LIVE_PROFESSIONAL_PRICES.solo.id,livemode:true,active:true,currency:"usd",unit_amount:9900,recurring:{interval:"month",interval_count:1}};
  const customer={id:"cus_fixture",livemode:true,metadata:{product_family:"recordpathai_professional",authorized_user:user.id}};
- let row=null,creates=0,checkout=0,signedIn=true,paid=false,leaseCalls=0,lock=null,expired=0,open=null,last=null,testAccess=false;
+ let row=null,creates=0,checkout=0,signedIn=true,paid=false,leaseCalls=0,lock=null,expired=0,open=null,last=null,testAccess=false,filing=null,filingOrder=null;
  const firmPrice={...price,id:LIVE_PROFESSIONAL_PRICES.firm.id,unit_amount:24900};
  const selectedPrice=id=>id===firmPrice.id?firmPrice:price;
  const ctx={user,mode:"production",rest:async(table,query,opts)=>{
   assert.equal(opts.service,true);
   if(table==="professional_live_billing")return row?[row]:[];
+  if(table==="professional_mail_orders")return filingOrder?[filingOrder]:[];
   if(table==="rpc/professional_claim_checkout"){assert.equal(opts.body.p_user,user.id);if(lock)return false;lock=opts.body.p_token;return true;}
   if(table==="rpc/professional_release_checkout"){assert.equal(opts.body.p_token,lock);lock=null;return true;}
   if(table==="rpc/professional_select_checkout_plan"){assert.equal(opts.body.p_token,lock);assert.equal(opts.body.p_org,row.org_id);assert.equal(opts.body.p_customer,customer.id);assert.equal(opts.body.p_user,user.id);assert.equal(paid,false);row.plan=opts.body.p_plan;return true;}
@@ -42,7 +43,7 @@ test("unpaid and paid provisioning uses actual Stripe account and service-only R
   if(table==="rpc/professional_set_paid_lease"){leaseCalls++;assert.equal(opts.body.p_user,user.id);assert.equal(opts.body.p_customer,customer.id);assert.equal(opts.body.p_verified,paid);if(paid)assert.equal(opts.body.p_subscription,"sub_fixture");return paid;}
   throw Error(table);
  }};
- const stripe={accounts:{retrieve:async()=>({id:"acct_1TNJc5EGlcQZ3lmX"})},prices:{retrieve:async id=>selectedPrice(id)},customers:{create:async(p)=>{creates++;assert.equal(p.metadata.authorized_user,user.id);return customer;},retrieve:async()=>customer},subscriptions:{list:async()=>({data:paid?[{id:"sub_fixture",livemode:true,status:"active",customer:customer.id,metadata:{product_family:"recordpathai_professional",org_id:"org",plan:"solo"},items:{data:[{price,quantity:1}]},current_period_end:Math.floor(Date.now()/1000)+3600,latest_invoice:{livemode:true,status:"paid",subscription:"sub_fixture",currency:"usd",amount_paid:9900,charge:{livemode:true,paid:true,status:"succeeded",currency:"usd",amount_captured:9900,amount_refunded:0,refunded:false,disputed:false}}}]:[],has_more:false})},checkout:{sessions:{list:async p=>({data:p.status==="open"?(open?[open]:[]):(last?[last]:[]),has_more:false}),expire:async id=>{assert.equal(open.id,id);expired++;last={...open,status:"expired"};open=null;return last;},create:async(p)=>{checkout++;assert.equal(p.customer,customer.id);assert.equal(p.line_items[0].price,LIVE_PROFESSIONAL_PRICES[p.metadata.plan].id);open={id:"cs_fixture_"+checkout,livemode:true,mode:"subscription",status:"open",customer:customer.id,metadata:p.metadata,url:"https://checkout.stripe.com/c/pay/fixture"+checkout};last=open;return open;},listLineItems:async id=>{assert.equal(open.id,id);return {data:[{price: selectedPrice(LIVE_PROFESSIONAL_PRICES[open.metadata.plan].id),quantity:1}],has_more:false};}}}};
+ const stripe={accounts:{retrieve:async()=>({id:"acct_1TNJc5EGlcQZ3lmX"})},prices:{retrieve:async id=>selectedPrice(id)},customers:{create:async(p)=>{creates++;assert.equal(p.metadata.authorized_user,user.id);return customer;},retrieve:async()=>customer},subscriptions:{list:async()=>({data:paid?[{id:"sub_fixture",livemode:true,status:"active",customer:customer.id,metadata:{product_family:"recordpathai_professional",org_id:"org",plan:"solo"},items:{data:[{price,quantity:1}]},current_period_end:Math.floor(Date.now()/1000)+3600,latest_invoice:{livemode:true,status:"paid",subscription:"sub_fixture",currency:"usd",amount_paid:9900,charge:{livemode:true,paid:true,status:"succeeded",currency:"usd",amount_captured:9900,amount_refunded:0,refunded:false,disputed:false}}}]:[],has_more:false})},checkout:{sessions:{list:async p=>({data:p.status==="open"?[...(filing?.status==="open"?[filing]:[]),...(open?[open]:[])]:[...(filing?[filing]:[]),...(last?[last]:[])],has_more:false}),expire:async id=>{assert.equal(open.id,id);expired++;last={...open,status:"expired"};open=null;return last;},create:async(p)=>{checkout++;assert.equal(p.customer,customer.id);assert.equal(p.line_items[0].price,LIVE_PROFESSIONAL_PRICES[p.metadata.plan].id);open={id:"cs_fixture_"+checkout,livemode:true,mode:"subscription",status:"open",customer:customer.id,metadata:p.metadata,url:"https://checkout.stripe.com/c/pay/fixture"+checkout};last=open;return open;},listLineItems:async id=>{assert.equal(open.id,id);return {data:[{price: selectedPrice(LIVE_PROFESSIONAL_PRICES[open.metadata.plan].id),quantity:1}],has_more:false};}}}};
  registerProfessionalLiveBilling({post:(p,fn)=>routes[p]=fn},{context:async(req,res)=>{if(!signedIn){res.status(401).end();return null;}return ctx;},env:{STRIPE_SECRET_KEY:"sk_live_fixture",SUPABASE_SERVICE_ROLE_KEY:"fixture"},stripeFactory:()=>stripe});
  const invoke=async(action,headers={})=>{const res={statusCode:200,status(n){this.statusCode=n;return this},json(x){this.body=x;return this},end(){return this}};await routes["/api/professional/live-billing/"+action]({get:k=>headers[k]},res);return res;};
  const consent={"x-professional-live-consent":"yes","x-professional-plan":"solo","x-professional-terms":"accepted-v1","x-professional-account-id":user.id};
@@ -66,9 +67,16 @@ test("unpaid and paid provisioning uses actual Stripe account and service-only R
  row.authorized_user="00000000-0000-4000-8000-000000000999";
  res=await invoke("checkout",consent);assert.equal(res.statusCode,403);assert.equal(checkout,3);
  res=await invoke("refresh");assert.equal(res.statusCode,403);assert.equal(leaseCalls,1);
- row.authorized_user=user.id;paid=true;
+ row.authorized_user=user.id;
+ filingOrder={case_id:"00000000-0000-4000-8000-000000000456",org_id:row.org_id,user_id:user.id,document_id:"doc",signed_sha:"a".repeat(64),court_fee_cents:10000,stripe_session_id:"cs_live_filing"};
+ filing={id:filingOrder.stripe_session_id,livemode:true,mode:"payment",customer:customer.id,status:"complete",amount_subtotal:11000,metadata:{productType:"recordpathai-professional-conviction-mail",orgId:row.org_id,userId:user.id,caseId:filingOrder.case_id,documentId:filingOrder.document_id,signedPdfSha:filingOrder.signed_sha,serviceFeeCents:"1000",courtFeeCents:"10000"}};
+ open=null;last={...last,status:"expired"};
+ res=await invoke("checkout",consent);assert.equal(res.statusCode,200);assert.equal(checkout,4);
+ filing.status="open";res=await invoke("checkout",consent);assert.equal(res.statusCode,200);assert.equal(checkout,4);
+ filing.metadata.signedPdfSha="b".repeat(64);res=await invoke("checkout",consent);assert.equal(res.statusCode,503);assert.equal(checkout,4);filing=null;
+ paid=true;
  res=await invoke("refresh");assert.equal(res.body.active,true);assert.equal(leaseCalls,2);
- res=await invoke("checkout",{...consent,"x-professional-plan":"firm"});assert.equal(res.statusCode,409);assert.equal(checkout,3);assert.equal(row.plan,"solo");
+ res=await invoke("checkout",{...consent,"x-professional-plan":"firm"});assert.equal(res.statusCode,409);assert.equal(checkout,4);assert.equal(row.plan,"solo");
 });
 test("paid membership never grants counsel verification, and tenant data remains MFA protected",()=>{
  const sql=read("sql/professional-self-service.sql");

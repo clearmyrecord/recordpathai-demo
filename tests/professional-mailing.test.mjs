@@ -35,14 +35,14 @@ test("only the private unique-case queue and shared signed-webhook/scheduler can
  assert.match(server,/professionalMailing\.fulfill\(\)/);
 });
 
-test("mocked professional order moves from approved review through Stripe and exactly one Lob check",async()=>{
+for(const ownerAccess of [false,true])test("mocked "+(ownerAccess?"owner":"subscriber")+" order moves from approved review through Stripe and exactly one Lob check",async()=>{
  const routes={},app={get:(p,fn)=>routes[p]=fn,post:(p,...f)=>routes[p]=f.at(-1)};
  const bytes=Buffer.from("%PDF-1.7\n"+"fixture-only ".repeat(60)+"\n%%EOF"),hash=createHash("sha256").update(bytes).digest("hex");
  const order={...o,signed_sha:hash,stripe_session_id:null,reviewed_at:new Date().toISOString(),review_checks:Object.fromEntries(["identity","docket","charges","discharge","exclusions","form","signature","authorization","court_fee_and_address"].map(k=>[k,true])),status:"approved"};
  const c={id:o.case_id,org_id:o.org_id,attorney_id:o.user_id,court_id:"oh-wood-common-pleas",outcome:"conviction",case_number:"FIXTURE-ONLY",client_id:"00000000-0000-4000-8000-000000000005"};
  const d={id:o.document_id,case_id:o.case_id,org_id:o.org_id,attorney_id:o.user_id,sha256:hash,page_count:2,signature_mode:"applicant_external",attorney_signature_attested:true};
  const customer="cus_fixture",price="price_1UgEDMEGlcQZ3lmXWhFcmLh2";
- let created=0,mailings=0,claims=0,paid=false,refund=false,webhook=false,latest=null;
+ let created=0,mailings=0,claims=0,paid=false,refund=false,webhook=false,latest=null,grantValid=false;
  const privateRest=async(t,x)=>{
   if(t==="professional_mail_orders"){
    if(x.method==="PATCH"){
@@ -62,11 +62,15 @@ test("mocked professional order moves from approved review through Stripe and ex
   if(t==="professional_case_decisions")return [{org_id:o.org_id,attorney_id:o.user_id,decision:"approved_for_unsigned_draft",entire_case_reviewed:true}];
   if(t==="professional_clients")return [{id:c.client_id,org_id:o.org_id,attorney_id:o.user_id,authorization_confirmed:true}];
   if(t==="professional_live_billing")return [{org_id:o.org_id,authorized_user:o.user_id,stripe_customer_id:customer,plan:"solo",approved:true}];
+  if(t==="professional_owner_mail_access")return grantValid?[{org_id:o.org_id,user_id:o.user_id,expires_at:new Date(Date.now()+3600000).toISOString(),revoked_at:null}]:[];
+  if(t==="professional_pilot_orgs")return [{id:o.org_id,active:true,access_kind:"paid"}];
+  if(t==="professional_pilot_members")return [{org_id:o.org_id,user_id:o.user_id,active:true}];
+  if(t==="professional_test_access")return [{org_id:o.org_id,user_id:o.user_id,expires_at:new Date(Date.now()+3600000).toISOString(),revoked_at:null}];
   if(t==="packet_dispatch_controls")return [{live_dispatch_enabled:true}];
   if(["professional_mail_alert_preferences","professional_mail_alert_deliveries"].includes(t))return [];
   throw Error(t);
  };
- const stripe={customers:{retrieve:async()=>({id:customer,livemode:true,metadata:{authorized_user:o.user_id,product_family:"recordpathai_professional"}})},subscriptions:{list:async()=>({has_more:false,data:[{id:"sub_fixture",livemode:true,status:"active",customer,metadata:{product_family:"recordpathai_professional",org_id:o.org_id,plan:"solo"},items:{data:[{price:{id:price},quantity:1}]},current_period_end:Math.floor(Date.now()/1000)+3600,latest_invoice:{livemode:true,status:"paid",subscription:"sub_fixture",currency:"usd",amount_paid:9900,charge:{livemode:true,paid:true,status:"succeeded",currency:"usd",amount_captured:9900,amount_refunded:0,refunded:false,disputed:false}}}]})},checkout:{sessions:{create:async(p)=>{created++;assert.equal(p.customer,customer);for(const target of [p.success_url,p.cancel_url]){const u=new URL(target);assert.equal(u.pathname,"/professional-packet.html");assert.equal(u.searchParams.get("caseId"),o.case_id);assert.equal(u.searchParams.get("org"),o.org_id);}assert.equal(p.metadata.serviceFeeCents,"1000");assert.equal(p.automatic_tax.enabled,true);assert.deepEqual(p.line_items.map(i=>i.price_data.unit_amount),[1000,10000]);assert.match(p.line_items[0].price_data.product_data.name,/mailing and case alerts/);latest={...session,customer,metadata:p.metadata,status:"open",payment_status:"unpaid",url:"https://checkout.stripe.com/c/pay/fixture"};return latest;},retrieve:async()=>paid?{...latest,status:"complete",payment_status:"paid",payment_intent:{...session.payment_intent,latest_charge:{...charge,refunded:refund,amount_refunded:refund?11000:0}}}:latest}}};
+ const stripe={customers:{retrieve:async()=>({id:customer,livemode:true,metadata:{authorized_user:o.user_id,product_family:"recordpathai_professional"}})},subscriptions:{list:async()=>({has_more:false,data:ownerAccess?[]:[{id:"sub_fixture",livemode:true,status:"active",customer,metadata:{product_family:"recordpathai_professional",org_id:o.org_id,plan:"solo"},items:{data:[{price:{id:price},quantity:1}]},current_period_end:Math.floor(Date.now()/1000)+3600,latest_invoice:{livemode:true,status:"paid",subscription:"sub_fixture",currency:"usd",amount_paid:9900,charge:{livemode:true,paid:true,status:"succeeded",currency:"usd",amount_captured:9900,amount_refunded:0,refunded:false,disputed:false}}}]})},checkout:{sessions:{create:async(p)=>{created++;assert.equal(p.customer,customer);for(const target of [p.success_url,p.cancel_url]){const u=new URL(target);assert.equal(u.pathname,"/professional-packet.html");assert.equal(u.searchParams.get("caseId"),o.case_id);assert.equal(u.searchParams.get("org"),o.org_id);}assert.equal(p.metadata.serviceFeeCents,"1000");assert.equal(p.automatic_tax.enabled,true);assert.deepEqual(p.line_items.map(i=>i.price_data.unit_amount),[1000,10000]);assert.match(p.line_items[0].price_data.product_data.name,/mailing and case alerts/);latest={...session,customer,metadata:p.metadata,status:"open",payment_status:"unpaid",url:"https://checkout.stripe.com/c/pay/fixture"};return latest;},retrieve:async()=>paid?{...latest,status:"complete",payment_status:"paid",payment_intent:{...session.payment_intent,latest_charge:{...charge,refunded:refund,amount_refunded:refund?11000:0}}}:latest}}};
  const env={STRIPE_SECRET_KEY:"sk_live_fixture",SUPABASE_SERVICE_ROLE_KEY:"fixture",RECORDPATH_PROFESSIONAL_MAILING_ENABLED:"true",RECORDPATH_PROFESSIONAL_ALERTS_ENABLED:"true",RECORDWATCH_ALERTS_LIVE_ENABLED:"true",RESEND_API_KEY:"fixture",RECORDWATCH_EMAIL_FROM:"alerts@example.invalid",TWILIO_ACCOUNT_SID:"AC"+"a".repeat(32),TWILIO_AUTH_TOKEN:"fixture",TWILIO_MESSAGING_SERVICE_SID:"MG"+"b".repeat(32),RECORDWATCH_SMS_CAMPAIGN_APPROVED:"true",RECORDPATH_ENABLE_AUTOMATIC_FULFILLMENT:"true",STRIPE_WEBHOOK_SECRET:"whsec_fixture",RECORDPATH_ENABLE_LIVE_DISPATCH:"true",LOB_LIVE_CHECKS_ENABLED:"true",LOB_CHECK_ATTACHMENTS_APPROVED:"true",LOB_LIVE_API_KEY:"live_fixture",LOB_VERIFIED_BANK_ID:"bank_fixture",LOB_FROM_ADDRESS_JSON:JSON.stringify({name:"Fixture",address_line1:"Fixture",address_city:"Fixture",address_state:"OH",address_zip:"43402"})};
  const cfg={url:"https://pfyxjhdlqgpzzzdssqpk.supabase.co",key:"fixture"};
  const network=async(url,init)=>{
@@ -79,6 +83,7 @@ test("mocked professional order moves from approved review through Stripe and ex
  const svc=registerProfessionalMailing(app,{express:{json:()=>()=>{}},context:async()=>({mode:"production",user:{id:o.user_id,email_confirmed_at:"2026-01-01"},rest:async()=>[c]}),rest:privateRest,config:()=>cfg,stripe,requireOperationsKey:()=>true,lobBankVerified:async()=>true,env,network});
  const res=()=>({code:200,status(n){this.code=n;return this},json(body){this.body=body;return this}});
  const invoke=async()=>{const r=res();await routes["/api/professional/mail/:caseId/checkout"]({params:{caseId:o.case_id},get:()=>"yes"},r);return r;};
+ if(ownerAccess){assert.equal((await invoke()).code,503);assert.equal(created,0);grantValid=true;}
  assert.equal((await invoke()).code,200);assert.equal((await invoke()).code,200);assert.equal(created,1);
  assert.deepEqual(await svc.fulfill(),{submitted:0,held:0});assert.equal(mailings,0);
  paid=true;webhook=true;const r=res();await svc.reconcile({...latest,payment_status:"paid"},r,{id:"evt_fixture",livemode:true,type:"checkout.session.completed",data:{object:latest}});assert.equal(r.code,200);assert.equal(order.status,"paid_hold");
