@@ -184,6 +184,18 @@ test("professional packet mirrors the consumer sections without consumer account
  assert.doesNotMatch(html,/js\/user-store\.js/);
 });
 
+test("Step 3 uses compact aligned payment options and selection-specific pricing",()=>{
+ const js=read("js/professional-practice.js"),css=read("assets/professional-modern.css");
+ assert.match(js,/wrap.className="professional-delivery-option"/);
+ assert.match(js,/quotedCourtFee\+10/);
+ assert.match(js,/totalQuote.textContent=mail\?/);
+ assert.match(js,/mailingQuote.textContent=mail\?money\(10\):"Not selected"/);
+ assert.match(js,/disabledPay.disabled=true/);
+ assert.match(css,/professional-delivery-option input\[type=radio\]\{[^}]*width:20px;height:20px;min-height:0/);
+ assert.match(css,/professional-checkout-total/);
+ assert.match(css,/professional-pay-and-mail:not\(\.menu-toggle\)\{width:100%/);
+});
+
 test("new professional client intake checks scoped existing identity before insert",()=>{
  const js=read("js/professional-practice.js");
  const lookup=js.slice(js.indexOf("async function findExistingClientMatches"),js.indexOf("function bindForm"));
@@ -197,4 +209,12 @@ test("new professional client intake checks scoped existing identity before inse
  assert.match(submit,/navigateWorkflow\(1,\{clientId:match.id\}\)/);
  assert.match(submit,/form.prepend\(panel\);panel.scrollIntoView\(\{block:"nearest"\}\);return;/);
  assert.match(js,/navigateWorkflow\(2,\{clientId:routeClient.id\}\)/);
+});
+
+test("client submit lock targets Save, never an inserted match button",()=>{
+ const js=read("js/professional-practice.js");const submit=js.slice(js.indexOf("function bindForm"),js.indexOf('bindForm("client-form"'));
+ assert.ok(submit.includes("||submitting)return"));
+ assert.ok(submit.includes("form.querySelector('button[type=\"submit\"]')"));
+ assert.ok(submit.includes("submitting=true;btn.disabled=true"));
+ assert.ok(submit.includes("finally{submitting=false;btn.disabled=false;}"));
 });

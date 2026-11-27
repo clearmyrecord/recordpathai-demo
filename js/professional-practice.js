@@ -252,13 +252,23 @@ async function refresh(){
   const contactLabel=add(prepare,"label",""),contactConfirmed=document.createElement("input");contactConfirmed.type="checkbox";contactLabel.append(contactConfirmed,document.createTextNode(" I reviewed the full legal name, mailing address, telephone, email, court and case number and confirm these details are correct."));
   const preview=stage("Step 2 — Preview Your Actual Application (View Only)","This preview shows the last submitted signed application. If contact or case details change, submit a new signed packet. Review both watermarked pages and confirm this exact document before checkout.");
   const payment=stage("Step 3 — Checkout After Independent Approval","Application preparation is included. Optional mailing and SMS/email case alerts cost $10 per filing plus applicable court fees and tax, after independent review and confirmation.");
-  const delivery=add(payment,"fieldset","");delivery.className="professional-delivery-choice";add(delivery,"legend","Choose how your approved packet is fulfilled");
-  function deliveryOption(value,label){const wrap=add(delivery,"label",""),input=document.createElement("input");input.type="radio";input.name="professional-delivery-"+row.id;input.value=value;wrap.append(input,document.createTextNode(" "+label));return input;}
-  const mailChoice=deliveryOption("mail","Mail my approved application to the court where available. $10 mailing + SMS/email alerts, plus applicable court fee and tax.");mailChoice.checked=true;
-  const digitalChoice=deliveryOption("digital","$0 approved digital PDF — I file and pay the court separately.");
-  const mailArea=add(payment,"div",""),digitalArea=add(payment,"div","");digitalArea.hidden=true;
-  const syncDelivery=()=>{mailArea.hidden=!mailChoice.checked;digitalArea.hidden=!digitalChoice.checked;};mailChoice.addEventListener("change",syncDelivery);digitalChoice.addEventListener("change",syncDelivery);
+  payment.classList.add("professional-checkout-stage");
   const supported=row.court_id==="oh-wood-common-pleas"&&["conviction","dismissal","not_guilty"].includes(row.outcome);
+  const quotedCourtFee=supported?(row.outcome==="conviction"?100:0):null;
+  const money=n=>"$"+n.toFixed(2);
+  const delivery=add(payment,"fieldset","");delivery.className="professional-delivery-choice";add(delivery,"legend","Choose how your approved packet is fulfilled");
+  function deliveryOption(value,label,description,price){const wrap=add(delivery,"label",""),input=document.createElement("input");wrap.className="professional-delivery-option";input.type="radio";input.name="professional-delivery-"+row.id;input.value=value;wrap.append(input);const copy=add(wrap,"span","");copy.className="professional-delivery-copy";add(copy,"strong",label);add(copy,"span",description);add(wrap,"strong",price).className="professional-delivery-price";return input;}
+  const mailChoice=deliveryOption("mail","Pay and Mail","Mail the reviewed application to the court, with SMS/email alerts and any applicable court deposit.",quotedCourtFee===null?"Review required":money(quotedCourtFee+10));mailChoice.checked=true;
+  const digitalChoice=deliveryOption("digital","Digital application","Download the reviewed PDF and file directly with the court. Pay any applicable court fee separately.","$0.00");
+  const checkoutQuote=add(payment,"section","");checkoutQuote.className="professional-checkout-quote";checkoutQuote.setAttribute("aria-live","polite");add(checkoutQuote,"h4","Your packet and court fees");
+  const quoteLine=(label,value)=>{const line=add(checkoutQuote,"div","");line.className="professional-checkout-quote-line";add(line,"span",label);return add(line,"strong",value);};
+  quoteLine("Application preparation","Included");
+  const mailingQuote=quoteLine("Mailing + SMS/email alerts",money(10));
+  const courtQuote=quoteLine("Court filing deposit",quotedCourtFee===null?"Review required":money(quotedCourtFee));
+  const totalQuote=quoteLine("Estimated total due",quotedCourtFee===null?"Review required":money(quotedCourtFee+10));totalQuote.parentElement.classList.add("professional-checkout-total");
+  const quoteNote=add(checkoutQuote,"p","Before applicable service tax. No $50 preparation fee for professional subscribers.");
+  const mailArea=add(payment,"div",""),digitalArea=add(payment,"div","");mailArea.className="professional-checkout-actions";digitalArea.className="professional-checkout-actions";digitalArea.hidden=true;
+  const syncDelivery=()=>{const mail=mailChoice.checked;mailArea.hidden=!mail;digitalArea.hidden=!digitalChoice.checked;mailingQuote.textContent=mail?money(10):"Not selected";courtQuote.textContent=mail?(quotedCourtFee===null?"Review required":money(quotedCourtFee)):"Paid separately if applicable";totalQuote.textContent=mail?(quotedCourtFee===null?"Review required":money(quotedCourtFee+10)):"$0.00";quoteNote.textContent=mail?"Before applicable service tax. No $50 preparation fee for professional subscribers.":"Application preparation and approved digital download are included. This option does not file the application or pay the court.";};mailChoice.addEventListener("change",syncDelivery);digitalChoice.addEventListener("change",syncDelivery);syncDelivery();
   if(!supported||decision&&!["hold","approved_for_unsigned_draft"].includes(decision.decision)){
    add(prepare,"p","This court or outcome requires separate review before a supported packet can be prepared.");
    add(preview,"p","No signed preview is available yet.");add(payment,"p","Checkout is unavailable for this case.");delivery.disabled=true;
@@ -278,13 +288,10 @@ async function refresh(){
     else throw Error("This case requires separate review.");
    };
    card=mailArea;
-   add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". Choose included digital delivery or Pay and Mail when the court-specific route is available.");
-   if(internalTestAccess){add(mailArea,"p","Internal test access: preview and confirm the packet without a subscription. Live Stripe and Lob mailing are disabled for this workspace.");const disabledPay=add(mailArea,"button","Pay and Mail");disabledPay.type="button";disabledPay.disabled=true;}
+   if(internalTestAccess){const testNotice=add(mailArea,"p","Internal test access — application preview and review are available. Live Stripe and Lob mailing are disabled for this workspace; no payment will be taken.");testNotice.className="professional-checkout-notice";testNotice.setAttribute("role","status");const disabledPay=add(mailArea,"button","Pay and Mail");disabledPay.className="professional-pay-and-mail";disabledPay.type="button";disabledPay.disabled=true;}
    if(["conviction","dismissal","not_guilty"].includes(row.outcome)&&row.court_id==="oh-wood-common-pleas"&&!internalTestAccess&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
     const courtFee=row.outcome==="conviction"?100:0;
-    add(card,"h4","Optional Pay and Mail");
-    add(card,"p","Preparation: included. Mailing + SMS/email case alerts: $10. Court filing deposit: $"+courtFee+". Total: $"+(courtFee+10)+" before applicable tax.");
-    const mailStatus=add(card,"p","Checking private mailing status…");mailStatus.setAttribute("role","status");
+    const mailStatus=add(card,"p","Checking private mailing status…");mailStatus.className="professional-checkout-notice";mailStatus.setAttribute("role","status");
     const consentLabel=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";consentLabel.append(consent,document.createTextNode(" I authorize mailing the independently approved signed application and agree to pay $"+(courtFee+10)+" plus applicable service tax, including $"+courtFee+" court deposit and $10 mailing and case alerts."));consentLabel.hidden=true;
     let checkoutReady=false;
     const pay=button(courtFee?"Pay and Mail — $110 + applicable tax":"Pay and Mail — $10 + applicable tax",async()=>{
@@ -293,7 +300,7 @@ async function refresh(){
      const token=epoch,session=ok(await api.auth.getSession()).session;if(!session?.access_token||token!==epoch||!active||org!==orgId())throw Error("Session changed");
      const response=await fetch("/api/professional/mail/"+encodeURIComponent(row.id)+"/checkout",{method:"POST",headers:{Authorization:"Bearer "+session.access_token,"x-professional-mail-consent":"yes"},cache:"no-store"});
      const data=await response.json();if(!response.ok||!data.ok||token!==epoch||!active||org!==orgId()||new URL(data.url).origin!=="https://checkout.stripe.com")throw Error("Checkout unavailable");location.assign(data.url);
-    });pay.hidden=false;
+    });pay.classList.add("professional-pay-and-mail");pay.hidden=false;
     const alertBox=add(card,"section","");alertBox.hidden=true;
     add(alertBox,"h4","SMS and email case alerts");
     add(alertBox,"p","Opt in separately to email and SMS alerts to your verified professional account contacts. Messages contain no client or case details. SMS frequency varies; message and data rates may apply. Reply STOP to opt out, HELP for help. Consent is optional and can be withdrawn here.");
@@ -437,8 +444,9 @@ async function findExistingClientMatches(payload,org){
  return rows.filter(c=>normalizedClientName(c.full_name)===name&&((phone&&normalizedClientPhone(c.phone)===phone)||(email&&String(c.email||"").trim().toLowerCase()===email)));
 }
 function bindForm(id,table,build){
+ let submitting=false;
  $(id).addEventListener("submit",async e=>{
- e.preventDefault();if(!active||routeStep!==1||routeClient)return;const form=e.currentTarget,btn=form.querySelector("button");btn.disabled=true;
+ e.preventDefault();if(!active||routeStep!==1||routeClient||submitting)return;const form=e.currentTarget,btn=form.querySelector('button[type="submit"]');if(!btn)return;submitting=true;btn.disabled=true;
  try{const org=orgId(),seq=epoch,values=Object.fromEntries(new FormData(form));const payload=build(values,org);if(table==="professional_clients"){
    const matches=await findExistingClientMatches(payload,org);
    if(!active||org!==orgId()||seq!==epoch)return;
@@ -452,7 +460,7 @@ function bindForm(id,table,build){
    }
   }
   form.querySelector("#existing-client-matches")?.remove();
-  const saved=ok(await api.from(table).insert(payload).select("*").single());if(!saved?.id)throw Error("Save not confirmed");const persisted=ok(await api.from(table).select("*").eq("id",saved.id).eq("org_id",org).single());if(!persisted||persisted.id!==saved.id||(table==="professional_cases"&&persisted.court_id!=="oh-wood-common-pleas")||Object.entries(payload).some(([key,value])=>persisted[key]!==value))throw Error("Supabase readback mismatch");if(!active||org!==orgId()||seq!==epoch)return;form.reset();navigateWorkflow(2,{clientId:saved.id});}catch{notice("Unable to save. Confirm required fields and authorization.");}finally{btn.disabled=false;}
+  const saved=ok(await api.from(table).insert(payload).select("*").single());if(!saved?.id)throw Error("Save not confirmed");const persisted=ok(await api.from(table).select("*").eq("id",saved.id).eq("org_id",org).single());if(!persisted||persisted.id!==saved.id||(table==="professional_cases"&&persisted.court_id!=="oh-wood-common-pleas")||Object.entries(payload).some(([key,value])=>persisted[key]!==value))throw Error("Supabase readback mismatch");if(!active||org!==orgId()||seq!==epoch)return;form.reset();navigateWorkflow(2,{clientId:saved.id});}catch{notice("Unable to save. Confirm required fields and authorization.");}finally{submitting=false;btn.disabled=false;}
  });
 }
 bindForm("client-form","professional_clients",(v,org)=>({org_id:org,full_name:v.full_name,dob:v.dob,other_names:v.other_names||"",line1:v.line1,line2:v.line2||"",city:v.city,state:v.state,zip:v.zip,email:v.email,phone:v.phone,authorization_confirmed:v.authorization_confirmed==="on"}));

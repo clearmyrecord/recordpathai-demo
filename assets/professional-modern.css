@@ -171,3 +171,30 @@
 .rp-professional .professional-offense-grid>div{font-size:14px;overflow-wrap:anywhere}
 @media(max-width:850px){.rp-professional .professional-date-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.rp-professional .professional-summary-grid{grid-template-columns:1fr}}
 @media(max-width:520px){.rp-professional .professional-consumer-card{padding:18px;border-radius:22px}.rp-professional .professional-status-banner,.rp-professional .professional-date-box{padding:14px}.rp-professional .professional-tracking-grid,.rp-professional .professional-offense-grid{grid-template-columns:1fr}}
+
+/* Step 3: compact consumer-style payment options, scoped to professional checkout. */
+.rp-professional .professional-main .professional-checkout-stage{display:grid;gap:14px;padding:24px}
+.rp-professional .professional-checkout-stage>h3,.rp-professional .professional-checkout-stage>p{margin:0}
+.rp-professional .professional-main .professional-checkout-stage .professional-delivery-choice{display:grid;gap:10px;margin:0;padding:0;border:0;background:transparent}
+.rp-professional .professional-checkout-stage .professional-delivery-choice legend{padding:0;margin-bottom:10px;font-size:15px}
+.rp-professional .professional-main .professional-checkout-stage .professional-delivery-option{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:start;gap:12px;margin:0;padding:16px;background:#fff;border:1px solid #cfddf3;border-radius:14px;cursor:pointer}
+.rp-professional .professional-checkout-stage .professional-delivery-option:has(input:checked){background:#eef4ff;border-color:#79a5ec;box-shadow:0 0 0 1px #79a5ec}
+.rp-professional .professional-main .professional-checkout-stage .professional-delivery-option input[type=radio]{appearance:auto;display:block;width:20px;height:20px;min-height:0;min-width:20px;max-width:20px;padding:0;margin:3px 0 0;border:0;accent-color:#2153a4}
+.rp-professional .professional-delivery-copy{display:grid;gap:4px;min-width:0}
+.rp-professional .professional-delivery-copy>strong{font-size:16px;color:#17396d}
+.rp-professional .professional-delivery-copy>span{font-size:14px;font-weight:400;color:#526780;line-height:1.5}
+.rp-professional .professional-delivery-price{font-size:16px;color:#17396d;white-space:nowrap;align-self:start}
+.rp-professional .professional-checkout-quote{padding:18px;background:#fff;border:1px solid #cfddf3;border-radius:14px}
+.rp-professional .professional-checkout-quote>h4{margin:0 0 12px;color:#17396d;font-size:17px}
+.rp-professional .professional-checkout-quote-line{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:5px 0;font-size:14px;color:#233d70}
+.rp-professional .professional-checkout-quote-line>strong{text-align:right;flex-shrink:0;max-width:50%;font-variant-numeric:tabular-nums}
+.rp-professional .professional-checkout-quote-line.professional-checkout-total{border-top:1px solid #cfddf3;margin-top:10px;padding-top:12px;font-weight:800;font-size:18px}
+.rp-professional .professional-checkout-quote>p{margin:10px 0 0;font-size:13px;color:#526780}
+.rp-professional .professional-checkout-actions{display:grid;gap:10px;min-width:0}
+.rp-professional .professional-checkout-actions .professional-checkout-notice{background:#eef4ff;border:1px solid #cfddf3;border-left:4px solid #477bc5;border-radius:10px;padding:12px 14px;margin:0;color:#33486b;font-size:14px}
+.rp-professional .professional-main .professional-checkout-actions button.professional-pay-and-mail:not(.menu-toggle){width:100%;margin:0;min-height:52px;background:#1c489d;border-color:#1c489d}
+.rp-professional .professional-main .professional-checkout-actions button.professional-pay-and-mail:not(.menu-toggle):disabled{opacity:.6;background:#7896c9;border-color:#7896c9}
+.rp-professional .professional-main .professional-checkout-stage label:has(>input[type=checkbox]){display:flex;align-items:flex-start;gap:8px;font-weight:400;font-size:14px}
+.rp-professional .professional-main .professional-checkout-stage label:has(>input[type=checkbox])>input{flex:0 0 18px;margin:3px 0 0}
+.rp-professional .professional-checkout-stage>details{margin:4px 0 0;padding-top:12px;border-top:1px solid #cfddf3}
+@media(max-width:600px){.rp-professional .professional-main .professional-checkout-stage{padding:14px;gap:12px}.rp-professional .professional-main .professional-checkout-stage .professional-delivery-option{grid-template-columns:20px minmax(0,1fr);padding:12px;gap:8px 10px}.rp-professional .professional-delivery-price{grid-column:2}.rp-professional .professional-checkout-quote{padding:12px}.rp-professional .professional-checkout-quote-line{gap:8px}}
