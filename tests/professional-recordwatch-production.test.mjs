@@ -12,12 +12,14 @@ test("production professional RecordWatch preserves consent and independent even
  const schedule=read("sql/professional-recordwatch-production-schedule.sql");
  assert.match(schedule,/professional-watch-due-production/);
 });
-test("approved production practice includes reminders and official manual signing export but no automatic dispatch",()=>{
+test("approved production practice includes reminders and applicant signing, manual filing instructions and no direct client dispatch",()=>{
  const js=read("js/professional-practice.js"),renderer=read("js/professional-wood-draft.js");
  assert.match(js,/professional_watch_tasks/);
  assert.match(js,/No independently verified event recorded/);
  assert.match(js,/signatureReady:true/);
- assert.match(js,/I reviewed the official form and will obtain the required applicant signature/);
+ assert.match(js,/The applicant must personally draw their own signature/);
+ assert.match(js,/!signatureInk\|\|!signatureConsent\.checked\|\|!contactConfirmed\.checked\|\|!caseReviewed\.checked/);
+ assert.match(js,/I attest that the applicant signed this exact official application/);
  assert.match(renderer,/signatureReady&&counsel/);
  assert.match(renderer,/signatureReady&&path==="generated.current_date"/);
  assert.match(renderer,/if\(!signatureReady\)for/);
