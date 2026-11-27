@@ -65,8 +65,9 @@ export function registerProfessionalLiveBilling(app,{context,env=process.env,str
   const list=await allSubscriptions(a),valid=list.filter(s=>verifiedLiveSubscription(s,a.row));
   const outstanding=list.filter(s=>!["canceled","incomplete_expired"].includes(s.status));
   const paid=valid.length===1&&outstanding.length===1?valid[0]:null;
-  const entitled=await setLease(a,paid);
-  return res.json({ok:true,mode:"live",plan:a.row.plan,amount_cents:a.price.unit_amount,active:entitled,subscription_exists:outstanding.length>0,lease_minutes:20});
+  const testAccess=outstanding.length===0&&await a.ctx.rest("rpc/professional_set_test_lease","",{service:true,body:{p_org:a.row.org_id,p_user:a.ctx.user.id}})===true;
+  const entitled=testAccess?true:await setLease(a,paid);
+  return res.json({ok:true,mode:"live",plan:a.row.plan,amount_cents:a.price.unit_amount,active:entitled,subscription_exists:outstanding.length>0,test_access:testAccess,lease_minutes:20});
  }catch{return res.status(503).json({ok:false,error:"Live subscription verification unavailable. Existing access expires automatically."});}});
  app.post("/api/professional/live-billing/checkout",async(req,res)=>{
   let ctx,token,locked=false,uncertain=false;
