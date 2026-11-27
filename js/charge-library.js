@@ -2700,7 +2700,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-manslaughter",
@@ -2708,7 +2708,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-homicide",
@@ -2716,7 +2716,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-negligent-homicide",
@@ -2724,7 +2724,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-vehicular-homicide",
@@ -2732,7 +2732,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-kidnapping",
@@ -2740,7 +2740,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-abduction",
@@ -2748,7 +2748,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-false-imprisonment",
@@ -2756,7 +2756,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-stalking",
@@ -2764,7 +2764,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-harassment",
@@ -2772,7 +2772,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-threats",
@@ -2780,7 +2780,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-intimidation",
@@ -2788,7 +2788,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-strangulation",
@@ -2796,7 +2796,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-child-abuse",
@@ -2804,7 +2804,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-elder-abuse",
@@ -2812,7 +2812,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-human-trafficking",
@@ -2820,7 +2820,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-extortion",
@@ -2828,7 +2828,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-blackmail",
@@ -2836,7 +2836,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-coercion",
@@ -2844,7 +2844,7 @@ const additionalChargeTerms=[
   "category": "Violence and personal offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-arson",
@@ -2852,7 +2852,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-aggravated-arson",
@@ -2860,7 +2860,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-motor-vehicle-theft",
@@ -2868,7 +2868,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-auto-theft",
@@ -2876,7 +2876,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-larceny",
@@ -2884,7 +2884,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-petty-theft",
@@ -2892,7 +2892,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-grand-theft",
@@ -2900,7 +2900,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-embezzlement",
@@ -2908,7 +2908,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-counterfeiting",
@@ -2916,7 +2916,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-credit-card-fraud",
@@ -2924,7 +2924,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-bank-fraud",
@@ -2932,7 +2932,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-mail-fraud",
@@ -2940,7 +2940,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-wire-fraud",
@@ -2948,7 +2948,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-insurance-fraud",
@@ -2956,7 +2956,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-tax-fraud",
@@ -2964,7 +2964,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-tax-evasion",
@@ -2972,7 +2972,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-welfare-fraud",
@@ -2980,7 +2980,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-medicaid-fraud",
@@ -2988,7 +2988,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-mortgage-fraud",
@@ -2996,7 +2996,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-computer-fraud",
@@ -3004,7 +3004,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-hacking",
@@ -3012,7 +3012,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-criminal-mischief",
@@ -3020,7 +3020,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-vandalism",
@@ -3028,7 +3028,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-burglary-tools",
@@ -3036,7 +3036,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-breaking-and-entering",
@@ -3044,7 +3044,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-money-laundering",
@@ -3052,7 +3052,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-retail-theft",
@@ -3060,7 +3060,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-identity-theft",
@@ -3068,7 +3068,7 @@ const additionalChargeTerms=[
   "category": "Property and financial offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-possession-of-drugs",
@@ -3076,7 +3076,7 @@ const additionalChargeTerms=[
   "category": "Drugs and controlled substances",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-possession-of-controlled-substances",
@@ -3084,7 +3084,7 @@ const additionalChargeTerms=[
   "category": "Drugs and controlled substances",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-possession-with-intent-to-distribute",
@@ -3092,7 +3092,7 @@ const additionalChargeTerms=[
   "category": "Drugs and controlled substances",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-drug-manufacturing",
@@ -3100,7 +3100,7 @@ const additionalChargeTerms=[
   "category": "Drugs and controlled substances",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-drug-cultivation",
@@ -3108,7 +3108,7 @@ const additionalChargeTerms=[
   "category": "Drugs and controlled substances",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-drug-smuggling",
@@ -3116,7 +3116,7 @@ const additionalChargeTerms=[
   "category": "Drugs and controlled substances",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-drug-sale",
@@ -3124,7 +3124,7 @@ const additionalChargeTerms=[
   "category": "Drugs and controlled substances",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-drug-trafficking",
@@ -3132,7 +3132,7 @@ const additionalChargeTerms=[
   "category": "Drugs and controlled substances",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-possession-of-drug-abuse-instruments",
@@ -3140,7 +3140,7 @@ const additionalChargeTerms=[
   "category": "Drugs and controlled substances",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-controlled-substance-prescription-fraud",
@@ -3148,7 +3148,7 @@ const additionalChargeTerms=[
   "category": "Drugs and controlled substances",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-rape",
@@ -3156,7 +3156,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-sexual-assault",
@@ -3164,7 +3164,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-sexual-battery",
@@ -3172,7 +3172,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-gross-sexual-imposition",
@@ -3180,7 +3180,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-statutory-rape",
@@ -3188,7 +3188,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-sexual-exploitation-of-a-minor",
@@ -3196,7 +3196,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-indecent-exposure",
@@ -3204,7 +3204,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-voyeurism",
@@ -3212,7 +3212,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-prostitution",
@@ -3220,7 +3220,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-solicitation",
@@ -3228,7 +3228,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-failure-to-register-as-a-sex-offender",
@@ -3236,7 +3236,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-child-endangerment",
@@ -3244,7 +3244,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-nonsupport",
@@ -3252,7 +3252,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-interference-with-custody",
@@ -3260,7 +3260,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-violation-of-protection-order",
@@ -3268,7 +3268,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-violation-of-restraining-order",
@@ -3276,7 +3276,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-bigamy",
@@ -3284,7 +3284,7 @@ const additionalChargeTerms=[
   "category": "Sex and family offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-bribery",
@@ -3292,7 +3292,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-perjury",
@@ -3300,7 +3300,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-tampering-with-evidence",
@@ -3308,7 +3308,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-witness-intimidation",
@@ -3316,7 +3316,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-obstruction-of-justice",
@@ -3324,7 +3324,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-escape",
@@ -3332,7 +3332,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-aiding-escape",
@@ -3340,7 +3340,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-failure-to-comply",
@@ -3348,7 +3348,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-fleeing-and-eluding",
@@ -3356,7 +3356,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-violation-of-parole",
@@ -3364,7 +3364,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-violation-of-probation",
@@ -3372,7 +3372,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-violation-of-court-order",
@@ -3380,7 +3380,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-false-report",
@@ -3388,7 +3388,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-false-alarm",
@@ -3396,7 +3396,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-riot",
@@ -3404,7 +3404,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-inciting-violence",
@@ -3412,7 +3412,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-gambling",
@@ -3420,7 +3420,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-public-gaming",
@@ -3428,7 +3428,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-animal-cruelty",
@@ -3436,7 +3436,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-loitering",
@@ -3444,7 +3444,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-liquor-law-violation",
@@ -3452,7 +3452,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-public-indecency",
@@ -3460,7 +3460,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-contempt-of-court",
@@ -3468,7 +3468,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-impersonation",
@@ -3476,7 +3476,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-conspiracy",
@@ -3484,7 +3484,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-attempt",
@@ -3492,7 +3492,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-aiding-and-abetting",
@@ -3500,7 +3500,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-complicity",
@@ -3508,7 +3508,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-organized-criminal-activity",
@@ -3516,7 +3516,7 @@ const additionalChargeTerms=[
   "category": "Public order and justice",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-driving-without-a-license",
@@ -3524,7 +3524,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-driving-without-insurance",
@@ -3532,7 +3532,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-speeding",
@@ -3540,7 +3540,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-street-racing",
@@ -3548,7 +3548,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-failure-to-stop",
@@ -3556,7 +3556,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-failure-to-yield",
@@ -3564,7 +3564,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-leaving-scene-of-accident",
@@ -3572,7 +3572,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-reckless-operation",
@@ -3580,7 +3580,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-commercial-driver-violation",
@@ -3588,7 +3588,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-traffic-control-violation",
@@ -3596,7 +3596,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-driving-under-revocation",
@@ -3604,7 +3604,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-open-container-violation",
@@ -3612,7 +3612,7 @@ const additionalChargeTerms=[
   "category": "Driving and regulatory",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-unlawful-possession-of-firearm",
@@ -3620,7 +3620,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-felon-in-possession",
@@ -3628,7 +3628,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-unlawful-discharge-of-firearm",
@@ -3636,7 +3636,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-possession-of-prohibited-weapon",
@@ -3644,7 +3644,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-unlawful-carrying",
@@ -3652,7 +3652,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-unlawful-sale-of-firearm",
@@ -3660,7 +3660,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-weapons-trafficking",
@@ -3668,7 +3668,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-criminal-gang-participation",
@@ -3676,7 +3676,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-terroristic-threats",
@@ -3684,7 +3684,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-terrorism",
@@ -3692,7 +3692,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-federal-offense",
@@ -3700,7 +3700,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  },
  {
   "id": "general-municipal-ordinance-violation",
@@ -3708,7 +3708,7 @@ const additionalChargeTerms=[
   "category": "Weapons and other offenses",
   "aliases": [],
   "kind": "general_term",
-  "source": "https://secure.ssa.gov/poms.Nsf/lnx/0202613900"
+  "source": null
  }
 ];
 window.chargeLibrary=[...ohioChargeReferences,...window.chargeLibrary.map(r=>({...r,kind:"general_term"})),...additionalChargeTerms];
@@ -3732,7 +3732,8 @@ window.chargeLibrary=[...ohioChargeReferences,...window.chargeLibrary.map(r=>({.
   return entries(state).map(e=>{
    const name=normalize(e.name),code=normalize(e.code),aliases=(e.aliases||[]).map(normalize);
    const hay=[name,code,...aliases].join(" ");
-   if(!terms.every(t=>hay.includes(t)))return null;
+   const subsectionMatch=Boolean(code&&q.startsWith(code+" ")&&/^[a-z0-9 ]+$/.test(q.slice(code.length+1)));
+   if(!subsectionMatch&&!terms.every(t=>hay.includes(t)))return null;
    const score=(code===q?100:code&&q.startsWith(code+" ")?90:code&&code.startsWith(q)?70:0)+(name===q?50:name.startsWith(q)?30:name.includes(q)?20:10)+(aliases.includes(q)?40:aliases.some(a=>a.includes(q))?15:0)+(e.state?5:0);
    return {...e,score};
   }).filter(Boolean).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name)||String(a.code||"").localeCompare(String(b.code||""))).slice(0,Math.max(1,Math.min(500,Number(limit)||20)));
@@ -3777,8 +3778,13 @@ window.chargeLibrary=[...ohioChargeReferences,...window.chargeLibrary.map(r=>({.
       if(row.state&&row.state!==stateCode(state.value))return;
       const name=card.querySelector('[data-field="charge_name"]'),code=card.querySelector('[data-field="charge_code"]');
       if(!name||!code)return;
-      if((name.value&&name.value!==row.name)||(row.code&&code.value&&code.value!==row.code)){if(!root.confirm("Replace the entered final charge name"+(row.code?" and statute":"")+"? Check the court record before continuing."))return;}
-      name.value=row.name;if(row.code)code.value=row.code;
+      const existingCode=normalize(code.value),baseCode=normalize(row.code);
+      const preserveSubsection=Boolean(baseCode&&existingCode.startsWith(baseCode+" "));
+      const chosenCode=preserveSubsection?code.value:row.code;
+      if((name.value&&name.value!==row.name)||(row.code&&code.value&&code.value!==chosenCode)||(!row.code&&code.value&&name.value!==row.name)){
+       if(!root.confirm("Replace the entered final charge name"+(row.code?" and statute":" (the entered statute will remain unchanged)")+"? Check the exact court record before continuing."))return;
+      }
+      name.value=row.name;if(row.code)code.value=chosenCode;
       name.dispatchEvent(new Event("change",{bubbles:true}));if(row.code)code.dispatchEvent(new Event("change",{bubbles:true}));
       box.hidden=true;
      });item.append(button);
@@ -3786,7 +3792,7 @@ window.chargeLibrary=[...ohioChargeReferences,...window.chargeLibrary.map(r=>({.
      results.append(item);
     }
    }
-   input.addEventListener("input",render);state.addEventListener("change",()=>{if(box.isConnected)render();});render();input.focus();
+   input.addEventListener("input",event=>{event.stopPropagation();render();});input.addEventListener("change",event=>event.stopPropagation());state.addEventListener("change",()=>{if(box.isConnected)render();});render();input.focus();
   });
  }
  root.RecordPathChargeLibrary={entries,search,mount};
