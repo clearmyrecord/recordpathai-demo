@@ -4,7 +4,7 @@
 const $=id=>document.getElementById(id);
 const say=t=>$("status").textContent=t;
 const ok=r=>{if(r.error)throw Error("Request failed");return r.data;};
-let api,user,factorId,epoch=0;
+let api,user,factorId,epoch=0,confirmedAccountId=null;
 const mode=new URLSearchParams(location.search);
 const pilot=mode.get("pilot")==="1",secure=mode.get("secure")==="1";
 const preferredPlan=["solo","firm"].includes(mode.get("plan"))?mode.get("plan"):"solo";
@@ -21,7 +21,7 @@ function showMfaSetup(totp){
  $("mfa-code-heading").textContent="Step 2 — Enter your six-digit code";
 }
 $("mfa-qr").addEventListener("error",()=>{$("mfa-qr").hidden=true;$("mfa-setup-details").querySelector("details").open=true;});
-function clear(){epoch++;factorId=null;user=null;clearMfaSetup();$("mfa-start").hidden=true;$("mfa-back").hidden=true;$("mfa-error").hidden=true;$("mfa-error").textContent="";$("mfa-code-heading").textContent="Enter your six-digit code";for(const id of ["signed-out","mfa","request","submitted","logout","secret","verify-form","practice-link","live-billing","billing-checkout","billing-portal","billing-refresh","billing-consent-label","plan-choice","pilot-link"])$(id).hidden=true;$("secret").textContent="";$("request-form").reset();$("verify-form").reset();$("application-state").textContent="";$("billing-state").textContent="";$("billing-consent").checked=false;}
+function clear(){epoch++;factorId=null;user=null;confirmedAccountId=null;$("confirmed-account-email").textContent="";clearMfaSetup();$("mfa-start").hidden=true;$("mfa-back").hidden=true;$("mfa-error").hidden=true;$("mfa-error").textContent="";$("mfa-code-heading").textContent="Enter your six-digit code";for(const id of ["signed-out","confirm-account","mfa","request","submitted","logout","secret","verify-form","practice-link","live-billing","billing-checkout","billing-portal","billing-refresh","billing-consent-label","plan-choice","pilot-link"])$(id).hidden=true;$("secret").textContent="";$("request-form").reset();$("verify-form").reset();$("application-state").textContent="";$("billing-state").textContent="";$("billing-consent").checked=false;}
 async function load(){
  clear();const token=epoch;
  const config=await window.RecordPathSupabase.getConfig();
@@ -42,9 +42,11 @@ async function load(){
   else say("You have an older professional application. For paid access, return to the Professional account page.");
   return;
  }
- $("submitted").hidden=false;$("live-billing").hidden=false;$("billing-refresh").hidden=false;$("pilot-link").hidden=false;
- say("Signed in as "+user.email+". Your subscription will be linked to this RecordPathAI account.");
- await refreshBilling(token);
+ $("confirmed-account-email").textContent=user.email||"Verified RecordPathAI account";
+ say("Step 1 — Confirm the account for your professional subscription.");
+ $("confirm-account").hidden=false;
+ if(secure){await refreshBilling(token);}
+
 }
 async function ensureMfa(token){
  const assurance=ok(await api.auth.mfa.getAuthenticatorAssuranceLevel());
@@ -61,13 +63,16 @@ async function ensureMfa(token){
 
 async function liveRequest(action,consent=false){
  const session=ok(await api.auth.getSession()).session;if(!user?.id||!user.email_confirmed_at||!session?.access_token||session.user?.id!==user.id)throw Error("Verified account session required");
- const r=await fetch("/api/professional/live-billing/"+action,{method:"POST",headers:{Authorization:"Bearer "+session.access_token,...(consent?{"x-professional-live-consent":"yes","x-professional-plan":$("paid-plan").value,"x-professional-terms":"accepted-v1"}:{})},cache:"no-store"});
+ if(action==="checkout"&&confirmedAccountId!==user.id)throw Error("Confirm your account first");
+ const r=await fetch("/api/professional/live-billing/"+action,{method:"POST",headers:{Authorization:"Bearer "+session.access_token,...(consent?{"x-professional-live-consent":"yes","x-professional-plan":$("paid-plan").value,"x-professional-terms":"accepted-v1","x-professional-account-id":confirmedAccountId||""}:{})},cache:"no-store"});
  const data=await r.json();if(!r.ok||!data.ok||data.mode!=="live")throw Error("Billing unavailable");return data;
 }
 async function refreshBilling(token=epoch){
  $("billing-checkout").hidden=true;$("billing-portal").hidden=true;$("billing-consent-label").hidden=true;$("practice-link").hidden=true;$("plan-choice").hidden=true;
  try{
   const data=await liveRequest("refresh");if(token!==epoch)return;
+  if(confirmedAccountId!==user.id&&!data.subscription_exists){$("submitted").hidden=true;$("confirm-account").hidden=false;return;}
+  $("confirm-account").hidden=true;$("submitted").hidden=false;$("live-billing").hidden=false;$("billing-refresh").hidden=false;$("pilot-link").hidden=false;
   if(data.unregistered){$("paid-plan").value=preferredPlan;$("billing-state").textContent="Your verified account is ready. Choose a monthly subscription. No attorney credentials or manual approval required.";$("plan-choice").hidden=false;$("billing-checkout").hidden=false;$("billing-consent-label").hidden=false;return;}
   $("paid-plan").value=data.plan;
   $("billing-state").textContent=(data.plan==="solo"?"Individual":"Firm")+" · $"+(data.amount_cents/100).toFixed(2)+"/month plus applicable tax · "+(data.active?"Subscription verified":data.subscription_exists?"Existing subscription requires attention":"Ready to subscribe");
@@ -78,6 +83,8 @@ async function refreshBilling(token=epoch){
   }
  }catch{if(token===epoch)$("billing-state").textContent="Subscription verification unavailable. Contact professional support or refresh.";}
 }
+$("confirm-account-continue").addEventListener("click",()=>action($("confirm-account-continue"),async()=>{const token=epoch,fresh=ok(await api.auth.getUser()).user;if(token!==epoch||!fresh?.id||!fresh.email_confirmed_at||fresh.id!==user?.id)throw Error("Verified account required");confirmedAccountId=fresh.id;$("confirm-account").hidden=true;$("submitted").hidden=false;$("live-billing").hidden=false;$("billing-refresh").hidden=false;$("pilot-link").hidden=false;say("Signed in as "+fresh.email+". Subscription will be linked to this account.");await refreshBilling(token);}));
+$("switch-account").addEventListener("click",()=>action($("switch-account"),async()=>{const target="professional-account.html"+location.search;ok(await api.auth.signOut());clear();location.assign("signup.html?returnUrl="+encodeURIComponent(target));}));
 $("billing-refresh").addEventListener("click",()=>action($("billing-refresh"),()=>refreshBilling()));
 $("billing-checkout").addEventListener("click",()=>action($("billing-checkout"),async()=>{
  if(!$("billing-consent").checked)throw Error("Recurring payment consent required");
