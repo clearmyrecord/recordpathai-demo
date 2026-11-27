@@ -1,15 +1,27 @@
 import {renderProfessionalDraft,prepareProfessionalDraftData} from "./professional-wood-draft.js";
 import {mountProfessionalRecordIntake,mountProfessionalPersonalIntake,buildProfessionalRecordPayload,sameRecordSnapshot} from "./professional-record-intake.js";
 let sharedIntake=null;
+const workflowFiles=["professional-practice.html","professional-eligibility.html","professional-record-details.html","professional-packet.html"];
+const routeStep=Math.max(0,workflowFiles.indexOf(location.pathname.split("/").pop()));
+const routeParams=new URLSearchParams(location.search);
+const uuid=value=>typeof value==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+let routeClient=null,routeCase=null;
+function navigateWorkflow(step,{clientId=null,caseId=null}={}){
+ const url=new URL(workflowFiles[step],location.href);
+ if(orgId())url.searchParams.set("org",orgId());
+ if(uuid(clientId))url.searchParams.set("clientId",clientId);
+ if(uuid(caseId))url.searchParams.set("caseId",caseId);
+ location.assign(url.href);
+}
 const $=id=>document.getElementById(id), notice=t=>$("notice").textContent=t;
 const production="pfyxjhdlqgpzzzdssqpk.supabase.co";
 let api,orgs=[],epoch=0,active=false,renewal=null,packetCaseId=null,internalTestAccess=false;
 const caseFilter=()=>$("client-filter").value;
-const setStep=n=>{$("app").classList.toggle("professional-packet-mode",n===3);$("professional-steps").hidden=!n;for(const [i,id] of ["step-personal","step-record","step-packet"].entries()){if(i+1===n)$(id).setAttribute("aria-current","step");else $(id).removeAttribute("aria-current");}};
+const setStep=n=>{$("app").classList.toggle("professional-packet-mode",n===3);$("app").classList.toggle("professional-intake-mode",n===1||n===2);if($("workflow-progress"))$("workflow-progress").textContent=Math.max(0,n-1)+" of 3 steps completed";$("professional-steps").hidden=!n;for(const [i,id] of ["step-personal","step-record","step-packet"].entries()){const el=$(id);el.classList.toggle("step-completed",i+1<n);el.classList.toggle("step-locked",i+1>n);if(i+1===n)el.setAttribute("aria-current","step");else el.removeAttribute("aria-current");el.querySelector(".step-status")?.replaceChildren(i+1<n?"Completed":i+1===n?"Current":"Locked");}};
 const hideIntake=()=>{for(const id of ["client-intake","case-intake"])$(id).hidden=true;};
-const returnDashboard=()=>{$("client-form").reset();$("case-form").reset();sharedIntake?.reset();hideIntake();packetCaseId=null;setStep(0);$("case-filter").value="";$("client-filter").value="";refresh().catch(fail);$("saved-clients").scrollIntoView({block:"start"});};
-const showIntake=id=>{if(!active)return;if(id==="client-intake")$("client-form").reset();else{const selected=$("clients").value;$("case-form").reset();sharedIntake?.reset();if(selected)$("clients").value=selected;}hideIntake();packetCaseId=null;setStep(id==="client-intake"?1:2);$(id).hidden=false;$(id).scrollIntoView({block:"start"});};
-const clear=()=>{hideIntake();packetCaseId=null;setStep(0);$("client-list").replaceChildren();for(const id of ["client-count","case-count","packet-count","watch-count"])$(id).textContent="0";if(renewal)clearInterval(renewal);renewal=null;epoch++;active=false;internalTestAccess=false;$("app").hidden=true;$("client-form").reset();$("professional-personal-fields").replaceChildren();$("case-form").reset();$("recordDetailsForm").replaceChildren();sharedIntake=null;$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();$("client-filter").replaceChildren(option("","All clients"));$("case-filter").value="";$("case-summary").textContent="";orgs=[];};
+const returnDashboard=()=>{if(routeStep){navigateWorkflow(0);return;}$("client-form").reset();$("case-form").reset();sharedIntake?.reset();hideIntake();packetCaseId=null;setStep(0);$("case-filter").value="";$("client-filter").value="";refresh().catch(fail);$("saved-clients").scrollIntoView({block:"start"});};
+const showIntake=id=>{if(!active)return;if(!routeStep){navigateWorkflow(1,{clientId:id==="case-intake"?$("clients").value:null});return;}if((id==="client-intake"?1:2)!==routeStep)return;if(id==="client-intake")$("client-form").reset();else{const selected=$("clients").value;$("case-form").reset();sharedIntake?.reset();if(routeClient)$("clients").value=routeClient.id;else if(selected)$("clients").value=selected;}hideIntake();packetCaseId=null;setStep(id==="client-intake"?1:2);$(id).hidden=false;$(id).scrollIntoView({block:"start"});};
+const clear=()=>{routeClient=null;routeCase=null;hideIntake();packetCaseId=null;setStep(0);$("client-list").replaceChildren();for(const id of ["client-count","case-count","packet-count","watch-count"])$(id).textContent="0";if(renewal)clearInterval(renewal);renewal=null;epoch++;active=false;internalTestAccess=false;$("app").hidden=true;$("client-form").reset();$("professional-personal-fields").replaceChildren();$("case-form").reset();$("recordDetailsForm").replaceChildren();sharedIntake=null;$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();$("client-filter").replaceChildren(option("","All clients"));$("case-filter").value="";$("case-summary").textContent="";orgs=[];};
 const fail=()=>{clear();notice("Access or request unavailable. No filing or payment was made. Reload or contact the pilot operator.");};
 const ok=r=>{if(r.error)throw Error("Request rejected");return r.data;};
 const orgId=()=>$("org").value;
@@ -38,9 +50,48 @@ async function load(){
  const members=ok(m);orgs=ok(o).filter(x=>x.client_intake_enabled&&members.some(y=>y.org_id===x.id&&((y.role==="attorney"&&y.attorney_verified)||(x.access_kind==="paid"&&x.self_service_terms_at&&y.role==="staff"&&!y.attorney_verified))));
  if(!orgs.length){notice("No active workspace. Subscribe or apply for the complimentary organization pilot.");return;}
  for(const org of orgs)$("org").append(option(org.id,org.pilot_code));
- await mountProfessionalPersonalIntake($("professional-personal-fields"));if(seq!==epoch)return;
- sharedIntake=await mountProfessionalRecordIntake($("recordDetailsForm"));if(seq!==epoch)return;
- active=true;$("app").hidden=false;await refresh();
+ const requestedOrg=routeParams.get("org");
+ if(requestedOrg){if(!orgs.some(o=>o.id===requestedOrg)){notice("This workspace is not accessible. Return to RecordWatch.");return;}$("org").value=requestedOrg;}
+ if(routeStep){
+  const requestedCase=routeParams.get("caseId"),requestedClient=routeParams.get("clientId");
+  if(routeStep===3){
+   if(!uuid(requestedCase)){notice("Open a saved case from RecordWatch to prepare its packet.");return;}
+   routeCase=ok(await api.from("professional_cases").select("*").eq("org_id",orgId()).eq("id",requestedCase).maybeSingle());
+   if(!routeCase){notice("Saved case is not accessible in this workspace.");return;}
+  }
+  const clientId=routeCase?.client_id||requestedClient;
+  if(clientId){
+   if(!uuid(clientId)){notice("Select an accessible saved client in RecordWatch.");return;}
+   routeClient=ok(await api.from("professional_clients").select("*").eq("org_id",orgId()).eq("id",clientId).maybeSingle());
+   if(!routeClient||routeClient.authorization_confirmed!==true){notice("An authorized saved client is required.");return;}
+  }else if(routeStep>1){notice("Begin with personal information before continuing.");return;}
+  if(seq!==epoch)return;
+  if(routeStep===1&&!routeClient)await mountProfessionalPersonalIntake($("professional-personal-fields"));
+  if(routeStep===2)sharedIntake=await mountProfessionalRecordIntake($("recordDetailsForm"));
+  if(seq!==epoch)return;
+  packetCaseId=routeCase?.id||null;
+ }
+ active=true;$("app").hidden=false;setStep(routeStep);await refresh();
+ if(!active)return;
+ if(routeStep===1){
+  showIntake("client-intake");
+  const picker=$("existing-client-picker");picker.replaceChildren(option("","Create a new client"),...Array.from($("clients").options,o=>option(o.value,o.textContent)));
+  picker.value=routeClient?.id||"";
+  picker.addEventListener("change",()=>navigateWorkflow(1,{clientId:picker.value}));
+  if(routeClient){
+   $("client-form").hidden=true;
+   const summary=$("existing-client-review");summary.hidden=false;summary.replaceChildren();
+   add(summary,"h3","Verify saved personal and contact information");
+   const grid=add(summary,"div","");grid.className="professional-packet-contact";
+   for(const [label,value] of [["Full legal name",routeClient.full_name],["Date of birth",routeClient.dob],["Other names",routeClient.other_names],["Email",routeClient.email],["Telephone",routeClient.phone],["Mailing address",[routeClient.line1,routeClient.line2,routeClient.city,routeClient.state,routeClient.zip].filter(Boolean).join(", ")]]){const item=add(grid,"div","");add(item,"strong",label);add(item,"span",value||"Not entered");}
+   const next=add(summary,"button","Continue to Case Information");next.type="button";next.addEventListener("click",()=>navigateWorkflow(2,{clientId:routeClient.id}));
+  }
+ }else if(routeStep===2){
+  $("clients").value=routeClient.id;showIntake("case-intake");$("clients").disabled=true;
+  $("back-personal").href=workflowFiles[1]+"?"+new URLSearchParams({org:orgId(),clientId:routeClient.id});
+ }else if(routeStep===3){
+  if(!Array.from($("cases").children).some(el=>el.dataset.caseId===packetCaseId)){notice("Saved packet case could not be loaded. Return to RecordWatch.");return;}
+ }
  if(paidRows.length&&active)renewal=setInterval(async()=>{try{if(active&&!await refreshPaidLease()){clear();notice("Subscription access expired. Return to Professional account.");}}catch{fail();}},10*60*1000);
 }
 async function saveGeneratedPacket(bytes,caseId,kind,seq,org){
@@ -58,13 +109,15 @@ async function refresh(){
  const [a,b,c,d,docs,reviewRows,counselRows,enrollRows,taskRows,verifiedRows,observedRows,generatedRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100),api.from("professional_counsel_profiles").select("*").eq("org_id",org).limit(1),api.from("professional_watch_enrollments").select("*").eq("org_id",org).limit(100),api.from("professional_watch_tasks").select("*").eq("org_id",org).order("due_date").limit(500),api.from("professional_verified_court_events").select("id,case_id,event_type,occurred_on,evidence_url,verified_at").eq("org_id",org).order("occurred_on",{ascending:false}).limit(500),api.from("professional_watch_observations").select("*").limit(100),api.from("professional_generated_packets").select("id,case_id,kind,sha256,page_count,created_at").eq("org_id",org).order("created_at",{ascending:false}).limit(500)]);
  if(seq!==epoch||!active||org!==orgId())return;
  const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0],enrollments=ok(enrollRows),tasks=ok(taskRows),verified=ok(verifiedRows),observations=ok(observedRows),generated=ok(generatedRows);
+ if(routeStep&&routeClient&&!clients.some(c=>c.id===routeClient.id))clients.push(routeClient);
+ if(routeStep===3&&routeCase&&!cases.some(c=>c.id===routeCase.id))cases.push(routeCase);
  $("client-filter").replaceChildren(option("","All clients"));
  for(const client of clients){$("clients").append(option(client.id,client.full_name));$("client-filter").append(option(client.id,client.full_name));}
  if(clients.some(c=>c.id===selectedClient))$("clients").value=selectedClient;
  if(clients.some(c=>c.id===selectedFilter))$("client-filter").value=selectedFilter;
  if(!clients.length)add($("client-list"),"p","No saved clients yet. Add a client to start the three-step application.");
  for(const client of clients){const card=add($("client-list"),"article","");card.className="saved-case-card";add(card,"h3",client.full_name).className="saved-case-title";const own=cases.filter(c=>c.client_id===client.id);add(card,"p",own.length+" saved case"+(own.length===1?"":"s")+(own.length?"":" · Ready for Step 2 — Record Details"));const actions=add(card,"div","");actions.className="saved-case-actions";const view=add(actions,"button",own.length?"View client cases":"Continue to Record Details");view.type="button";view.className="btn";view.addEventListener("click",()=>{if(!active||seq!==epoch||org!==orgId())return;if(!own.length){$("clients").value=client.id;showIntake("case-intake");}else{hideIntake();packetCaseId=null;setStep(0);$("client-filter").value=client.id;$("case-filter").value="";refresh().catch(fail);$("saved-cases").scrollIntoView({block:"start"});}});if(own.length){const next=add(actions,"button","Add case");next.type="button";next.className="btn secondary";next.addEventListener("click",()=>{if(!active||seq!==epoch||org!==orgId())return;$("clients").value=client.id;showIntake("case-intake");});}}
- const visible=cases.filter(c=>(!caseFilter()||c.client_id===caseFilter())&&c.case_number.toLowerCase().includes($("case-filter").value.trim().toLowerCase()));
+ const visible=cases.filter(c=>(routeStep!==3||c.id===packetCaseId)&&(!caseFilter()||c.client_id===caseFilter())&&c.case_number.toLowerCase().includes($("case-filter").value.trim().toLowerCase()));
  $("case-summary").textContent=clients.length+" saved clients · "+cases.length+" saved cases · "+visible.length+" shown (most recent 100 records).";
  $("client-count").textContent=String(clients.length);$("case-count").textContent=String(cases.length);$("packet-count").textContent=String(generated.length);$("watch-count").textContent=String(enrollments.filter(e=>e.enabled).length);
  if(!visible.length)add($("cases"),"p","No matching saved cases. Add a client or enter record details to get started.");
@@ -85,7 +138,7 @@ async function refresh(){
   const section=(label)=>{const d=document.createElement("details");d.className="professional-case-panel";add(d,"summary",label);const body=add(d,"div","");shell.append(d);return {d,body};};
   const reviewPanel=section("Record details & eligibility screening"),watchPanel=section("RecordWatch"),packetPanel=section("Step 3 — Packet");let card=reviewPanel.body;
   let loadCurrentPreview=null;
-  const openPanel=panel=>{hideIntake();packetCaseId=panel===packetPanel?row.id:null;for(const el of $("cases").children)el.classList.toggle("packet-focused",el===shell&&packetCaseId===row.id);setStep(panel===packetPanel?3:0);for(const p of [reviewPanel,watchPanel,packetPanel])p.d.open=p===panel;panel.d.scrollIntoView({block:"start"});if(panel===packetPanel&&loadCurrentPreview)void loadCurrentPreview().catch(()=>{});};
+  const openPanel=panel=>{if(panel===packetPanel&&!routeStep){navigateWorkflow(3,{caseId:row.id});return;}hideIntake();packetCaseId=panel===packetPanel?row.id:null;for(const el of $("cases").children)el.classList.toggle("packet-focused",el===shell&&packetCaseId===row.id);setStep(panel===packetPanel?3:0);for(const p of [reviewPanel,watchPanel,packetPanel])p.d.open=p===panel;panel.d.scrollIntoView({block:"start"});if(panel===packetPanel&&loadCurrentPreview)void loadCurrentPreview().catch(()=>{});};
   const nav=(label,p,primary=false)=>{const b=add(actions,"button",label);b.type="button";b.className=primary?"btn":"btn secondary";b.addEventListener("click",()=>{if(active&&org===orgId())openPanel(p)});};
   nav("Resume",packetStatus==="Not generated"||packetStatus==="Reviewed"?packetPanel:watchPanel,true);nav("Record Details",reviewPanel);nav("Open Packet",packetPanel);nav("Open RecordWatch",watchPanel);
   add(card,"p",row.outcome+" · "+row.charge_name+" · "+row.charge_code+" · "+row.charge_level+" · disposition "+row.disposition_date+(row.final_discharge_date?" · discharge "+row.final_discharge_date:""));
@@ -130,6 +183,7 @@ async function refresh(){
   add(card,"p","Reminders use attorney-entered dates. Official events require independent verification; no live docket feed or email/SMS dispatch is connected.");
   const docketInfo=window.RecordPathRecordCollection.linkFor({state:detailFields.caseState||(row.court_id==="oh-wood-common-pleas"?"OH":""),county:detailFields.county||(row.court_id==="oh-wood-common-pleas"?"Wood":""),courtType:detailFields.courtType||(row.court_id==="oh-wood-common-pleas"?"court-of-common-pleas":""),courtName:actualCourt});if(docketInfo.url){const docket=add(card,"a",docketInfo.label);docket.href=docketInfo.url;docket.target="_blank";docket.rel="noopener noreferrer";}else add(card,"p",docketInfo.note);
 
+  if(!routeStep){packetPanel.d.remove();$("cases").append(shell);continue;}
   card=packetPanel.body;card.classList.add("professional-packet-page");
   add(card,"h2","Your Filing Packet");
   add(card,"h3","Eligibility Status");
@@ -330,35 +384,32 @@ async function refresh(){
 }
 function bindForm(id,table,build){
  $(id).addEventListener("submit",async e=>{
- e.preventDefault();if(!active)return;const form=e.currentTarget,btn=form.querySelector("button");btn.disabled=true;
- try{const org=orgId(),seq=epoch,values=Object.fromEntries(new FormData(form));const payload=build(values,org);const saved=ok(await api.from(table).insert(payload).select("*").single());if(!saved?.id)throw Error("Save not confirmed");const persisted=ok(await api.from(table).select("*").eq("id",saved.id).eq("org_id",org).single());if(!persisted||persisted.id!==saved.id||(table==="professional_cases"&&persisted.court_id!=="oh-wood-common-pleas")||Object.entries(payload).some(([key,value])=>persisted[key]!==value))throw Error("Supabase readback mismatch");if(!active||org!==orgId()||seq!==epoch)return;form.reset();await refresh();if(!active||org!==orgId())return;if(table==="professional_clients"){ $("clients").value=saved.id;showIntake("case-intake");notice("Client saved. Continue to record details."); }else{hideIntake();packetCaseId=saved.id;setStep(3);$("case-filter").value=persisted.case_number;$("client-filter").value=persisted.client_id;await refresh();if(!active||org!==orgId()||packetCaseId!==saved.id)return;const target=Array.from($("cases").children).find(el=>el.dataset.caseId===saved.id);if(target)target.scrollIntoView({block:"start"});notice("Case saved. Step 3 — Packet is ready for eligibility review and preparation.");}}catch{notice("Unable to save. Confirm required fields and authorization.");}finally{btn.disabled=false;}
+ e.preventDefault();if(!active||routeStep!==1||routeClient)return;const form=e.currentTarget,btn=form.querySelector("button");btn.disabled=true;
+ try{const org=orgId(),seq=epoch,values=Object.fromEntries(new FormData(form));const payload=build(values,org);const saved=ok(await api.from(table).insert(payload).select("*").single());if(!saved?.id)throw Error("Save not confirmed");const persisted=ok(await api.from(table).select("*").eq("id",saved.id).eq("org_id",org).single());if(!persisted||persisted.id!==saved.id||(table==="professional_cases"&&persisted.court_id!=="oh-wood-common-pleas")||Object.entries(payload).some(([key,value])=>persisted[key]!==value))throw Error("Supabase readback mismatch");if(!active||org!==orgId()||seq!==epoch)return;form.reset();navigateWorkflow(2,{clientId:saved.id});}catch{notice("Unable to save. Confirm required fields and authorization.");}finally{btn.disabled=false;}
  });
 }
 bindForm("client-form","professional_clients",(v,org)=>({org_id:org,full_name:v.full_name,dob:v.dob,other_names:v.other_names||"",line1:v.line1,line2:v.line2||"",city:v.city,state:v.state,zip:v.zip,email:v.email,phone:v.phone,authorization_confirmed:v.authorization_confirmed==="on"}));
 $("case-form").addEventListener("submit",async e=>{
- e.preventDefault();if(!active||!sharedIntake)return;
+ e.preventDefault();if(!active||routeStep!==2||!routeClient||!sharedIntake)return;
  const btn=$("case-save");btn.disabled=true;
  try{
-  const org=orgId(),seq=epoch,snapshot=sharedIntake.capture(),client=$("clients").value;
+  const org=orgId(),seq=epoch,snapshot=sharedIntake.capture(),client=routeClient.id;
   const payload=buildProfessionalRecordPayload(snapshot,org,client);
   const saved=ok(await api.from("professional_cases").insert(payload).select("id").single());
   if(!saved?.id)throw Error("Case save not confirmed");
   const persisted=ok(await api.from("professional_cases").select("*").eq("id",saved.id).eq("org_id",org).single());
   if(!persisted||persisted.id!==saved.id||persisted.client_id!==client||!sameRecordSnapshot(snapshot,persisted.record_details))throw Error("Supabase full record readback mismatch");
   if(!active||org!==orgId()||seq!==epoch)return;
-  $("case-form").reset();sharedIntake.reset();hideIntake();packetCaseId=persisted.id;setStep(3);$("case-filter").value=persisted.case_number;$("client-filter").value=persisted.client_id;
-  await refresh();if(!active||org!==orgId()||packetCaseId!==persisted.id)return;
-  const target=Array.from($("cases").children).find(el=>el.dataset.caseId===persisted.id);if(target)target.scrollIntoView({block:"start"});
-  notice(persisted.outcome==="mixed"?"All record details saved to Supabase. Packet held for further review.":"All record details saved and verified in Supabase. Continue to Step 3 — Packet.");
+  $("case-form").reset();sharedIntake.reset();navigateWorkflow(3,{caseId:persisted.id});
  }catch(error){notice(error?.message?.startsWith("Enter")?error.message:"Unable to save and verify full record details. Check the court, dates and required fields.");}
  finally{btn.disabled=false;}
 });
 $("new-client").addEventListener("click",()=>showIntake("client-intake"));
 $("add-client-top").addEventListener("click",()=>showIntake("client-intake"));
 $("return-dashboard").addEventListener("click",returnDashboard);
-$("new-case").addEventListener("click",()=>showIntake($("clients").options.length?"case-intake":"client-intake"));
+$("new-case").addEventListener("click",()=>navigateWorkflow(1,{clientId:caseFilter()||null}));
 $("close-client").addEventListener("click",returnDashboard);$("close-case").addEventListener("click",returnDashboard);
-$("org").addEventListener("change",()=>{hideIntake();packetCaseId=null;setStep(0);$("client-form").reset();$("case-form").reset();sharedIntake?.reset();refresh().catch(fail);});
+$("org").addEventListener("change",()=>{if(routeStep){navigateWorkflow(1);return;}hideIntake();packetCaseId=null;setStep(0);$("client-form").reset();$("case-form").reset();sharedIntake?.reset();refresh().catch(fail);});
 $("refresh").addEventListener("click",()=>refresh().catch(fail));
 $("client-filter").addEventListener("change",()=>{packetCaseId=null;setStep(0);refresh().catch(fail);});
 $("case-filter").addEventListener("change",()=>{packetCaseId=null;setStep(0);refresh().catch(fail);});
