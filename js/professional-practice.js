@@ -20,7 +20,7 @@ const caseFilter=()=>$("client-filter").value;
 const setStep=n=>{$("app").classList.toggle("professional-packet-mode",n===3);$("app").classList.toggle("professional-intake-mode",n===1||n===2);if($("workflow-progress"))$("workflow-progress").textContent=Math.max(0,n-1)+" of 3 steps completed";$("professional-steps").hidden=!n;for(const [i,id] of ["step-personal","step-record","step-packet"].entries()){const el=$(id);el.classList.toggle("step-completed",i+1<n);el.classList.toggle("step-locked",i+1>n);if(i+1===n)el.setAttribute("aria-current","step");else el.removeAttribute("aria-current");el.querySelector(".step-status")?.replaceChildren(i+1<n?"Completed":i+1===n?"Current":"Locked");}};
 const hideIntake=()=>{for(const id of ["client-intake","case-intake"])$(id).hidden=true;};
 const returnDashboard=()=>{if(routeStep){navigateWorkflow(0);return;}$("client-form").reset();$("case-form").reset();sharedIntake?.reset();hideIntake();packetCaseId=null;setStep(0);$("case-filter").value="";$("client-filter").value="";refresh().catch(fail);$("saved-clients").scrollIntoView({block:"start"});};
-const showIntake=id=>{if(!active)return;if(!routeStep){navigateWorkflow(1,{clientId:id==="case-intake"?$("clients").value:null});return;}if((id==="client-intake"?1:2)!==routeStep)return;if(id==="client-intake")$("client-form").reset();else{const selected=$("clients").value;$("case-form").reset();sharedIntake?.reset();if(routeClient)$("clients").value=routeClient.id;else if(selected)$("clients").value=selected;}hideIntake();packetCaseId=null;setStep(id==="client-intake"?1:2);$(id).hidden=false;$(id).scrollIntoView({block:"start"});};
+const showIntake=id=>{if(!active)return;if(!routeStep){navigateWorkflow(id==="case-intake"?2:1,{clientId:id==="case-intake"?$("clients").value:null});return;}if((id==="client-intake"?1:2)!==routeStep)return;if(id==="client-intake")$("client-form").reset();else{const selected=$("clients").value;$("case-form").reset();sharedIntake?.reset();if(routeClient)$("clients").value=routeClient.id;else if(selected)$("clients").value=selected;}hideIntake();packetCaseId=null;setStep(id==="client-intake"?1:2);$(id).hidden=false;$(id).scrollIntoView({block:"start"});};
 const clear=()=>{routeClient=null;routeCase=null;hideIntake();packetCaseId=null;setStep(0);$("client-list").replaceChildren();for(const id of ["client-count","case-count","packet-count","watch-count"])$(id).textContent="0";if(renewal)clearInterval(renewal);renewal=null;epoch++;active=false;internalTestAccess=false;$("app").hidden=true;$("client-form").reset();$("professional-personal-fields").replaceChildren();$("case-form").reset();$("recordDetailsForm").replaceChildren();sharedIntake=null;$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();$("client-filter").replaceChildren(option("","All clients"));$("case-filter").value="";$("case-summary").textContent="";orgs=[];};
 const fail=()=>{clear();notice("Access or request unavailable. No filing or payment was made. Reload or contact the pilot operator.");};
 const ok=r=>{if(r.error)throw Error("Request rejected");return r.data;};
@@ -64,10 +64,10 @@ async function load(){
    if(!uuid(clientId)){notice("Select an accessible saved client in RecordWatch.");return;}
    routeClient=ok(await api.from("professional_clients").select("*").eq("org_id",orgId()).eq("id",clientId).maybeSingle());
    if(!routeClient||routeClient.authorization_confirmed!==true){notice("An authorized saved client is required.");return;}
-  }else if(routeStep>1){notice("Begin with personal information before continuing.");return;}
+  }else if(routeStep===3){notice("Begin with personal information before continuing.");return;}
   if(seq!==epoch)return;
   if(routeStep===1&&!routeClient)await mountProfessionalPersonalIntake($("professional-personal-fields"));
-  if(routeStep===2)sharedIntake=await mountProfessionalRecordIntake($("recordDetailsForm"));
+  if(routeStep===2&&routeClient)sharedIntake=await mountProfessionalRecordIntake($("recordDetailsForm"));
   if(seq!==epoch)return;
   packetCaseId=routeCase?.id||null;
  }
@@ -87,8 +87,18 @@ async function load(){
    const next=add(summary,"button","Continue to Case Information");next.type="button";next.addEventListener("click",()=>navigateWorkflow(2,{clientId:routeClient.id}));
   }
  }else if(routeStep===2){
-  $("clients").value=routeClient.id;showIntake("case-intake");$("clients").disabled=true;
-  $("back-personal").href=workflowFiles[1]+"?"+new URLSearchParams({org:orgId(),clientId:routeClient.id});
+  showIntake("case-intake");
+  const picker=$("clients");
+  picker.insertBefore(option("","Select a saved client"),picker.firstChild);
+  picker.value=routeClient?.id||"";
+  picker.disabled=false;
+  picker.addEventListener("change",()=>navigateWorkflow(2,{clientId:picker.value}));
+  $("recordDetailsForm").hidden=!routeClient;
+  $("case-save").hidden=!routeClient;
+  $("case-save").disabled=!routeClient;
+  $("back-personal").href=workflowFiles[1]+"?"+new URLSearchParams(routeClient?{org:orgId(),clientId:routeClient.id}:{org:orgId()});
+  $("back-personal").textContent=routeClient?"Back to Personal Information":"Add a new client in Step 1";
+  if(!routeClient)notice("Select a saved client to add a new case in Step 2. If the client is new, complete Step 1 first.");
  }else if(routeStep===3){
   if(!Array.from($("cases").children).some(el=>el.dataset.caseId===packetCaseId)){notice("Saved packet case could not be loaded. Return to RecordWatch.");return;}
  }
@@ -417,7 +427,7 @@ $("case-form").addEventListener("submit",async e=>{
 $("new-client").addEventListener("click",()=>showIntake("client-intake"));
 $("add-client-top").addEventListener("click",()=>showIntake("client-intake"));
 $("return-dashboard").addEventListener("click",returnDashboard);
-$("new-case").addEventListener("click",()=>navigateWorkflow(1,{clientId:caseFilter()||null}));
+$("new-case").addEventListener("click",()=>navigateWorkflow(2,{clientId:caseFilter()||null}));
 $("close-client").addEventListener("click",returnDashboard);$("close-case").addEventListener("click",returnDashboard);
 $("org").addEventListener("change",()=>{if(routeStep){navigateWorkflow(1);return;}hideIntake();packetCaseId=null;setStep(0);$("client-form").reset();$("case-form").reset();sharedIntake?.reset();refresh().catch(fail);});
 $("refresh").addEventListener("click",()=>refresh().catch(fail));
