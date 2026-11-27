@@ -9,16 +9,17 @@ export function providerReadiness(env={}){
   return {enabled,email_configured:emailConfigured,sms_configured:smsConfigured,
     email_ready:enabled && emailConfigured,sms_ready:enabled && smsConfigured};
 }
-export async function sendPremiumEmail({to,subject,message,env=process.env,fetchFn=fetch}){
+export async function sendPremiumEmail({to,subject,message,env=process.env,fetchFn=fetch,professional=false}){
   const r=providerReadiness(env);
   if(!r.email_ready||!validAlertEmail(to))throw new Error("Premium email sending is disabled or recipient invalid");
+  const manageUrl=professional?"https://recordpathai.com/professional-practice.html":"https://recordpathai.com/recordwatch-dashboard.html";
   const response=await fetchFn("https://api.resend.com/emails",{
     method:"POST",headers:{Authorization:"Bearer "+env.RESEND_API_KEY,"Content-Type":"application/json"},
     body:JSON.stringify({from:"RecordPathAI <"+env.RECORDWATCH_EMAIL_FROM+">",
       to:[to],subject,
-      text:message+"\n\nManage or disable alerts: https://recordpathai.com/recordwatch-dashboard.html",
+      text:message+"\n\nManage or disable alerts: "+manageUrl,
       html:'<p>'+message.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))+
-        '</p><p><a href="https://recordpathai.com/recordwatch-dashboard.html">Manage alert preferences</a></p>'
+        '</p><p><a href="'+manageUrl+'">Manage alert preferences</a></p>'
     }),signal:AbortSignal.timeout(12000)
   });
   if(!response.ok)throw new Error("Resend rejected Premium alert (HTTP "+response.status+")");
