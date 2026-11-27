@@ -2,7 +2,7 @@ import {createHash} from "node:crypto";
 import {buildCourtCheckRequest,requireLobLiveDispatch} from "./lob-checks.js";
 import {findCourtProfile} from "./court-profiles.js";
 import {verifiedLiveSubscription} from "./professional-live-billing.js";
-export const PROFESSIONAL_MAIL_SERVICE_CENTS=1000;
+export const PROFESSIONAL_MAIL_SERVICE_CENTS=0;
 export const PROFESSIONAL_MAIL_COURT_CENTS=10000;
 export const PROFESSIONAL_MAIL_PRODUCT="recordpathai-professional-conviction-mail";
 const uuid=v=>typeof v==="string"&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(v);
@@ -15,11 +15,11 @@ const digest=b=>createHash("sha256").update(b).digest("hex");
 const recent=v=>Number.isFinite(Date.parse(v))&&Date.parse(v)<=Date.now()&&Date.parse(v)>Date.now()-30*86400000;
 const REQUIRED_REVIEW=["identity","docket","charges","discharge","exclusions","form","signature","authorization","court_fee_and_address"];
 const reviewed=o=>recent(o.reviewed_at)&&REQUIRED_REVIEW.every(k=>o.review_checks?.[k]===true);
-const metadata=o=>({productType:PROFESSIONAL_MAIL_PRODUCT,userId:o.user_id,caseId:o.case_id,orgId:o.org_id,documentId:o.document_id,signedPdfSha:o.signed_sha,serviceFeeCents:"1000",courtFeeCents:"10000"});
+const metadata=o=>({productType:PROFESSIONAL_MAIL_PRODUCT,userId:o.user_id,caseId:o.case_id,orgId:o.org_id,documentId:o.document_id,signedPdfSha:o.signed_sha,serviceFeeCents:String(PROFESSIONAL_MAIL_SERVICE_CENTS),courtFeeCents:String(PROFESSIONAL_MAIL_COURT_CENTS)});
 const matches=(s,o)=>Object.entries(metadata(o)).every(([k,v])=>s?.metadata?.[k]===v);
 export function verifiedProfessionalMailPayment(s,o){
  const pi=s?.payment_intent,c=pi?.latest_charge;
- return Boolean(o&&sessionId(s?.id)&&s.id===o.stripe_session_id&&s.livemode===true&&s.mode==="payment"&&s.status==="complete"&&s.payment_status==="paid"&&s.currency==="usd"&&s.amount_subtotal===11000&&Number.isSafeInteger(s.amount_total)&&s.amount_total>=11000&&matches(s,o)&&pi?.livemode===true&&pi.status==="succeeded"&&pi.currency==="usd"&&pi.amount===s.amount_total&&pi.amount_received===s.amount_total&&c?.livemode===true&&c.paid===true&&c.status==="succeeded"&&c.payment_intent===pi.id&&c.currency==="usd"&&c.amount===s.amount_total&&c.amount_captured===s.amount_total&&c.amount_refunded===0&&c.refunded===false&&c.disputed===false);
+ return Boolean(o&&sessionId(s?.id)&&s.id===o.stripe_session_id&&s.livemode===true&&s.mode==="payment"&&s.status==="complete"&&s.payment_status==="paid"&&s.currency==="usd"&&s.amount_subtotal===PROFESSIONAL_MAIL_COURT_CENTS&&s.amount_total===PROFESSIONAL_MAIL_COURT_CENTS&&matches(s,o)&&pi?.livemode===true&&pi.status==="succeeded"&&pi.currency==="usd"&&pi.amount===s.amount_total&&pi.amount_received===s.amount_total&&c?.livemode===true&&c.paid===true&&c.status==="succeeded"&&c.payment_intent===pi.id&&c.currency==="usd"&&c.amount===s.amount_total&&c.amount_captured===s.amount_total&&c.amount_refunded===0&&c.refunded===false&&c.disputed===false);
 }
 export function registerProfessionalMailing(app,{express,context,rest,config,stripe,requireOperationsKey,lobBankVerified,env=process.env,network=fetch}){
  const table="professional_mail_orders";
@@ -110,7 +110,7 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
    const o=await order(c.id);
    if(o&&(o.user_id!==c.attorney_id||o.org_id!==c.org_id))return send(res,403,"Order ownership mismatch.");
    let ready=false;try{ready=Boolean(o?.status==="approved"&&reviewed(o)&&await enabled());}catch{}
-   const result={ok:true,status:o?.status||"awaiting_independent_review",checkoutReady:ready,serviceFeeCents:1000,courtFeeCents:10000,lobCheckId:o?.lob_check_id||null};
+   const result={ok:true,status:o?.status||"awaiting_independent_review",checkoutReady:ready,serviceFeeCents:PROFESSIONAL_MAIL_SERVICE_CENTS,courtFeeCents:PROFESSIONAL_MAIL_COURT_CENTS,lobCheckId:o?.lob_check_id||null};
    if(o?.lob_check_id&&env.LOB_LIVE_API_KEY?.startsWith("live_")){
     try{const r=await network("https://api.lob.com/v1/checks/"+o.lob_check_id,{headers:{Authorization:"Basic "+Buffer.from(env.LOB_LIVE_API_KEY+":").toString("base64")},signal:AbortSignal.timeout(10000)});if(r.ok){const data=await r.json();if(data.id===o.lob_check_id){result.expectedDeliveryDate=data.expected_delivery_date||null;result.providerEvents=Array.isArray(data.tracking_events)?data.tracking_events.slice(-10).map(e=>({name:e.name,time:e.time})):[];}}}catch{}
    }
@@ -129,13 +129,13 @@ export function registerProfessionalMailing(app,{express,context,rest,config,str
    let s;
    if(o.stripe_session_id){s=await stripe.checkout.sessions.retrieve(o.stripe_session_id);}
    else {
-    s=await stripe.checkout.sessions.create({mode:"payment",customer,customer_update:{address:"auto"},automatic_tax:{enabled:true},success_url:back,cancel_url:back,metadata:metadata(o),payment_intent_data:{metadata:metadata(o)},line_items:[{quantity:1,price_data:{currency:"usd",unit_amount:1000,tax_behavior:"exclusive",product_data:{name:"RecordPathAI professional mailing service",tax_code:"txcd_20030000"}}},{quantity:1,price_data:{currency:"usd",unit_amount:10000,tax_behavior:"inclusive",product_data:{name:"Court filing deposit",tax_code:"txcd_00000000"}}}]},{idempotencyKey:"rpai-pro-mail-"+o.case_id});
-    if(!sessionId(s.id)||!matches(s,o)||s.customer!==customer||s.livemode!==true)throw Error("Checkout mismatch");
+    s=await stripe.checkout.sessions.create({mode:"payment",customer,customer_update:{address:"auto"},success_url:back,cancel_url:back,metadata:metadata(o),payment_intent_data:{metadata:metadata(o)},line_items:[{quantity:1,price_data:{currency:"usd",unit_amount:PROFESSIONAL_MAIL_COURT_CENTS,tax_behavior:"inclusive",product_data:{name:"Court filing deposit",tax_code:"txcd_00000000"}}}]},{idempotencyKey:"rpai-pro-mail-"+o.case_id});
+    if(!sessionId(s.id)||!matches(s,o)||s.customer!==customer||s.livemode!==true||s.amount_subtotal!==PROFESSIONAL_MAIL_COURT_CENTS||s.amount_total!==PROFESSIONAL_MAIL_COURT_CENTS)throw Error("Checkout mismatch");
     const saved=await change(o,"status=eq.approved&stripe_session_id=is.null",{stripe_session_id:s.id});
     if(saved.length!==1&&(await order(o.case_id))?.stripe_session_id!==s.id)throw Error("Checkout persistence failed");
    }
-   if(!sessionId(s.id)||!matches(s,o)||s.customer!==customer||s.status!=="open"||s.livemode!==true||new URL(s.url).origin!=="https://checkout.stripe.com")return send(res,409,"Existing checkout requires review. Do not pay twice.");
-   return res.json({ok:true,url:s.url});
+   if(!sessionId(s.id)||!matches(s,o)||s.customer!==customer||s.status!=="open"||s.livemode!==true||s.amount_subtotal!==PROFESSIONAL_MAIL_COURT_CENTS||s.amount_total!==PROFESSIONAL_MAIL_COURT_CENTS||new URL(s.url).origin!=="https://checkout.stripe.com")return send(res,409,"Existing checkout requires review. Do not pay twice.");
+   return res.json({ok:true,url:s.url,totalCents:PROFESSIONAL_MAIL_COURT_CENTS});
   }catch{return send(res,503,"Checkout unavailable. No duplicate payment should be attempted.");}
  });
  async function reconcile(session,res,event){
