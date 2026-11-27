@@ -165,10 +165,12 @@ async function refresh(){
   if(client.other_names)add(card,"p","Other names used: "+client.other_names);
   add(card,"p","Mailing: "+[client.line1,client.line2,client.city,client.state,client.zip].filter(Boolean).join(", ")+" · "+client.email+" · "+client.phone);
   if(row.record_details?.schemaVersion===1){const detail=document.createElement("details");add(detail,"summary","View all saved Step 2 fields");card.append(detail);const renderValues=(parent,obj)=>{for(const [key,val] of Object.entries(obj||{})){const line=add(parent,"p","");add(line,"strong",key.replace(/([a-z])([A-Z])/g,"$1 $2").replaceAll("_"," ") + ": ");line.append(document.createTextNode(val===true?"Yes":val===false?"No":String(val||"Not entered")));}};renderValues(detail,detailFields);for(const [i,charge] of row.record_details.charges.entries()){add(detail,"h4","Charge "+(i+1));renderValues(detail,charge);}}
+  let packetEligibility=null;
   if(row.outcome==="mixed")add(card,"p","Eligibility and filing review required: unsupported court, multiple charges, incomplete or unresolved record information. All entered details are saved.");
   else if(window.RecordPathEligibilityEngine?.resolveEligibilityForCase){
    const disposition={dismissal:"dismissed",not_guilty:"not guilty",conviction:"convicted"}[row.outcome]||"";
    const result=window.RecordPathEligibilityEngine.resolveEligibilityForCase({id:row.id,court:{caseState:"OH",county:"Wood",courtName:"Wood County Court of Common Pleas",caseNumber:row.case_number},charges:[{chargeName:row.charge_name,statuteCode:row.charge_code,chargeLevel:row.charge_level,disposition,dispositionDate:row.disposition_date,finalDischargeDate:row.final_discharge_date||"",probationCompletedDate:row.probation_end_date||""}],outcome:{outcome:disposition,dispositionDate:row.disposition_date,finalDischargeDate:row.final_discharge_date||""}});
+   packetEligibility=result;
    eligibilityBadge.textContent=result.status||"Needs review";eligibilityBadge.className="case-status-badge "+(String(result.status||"").toLowerCase()==="eligible"?"eligible":"needs-review");estimated.textContent=result.formattedEligibilityDate||"Not available";
    add(card,"h4","Eligibility screening");add(card,"p",result.status+" · "+(result.formattedEligibilityDate||"Date not available")+" · "+(result.ruleCitation||"Review local rules"));
    for(const flag of result.flags||[])add(card,"p",flag);
@@ -205,13 +207,45 @@ async function refresh(){
 
   if(routeStep!==3){packetPanel.d.remove();$("cases").append(shell);continue;}
   card=packetPanel.body;card.classList.add("professional-packet-page");
-  add(card,"h2","Your Filing Packet");
-  add(card,"h3","Eligibility Status");
-  add(card,"p","Client: "+client.full_name+" · Case: "+row.case_number+" · Eligibility: "+eligibilityBadge.textContent+" · Estimated date: "+estimated.textContent);
-  add(card,"p","RecordPathAI packet preparation: $0 — included with professional access. Applicable court fees are separate: "+(row.outcome==="conviction"?"$100 for a qualifying conviction":row.outcome==="mixed"?"Requires review":"$0 for qualifying dismissal or not-guilty cases")+".");
+  const packetCard=(heading)=>{const section=add(packetPanel.body,"section","");section.className="professional-consumer-card";add(section,"h2",heading);return section;};
+  const fmtDate=value=>value?window.RecordPathRuleDateUtils.formatDate(value)||"Not entered":"Not entered";
+  const nonconviction=["dismissal","not_guilty"].includes(row.outcome);
+  const screening=packetCard("Eligibility Status"),result=packetEligibility;
+  const banner=add(screening,"div","");banner.className="professional-status-banner";
+  const eligible=result?.isEligibleNow===true&&!result.needsReview&&!(result.flags||[]).length;
+  const pill=add(banner,"span",eligible?"Likely Eligible":result?.statusLabel||"Eligibility Needs Review");pill.className="professional-status-pill "+(eligible?"eligible":"pending");
+  add(banner,"h3",eligible?(row.outcome==="dismissal"?"Dismissed case — likely eligible for sealing":row.outcome==="not_guilty"?"Not-guilty case — likely eligible for sealing":"Likely eligible for record relief"):result?.statusLabel||"Eligibility needs review").className="professional-status-headline";
+  add(banner,"p",result?.ruleCitation||"Review the complete saved case and applicable court requirements.");
+  const flags=result?.flags||[];
+  if(flags.length){const list=add(banner,"ul","");for(const flag of flags)add(list,"li",flag);}
+  const dates=add(screening,"div","");dates.className="professional-date-grid";
+  for(const [label,value] of [["Relief Type",result?.reliefType], [nonconviction?"Dismissal / disposition date":"Sentence completion / discharge date",result?fmtDate(result.completionDate):"Review required"],["Required Waiting Period",result?.waitingPeriodText],["Estimated Eligible Date",result?.formattedEligibilityDate]]){
+   const box=add(dates,"div","");box.className="professional-date-box";add(box,"span",label);add(box,"strong",value||"Review required");
+  }
+  add(screening,"p",eligible?"Eligible now":result?.status||"More information needed").className="professional-meta-note";
+  add(screening,"p","This is a screening result, not legal advice. Final approval depends on the court.").className="professional-meta-note";
+  const tracking=add(screening,"aside","");tracking.className="professional-tracking-panel";add(tracking,"h3","RecordWatch background tracking");add(tracking,"p","RecordWatch uses the same eligibility and record details powering this packet.");
+  const trackGrid=add(tracking,"div","");trackGrid.className="professional-tracking-grid";
+  for(const [label,value] of [["Tracking",watchEnabled?"Enabled":"Not activated"],["Estimated eligibility",eligible?"Eligible now":result?.status||"Review required"],["Missing requirements",flags.length?flags.join("; "):result?"None recorded":"Case review required"],["Next action",eligible?"Generate court packet.":"Review saved case requirements."]]){const item=add(trackGrid,"div","");add(item,"strong",label);add(item,"span",value);}
+  add(tracking,"p","Professional preparation and digital download are included. Optional mailing and SMS/email case alerts are $10 per filing plus applicable court fees and tax.").className="professional-meta-note";
+  const watchLink=add(tracking,"a","View RecordWatch Professional →");watchLink.href=workflowFiles[0]+"?"+new URLSearchParams({org});
+  const intake=packetCard("Intake Summary"),summaryGrid=add(intake,"div","");summaryGrid.className="professional-summary-grid";
+  const summaryBox=(heading,fields)=>{const box=add(summaryGrid,"div","");box.className="professional-summary-box";add(box,"h3",heading);for(const [label,value] of fields){const line=add(box,"div","");line.className="professional-summary-row";add(line,"strong",label);add(line,"span",value||"Not entered");}};
+  summaryBox("Person",[["Name",client.full_name],["Email",client.email],["Phone",client.phone],["Address",[client.line1,client.line2,client.city,client.state,client.zip].filter(Boolean).join(", ")],["Residence State",client.state]]);
+  const outcomeLabel={dismissal:"Dismissed",not_guilty:"Not guilty",conviction:"Convicted",mixed:"Review required"}[row.outcome]||row.outcome;
+  summaryBox("Selected Record",[["Case State",detailFields.caseState],["Charge",row.charge_name],["Offense Code",row.charge_code],["Level",row.charge_level],["Case Number",row.case_number],["Court",actualCourt],["Judge Name",row.judge_name||detailFields.judgeName],["County",detailFields.county],["Outcome",outcomeLabel]]);
+  const offenses=packetCard("All Saved Offenses");add(offenses,"p","The packet and eligibility banner above use the current selected record. This section shows every saved offense for this client’s selected case.");
+  const charges=Array.isArray(row.record_details?.charges)&&row.record_details.charges.length?row.record_details.charges:[{charge_name:row.charge_name,charge_code:row.charge_code,degree:row.charge_level,disposition:outcomeLabel,disposition_date:row.disposition_date,discharge_date:row.final_discharge_date}];
+  for(const [i,charge] of charges.entries()){const item=add(offenses,"article","");item.className="professional-offense-item";const head=add(item,"div","");head.className="professional-offense-head";add(head,"h3","Offense "+(i+1)+": "+(charge.charge_name||"Not entered"));if(i===0&&charges.length===1)add(head,"span","Current packet record").className="professional-record-tag";
+   const grid=add(item,"div","");grid.className="professional-offense-grid";
+   for(const [label,value] of [["Case Number",row.case_number],["Statute",charge.charge_code],["Degree",charge.degree],["Outcome",charge.disposition||charge.outcome||(charges.length===1?outcomeLabel:"Not entered")],["Disposition Date",fmtDate(charge.disposition_date)],["Discharge Date",fmtDate(charge.discharge_date)],["Court",actualCourt],["County",detailFields.county]]){const line=add(grid,"div","");add(line,"strong",label+": ");line.append(document.createTextNode(value||"Not entered"));}
+  }
+  card=packetCard("Generate Packet");
+  add(card,"p","RecordPathAI packet preparation: $0 — included with professional access. Applicable court fees are separate: "+(row.outcome==="conviction"?"$100 for a qualifying Wood County conviction":row.outcome==="mixed"?"Requires review":"$0 for qualifying Wood County dismissal or not-guilty cases")+".");
+  const generateCard=card;
   const fees=add(card,"section","");fees.className="professional-packet-fees";add(fees,"h3","Your packet and court fees");
   for(const [label,value] of [["RecordPathAI application preparation","$0 — included"],["Court filing fee / deposit",row.outcome==="conviction"?"$100":row.outcome==="mixed"?"Review required":"$0"],["Mailing + SMS/email case alerts",row.outcome==="conviction"?"$10 + applicable tax":"$10 when mailing is available"]]){const line=add(fees,"div","");add(line,"span",label);add(line,"strong",value);}
-  const stage=(title,desc)=>{const section=add(packetPanel.body,"section","");section.className="professional-packet-stage";add(section,"h3",title);add(section,"p",desc);return section;};
+  const stage=(title,desc)=>{const section=add(generateCard,"section","");section.className="professional-packet-stage";add(section,"h3",title);add(section,"p",desc);return section;};
   const prepare=stage("Step 1 — Prepare and Submit Your Real Signed Packet","Verify saved client and case information, draw the applicant’s signature, and authorize private review. The signed two-page application is saved securely. This does not charge or file anything.");
   const contact=add(prepare,"fieldset","");contact.className="professional-packet-contact";add(contact,"legend","Verify contact and mailing details on both court forms");
   for(const [label,value] of [["Full legal name",client.full_name],["Mailing street address",client.line1],["Apartment / P.O. box (optional)",client.line2],["City",client.city],["State",client.state],["ZIP / postal code",client.zip],["Telephone number",client.phone],["Email address",client.email],["Court",actualCourt],["Case number",row.case_number]]){const line=add(contact,"div","");add(line,"strong",label);add(line,"span",value||"Not entered");}
