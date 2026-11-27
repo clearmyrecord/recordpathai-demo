@@ -1,12 +1,11 @@
 -- STAGING ONLY. Documents remain private and immutable; no automatic filing.
 begin;
-insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
-values('professional-private-review','professional-private-review',false,8388608,array['application/pdf']);
+-- Store small review PDFs as bounded bytea in staging, avoiding direct Storage metadata writes.
 create table public.professional_signed_documents (
  id uuid primary key default gen_random_uuid(),
  org_id uuid not null, case_id uuid not null, attorney_id uuid not null,
  sha256 text not null check(sha256 ~ '^[0-9a-f]{64}$'),
- object_path text not null check(object_path = attorney_id::text || '/' || case_id::text || '/' || sha256 || '.pdf'),
+ pdf_bytes bytea not null check(octet_length(pdf_bytes) between 500 and 2097152 and substring(pdf_bytes from 1 for 5)=decode('255044462d','hex') and encode(sha256(pdf_bytes),'hex')=sha256),
  page_count integer not null check(page_count=2),
  attorney_signature_attested boolean not null check(attorney_signature_attested),
  created_at timestamptz not null default now(),
@@ -24,7 +23,8 @@ create table public.professional_signed_reviews (
 alter table public.professional_signed_documents enable row level security;
 alter table public.professional_signed_reviews enable row level security;
 revoke all on public.professional_signed_documents,public.professional_signed_reviews from public,anon,authenticated;
-grant select on public.professional_signed_documents,public.professional_signed_reviews to authenticated;
+grant select(id,org_id,case_id,attorney_id,sha256,page_count,attorney_signature_attested,created_at) on public.professional_signed_documents to authenticated;
+grant select on public.professional_signed_reviews to authenticated;
 grant insert(document_id,org_id,case_id,exact_document_reviewed) on public.professional_signed_reviews to authenticated;
 grant select,insert,update,delete on public.professional_signed_documents,public.professional_signed_reviews to service_role;
 create policy pro_document_read on public.professional_signed_documents for select to authenticated using
