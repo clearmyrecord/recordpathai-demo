@@ -22,14 +22,14 @@ async function load(){
  if(seq!==epoch)return;
  if(user.error||!user.data.user){$("login").hidden=false;notice("Sign in to an approved professional account.");return;}
  $("login").hidden=true;$("logout").hidden=false;
- if(ok(await api.auth.mfa.getAuthenticatorAssuranceLevel()).currentLevel!=="aal2"){notice("Verified MFA session required. Return to Professional account to verify your session.");return;}
+ if(ok(await api.auth.mfa.getAuthenticatorAssuranceLevel()).currentLevel!=="aal2"){notice("Two-step verification is required before opening client records.");location.replace("professional-account.html?secure=1");return;}
  const paidRows=ok(await api.from("professional_live_billing").select("org_id").limit(2));
  if(paidRows.length){if(paidRows.length!==1||!await refreshPaidLease()){notice("A current paid subscription is required. Visit Professional account to manage billing.");return;}}
  if(seq!==epoch)return;
- const [o,m]=await Promise.all([api.from("professional_pilot_orgs").select("id,pilot_code,client_intake_enabled,access_kind"),api.from("professional_pilot_members").select("org_id,role,attorney_verified")]);
+ const [o,m]=await Promise.all([api.from("professional_pilot_orgs").select("id,pilot_code,client_intake_enabled,access_kind,self_service_terms_at"),api.from("professional_pilot_members").select("org_id,role,attorney_verified")]);
  if(seq!==epoch)return;
- const members=ok(m);orgs=ok(o).filter(x=>x.client_intake_enabled&&members.some(y=>y.org_id===x.id&&y.role==="attorney"&&y.attorney_verified));
- if(!orgs.length){notice("No approved attorney intake access. Credential, partner agreement, legal and security verification are required.");return;}
+ const members=ok(m);orgs=ok(o).filter(x=>x.client_intake_enabled&&members.some(y=>y.org_id===x.id&&((y.role==="attorney"&&y.attorney_verified)||(x.access_kind==="paid"&&x.self_service_terms_at&&y.role==="staff"&&!y.attorney_verified))));
+ if(!orgs.length){notice("No active workspace. Subscribe or apply for the complimentary organization pilot.");return;}
  for(const org of orgs)$("org").append(option(org.id,org.pilot_code));
  active=true;$("app").hidden=false;await refresh();
  if(paidRows.length&&active)renewal=setInterval(async()=>{try{if(active&&!await refreshPaidLease()){clear();notice("Subscription access expired. Return to Professional account.");}}catch{fail();}},10*60*1000);
@@ -42,7 +42,7 @@ async function refresh(){
  if(seq!==epoch||!active||org!==orgId())return;
  const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0],enrollments=ok(enrollRows),tasks=ok(taskRows),verified=ok(verifiedRows),observations=ok(observedRows);
  for(const client of clients)$("clients").append(option(client.id,client.full_name));
- $("role").textContent="Verified attorney · assigned records only";
+ $("role").textContent="Secure professional account · assigned records only";
 
  for(const row of cases){
   const client=clients.find(x=>x.id===row.client_id);if(!client)continue;
@@ -50,7 +50,7 @@ async function refresh(){
   add(card,"p",row.outcome+" · "+row.charge_name+" · "+row.charge_code+" · "+row.charge_level+" · disposition "+row.disposition_date+(row.final_discharge_date?" · discharge "+row.final_discharge_date:""));
   add(card,"p","Mailing: "+[client.line1,client.line2,client.city,client.state,client.zip].filter(Boolean).join(", ")+" · "+client.email+" · "+client.phone);
   const decision=decisions.find(x=>x.case_id===row.id);
-  add(card,"p",decision?"Review: "+decision.decision.replaceAll("_"," "):"Awaiting attorney review");
+  add(card,"p",decision?"Review: "+decision.decision.replaceAll("_"," "):"Awaiting authorized review");
   const button=(label,fn)=>{const btn=add(card,"button",label);btn.type="button";btn.addEventListener("click",async()=>{if(!active||org!==orgId())return;btn.disabled=true;try{await fn();}catch{notice("Action rejected. Check saved information and access.");}finally{btn.disabled=false;}});return btn;};
   add(card,"h4","RecordWatch Professional");
   const enrollment=enrollments.find(e=>e.case_id===row.id);
@@ -144,7 +144,7 @@ async function refresh(){
   }
   $("cases").append(card);
  }
- notice("Approved attorney workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
+ notice("Professional workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
 }
 function bindForm(id,table,build){
  $(id).addEventListener("submit",async e=>{
