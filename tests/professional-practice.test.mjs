@@ -183,3 +183,15 @@ test("professional packet mirrors the consumer sections without consumer account
  assert.match(css,/\.professional-summary-grid/);
  assert.doesNotMatch(html,/js\/user-store\.js/);
 });
+
+test("Step 3 uses compact aligned payment options and selection-specific pricing",()=>{
+ const js=read("js/professional-practice.js"),css=read("assets/professional-modern.css");
+ assert.match(js,/wrap.className="professional-delivery-option"/);
+ assert.match(js,/quotedCourtFee\+10/);
+ assert.match(js,/totalQuote.textContent=mail\?/);
+ assert.match(js,/mailingQuote.textContent=mail\?money\(10\):"Not selected"/);
+ assert.match(js,/disabledPay.disabled=true/);
+ assert.match(css,/professional-delivery-option input\[type=radio\]\{[^}]*width:20px;height:20px;min-height:0/);
+ assert.match(css,/professional-checkout-total/);
+ assert.match(css,/professional-pay-and-mail:not\(\.menu-toggle\)\{width:100%/);
+});
