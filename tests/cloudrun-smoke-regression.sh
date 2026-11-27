@@ -110,9 +110,10 @@ case "$url" in
   */professional.html)marker='href="signup.html?returnUrl=professional-account.html" class="nav-cta">Get started';page="professional.html";;
   */signup.html)marker='id="professionalExistingAccount"';page="signup.html";;
   */professional-account.html)marker='id="confirm-account" hidden';page="professional-account.html";;
+  */professional-packet.html)marker="Your Filing Packet";page="professional-packet.html";;
   */professional-practice.html)marker="Attorney case workflow";page="professional-practice.html";;
   */js/professional-account.js)marker='if(action==="checkout"&&confirmedAccountId!==user.id)';page="professional-account.js";;
-  */js/professional-practice.js)marker="Download official form for signature";page="professional-practice.js";;
+  */js/professional-practice.js)marker='Prepare My Real Signed Packet for Private Review Pay and Mail — $110';page="professional-practice.js";;
   *)echo "Unknown requested path $url" >&2;exit 81;;
 esac
 case "$url" in
