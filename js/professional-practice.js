@@ -210,12 +210,12 @@ async function refresh(){
   add(card,"p","Client: "+client.full_name+" · Case: "+row.case_number+" · Eligibility: "+eligibilityBadge.textContent+" · Estimated date: "+estimated.textContent);
   add(card,"p","RecordPathAI packet preparation: $0 — included with professional access. Applicable court fees are separate: "+(row.outcome==="conviction"?"$100 for a qualifying conviction":row.outcome==="mixed"?"Requires review":"$0 for qualifying dismissal or not-guilty cases")+".");
   const fees=add(card,"section","");fees.className="professional-packet-fees";add(fees,"h3","Your packet and court fees");
-  for(const [label,value] of [["RecordPathAI application preparation","$0 — included"],["Court filing fee / deposit",row.outcome==="conviction"?"$100":row.outcome==="mixed"?"Review required":"$0"],["RecordPathAI mailing service","$0 — included when available"]]){const line=add(fees,"div","");add(line,"span",label);add(line,"strong",value);}
+  for(const [label,value] of [["RecordPathAI application preparation","$0 — included"],["Court filing fee / deposit",row.outcome==="conviction"?"$100":row.outcome==="mixed"?"Review required":"$0"],["Mailing + SMS/email case alerts",row.outcome==="conviction"?"$10 + applicable tax":"$10 when mailing is available"]]){const line=add(fees,"div","");add(line,"span",label);add(line,"strong",value);}
   const stage=(title,desc)=>{const section=add(packetPanel.body,"section","");section.className="professional-packet-stage";add(section,"h3",title);add(section,"p",desc);return section;};
   const prepare=stage("Step 1 — Prepare and Submit Your Signed Packet","Verify the saved client and case information, prepare the official forms, and obtain the applicant’s actual signature. This does not charge or file anything.");
   const contact=add(prepare,"div","");contact.className="professional-packet-contact";add(contact,"h4","Verify contact and mailing details on both court forms");for(const [label,value] of [["Full legal name",client.full_name],["Mailing address",[client.line1,client.line2,client.city,client.state,client.zip].filter(Boolean).join(", ")],["Telephone number",client.phone],["Email address",client.email],["Court",actualCourt],["Case number",row.case_number]]){const line=add(contact,"div","");add(line,"strong",label);add(line,"span",value||"Not entered");}
   const preview=stage("Step 2 — Preview Your Actual Application (View Only)","Review both watermarked pages of the saved signed application before confirming the exact document.");
-  const payment=stage("Step 3 — Checkout After Independent Approval","Preparation and mailing service are included in your professional subscription. Pay only applicable court fees after independent review and confirmation.");
+  const payment=stage("Step 3 — Checkout After Independent Approval","Application preparation is included. Optional mailing and SMS/email case alerts cost $10 per filing plus applicable court fees and tax, after independent review and confirmation.");
   card=prepare;
   if(!decision){
    add(preview,"p","Complete Step 1 to preview your signed application.");add(payment,"p","Complete preparation and review before continuing.");
@@ -241,10 +241,10 @@ async function refresh(){
    add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". Choose included digital delivery or Pay and Mail when the court-specific route is available.");
    if(row.outcome==="conviction"&&!internalTestAccess&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
     add(card,"h4","Optional Pay and Mail");
-    add(card,"p","RecordPathAI preparation and mailing service: included. Court filing deposit: $100. Total due: $100.");
+    add(card,"p","Preparation: included. Mailing + SMS/email case alerts: $10. Court filing deposit: $100. Total: $110 before applicable tax.");
     const mailStatus=add(card,"p","Checking private mailing status…");mailStatus.setAttribute("role","status");
-    const consentLabel=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";consentLabel.append(consent,document.createTextNode(" I authorize mailing the independently approved signed application and agree to pay the $100 court filing deposit."));consentLabel.hidden=true;
-    const pay=button("Pay and Mail — $100",async()=>{
+    const consentLabel=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";consentLabel.append(consent,document.createTextNode(" I authorize mailing the independently approved signed application and agree to pay the $100 court deposit plus $10 for mailing and SMS/email case alerts, plus applicable tax."));consentLabel.hidden=true;
+    const pay=button("Pay and Mail — $110 + applicable tax",async()=>{
      if(!consent.checked||!active||org!==orgId())throw Error("Consent required");
      const token=epoch,session=ok(await api.auth.getSession()).session;if(!session?.access_token||token!==epoch||!active||org!==orgId())throw Error("Session changed");
      const response=await fetch("/api/professional/mail/"+encodeURIComponent(row.id)+"/checkout",{method:"POST",headers:{Authorization:"Bearer "+session.access_token,"x-professional-mail-consent":"yes"},cache:"no-store"});
