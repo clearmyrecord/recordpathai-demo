@@ -85,3 +85,21 @@ test("professional and consumer charge intake ask for only one completion date",
  assert.doesNotMatch(shared,/dataset\.field="probation_end_date"|Probation termination date \(if applicable\)/);
  assert.match(shared,/final_discharge_date:c\.discharge_date\|\|null,probation_end_date:null/);
 });
+
+
+test("professional filing packet follows consumer preparation, preview and checkout layout",()=>{
+ const js=read("js/professional-practice.js"),consumer=read("packet.html"),css=read("assets/professional-modern.css"),server=read("src/professional-signed-review.js");
+ for(const label of ["Your Filing Packet","Your packet and court fees","Preview Your Actual Application (View Only)","Checkout After Independent Approval"]){assert.ok(consumer.includes(label));assert.ok(js.includes(label));}
+ assert.match(js,/professional-packet-mode/);
+ assert.match(css,/\.professional-packet-mode #cases>\.saved-case-card:not\(\.packet-focused\)/);
+ assert.match(js,/for\(const page of \[1,2\]\)/);
+ assert.match(js,/await img\.decode\(\)/);
+ assert.match(js,/\/preview\/.*page/);
+ assert.match(js,/Confirm My Reviewed Pages/);
+ assert.match(js,/\$0 — included/);
+ assert.match(js,/Pay and Mail — \$110/);
+ assert.match(server,/\/api\/professional\/signed-review\/:id\/preview\/:page/);
+ assert.match(server,/renderWatermarkedPreviewPage\(bytes,page,d\.page_count,\{professional:true\}\)/);
+ assert.match(server,/private, no-store/);
+ assert.doesNotMatch(js,/localStorage|sessionStorage/);
+});
