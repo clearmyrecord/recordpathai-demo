@@ -1,0 +1,17 @@
+/* Shared charge reference picker; scoped to its own UI. */
+.charge-library-panel{margin-top:12px;padding:16px;border:1px solid #cfddf3;background:#f5f9ff;border-radius:14px;display:grid;gap:10px;min-width:0}
+.charge-library-panel[hidden]{display:none!important}
+.charge-library-panel label{display:grid;gap:6px;color:#233d70;font-weight:700}
+.charge-library-panel input[type=search]{width:100%;min-width:0;background:#fff;border:1px solid #cfddf3;border-radius:8px;padding:10px}
+.charge-library-panel p{font-size:13px;line-height:1.5;color:#526780;margin:0}
+.charge-library-result{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;border-top:1px solid #dce5f3;padding:9px 0}
+.charge-library-result button{max-width:100%;white-space:normal;text-align:left;line-height:1.4}
+.charge-library-result a{color:#1c489d;font-size:13px;font-weight:600}
+.charge-library-table{display:grid;gap:8px;margin-top:16px}
+.charge-library-list-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,130px) minmax(0,140px);gap:12px;padding:14px;border:1px solid #dce5f3;border-radius:12px;background:#fff;align-items:start}
+.charge-library-list-row h3{margin:0 0 4px;font-size:16px;color:#233d70}
+.charge-library-list-row p{margin:0;font-size:13px;color:#526780}
+.charge-library-list-row a{font-size:13px;color:#1c489d}
+.charge-library-filter{display:grid;gap:12px;grid-template-columns:1fr 2fr;align-items:end}
+.charge-library-filter label{display:grid;gap:6px;font-weight:700}
+@media(max-width:640px){.charge-library-filter,.charge-library-list-row{grid-template-columns:1fr}.charge-library-result{align-items:flex-start}}
