@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import {randomUUID} from "node:crypto";
 const ACCOUNT="acct_1TNJc5EGlcQZ3lmX";
 const BACK="https://recordpathai.com/professional-account.html";
 const PORTAL="bpc_1UgEGjEGlcQZ3lmXEuDTCSHU";
@@ -11,9 +12,9 @@ export function verifiedLiveSubscription(s,row,now=Math.floor(Date.now()/1000)){
  const expected=LIVE_PROFESSIONAL_PRICES[row.plan],invoice=s?.latest_invoice,charge=invoice?.charge;
  return Boolean(expected&&s?.livemode===true&&s.status==="active"&&s.customer===row.stripe_customer_id&&s.metadata?.product_family==="recordpathai_professional"&&s.metadata.org_id===row.org_id&&s.metadata.plan===row.plan&&s.items?.data?.length===1&&s.items.data[0].price?.id===expected.id&&s.items.data[0].quantity===1&&Number.isFinite(s.current_period_end)&&s.current_period_end>now&&invoice?.livemode===true&&invoice.status==="paid"&&invoice.subscription===s.id&&invoice.currency==="usd"&&invoice.amount_paid>=expected.cents&&charge?.livemode===true&&charge.paid===true&&charge.status==="succeeded"&&charge.currency==="usd"&&charge.amount_captured>=expected.cents&&charge.amount_refunded===0&&charge.refunded===false&&charge.disputed===false);
 }
-export function registerProfessionalLiveBilling(app,{context,env=process.env,stripeFactory=k=>new Stripe(k,{apiVersion:"2023-10-16"})}){
- async function authorized(req,res,{create=false}={}){
-  const ctx=await context(req,res);if(!ctx)return null;
+export function registerProfessionalLiveBilling(app,{context,env=process.env,stripeFactory=k=>new Stripe(k,{apiVersion:"2023-10-16",timeout:12000,maxNetworkRetries:0})}){
+ async function authorized(req,res,{create=false,authenticated=null}={}){
+  const ctx=authenticated||await context(req,res);if(!ctx)return null;
   if(ctx.mode!=="production"){res.status(503).json({ok:false,error:"Live professional billing requires production."});return null;}
   if(!ctx.user.email_confirmed_at){res.status(403).json({ok:false,error:"Confirm your email first."});return null;}
   if(create&&req.get("x-professional-account-id")!==ctx.user.id){res.status(403).json({ok:false,error:"Confirm the signed-in RecordPathAI account before starting checkout."});return null;}
@@ -67,23 +68,60 @@ export function registerProfessionalLiveBilling(app,{context,env=process.env,str
   const entitled=await setLease(a,paid);
   return res.json({ok:true,mode:"live",plan:a.row.plan,amount_cents:a.price.unit_amount,active:entitled,subscription_exists:outstanding.length>0,lease_minutes:20});
  }catch{return res.status(503).json({ok:false,error:"Live subscription verification unavailable. Existing access expires automatically."});}});
- app.post("/api/professional/live-billing/checkout",async(req,res)=>{try{
-  if(req.get("x-professional-live-consent")!=="yes")return res.status(400).end();
-  const a=await authorized(req,res,{create:true});if(!a)return;
-  const {stripe,row,price}=a,list=await allSubscriptions(a);
-  if(list.some(s=>!["canceled","incomplete_expired"].includes(s.status)))return res.status(409).json({ok:false,error:"Manage your existing subscription rather than creating another."});
-  const sessions=await stripe.checkout.sessions.list({customer:row.stripe_customer_id,status:"open",limit:100});
-  if(sessions.has_more)throw Error("Open sessions require review");
-  let session=sessions.data.find(s=>s.livemode===true&&s.mode==="subscription"&&s.metadata?.product_family==="recordpathai_professional"&&s.metadata.org_id===row.org_id&&s.metadata.plan===row.plan);
-  if(!session&&sessions.data.length)throw Error("Existing checkout requires review");
-  if(!session){
-   const metadata={product_family:"recordpathai_professional",org_id:row.org_id,plan:row.plan};
-   session=await stripe.checkout.sessions.create({mode:"subscription",customer:row.stripe_customer_id,line_items:[{price:price.id,quantity:1}],automatic_tax:{enabled:true},customer_update:{address:"auto"},success_url:BACK,cancel_url:BACK,metadata,subscription_data:{metadata},client_reference_id:row.org_id},{idempotencyKey:"rpai-pro-live-"+row.org_id+"-"+row.plan+"-"+new Date().toISOString().slice(0,10)});
-  }
-  const items=await stripe.checkout.sessions.listLineItems(session.id,{limit:2});
-  if(items.has_more||items.data.length!==1||items.data[0].price?.id!==price.id||items.data[0].quantity!==1||session.customer!==row.stripe_customer_id||session.livemode!==true||session.status!=="open"||new URL(session.url).origin!=="https://checkout.stripe.com")throw Error("Unexpected checkout");
-  return res.json({ok:true,mode:"live",url:session.url});
- }catch{return res.status(503).json({ok:false,error:"Professional checkout unavailable."});}});
+ app.post("/api/professional/live-billing/checkout",async(req,res)=>{
+  let ctx,token,locked=false,uncertain=false;
+  try{
+   if(req.get("x-professional-live-consent")!=="yes")return res.status(400).end();
+   ctx=await context(req,res);if(!ctx)return;
+   if(ctx.mode!=="production")return res.status(503).json({ok:false,error:"Live professional billing requires production."});
+   if(!ctx.user.email_confirmed_at||req.get("x-professional-account-id")!==ctx.user.id)return res.status(403).json({ok:false,error:"Verify the signed-in account before starting checkout."});
+   const plan=req.get("x-professional-plan");
+   if(!["solo","firm"].includes(plan)||req.get("x-professional-terms")!=="accepted-v1")return res.status(400).json({ok:false,error:"Choose a plan and accept the software terms."});
+   token=randomUUID();
+   locked=await ctx.rest("rpc/professional_claim_checkout","",{service:true,body:{p_user:ctx.user.id,p_token:token}})===true;
+   if(!locked)return res.status(409).json({ok:false,error:"A checkout is being prepared. Refresh subscription status before retrying."});
+   const a=await authorized(req,res,{create:true,authenticated:ctx});if(!a)return;
+   const {stripe,row}=a,list=await allSubscriptions(a);
+   const outstanding=s=>!["canceled","incomplete_expired"].includes(s.status);
+   if(list.some(outstanding))return res.status(409).json({ok:false,error:"Manage your existing subscription rather than creating another."});
+   const sessions=await stripe.checkout.sessions.list({customer:row.stripe_customer_id,status:"open",limit:100});
+   if(sessions.has_more||sessions.data.length>1)throw Error("Open sessions require review");
+   let session=sessions.data[0];
+   const belongs=s=>s.livemode===true&&s.mode==="subscription"&&s.customer===row.stripe_customer_id&&s.metadata?.product_family==="recordpathai_professional"&&s.metadata.org_id===row.org_id&&["solo","firm"].includes(s.metadata.plan);
+   if(session&&!belongs(session))throw Error("Existing checkout requires review");
+   const price=plan===row.plan?a.price:await stripe.prices.retrieve(LIVE_PROFESSIONAL_PRICES[plan].id);
+   if(!verifiedLivePrice(price,plan))throw Error("Selected price unavailable");
+   if(session&&session.metadata.plan!==plan){
+    const expired=await stripe.checkout.sessions.expire(session.id);
+    if(expired.id!==session.id||expired.status!=="expired")throw Error("Old checkout did not expire");
+    session=null;
+   }
+   // Expiration may race with a completed payment. Recheck Stripe before
+   // modifying the unpaid billing row or offering another payment.
+   if((await allSubscriptions(a)).some(outstanding))return res.status(409).json({ok:false,error:"A subscription already exists. Refresh its status."});
+   if(row.plan!==plan){
+    const changed=await ctx.rest("rpc/professional_select_checkout_plan","",{service:true,body:{p_user:ctx.user.id,p_token:token,p_org:row.org_id,p_customer:row.stripe_customer_id,p_plan:plan}});
+    if(changed!==true)throw Error("Plan selection unavailable");
+    row.plan=plan;
+   }
+   if(!session){
+    const prior=await stripe.checkout.sessions.list({customer:row.stripe_customer_id,limit:1});
+    const last=prior.data[0];
+    if(last?.status==="open")throw Error("Unexpected open checkout");
+    if(last&&!belongs(last))throw Error("Unexpected checkout history");
+    const metadata={product_family:"recordpathai_professional",org_id:row.org_id,plan:row.plan};
+    // One deterministic request per last known checkout and chosen plan.
+    // Keep the lock on uncertain creation; a retry must reconcile provider state.
+    uncertain=true;
+    session=await stripe.checkout.sessions.create({mode:"subscription",customer:row.stripe_customer_id,line_items:[{price:price.id,quantity:1}],automatic_tax:{enabled:true},customer_update:{address:"auto"},success_url:BACK,cancel_url:BACK,metadata,subscription_data:{metadata},client_reference_id:row.org_id},{idempotencyKey:"rpai-pro-live-"+row.org_id+"-"+row.plan+"-"+(last?.id||"first")});
+    uncertain=false;
+   }
+   const items=await stripe.checkout.sessions.listLineItems(session.id,{limit:2});
+   if(items.has_more||items.data.length!==1||items.data[0].price?.id!==price.id||items.data[0].quantity!==1||session.customer!==row.stripe_customer_id||session.livemode!==true||session.status!=="open"||new URL(session.url).origin!=="https://checkout.stripe.com")throw Error("Unexpected checkout");
+   return res.json({ok:true,mode:"live",url:session.url});
+  }catch{return res.status(503).json({ok:false,error:"Professional checkout unavailable. Refresh subscription status before retrying."});}
+  finally{if(locked&&!uncertain){try{await ctx.rest("rpc/professional_release_checkout","",{service:true,body:{p_user:ctx.user.id,p_token:token}});}catch{ /* The private lock expires automatically. */ }}}
+ });
  app.post("/api/professional/live-billing/portal",async(req,res)=>{try{
   if(req.get("x-professional-live-consent")!=="yes")return res.status(400).end();
   const a=await authorized(req,res);if(!a)return;
