@@ -1,4 +1,5 @@
 import {registerProfessionalReviewRoutes} from "./src/professional-signed-review.js";
+import {PROFESSIONAL_MAIL_PRODUCT} from "./src/professional-mailing.js";
 import { paidSandboxProofSession, createPaidSandboxProof } from "./src/paid-sandbox-proof.js";
 import express from "express";
 import Stripe from "stripe";
@@ -193,6 +194,8 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
     if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
       return res.json({received:true});
     const session=event.data?.object;
+    if(session?.metadata?.productType===PROFESSIONAL_MAIL_PRODUCT)
+      return await professionalMailing.reconcile(session,res,event);
     if(session?.metadata?.productType==="record-sealing-packet")
       return await reconcilePaidPacketCheckout(session,res,event);
     if(session?.metadata?.product==="premium_recordwatch_lifetime"){
@@ -225,7 +228,7 @@ app.post("/api/recordwatch/stripe-webhook",express.raw({type:"application/json",
 // The original packet webhook remains independent, preserving paid-hold
 // fulfillment for court packets and refusing RecordWatch subscription events.
 // Professional routes are independent of the consumer raw Stripe webhook.
-registerProfessionalReviewRoutes(app,{express,publicSupabaseConfig,supabaseRestConfig,requireApiUser,getBearerToken});
+const professionalMailing=registerProfessionalReviewRoutes(app,{express,publicSupabaseConfig,supabaseRestConfig,requireApiUser,getBearerToken,mailing:{rest:supabaseRest,config:supabaseRestConfig,stripe,requireOperationsKey,lobBankVerified}});
 
 app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb"}),async(req,res)=>{
   const secret=process.env.STRIPE_WEBHOOK_SECRET||"";
@@ -245,6 +248,7 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json",limit:"256kb
   if(!["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type))
     return res.json({received:true});
   const session=event.data?.object;
+  if(session?.metadata?.productType===PROFESSIONAL_MAIL_PRODUCT)return await professionalMailing.reconcile(session,res,event);
   return await reconcilePaidPacketCheckout(session,res,event);
 });
 
@@ -1438,7 +1442,9 @@ app.post("/api/operator/packet/fulfill-paid",async(req,res)=>{
       if(await dispatchPaidPacketToLob(job.stripe_session_id,result))counts.submitted++;
       else counts.held++;
     }
-    return res.json({ok:true,...counts});
+    let professional={submitted:0,held:0};
+    try{professional=await professionalMailing.fulfill();}catch{professional={unavailable:true};}
+    return res.json({ok:true,...counts,professional});
   }catch(error){
     console.warn("Packet fulfillment scheduler failure",error?.name||"unknown");
     return res.status(503).json({ok:false,error:"Packet fulfillment scheduler could not complete."});
