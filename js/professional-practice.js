@@ -134,7 +134,28 @@ async function refresh(){
   }else if(decision.decision==="approved_for_unsigned_draft"){
    card=packetPanel.body;
    add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". File directly with the court; no payment collected here.");
-   if(row.outcome==="conviction"&&orgs.some(o=>o.id===org&&o.access_kind==="paid"))add(card,"p","Optional RecordPathAI conviction mailing: $10 per filing + $100 applicable court fee = $110 before any applicable tax. Mailing checkout is not yet available.");
+   if(row.outcome==="conviction"&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
+    add(card,"h4","Optional Pay and Mail");
+    add(card,"p","RecordPathAI mailing: $10 · court filing deposit: $100 · combined $110 before applicable tax. No $50 preparation fee.");
+    const mailStatus=add(card,"p","Checking private mailing status…");mailStatus.setAttribute("role","status");
+    const consentLabel=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";consentLabel.append(consent,document.createTextNode(" I authorize mailing the independently approved signed application and $100 court deposit, and agree to pay the $10 mailing fee plus applicable tax."));consentLabel.hidden=true;
+    const pay=button("Pay and Mail — $110 + applicable tax",async()=>{
+     if(!consent.checked||!active||org!==orgId())throw Error("Consent required");
+     const token=epoch,session=ok(await api.auth.getSession()).session;if(!session?.access_token||token!==epoch||!active||org!==orgId())throw Error("Session changed");
+     const response=await fetch("/api/professional/mail/"+encodeURIComponent(row.id)+"/checkout",{method:"POST",headers:{Authorization:"Bearer "+session.access_token,"x-professional-mail-consent":"yes"},cache:"no-store"});
+     const data=await response.json();if(!response.ok||!data.ok||token!==epoch||!active||org!==orgId()||new URL(data.url).origin!=="https://checkout.stripe.com")throw Error("Checkout unavailable");location.assign(data.url);
+    });pay.hidden=true;
+    void (async()=>{try{
+     const token=epoch,session=ok(await api.auth.getSession()).session;if(!session?.access_token||!active||org!==orgId()||token!==epoch)return;
+     const response=await fetch("/api/professional/mail/"+encodeURIComponent(row.id),{headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"});
+     const data=await response.json();if(!response.ok||!data.ok)throw Error("Unavailable");
+     if(!active||org!==orgId()||token!==epoch)return;
+     const labels={awaiting_independent_review:"Awaiting independent signed application review",approved:"Reviewed — mailing readiness check",paid_hold:"Payment verified — awaiting mailing",dispatch_claimed:"Mailing being reconciled — do not pay again",submitted_to_lob:"Accepted by Lob for processing — court filing not yet confirmed"};
+     mailStatus.textContent=(labels[data.status]||"Mailing status unavailable")+(data.lobCheckId?" · Lob reference: "+data.lobCheckId:"")+(data.expectedDeliveryDate?" · Estimated delivery: "+data.expectedDeliveryDate:"");
+     if(data.checkoutReady===true){consentLabel.hidden=false;pay.hidden=false;mailStatus.textContent="Approved for secure mailing checkout";}
+     if(Array.isArray(data.providerEvents))for(const e of data.providerEvents){if(e.name) add(mailStatus,"span"," · "+e.name+(e.time?" ("+e.time+")":""));}
+    }catch{mailStatus.textContent="Mailing status unavailable. Do not pay again."}})();
+   }
    button("Generate and save review draft",async()=>{
     const token=epoch;
     const [freshClient,freshCase,freshDecision]=await Promise.all([api.from("professional_clients").select("*").eq("id",client.id).single(),api.from("professional_cases").select("*").eq("id",row.id).single(),api.from("professional_case_decisions").select("*").eq("case_id",row.id).single()]);
