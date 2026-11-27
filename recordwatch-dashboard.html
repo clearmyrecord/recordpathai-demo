@@ -6,6 +6,7 @@
   <title>RecordWatch Dashboard | RecordPathAI</title>
   <meta name="description" content="Monitor RecordWatch case eligibility, requirements, risk flags, correction tasks, and post-relief verification." />
   <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/consumer-mail-tracking.css?v=20261127" />
   <style>
     .recordwatch-optin-field { display:grid; gap:.35rem; margin:1rem 0; }
     .recordwatch-optin-field input[type="tel"] { max-width:28rem; padding:.75rem; border:1px solid #9caac3; border-radius:8px; }
@@ -118,10 +119,11 @@
   <script src="js/recordwatch-monitor.js"></script>
   <script src="js/record-details-fields.js"></script>
   <script src="js/supabase-client.js"></script><script src="js/user-store.js"></script>
-  <script src="js/saved-case-cards.js"></script>
+  <script src="js/consumer-mail-tracking.js?v=20261127"></script>
+  <script src="js/saved-case-cards.js?v=20261127-mail-tracking"></script>
   <script src="js/i18n.js" defer></script>
   <script src="js/auth.js"></script>
-  <script src="js/recordwatch-filing-tracker.js"></script>
+  <script src="js/recordwatch-filing-tracker.js?v=20261127-mail-tracking"></script>
   <script>
     (function () {
       "use strict";
@@ -238,8 +240,9 @@
             '<div class="detail-list">' +
             row("Court", caseData.court && caseData.court.courtName) + row("County / State", [caseData.court && caseData.court.county, caseData.court && caseData.court.caseState].filter(Boolean).join(", ")) + row("Primary charge", chargeSummary(caseData)) + row("Eligibility date", RecordWatchRules.formatDate(date)) + row("Countdown", days === null ? "Not available" : (days <= 0 ? "Eligible date reached" : days + " day(s)")) + row("Reminder status", reminderStatus === "paused" ? "Paused" : "Active") + row("Eligibility status", status) + row("Confidence", confidenceLabel(caseData)) + row("Recommended next action", RecordWatchRules.getRecommendedStatus(caseData)) +
             '</div>' + RecordPathRecordDetailsFields.render(sourceCase.metadata?.recordPathStep2) +
-            '<div class="saved-case-actions"><button class="btn" type="button" data-case-action="open" data-case-id="' + esc(caseData.id) + '">Open</button><button class="btn secondary" type="button" data-case-action="edit" data-case-id="' + esc(caseData.id) + '">Edit</button><button class="btn secondary" type="button" data-case-action="packet" data-case-id="' + esc(caseData.id) + '">Packet</button><button class="btn secondary" type="button" data-case-action="toggle-reminders" data-case-id="' + esc(caseData.id) + '">' + (reminderStatus === "paused" ? "Resume Reminders" : "Pause Reminders") + '</button><button class="btn danger" type="button" data-case-action="delete" data-case-id="' + esc(caseData.id) + '">Delete / Archive</button></div><h4>Monitoring checklist</h4><div class="checklist">' + checklist + '</div></article>';
+            '<div class="saved-case-actions"><button class="btn" type="button" data-case-action="open" data-case-id="' + esc(caseData.id) + '">Open</button><button class="btn secondary" type="button" data-case-action="edit" data-case-id="' + esc(caseData.id) + '">Edit</button><button class="btn secondary" type="button" data-case-action="packet" data-case-id="' + esc(caseData.id) + '">Packet</button><button class="btn secondary" type="button" data-case-action="toggle-reminders" data-case-id="' + esc(caseData.id) + '">' + (reminderStatus === "paused" ? "Resume Reminders" : "Pause Reminders") + '</button><button class="btn danger" type="button" data-case-action="delete" data-case-id="' + esc(caseData.id) + '">Delete / Archive</button></div><h4>Monitoring checklist</h4><div class="checklist">' + checklist + '</div><div data-consumer-mail-tracking="' + esc(caseData.id) + '"></div></article>';
         }).join("");
+        window.RecordPathConsumerMailTracking?.mountCards(casesContainer);
       }
 
 
