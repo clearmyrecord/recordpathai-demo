@@ -1,0 +1,98 @@
+{
+  "courtId": "oh-wood-bowling-green-municipal",
+  "courtName": "Bowling Green Municipal Court",
+  "state": "OH",
+  "county": "Wood",
+  "courtType": "municipal",
+  "reviewedOn": "2026-11-26",
+  "forms": {
+    "sealing": "https://www.bgcourt.org/DocumentCenter/View/115/Sealing-of-Record-Application-PDF",
+    "expungement": "https://www.bgcourt.org/DocumentCenter/View/112/Application-for-Expungement-of-Record-PDF"
+  },
+  "officialDirectory": "https://www.bgcourt.org/177/Forms",
+  "caseSearchLanding": "https://www.bgcourt.org/",
+  "rules": "https://www.bgcourt.org/DocumentCenter/View/120/Local-Rules-BGMC-2025-PDF",
+  "nonconvictionStatute": "https://codes.ohio.gov/ohio-revised-code/section-2953.33",
+  "convictionStatute": "https://codes.ohio.gov/ohio-revised-code/section-2953.32",
+  "clerk": {
+    "name": "Bowling Green Municipal Court Clerk",
+    "address": "711 South Dunbridge Road, Bowling Green, OH 43402",
+    "phone": "419-352-5263",
+    "fax": "419-352-9407",
+    "directory": "https://www.bgcourt.org/m/directory/department?did=6"
+  },
+  "fees": {
+    "convictionCents": 10000,
+    "nonconvictionExpectedCents": 0,
+    "nonconvictionClerkConfirmed": false,
+    "serviceIllustrativeCents": 5000,
+    "waiverMayApply": true
+  },
+  "routing": {
+    "convictionCheckbox": true,
+    "dismissalCheckbox": true,
+    "acquittalSpecificCheckbox": false,
+    "acquittalManualReview": true,
+    "mixedManualReview": true,
+    "unknownManualReview": true,
+    "noBillManualReview": true
+  },
+  "fieldInventory": {
+    "applicant": [
+      "legalName",
+      "address",
+      "cityStateZip",
+      "phone",
+      "dateOfBirth"
+    ],
+    "restricted": [
+      "socialSecurityNumber"
+    ],
+    "case": [
+      "caseNumber",
+      "assignedJudge",
+      "offenseCode",
+      "offenseName",
+      "convictionDate"
+    ],
+    "affidavit": [
+      "venueState",
+      "venueCounty",
+      "defendantName",
+      "convictionFacts",
+      "defendantSignature",
+      "notaryDate",
+      "notarySignature"
+    ],
+    "attorney": [
+      "name",
+      "phone",
+      "address",
+      "registrationNumberIfRequired"
+    ],
+    "additional": [
+      "certificateOfService"
+    ],
+    "neverAutofill": [
+      "signatures",
+      "notaryAttestation",
+      "swornAssertions",
+      "convictionFactsOnDismissal",
+      "courtHearingDate",
+      "courtOnlyFields"
+    ],
+    "pdfCoordinatesVerified": false
+  },
+  "filing": {
+    "rule6": "Applicant or duly authorized attorney; no automatic third-party submission.",
+    "rule7": "Certificate of service and filer identification required.",
+    "rule8": "General fax rule excludes fee-bearing pre/post judgment pleadings; do not assume any sealing fax acceptance until clerk confirms. Signed source must be retained. Maximum 15 pages.",
+    "mailAcceptanceConfirmed": false,
+    "payeeConfirmed": false,
+    "onlinePaymentConfirmed": false,
+    "noFeeFaxConfirmed": false
+  },
+  "packetGenerationApproved": false,
+  "checkoutEnabled": false,
+  "automatedFilingEnabled": false
+}
