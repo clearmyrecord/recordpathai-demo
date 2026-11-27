@@ -16,8 +16,9 @@ export function prepareProfessionalDraftData(c,m,d,today){
  generated:{current_date:date(today)}};
  return {template:templates[m.outcome],data,courtFeeCents:m.outcome==="conviction"?10000:0};
 }
-export async function renderProfessionalDraft({client,caseRow,decision,today,PDFLib,fetcher=fetch}){
+export async function renderProfessionalDraft({client,caseRow,decision,today,PDFLib,fetcher=fetch,counsel=null,typedSignature=null}){
  const {template,data}=prepareProfessionalDraftData(client,caseRow,decision,today);
+ if(counsel&&(!counsel.full_name||counsel.org_id!==caseRow.org_id||counsel.attorney_id!==caseRow.attorney_id||!counsel.verified_at||!/^\d{7}$/.test(counsel.ohio_bar_number)||typedSignature!==counsel.full_name))throw Error("Verified attorney identity and explicit signature required.");
  const [p,r]=await Promise.all([fetcher(template.pdf,{cache:"no-store",credentials:"same-origin"}),fetcher(template.map,{cache:"no-store",credentials:"same-origin"})]);
  if(!p.ok||!r.ok)throw Error("Official template unavailable.");
  const mapping=await r.json(), fields=mapping.mappings;
@@ -28,7 +29,17 @@ export async function renderProfessionalDraft({client,caseRow,decision,today,PDF
  const font=await pdf.embedFont(StandardFonts.Helvetica),bold=await pdf.embedFont(StandardFonts.HelveticaBold),pages=pdf.getPages();
  const allowed=/^(petitioner\.(full_name|email|phone|address\.(line1|line2|city|state|zip))|court\.(case_number|judge_name)|charges\.[0-3]\.(charge_name|charge_code|level|disposition_date|discharge_date)|generated\.current_date)$/;
  for(const f of fields){
-  if(f.type==="signature")continue;
+  if(f.type==="signature"){
+   if(counsel){
+    const page=pages[3],sx=page.getWidth()/mapping.pageWidth,sy=page.getHeight()/mapping.pageHeight;
+    const x=f.x*sx,y=page.getHeight()-(f.y+f.height)*sy,w=f.width*sx;
+    const text="/s/ "+counsel.full_name+" (counsel)";
+    let size=9;while(size>6&&font.widthOfTextAtSize(text,size)>w)size-=.25;
+    if(font.widthOfTextAtSize(text,size)>w)throw Error("Counsel name exceeds signature space.");
+    page.drawText(text,{x,y:y+3,size,font,color:rgb(0,0,0)});
+   }
+   continue;
+  }
   const path=f.dataPath||f.name;
   if(!allowed.test(path)||!["text","date"].includes(f.type))throw Error("Unapproved template field.");
   const page=pages[Number(f.page)-1],sx=page.getWidth()/mapping.pageWidth,sy=page.getHeight()/mapping.pageHeight;
@@ -42,6 +53,7 @@ export async function renderProfessionalDraft({client,caseRow,decision,today,PDF
   page.drawText(value,{x:f.x*sx,y:page.getHeight()-(f.y+f.height)*sy+Math.max(1,(h-size)/2),size,font,color:rgb(0,0,0)});
  }
  pdf.removePage(1);pdf.removePage(0);
- for(const page of pdf.getPages())page.drawText("UNSIGNED REVIEW DRAFT - DO NOT FILE",{x:30,y:14,size:9,font:bold,color:rgb(.65,.1,.1)});
+ for(const page of pdf.getPages())page.drawText(counsel?"COUNSEL SIGNATURE ASSUMPTION - DO NOT FILE":"UNSIGNED REVIEW DRAFT - DO NOT FILE",{x:30,y:14,size:9,font:bold,color:rgb(.65,.1,.1)});
+ if(counsel)pdf.getPages()[1].drawText("Counsel Ohio registration: "+counsel.ohio_bar_number,{x:30,y:27,size:8,font,color:rgb(0,0,0)});
  return pdf.save();
 }
