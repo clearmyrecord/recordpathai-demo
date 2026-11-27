@@ -1,3 +1,4 @@
+import {quoteProfessionalFiling,PROFESSIONAL_PRICING} from "./professional-pricing.js";
 import Stripe from "stripe";
 const PRICES=Object.freeze({solo:{id:"price_1UgDZYE2dI5377iPC7Ldxgrf",cents:9900},firm:{id:"price_1UgDZbE2dI5377iPxa9va951",cents:24900}});
 const ACCOUNT="acct_1TNJcME2dI5377iP";
@@ -21,7 +22,7 @@ export function registerProfessionalBillingRoutes(app,{context,env=process.env,s
   if(account.id!==ACCOUNT)throw Error("Wrong sandbox account");
   const [price,customer]=await Promise.all([stripe.prices.retrieve(PRICES[row.plan].id),stripe.customers.retrieve(row.stripe_customer_id)]);
   if(!validProfessionalTestPrice(price,row.plan)||customer.deleted||customer.livemode!==false||customer.id!==row.stripe_customer_id)throw Error("Invalid sandbox billing configuration");
-  return {stripe,row,price};
+  return {stripe,row,price,ctx};
  }
  async function subscriptions(stripe,row){
   const list=await stripe.subscriptions.list({customer:row.stripe_customer_id,status:"all",limit:100});
@@ -33,8 +34,23 @@ export function registerProfessionalBillingRoutes(app,{context,env=process.env,s
   const list=await subscriptions(a.stripe,a.row);
   const found=list.filter(s=>validProfessionalTestSubscription(s,a.row.org_id,a.row.stripe_customer_id,a.row.plan));
   const latest=found.sort((x,y)=>y.created-x.created)[0];
-  return res.json({ok:true,mode:"sandbox",plan:a.row.plan,amount_cents:a.price.unit_amount,subscription_status:latest?.status||"not_started",test_active:latest?.status==="active"||latest?.status==="trialing",production_entitlement:false});
+  return res.json({ok:true,mode:"sandbox",plan:a.row.plan,amount_cents:a.price.unit_amount,subscription_status:latest?.status||"not_started",test_active:latest?.status==="active"||latest?.status==="trialing",production_entitlement:false,preparation_fee_cents:0,automated_filing_fee_cents:PROFESSIONAL_PRICING.automatedFilingCents,recordwatch_included:true});
  }catch{return res.status(503).json({ok:false,error:"Sandbox billing verification unavailable."});}});
+ app.get("/api/professional/billing/filing-quote",async(req,res)=>{try{
+  const a=await authorized(req,res);if(!a)return;
+  const c=await a.ctx.ownedCase(String(req.query.case_id||""));
+  if(!c||c.org_id!==a.row.org_id)return res.status(403).json({ok:false,error:"Approved case in authorized organization required."});
+  const list=await subscriptions(a.stripe,a.row);
+  const active=list.filter(s=>s.status==="active"&&validProfessionalTestSubscription(s,a.row.org_id,a.row.stripe_customer_id,a.row.plan));
+  if(active.length!==1)return res.status(403).json({ok:false,error:"Verified active sandbox subscription required."});
+  const delivery=String(req.query.delivery||"automated");
+  if(delivery==="automated"){
+   const fee=await a.stripe.prices.retrieve(PROFESSIONAL_PRICING.sandboxFilingPriceId);
+   if(fee.id!==PROFESSIONAL_PRICING.sandboxFilingPriceId||fee.livemode!==false||fee.active!==true||fee.currency!=="usd"||fee.unit_amount!==1000||fee.type!=="one_time"||fee.recurring)throw Error("Invalid filing price");
+  }
+  const quote=quoteProfessionalFiling({courtId:c.court_id,outcome:c.outcome,access:"active_subscription",delivery});
+  return res.status(quote.ok?200:409).json({...quote,mode:"sandbox",note:"Quote only. No payment or court filing is authorized."});
+ }catch{return res.status(503).json({ok:false,error:"Professional filing quote unavailable."});}});
  app.post("/api/professional/billing/checkout",async(req,res)=>{try{
   if(req.get("x-professional-sandbox-consent")!=="yes")return res.status(400).end();
   const a=await authorized(req,res);if(!a)return;
