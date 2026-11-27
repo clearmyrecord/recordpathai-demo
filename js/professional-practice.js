@@ -218,10 +218,16 @@ async function refresh(){
   const contactLabel=add(prepare,"label",""),contactConfirmed=document.createElement("input");contactConfirmed.type="checkbox";contactLabel.append(contactConfirmed,document.createTextNode(" I reviewed the full legal name, mailing address, telephone, email, court and case number and confirm these details are correct."));
   const preview=stage("Step 2 — Preview Your Actual Application (View Only)","Review both watermarked pages of the saved signed application before confirming the exact document.");
   const payment=stage("Step 3 — Checkout After Independent Approval","Application preparation is included. Optional mailing and SMS/email case alerts cost $10 per filing plus applicable court fees and tax, after independent review and confirmation.");
+  const delivery=add(payment,"fieldset","");delivery.className="professional-delivery-choice";add(delivery,"legend","Choose how your approved packet is fulfilled");
+  function deliveryOption(value,label){const wrap=add(delivery,"label",""),input=document.createElement("input");input.type="radio";input.name="professional-delivery-"+row.id;input.value=value;wrap.append(input,document.createTextNode(" "+label));return input;}
+  const mailChoice=deliveryOption("mail","Mail my approved application to the court where available. $10 mailing + SMS/email alerts, plus applicable court fee and tax.");mailChoice.checked=true;
+  const digitalChoice=deliveryOption("digital","$0 approved digital PDF — I file and pay the court separately.");
+  const mailArea=add(payment,"div",""),digitalArea=add(payment,"div","");digitalArea.hidden=true;
+  const syncDelivery=()=>{mailArea.hidden=!mailChoice.checked;digitalArea.hidden=!digitalChoice.checked;};mailChoice.addEventListener("change",syncDelivery);digitalChoice.addEventListener("change",syncDelivery);
   const supported=row.court_id==="oh-wood-common-pleas"&&["conviction","dismissal","not_guilty"].includes(row.outcome);
   if(!supported||decision&&!["hold","approved_for_unsigned_draft"].includes(decision.decision)){
    add(prepare,"p","This court or outcome requires separate review before a supported packet can be prepared.");
-   add(preview,"p","No signed preview is available yet.");add(payment,"p","Checkout is unavailable for this case.");
+   add(preview,"p","No signed preview is available yet.");add(payment,"p","Checkout is unavailable for this case.");delivery.disabled=true;
   }else{
    if(decision?.decision==="hold")add(prepare,"p","This case was held for review. Confirm the renewed complete case review below before submitting a signed application.");
    const reviewLabel=add(prepare,"label",""),caseReviewed=document.createElement("input");caseReviewed.type="checkbox";reviewLabel.append(caseReviewed,document.createTextNode(" I reviewed the complete docket, charge inventory, eligibility and filing requirements."));
@@ -237,20 +243,23 @@ async function refresh(){
     }else if(!current){ok(await api.from("professional_case_decisions").insert({org_id:org,case_id:row.id,decision:"approved_for_unsigned_draft",entire_case_reviewed:true}));}
     else throw Error("This case requires separate review.");
    };
-   card=payment;
+   card=mailArea;
    add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". Choose included digital delivery or Pay and Mail when the court-specific route is available.");
+   if(internalTestAccess){add(mailArea,"p","Internal test access: preview and confirm the packet without a subscription. Live Stripe and Lob mailing are disabled for this workspace.");const disabledPay=add(mailArea,"button","Pay and Mail");disabledPay.type="button";disabledPay.disabled=true;}
    if(["conviction","dismissal","not_guilty"].includes(row.outcome)&&row.court_id==="oh-wood-common-pleas"&&!internalTestAccess&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
     const courtFee=row.outcome==="conviction"?100:0;
     add(card,"h4","Optional Pay and Mail");
     add(card,"p","Preparation: included. Mailing + SMS/email case alerts: $10. Court filing deposit: $"+courtFee+". Total: $"+(courtFee+10)+" before applicable tax.");
     const mailStatus=add(card,"p","Checking private mailing status…");mailStatus.setAttribute("role","status");
     const consentLabel=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";consentLabel.append(consent,document.createTextNode(" I authorize mailing the independently approved signed application and agree to pay $"+(courtFee+10)+" plus applicable service tax, including $"+courtFee+" court deposit and $10 mailing and case alerts."));consentLabel.hidden=true;
+    let checkoutReady=false;
     const pay=button(courtFee?"Pay and Mail — $110 + applicable tax":"Pay and Mail — $10 + applicable tax",async()=>{
+     if(!checkoutReady){mailStatus.textContent="Checkout is not available yet. Complete the signed application preview and independent review, then check status again. No payment was taken.";return;}
      if(!consent.checked||!active||org!==orgId())throw Error("Consent required");
      const token=epoch,session=ok(await api.auth.getSession()).session;if(!session?.access_token||token!==epoch||!active||org!==orgId())throw Error("Session changed");
      const response=await fetch("/api/professional/mail/"+encodeURIComponent(row.id)+"/checkout",{method:"POST",headers:{Authorization:"Bearer "+session.access_token,"x-professional-mail-consent":"yes"},cache:"no-store"});
      const data=await response.json();if(!response.ok||!data.ok||token!==epoch||!active||org!==orgId()||new URL(data.url).origin!=="https://checkout.stripe.com")throw Error("Checkout unavailable");location.assign(data.url);
-    });pay.hidden=true;
+    });pay.hidden=false;
     const alertBox=add(card,"section","");alertBox.hidden=true;
     add(alertBox,"h4","SMS and email case alerts");
     add(alertBox,"p","Opt in separately to email and SMS alerts to your verified professional account contacts. Messages contain no client or case details. SMS frequency varies; message and data rates may apply. Reply STOP to opt out, HELP for help. Consent is optional and can be withdrawn here.");
@@ -274,17 +283,18 @@ async function refresh(){
      alertBox.hidden=false;emailOpt.disabled=!data.emailAvailable;smsOpt.disabled=!data.smsAvailable;emailOpt.checked=data.emailEnabled&&data.emailAvailable;smsOpt.checked=data.smsEnabled&&data.smsAvailable;
      if(!data.smsAvailable)alertStatus.textContent="SMS requires a verified, non-suppressed account phone number. Email can be enabled independently.";
     }
-    void (async()=>{try{
+    const checkMailStatus=async()=>{try{
      const token=epoch,session=ok(await api.auth.getSession()).session;if(!session?.access_token||!active||org!==orgId()||token!==epoch)return;
      const response=await fetch("/api/professional/mail/"+encodeURIComponent(row.id),{headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"});
      const data=await response.json();if(!response.ok||!data.ok)throw Error("Unavailable");
      if(!active||org!==orgId()||token!==epoch)return;
      const labels={awaiting_independent_review:"Awaiting independent signed application review",approved:"Reviewed — mailing readiness check",paid_hold:"Payment verified — awaiting mailing",dispatch_claimed:"Mailing being reconciled — do not pay again",submitted_to_lob:"Accepted by Lob for processing — court filing not yet confirmed"};
      mailStatus.textContent=(labels[data.status]||"Mailing status unavailable")+((data.lobCheckId||data.lobLetterId)?" · Lob reference: "+(data.lobCheckId||data.lobLetterId):"")+(data.expectedDeliveryDate?" · Estimated delivery: "+data.expectedDeliveryDate:"");
-     if(data.checkoutReady===true){consentLabel.hidden=false;pay.hidden=false;mailStatus.textContent="Approved for secure mailing checkout";}
+     checkoutReady=data.checkoutReady===true;consentLabel.hidden=!checkoutReady;if(checkoutReady)mailStatus.textContent="Approved for secure mailing checkout";
      if(data.status!=="awaiting_independent_review")await loadAlertPreferences().catch(()=>{});
      if(Array.isArray(data.providerEvents))for(const e of data.providerEvents){if(e.name) add(mailStatus,"span"," · "+e.name+(e.time?" ("+e.time+")":""));}
-    }catch{mailStatus.textContent="Mailing status unavailable. Do not pay again."}})();
+    }catch{checkoutReady=false;consentLabel.hidden=true;mailStatus.textContent="Mailing status unavailable. Do not pay again.";}};
+    button("Check review status",checkMailStatus);void checkMailStatus();
    }
    card=prepare;
    const currentDraft=async()=>{
@@ -358,7 +368,8 @@ async function refresh(){
       button("Confirm My Reviewed Pages Before Payment",async()=>{if(!reviewed.checked||!downloaded)throw Error("Open and review both pages first");ok(await api.from("professional_signed_reviews").insert({document_id:doc.id,org_id:org,case_id:row.id,exact_document_reviewed:true}));await refresh();});
     }
    }
-   card=payment;
+   card=digitalArea;
+   if(!rowDocs.some(d=>rowReviews.some(r=>r.document_id===d.id)))add(card,"p","Complete Step 1 and confirm both signed pages in Step 2 to download your included digital application.");
    for(const doc of rowDocs.filter(d=>rowReviews.some(r=>r.document_id===d.id))){button("Download Signed Application — $0",async()=>{const token=epoch,headers=await auth();const response=await fetch("/api/professional/signed-review/"+encodeURIComponent(doc.id),{headers,cache:"no-store"});if(!response.ok)throw Error("Download unavailable");const blob=await response.blob();if(!active||token!==epoch||org!==orgId())return;const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="signed-application.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});}
    if(rowReviews.some(r=>rowDocs.some(d=>d.id===r.document_id&&d.signature_mode==="applicant_external"))){
     add(card,"h4","Manual filing instructions");
@@ -369,6 +380,7 @@ async function refresh(){
     }else add(card,"p","Qualifying dismissal/not-guilty applications have no court fee. Do not include a court-fee check. No-fee email filing acceptance is unconfirmed; use the verified manual route.");
     add(card,"p","RecordPathAI does not submit the application or charge for manual filing. Confirm clerk acceptance on the official docket.");
    }
+   card=add(payment,"details","");add(card,"summary","RecordWatch filing status and manual events");
    const event=document.createElement("select");event.setAttribute("aria-label","Manual status event");
    for(const [v,t] of [["manual_filing_reported","Filing reported by attorney"],["manual_hearing_reported","Hearing reported by attorney"],["manual_order_reported","Order reported by attorney"],["manual_followup","Follow-up"]])if(v==="manual_followup"||rowReviews.some(r=>rowDocs.some(d=>d.id===r.document_id&&d.signature_mode==="applicant_external")))event.append(option(v,t));
    const date=document.createElement("input");date.type="date";date.setAttribute("aria-label","Event date");date.value=new Date().toISOString().slice(0,10);card.append(event,date);
