@@ -1,5 +1,5 @@
 import {renderProfessionalDraft} from "./professional-wood-draft.js";
-import {mountProfessionalRecordIntake,buildProfessionalRecordPayload,sameRecordSnapshot} from "./professional-record-intake.js";
+import {mountProfessionalRecordIntake,mountProfessionalPersonalIntake,buildProfessionalRecordPayload,sameRecordSnapshot} from "./professional-record-intake.js";
 let sharedIntake=null;
 const $=id=>document.getElementById(id), notice=t=>$("notice").textContent=t;
 const production="pfyxjhdlqgpzzzdssqpk.supabase.co";
@@ -9,7 +9,7 @@ const setStep=n=>{$("professional-steps").hidden=!n;for(const [i,id] of ["step-p
 const hideIntake=()=>{for(const id of ["client-intake","case-intake"])$(id).hidden=true;};
 const returnDashboard=()=>{$("client-form").reset();$("case-form").reset();sharedIntake?.reset();hideIntake();packetCaseId=null;setStep(0);$("case-filter").value="";$("client-filter").value="";refresh().catch(fail);$("saved-clients").scrollIntoView({block:"start"});};
 const showIntake=id=>{if(!active)return;if(id==="client-intake")$("client-form").reset();else{const selected=$("clients").value;$("case-form").reset();sharedIntake?.reset();if(selected)$("clients").value=selected;}hideIntake();packetCaseId=null;setStep(id==="client-intake"?1:2);$(id).hidden=false;$(id).scrollIntoView({block:"start"});};
-const clear=()=>{hideIntake();packetCaseId=null;setStep(0);$("client-list").replaceChildren();for(const id of ["client-count","case-count","packet-count","watch-count"])$(id).textContent="0";if(renewal)clearInterval(renewal);renewal=null;epoch++;active=false;internalTestAccess=false;$("app").hidden=true;$("client-form").reset();$("case-form").reset();$("recordDetailsForm").replaceChildren();sharedIntake=null;$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();$("client-filter").replaceChildren(option("","All clients"));$("case-filter").value="";$("case-summary").textContent="";orgs=[];};
+const clear=()=>{hideIntake();packetCaseId=null;setStep(0);$("client-list").replaceChildren();for(const id of ["client-count","case-count","packet-count","watch-count"])$(id).textContent="0";if(renewal)clearInterval(renewal);renewal=null;epoch++;active=false;internalTestAccess=false;$("app").hidden=true;$("client-form").reset();$("professional-personal-fields").replaceChildren();$("case-form").reset();$("recordDetailsForm").replaceChildren();sharedIntake=null;$("clients").replaceChildren();$("cases").replaceChildren();$("org").replaceChildren();$("client-filter").replaceChildren(option("","All clients"));$("case-filter").value="";$("case-summary").textContent="";orgs=[];};
 const fail=()=>{clear();notice("Access or request unavailable. No filing or payment was made. Reload or contact the pilot operator.");};
 const ok=r=>{if(r.error)throw Error("Request rejected");return r.data;};
 const orgId=()=>$("org").value;
@@ -38,6 +38,7 @@ async function load(){
  const members=ok(m);orgs=ok(o).filter(x=>x.client_intake_enabled&&members.some(y=>y.org_id===x.id&&((y.role==="attorney"&&y.attorney_verified)||(x.access_kind==="paid"&&x.self_service_terms_at&&y.role==="staff"&&!y.attorney_verified))));
  if(!orgs.length){notice("No active workspace. Subscribe or apply for the complimentary organization pilot.");return;}
  for(const org of orgs)$("org").append(option(org.id,org.pilot_code));
+ await mountProfessionalPersonalIntake($("professional-personal-fields"));if(seq!==epoch)return;
  sharedIntake=await mountProfessionalRecordIntake($("recordDetailsForm"));if(seq!==epoch)return;
  active=true;$("app").hidden=false;await refresh();
  if(paidRows.length&&active)renewal=setInterval(async()=>{try{if(active&&!await refreshPaidLease()){clear();notice("Subscription access expired. Return to Professional account.");}}catch{fail();}},10*60*1000);
@@ -87,6 +88,7 @@ async function refresh(){
   const nav=(label,p,primary=false)=>{const b=add(actions,"button",label);b.type="button";b.className=primary?"btn":"btn secondary";b.addEventListener("click",()=>{if(active&&org===orgId())openPanel(p)});};
   nav("Resume",packetStatus==="Not generated"||packetStatus==="Reviewed"?packetPanel:watchPanel,true);nav("Record Details",reviewPanel);nav("Open Packet",packetPanel);nav("Open RecordWatch",watchPanel);
   add(card,"p",row.outcome+" · "+row.charge_name+" · "+row.charge_code+" · "+row.charge_level+" · disposition "+row.disposition_date+(row.final_discharge_date?" · discharge "+row.final_discharge_date:""));
+  if(client.other_names)add(card,"p","Other names used: "+client.other_names);
   add(card,"p","Mailing: "+[client.line1,client.line2,client.city,client.state,client.zip].filter(Boolean).join(", ")+" · "+client.email+" · "+client.phone);
   if(row.record_details?.schemaVersion===1){const detail=document.createElement("details");add(detail,"summary","View all saved Step 2 fields");card.append(detail);const renderValues=(parent,obj)=>{for(const [key,val] of Object.entries(obj||{})){const line=add(parent,"p","");add(line,"strong",key.replace(/([a-z])([A-Z])/g,"$1 $2").replaceAll("_"," ") + ": ");line.append(document.createTextNode(val===true?"Yes":val===false?"No":String(val||"Not entered")));}};renderValues(detail,detailFields);for(const [i,charge] of row.record_details.charges.entries()){add(detail,"h4","Charge "+(i+1));renderValues(detail,charge);}}
   if(row.outcome==="mixed")add(card,"p","Eligibility and filing review required: unsupported court, multiple charges, incomplete or unresolved record information. All entered details are saved.");
@@ -246,7 +248,7 @@ function bindForm(id,table,build){
  try{const org=orgId(),seq=epoch,values=Object.fromEntries(new FormData(form));const payload=build(values,org);const saved=ok(await api.from(table).insert(payload).select("*").single());if(!saved?.id)throw Error("Save not confirmed");const persisted=ok(await api.from(table).select("*").eq("id",saved.id).eq("org_id",org).single());if(!persisted||persisted.id!==saved.id||(table==="professional_cases"&&persisted.court_id!=="oh-wood-common-pleas")||Object.entries(payload).some(([key,value])=>persisted[key]!==value))throw Error("Supabase readback mismatch");if(!active||org!==orgId()||seq!==epoch)return;form.reset();await refresh();if(!active||org!==orgId())return;if(table==="professional_clients"){ $("clients").value=saved.id;showIntake("case-intake");notice("Client saved. Continue to record details."); }else{hideIntake();packetCaseId=saved.id;setStep(3);$("case-filter").value=persisted.case_number;$("client-filter").value=persisted.client_id;await refresh();if(!active||org!==orgId()||packetCaseId!==saved.id)return;const target=Array.from($("cases").children).find(el=>el.dataset.caseId===saved.id);if(target)target.scrollIntoView({block:"start"});notice("Case saved. Step 3 — Packet is ready for eligibility review and preparation.");}}catch{notice("Unable to save. Confirm required fields and authorization.");}finally{btn.disabled=false;}
  });
 }
-bindForm("client-form","professional_clients",(v,org)=>({org_id:org,full_name:v.full_name,dob:v.dob,line1:v.line1,line2:v.line2||"",city:v.city,state:v.state,zip:v.zip,email:v.email,phone:v.phone,authorization_confirmed:v.authorization_confirmed==="on"}));
+bindForm("client-form","professional_clients",(v,org)=>({org_id:org,full_name:v.full_name,dob:v.dob,other_names:v.other_names||"",line1:v.line1,line2:v.line2||"",city:v.city,state:v.state,zip:v.zip,email:v.email,phone:v.phone,authorization_confirmed:v.authorization_confirmed==="on"}));
 $("case-form").addEventListener("submit",async e=>{
  e.preventDefault();if(!active||!sharedIntake)return;
  const btn=$("case-save");btn.disabled=true;
