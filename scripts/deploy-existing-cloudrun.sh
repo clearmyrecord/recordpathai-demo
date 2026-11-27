@@ -194,6 +194,13 @@ smoke_check() {
 
 # Authentication can be unavailable even when static pages return HTTP 200.
 # Surface it explicitly without ever logging public keys, tokens or credentials.
+check_professional_pages() {
+  smoke_check "professional.html" "Create professional account" "Professional homepage" &&
+  smoke_check "professional-account.html" "Submit verification request" "Professional registration" &&
+  smoke_check "professional-practice.html" "Attorney case workflow" "Professional practice" &&
+  smoke_check "js/professional-account.js" "live-billing/" "Professional account script" &&
+  smoke_check "js/professional-practice.js" "Download official form for signature" "Professional workspace script"
+}
 report_auth_readiness() {
   local status
   status="$(curl --silent --show-error --max-time 20 --output "$SMOKE_DIR/auth-status.json" \
@@ -269,6 +276,7 @@ smoke_check "pilot-demo.html" "Illustrative demo" "Fictional pilot page" || \
 smoke_check "js/pilot-demo.js" "DEMO-2006-001" "Fictional pilot script" || \
   { echo "Candidate failed smoke check. Production traffic is unchanged." >&2; exit 5; }
 
+check_professional_pages || { echo "Candidate professional pages failed. Existing traffic is unchanged." >&2; exit 5; }
 report_auth_readiness
 check_recordwatch_readiness "zero-traffic candidate" || { echo "Candidate lacks RecordWatch configuration. Existing traffic is unchanged." >&2; exit 5; }
 
@@ -315,9 +323,17 @@ smoke_check "pilot-demo.html" "Illustrative demo" "Production fictional pilot" |
 smoke_check "js/pilot-demo.js" "DEMO-2006-001" "Production pilot script" || \
   rollback_after_smoke_failure "Production pilot script failed smoke check"
 
+check_professional_pages || rollback_after_smoke_failure "Production professional pages failed"
 report_auth_readiness
 check_recordwatch_readiness "promoted production revision" || \
   rollback_after_smoke_failure "Promoted revision failed RecordWatch readiness"
 
+if [[ "$PROJECT/$REGION/$SERVICE" == "recordpathai-production/us-west1/recordpathai" ]]; then
+  # Public domain may be routed separately from the Cloud Run service URL.
+  # Verify the actual user-facing links too; preserve earlier traffic on failure.
+  URL="https://recordpathai.com"
+  check_professional_pages || rollback_after_smoke_failure "Canonical public professional pages failed"
+  echo "Canonical Professional homepage, registration, workspace and scripts verified at $URL"
+fi
 echo "Cloud Run deployed revision $NEW_REV confirmed serving 100% of traffic and passing production smoke checks: $URL"
 echo "Public court-record indexing remains OFF until court authorization and status review."
