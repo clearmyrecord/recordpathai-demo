@@ -33,3 +33,15 @@ test("operator approval requires evidence, applicant consent and no public execu
  assert.match(sql,/revoke all on function public.professional_approve_pilot_request\(uuid,text,text,text,text\) from service_role/);
  assert.match(sql,/insert into public.professional_activation_audit/);
 });
+
+test("professional dashboard follows consumer saved-case-first navigation and sequential intake",()=>{
+ const js=read("js/professional-practice.js"),html=read("professional-practice.html");
+ assert.ok(html.indexOf('id="saved-cases"')<html.indexOf('id="client-intake"'));
+ assert.ok(html.indexOf('id="client-intake"')<html.indexOf('id="case-intake"'));
+ assert.match(html,/id="client-intake" hidden/);assert.match(html,/id="case-intake" hidden/);
+ for(const name of ["saved-case-card","saved-case-header","saved-case-actions","saved-case-detail-grid"])assert.ok(js.includes(name));
+ for(const label of ["Resume","Record Details","Open Packet","Open RecordWatch"])assert.ok(js.includes('nav("'+label+'"'));
+ assert.match(js,/showIntake\("case-intake"\)/);assert.match(js,/resolveEligibilityForCase/);
+ assert.match(js,/professional_generated_packets/);
+ assert.doesNotMatch(js,/localStorage|sessionStorage|RecordPathUserStore\.setActiveCase/);
+});
