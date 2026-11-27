@@ -312,8 +312,7 @@ async function refresh(){
     else throw Error("This case requires separate review.");
    };
    card=mailArea;
-   if(internalTestAccess){const testNotice=add(mailArea,"p","Internal test access — application preview and review are available. Live Stripe and Lob mailing are disabled for this workspace; no payment will be taken.");testNotice.className="professional-checkout-notice";testNotice.setAttribute("role","status");const disabledPay=add(mailArea,"button","Pay and Mail");disabledPay.className="professional-pay-and-mail";disabledPay.type="button";disabledPay.disabled=true;}
-   if(["conviction","dismissal","not_guilty"].includes(row.outcome)&&row.court_id==="oh-wood-common-pleas"&&!internalTestAccess&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
+   if(supported&&orgs.some(o=>o.id===org&&o.access_kind==="paid")){
     const courtFee=row.outcome==="conviction"?100:0;
     const mailStatus=add(card,"p","Checking private mailing status…");mailStatus.className="professional-checkout-notice";mailStatus.setAttribute("role","status");
     const consentLabel=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";consentLabel.append(consent,document.createTextNode(" I authorize mailing the independently approved signed application and agree to pay $"+(courtFee+10)+" plus applicable service tax, including $"+courtFee+" court deposit and $10 mailing and case alerts."));consentLabel.hidden=true;
@@ -324,7 +323,7 @@ async function refresh(){
      const token=epoch,session=ok(await api.auth.getSession()).session;if(!session?.access_token||token!==epoch||!active||org!==orgId())throw Error("Session changed");
      const response=await fetch("/api/professional/mail/"+encodeURIComponent(row.id)+"/checkout",{method:"POST",headers:{Authorization:"Bearer "+session.access_token,"x-professional-mail-consent":"yes"},cache:"no-store"});
      const data=await response.json();if(!response.ok||!data.ok||token!==epoch||!active||org!==orgId()||new URL(data.url).origin!=="https://checkout.stripe.com")throw Error("Checkout unavailable");location.assign(data.url);
-    });pay.classList.add("professional-pay-and-mail");pay.hidden=false;
+    });pay.classList.add("professional-pay-and-mail");pay.hidden=false;pay.disabled=true;
     const alertBox=add(card,"section","");alertBox.hidden=true;
     add(alertBox,"h4","SMS and email case alerts");
     add(alertBox,"p","Opt in separately to email and SMS alerts to your verified professional account contacts. Messages contain no client or case details. SMS frequency varies; message and data rates may apply. Reply STOP to opt out, HELP for help. Consent is optional and can be withdrawn here.");
@@ -355,10 +354,12 @@ async function refresh(){
      if(!active||org!==orgId()||token!==epoch)return;
      const labels={awaiting_independent_review:"Awaiting independent signed application review",approved:"Reviewed — mailing readiness check",paid_hold:"Payment verified — awaiting mailing",dispatch_claimed:"Mailing being reconciled — do not pay again",submitted_to_lob:"Accepted by Lob for processing — court filing not yet confirmed"};
      mailStatus.textContent=(labels[data.status]||"Mailing status unavailable")+((data.lobCheckId||data.lobLetterId)?" · Lob reference: "+(data.lobCheckId||data.lobLetterId):"")+(data.expectedDeliveryDate?" · Estimated delivery: "+data.expectedDeliveryDate:"");
-     checkoutReady=data.checkoutReady===true;consentLabel.hidden=!checkoutReady;if(checkoutReady)mailStatus.textContent="Approved for secure mailing checkout";
+     checkoutReady=data.checkoutReady===true;pay.disabled=!checkoutReady;consentLabel.hidden=!checkoutReady;
+     const blockers={independent_review_required:"Awaiting independent review of the exact signed application. Check review status after approval.",mailing_not_enabled:"Live court mailing is not configured for this filing route.",alerts_not_ready:"Mailing and alert service is not ready.",billing_access_required:"A paid subscription or approved owner filing access is required.",review_or_service_unavailable:"Signed application review or mailing service could not be verified.",existing_order:""};
+     if(checkoutReady)mailStatus.textContent="Approved for secure mailing checkout";else if(blockers[data.checkoutBlocker])mailStatus.textContent=blockers[data.checkoutBlocker]+" No payment was taken.";
      if(data.status!=="awaiting_independent_review")await loadAlertPreferences().catch(()=>{});
      if(Array.isArray(data.providerEvents))for(const e of data.providerEvents){if(e.name) add(mailStatus,"span"," · "+e.name+(e.time?" ("+e.time+")":""));}
-    }catch{checkoutReady=false;consentLabel.hidden=true;mailStatus.textContent="Mailing status unavailable. Do not pay again.";}};
+    }catch{checkoutReady=false;pay.disabled=true;consentLabel.hidden=true;mailStatus.textContent="Mailing status unavailable. Do not pay again.";}};
     button("Check review status",checkMailStatus);void checkMailStatus();
    }
    card=prepare;
@@ -457,7 +458,7 @@ async function refresh(){
   const back=add(packetPanel.body,"button","Save & return to RecordWatch");back.type="button";back.className="btn secondary";back.addEventListener("click",returnDashboard);
   $("cases").append(shell);if(packetCaseId===row.id){shell.classList.add("packet-focused");packetPanel.d.open=true;setStep(3);}
  }
- notice(internalTestAccess?"Internal testing workspace — no paid subscription. Use fictional client records only; live mailing is unavailable.":"Professional workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
+ notice(internalTestAccess?"Complimentary workspace access. Live filing requires a separate approved owner entitlement, signed application review and payment. Otherwise use fictional records only.":"Professional workspace loaded. Case reminders and verified-event tracking; court mailing requires independent approval and payment.");
 }
 function normalizedClientName(value){return String(value||"").trim().replace(/\s+/g," ").toLowerCase();}
 function normalizedClientPhone(value){const digits=String(value||"").replace(/\D/g,"");return digits.length===11&&digits.startsWith("1")?digits.slice(1):digits;}
