@@ -94,7 +94,7 @@ function verifyVisibleWatermark(ctx,width,height,before){
     throw new Error("Private preview watermark text is not visible; image withheld.");
 }
 
-export async function renderWatermarkedPreviewPage(bytes,pageNumber,expectedPages){
+export async function renderWatermarkedPreviewPage(bytes,pageNumber,expectedPages,{professional=false}={}){
   if(!Buffer.isBuffer(bytes) && !(bytes instanceof Uint8Array))
     throw new Error("Invalid private court document.");
   const n=Number(pageNumber);
@@ -133,7 +133,7 @@ export async function renderWatermarkedPreviewPage(bytes,pageNumber,expectedPage
   ctx.textAlign="center";ctx.textBaseline="middle";
   ctx.font="bold 16px "+FONT_FAMILY;
   ctx.fillStyle="#ffffff";
-  ctx.fillText("PRIVATE PREVIEW ONLY - UNWATERMARKED PDF AFTER VERIFIED PAYMENT",
+  ctx.fillText(professional?"PRIVATE PREVIEW ONLY - REVIEW BEFORE FILING":"PRIVATE PREVIEW ONLY - UNWATERMARKED PDF AFTER VERIFIED PAYMENT",
     width/2,height-21,Math.max(50,width-20));
   ctx.restore();
   verifyVisibleWatermark(ctx,width,height,before);
