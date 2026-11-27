@@ -8,6 +8,7 @@ create table if not exists public.professional_mail_orders (
  document_id uuid not null references public.professional_signed_documents(id) on delete restrict,
  signed_sha text not null check(signed_sha ~ '^[a-f0-9]{64}$'),
  reviewer_reference text not null check(length(trim(reviewer_reference)) between 12 and 500),
+ review_checks jsonb not null check(review_checks @> '{"identity":true,"docket":true,"charges":true,"discharge":true,"exclusions":true,"form":true,"signature":true,"authorization":true,"court_fee_and_address":true}'::jsonb),
  reviewed_at timestamptz not null default now(),
  status text not null default 'approved' check(status in ('approved','paid_hold','dispatch_claimed','submitted_to_lob')),
  stripe_session_id text unique check(stripe_session_id ~ '^cs_live_[A-Za-z0-9]+$'),
