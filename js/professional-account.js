@@ -7,6 +7,7 @@ const ok=r=>{if(r.error)throw Error("Request failed");return r.data;};
 let api,user,factorId,epoch=0;
 const mode=new URLSearchParams(location.search);
 const pilot=mode.get("pilot")==="1",secure=mode.get("secure")==="1";
+const preferredPlan=["solo","firm"].includes(mode.get("plan"))?mode.get("plan"):"solo";
 function clearMfaSetup(){ $("mfa-qr").removeAttribute("src");$("mfa-qr").hidden=true;$("mfa-setup-details").hidden=true;$("secret").textContent="";$("secret").hidden=true; }
 function showMfaSetup(totp){
  clearMfaSetup();
@@ -28,7 +29,7 @@ async function load(){
  api=await window.RecordPathSupabase.getClient();
  const result=await api.auth.getUser();
  if(token!==epoch)return;
- if(result.error||!result.data.user){$("signed-out").hidden=false;say("Sign in to apply for professional access.");return;}
+ if(result.error||!result.data.user){const target="professional-account.html"+location.search;for(const a of $("signed-out").querySelectorAll("a")){const base=a.getAttribute("href").split("?")[0];a.href=base+"?returnUrl="+encodeURIComponent(target);}$("signed-out").hidden=false;say("Sign in or create your regular RecordPathAI account.");return;}
  user=result.data.user;$("logout").hidden=false;
  if(!user.email_confirmed_at){say("Confirm your account email before applying.");return;}
  if(pilot){
@@ -67,7 +68,7 @@ async function refreshBilling(token=epoch){
  $("billing-checkout").hidden=true;$("billing-portal").hidden=true;$("billing-consent-label").hidden=true;$("practice-link").hidden=true;$("plan-choice").hidden=true;
  try{
   const data=await liveRequest("refresh");if(token!==epoch)return;
-  if(data.unregistered){$("billing-state").textContent="Choose a monthly subscription. No attorney credentials or manual approval required.";$("plan-choice").hidden=false;$("billing-checkout").hidden=false;$("billing-consent-label").hidden=false;return;}
+  if(data.unregistered){$("paid-plan").value=preferredPlan;$("billing-state").textContent="Choose a monthly subscription. No attorney credentials or manual approval required.";$("plan-choice").hidden=false;$("billing-checkout").hidden=false;$("billing-consent-label").hidden=false;return;}
   $("paid-plan").value=data.plan;
   $("billing-state").textContent=(data.plan==="solo"?"Individual":"Firm")+" · $"+(data.amount_cents/100).toFixed(2)+"/month plus applicable tax · "+(data.active?"Subscription verified":data.subscription_exists?"Existing subscription requires attention":"Ready to subscribe");
   $("billing-checkout").hidden=data.subscription_exists;$("billing-consent-label").hidden=data.subscription_exists;$("billing-portal").hidden=!data.subscription_exists;
