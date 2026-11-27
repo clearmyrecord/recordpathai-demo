@@ -29,9 +29,9 @@ async function refresh(){
  if(!active)return;
  const seq=++epoch,org=orgId();
  $("clients").replaceChildren();$("cases").replaceChildren();
- const [a,b,c,d]=await Promise.all(["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)));
+ const [a,b,c,d,docs,reviewRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100)]);
  if(seq!==epoch||!active||org!==orgId())return;
- const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d);
+ const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows);
  for(const client of clients)$("clients").append(option(client.id,client.full_name));
  $("role").textContent="Verified attorney · assigned records only";
  for(const row of cases){
@@ -55,8 +55,34 @@ async function refresh(){
     if(!active||token!==epoch||org!==orgId())return;
     const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));const a=document.createElement("a");a.href=url;a.download="wood-county-unsigned-review-draft.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
    });
+   add(card,"h4","Signed document review");
+   add(card,"p","Obtain the actual applicant signature on the official form outside this staging tool. Upload only fictional test documents; unsigned review drafts cannot be submitted.");
+   const file=document.createElement("input");file.type="file";file.accept="application/pdf";file.setAttribute("aria-label","Signed two-page official test PDF");card.append(file);
+   const label=add(card,"label","");const attested=document.createElement("input");attested.type="checkbox";label.append(attested,document.createTextNode(" I attest that the applicant signed this exact official application."));
+   const auth=async()=>{const session=ok(await api.auth.getSession()).session;if(!session?.access_token)throw Error("Session unavailable");return {Authorization:"Bearer "+session.access_token};};
+   button("Upload signed test PDF",async()=>{
+    const selected=file.files[0];if(!attested.checked||!selected||selected.size>2097152)throw Error("Signed PDF and attestation required");
+    const token=epoch;const headers=await auth();if(!active||token!==epoch||org!==orgId())return;
+    const response=await fetch("/api/professional/signed-review",{method:"POST",headers:{...headers,"Content-Type":"application/pdf","x-professional-case-id":row.id,"x-professional-signature-attested":"yes"},body:selected,cache:"no-store"});
+    if(!response.ok)throw Error("Upload rejected");file.value="";await refresh();
+   });
+   const rowDocs=documents.filter(x=>x.case_id===row.id);
+   const rowReviews=signedReviews.filter(x=>x.case_id===row.id);
+   for(const doc of rowDocs){
+    add(card,"p","PDF SHA-256: "+doc.sha256+" · "+(rowReviews.some(r=>r.document_id===doc.id)?"Reviewed":"Awaiting exact-document review"));
+    let downloaded=false;
+    button("Open private signed PDF",async()=>{
+      const token=epoch;const headers=await auth();const response=await fetch("/api/professional/signed-review/"+encodeURIComponent(doc.id),{headers,cache:"no-store"});
+      if(!response.ok)throw Error("Download rejected");const blob=await response.blob();if(!active||token!==epoch||org!==orgId())return;
+      const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="signed-review.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);downloaded=true;
+    });
+    if(!rowReviews.some(r=>r.document_id===doc.id)){
+      const reviewLabel=add(card,"label","");const reviewed=document.createElement("input");reviewed.type="checkbox";reviewLabel.append(reviewed,document.createTextNode(" I inspected this exact signed PDF, confirmed the signature and information, and accept responsibility for any subsequent manual filing."));
+      button("Record exact signed PDF review",async()=>{if(!reviewed.checked||!downloaded)throw Error("Open and review the PDF first");ok(await api.from("professional_signed_reviews").insert({document_id:doc.id,org_id:org,case_id:row.id,exact_document_reviewed:true}));await refresh();});
+    }
+   }
    const event=document.createElement("select");event.setAttribute("aria-label","Manual status event");
-   for(const [v,t] of [["manual_filing_reported","Filing reported by attorney"],["manual_hearing_reported","Hearing reported by attorney"],["manual_order_reported","Order reported by attorney"],["manual_followup","Follow-up"]])event.append(option(v,t));
+   for(const [v,t] of [["manual_filing_reported","Filing reported by attorney"],["manual_hearing_reported","Hearing reported by attorney"],["manual_order_reported","Order reported by attorney"],["manual_followup","Follow-up"]])if(v==="manual_followup"||rowReviews.length)event.append(option(v,t));
    const date=document.createElement("input");date.type="date";date.setAttribute("aria-label","Event date");date.value=new Date().toISOString().slice(0,10);card.append(event,date);
    button("Save manual event",async()=>{if(!date.value)throw Error("Date required");ok(await api.from("professional_case_events").insert({org_id:org,case_id:row.id,event_type:event.value,event_date:date.value}));await refresh();});
    for(const e of events.filter(x=>x.case_id===row.id))add(card,"p",e.event_date+" — "+e.event_type.replaceAll("_"," "));
