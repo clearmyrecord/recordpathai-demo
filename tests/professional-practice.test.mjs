@@ -251,3 +251,15 @@ test("record removal requires confirmation and preserves linked histories with r
  assert.match(sql,/read_predicate/);
  assert.match(css,/professional-delete-record/);
 });
+
+test("archive recovery is independent of the newest 100 dashboard records",async()=>{
+ const js=read("js/professional-practice.js");
+ const code=js.slice(js.indexOf("async function loadArchivedRecords"),js.indexOf("async function refresh(){"));
+ const ids=Array.from({length:235},(_,i)=>"00000000-0000-4000-8000-"+String(i+1).padStart(12,"0"));
+ let pageReads=0,parentReads=0;
+ const fakeApi={from(table){let cursor="",selected=[],scope;const q={select(){return q},eq(k,v){scope=v;return q},order(k,v){assert.equal(k,"case_id");assert.equal(v.ascending,true);return q},limit(n){assert.equal(n,100);return q},gt(k,v){assert.equal(k,"case_id");cursor=v;return q},in(k,v){assert.equal(k,"id");selected=v;return q},then(resolve){assert.equal(scope,"workspace");if(table==="archives"){pageReads++;return Promise.resolve(ids.filter(x=>x>cursor).slice(0,100).map(case_id=>({case_id}))).then(resolve);}assert.equal(table,"cases");parentReads++;return Promise.resolve(selected.map(id=>({id,case_number:id}))).then(resolve);}};return q;}};
+ const load=new Function("api","active","epoch","orgId","ok","uuid",code+";return loadArchivedRecords;")(fakeApi,true,1,()=>"workspace",x=>x,x=>ids.includes(x));
+ const rows=await load({archiveTable:"archives",parentTable:"cases",key:"case_id",label:"case_number",org:"workspace",seq:1});
+ assert.deepEqual(rows.map(r=>r.id),ids);assert.equal(pageReads,3);assert.equal(parentReads,3);
+ assert.match(js,/\["client",archivedClients\],\["case",archivedCases\]/);
+});
