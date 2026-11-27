@@ -147,7 +147,7 @@ test("professional client and case creation has three dedicated routes, not dash
  assert.match(js,/if\(!routeStep\)\{navigateWorkflow\(id==="case-intake"\?2:1/);
  assert.match(js,/if\(panel===packetPanel&&!routeStep\)\{navigateWorkflow\(3/);
  assert.match(js,/if\(routeStep!==3\)\{packetPanel\.d\.remove\(\)/);
- assert.match(js,/if\(!active\|\|routeStep!==1\|\|routeClient\)return/);
+ assert.match(js,/if\(!active\|\|routeStep!==1\|\|routeClient\|\|submitting\)return/);
  assert.match(js,/if\(!active\|\|routeStep!==2\|\|!routeClient\|\|!sharedIntake\)return/);
  assert.match(js,/navigateWorkflow\(2,\{clientId:saved\.id\}\)/);
  assert.match(js,/navigateWorkflow\(3,\{caseId:persisted\.id\}\)/);
