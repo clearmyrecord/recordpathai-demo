@@ -232,3 +232,22 @@ test("professional record details use labeled sections without changing saved ca
  assert.doesNotMatch(panel,/\.insert\(|\.update\(|\.delete\(/);
  assert.match(css,/professional-review-grid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
+
+test("record removal requires confirmation and preserves linked histories with reversible archives",()=>{
+ const js=read("js/professional-practice.js"),sql=read("sql/professional-record-removal.sql"),css=read("assets/professional-modern.css");
+ const action=js.slice(js.indexOf("function recordRemovalButton"),js.indexOf("async function refresh(){"));
+ assert.match(action,/window.confirm/);
+ assert.match(action,/\.delete\(\)\.eq\("id",row.id\)\.eq\("org_id",org\)/);
+ assert.match(action,/result.error.code!=="23503"/);
+ assert.match(action,/archiveTable\)\.insert\(/);
+ assert.match(action,/archiveTable\)\.delete\(\)/);
+ assert.match(action,/if\(!current\(\)\)/);
+ assert.match(js,/recordRemovalButton\(actions,\{kind:"client"/);
+ assert.match(js,/recordRemovalButton\(actions,\{kind:"case"/);
+ assert.match(js,/professional-archived-records/);
+ assert.match(sql,/professional_case_archives enable row level security/);
+ assert.match(sql,/professional_client_archives enable row level security/);
+ assert.match(sql,/attorney_id=\(select auth.uid\(\)\)/);
+ assert.match(sql,/read_predicate/);
+ assert.match(css,/professional-delete-record/);
+});
