@@ -134,6 +134,7 @@ async function refresh(){
   }else if(decision.decision==="approved_for_unsigned_draft"){
    card=packetPanel.body;
    add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". File directly with the court; no payment collected here.");
+   if(row.outcome==="conviction"&&orgs.some(o=>o.id===org&&o.access_kind==="paid"))add(card,"p","Optional RecordPathAI conviction mailing: $10 per filing + $100 applicable court fee = $110 before any applicable tax. Mailing checkout is not yet available.");
    button("Generate and save review draft",async()=>{
     const token=epoch;
     const [freshClient,freshCase,freshDecision]=await Promise.all([api.from("professional_clients").select("*").eq("id",client.id).single(),api.from("professional_cases").select("*").eq("id",row.id).single(),api.from("professional_case_decisions").select("*").eq("case_id",row.id).single()]);
