@@ -57,7 +57,8 @@
       field("Primary Charge", item.primaryCharge || (item.charges || [])[0]) +
       field("Estimated Eligibility Date", fmtDate(item.estimatedEligibleDate)) +
       field("Last Updated", fmtDate(item.lastUpdated || item.updatedAt)) +
-      '</div><div class="saved-case-actions">' + actions + '</div></article>';
+      '</div><div class="saved-case-actions">' + actions + '</div>' +
+      (options && options.readOnly ? '' : '<div data-consumer-mail-tracking="' + esc(id) + '"></div>') + '</article>';
   }
 
   function render(container, cases, options) {
@@ -66,6 +67,7 @@
     var normalizedCases = cases || [];
     if (window.RecordPathUserStore && RecordPathUserStore.normalizeCase) normalizedCases = normalizedCases.map(function (item) { return RecordPathUserStore.normalizeCase(item); });
     container.innerHTML = normalizedCases.length ? normalizedCases.map(function (item) { return card(item, options || {}); }).join("") : emptyState();
+    if (!options?.readOnly) window.RecordPathConsumerMailTracking?.mountCards(container);
   }
 
   async function refreshSavedCases(rerender, message) {
