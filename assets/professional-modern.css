@@ -231,3 +231,10 @@
 .rp-professional .professional-archived-records{margin-top:20px;border-top:1px solid #d5e1f1;padding-top:16px}
 .rp-professional .professional-archive-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid #d5e1f1;border-radius:12px;margin-top:8px;flex-wrap:wrap;overflow-wrap:anywhere}
 .rp-professional .professional-archive-row button{margin:0}
+
+.rp-professional .professional-mail-tracking{margin:12px 0;padding:14px;border:1px solid #d5e1f1;border-radius:12px;background:#f8fbff}
+.rp-professional .professional-mail-tracking-info{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;margin:12px 0}
+.rp-professional .professional-mail-tracking-info>div{display:grid;gap:4px;background:#fff;border:1px solid #dce5f3;border-radius:8px;padding:10px;overflow-wrap:anywhere}
+.rp-professional .professional-mail-tracking-info strong{color:#233d70;font-size:12px}
+.rp-professional .professional-mail-tracking ol{padding-inline-start:20px}
+.rp-professional .professional-mail-tracking li{margin:6px 0}
