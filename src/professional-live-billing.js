@@ -85,6 +85,7 @@ export function registerProfessionalLiveBilling(app,{context,env=process.env,str
    const {stripe,row}=a,list=await allSubscriptions(a);
    const outstanding=s=>!["canceled","incomplete_expired"].includes(s.status);
    if(list.some(outstanding))return res.status(409).json({ok:false,error:"Manage your existing subscription rather than creating another."});
+   if(await ctx.rest("rpc/professional_set_test_lease","",{service:true,body:{p_org:row.org_id,p_user:ctx.user.id}})===true)return res.status(409).json({ok:false,error:"Internal testing access is active. No subscription payment is required. Refresh your account to open RecordWatch."});
    const sessions=await stripe.checkout.sessions.list({customer:row.stripe_customer_id,status:"open",limit:100});
    if(sessions.has_more||sessions.data.length>1)throw Error("Open sessions require review");
    let session=sessions.data[0];
