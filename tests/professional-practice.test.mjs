@@ -74,3 +74,14 @@ test("professional reuses actual consumer Step 2 sections and charge template wi
  assert.match(sql,/f->>'allChargesConfirmed'='yes'/);
  assert.match(sql,/f->>'proceedingsStatus'='none'/);
 });
+
+
+test("professional and consumer charge intake ask for only one completion date",()=>{
+ const consumer=read("record-details.html"),shared=read("js/professional-record-intake.js");
+ const template=consumer.match(/<template id="sharedRecordChargeTemplate">([\s\S]*?)<\/template>/)[1];
+ assert.equal((template.match(/data-field="disposition_date"/g)||[]).length,1);
+ assert.equal((template.match(/data-field="discharge_date"/g)||[]).length,1);
+ assert.doesNotMatch(template,/data-field="probation_end_date"/);
+ assert.doesNotMatch(shared,/dataset\.field="probation_end_date"|Probation termination date \(if applicable\)/);
+ assert.match(shared,/final_discharge_date:c\.discharge_date\|\|null,probation_end_date:null/);
+});
