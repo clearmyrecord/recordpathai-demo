@@ -30,5 +30,6 @@ revoke all on public.professional_activation_audit from public,anon,authenticate
 grant select,insert on public.professional_activation_audit to service_role;
 -- Operator calls this function only after independent verification. Never from browser.
 revoke all on function public.professional_approve_pilot_request(uuid,text,text,text,text) from public,anon,authenticated;
-grant execute on function public.professional_approve_pilot_request(uuid,text,text,text,text) to service_role;
+revoke all on function public.professional_approve_pilot_request(uuid,text,text,text,text) from service_role;
+-- Only the database owner/operator may execute this invoker function; no browser or API access.
 commit;
