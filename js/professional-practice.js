@@ -438,10 +438,11 @@ async function refresh(){
    const draftStatus=add(prepare,"p","Draw the actual applicant signature below, then submit the signed packet.");draftStatus.setAttribute("role","status");
    add(prepare,"h4","Draw your signature below");
    add(prepare,"p","The applicant must personally draw their own signature. Do not sign for another person.");
-   const canvas=document.createElement("canvas");canvas.className="professional-signature-pad";canvas.width=640;canvas.height=160;canvas.style.cssText="width:100%;max-width:640px;height:160px;border:1px solid #cfd9ea;background:#fff;border-radius:8px;touch-action:none";canvas.setAttribute("aria-label","Draw your actual applicant signature");prepare.append(canvas);
-   const pen=canvas.getContext("2d");pen.strokeStyle="#142b49";pen.lineWidth=3;pen.lineCap="round";pen.lineJoin="round";let drawing=false,last=null;
+   const canvas=document.createElement("canvas");canvas.className="professional-signature-pad";canvas.setAttribute("aria-label","Draw your actual applicant signature");prepare.append(canvas);
+   const pen=canvas.getContext("2d");let drawing=false,last=null;
+   const resizeBlankSignature=()=>{if(signatureInk||drawing)return;const rect=canvas.getBoundingClientRect();if(rect.width<=0||rect.height<=0)return;const ratio=Math.min(2,Math.max(1,window.devicePixelRatio||1),2048/rect.width);canvas.width=Math.max(1,Math.round(rect.width*ratio));canvas.height=Math.max(1,Math.round(rect.height*ratio));pen.strokeStyle="#142b49";pen.lineWidth=2*ratio;pen.lineCap="round";pen.lineJoin="round";};
    const point=e=>{const rect=canvas.getBoundingClientRect();return [(e.clientX-rect.left)*canvas.width/rect.width,(e.clientY-rect.top)*canvas.height/rect.height];};
-   canvas.addEventListener("pointerdown",e=>{if(!e.isPrimary||e.button!==0)return;e.preventDefault();drawing=true;last=point(e);canvas.setPointerCapture(e.pointerId);});
+   canvas.addEventListener("pointerdown",e=>{if(!e.isPrimary||e.button!==0)return;e.preventDefault();resizeBlankSignature();drawing=true;last=point(e);canvas.setPointerCapture(e.pointerId);});
    canvas.addEventListener("pointermove",e=>{if(!drawing||!e.isPrimary)return;e.preventDefault();const next=point(e);if(Math.hypot(next[0]-last[0],next[1]-last[1])>0.5){pen.beginPath();pen.moveTo(...last);pen.lineTo(...next);pen.stroke();signatureInk=true;last=next;}});
    for(const event of ["pointerup","pointercancel","lostpointercapture"])canvas.addEventListener(event,()=>{drawing=false;last=null;});
    button("Use Drawn Signature",async()=>{if(!signatureInk){draftStatus.textContent="Draw the applicant signature first.";return;}draftStatus.textContent="Signature ready. Confirm the authorization and prepare the signed packet.";});
