@@ -29,9 +29,9 @@ async function refresh(){
  if(!active)return;
  const seq=++epoch,org=orgId();
  $("clients").replaceChildren();$("cases").replaceChildren();
- const [a,b,c,d,docs,reviewRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100)]);
+ const [a,b,c,d,docs,reviewRows,counselRows]=await Promise.all([...["professional_clients","professional_cases","professional_case_decisions","professional_case_events"].map(t=>api.from(t).select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(100)),api.from("professional_signed_documents").select("id,org_id,case_id,attorney_id,sha256,page_count,created_at,signature_mode,counsel_name,counsel_bar_number").eq("org_id",org).order("created_at",{ascending:false}).limit(100),api.from("professional_signed_reviews").select("*").eq("org_id",org).limit(100),api.from("professional_counsel_profiles").select("*").eq("org_id",org).limit(1)]);
  if(seq!==epoch||!active||org!==orgId())return;
- const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows);
+ const clients=ok(a),cases=ok(b),decisions=ok(c),events=ok(d),documents=ok(docs),signedReviews=ok(reviewRows),counsel=ok(counselRows)[0];
  for(const client of clients)$("clients").append(option(client.id,client.full_name));
  $("role").textContent="Verified attorney · assigned records only";
  for(const row of cases){
@@ -60,6 +60,22 @@ async function refresh(){
    const file=document.createElement("input");file.type="file";file.accept="application/pdf";file.setAttribute("aria-label","Signed two-page official test PDF");card.append(file);
    const label=add(card,"label","");const attested=document.createElement("input");attested.type="checkbox";label.append(attested,document.createTextNode(" I attest that the applicant signed this exact official application."));
    const auth=async()=>{const session=ok(await api.auth.getSession()).session;if(!session?.access_token)throw Error("Session unavailable");return {Authorization:"Bearer "+session.access_token};};
+   add(card,"h4","Sign as attorney of record");
+   if(counsel){
+    add(card,"p",counsel.full_name+" · Ohio registration "+counsel.ohio_bar_number+" · "+counsel.firm_name);
+    add(card,"p","Staging assumption: counsel may sign in their own capacity. Local court acceptance is not yet verified; the signed test PDF is marked DO NOT FILE.");
+    const typed=document.createElement("input");typed.setAttribute("aria-label","Type your own full attorney name to sign");typed.placeholder="Type your full attorney name";typed.autocomplete="off";card.append(typed);
+    const lab=add(card,"label","");const consent=document.createElement("input");consent.type="checkbox";lab.append(consent,document.createTextNode(" I am the verified counsel of record, have authorization to act for this client, reviewed the draft, and intend to sign in my own name for this test."));
+    button("Sign as counsel and save private test PDF",async()=>{
+     if(!consent.checked||typed.value!==counsel.full_name)throw Error("Explicit counsel consent required");
+     const token=epoch;
+     const [fc,fm,fd,fp]=await Promise.all([api.from("professional_clients").select("*").eq("id",client.id).single(),api.from("professional_cases").select("*").eq("id",row.id).single(),api.from("professional_case_decisions").select("*").eq("case_id",row.id).single(),api.from("professional_counsel_profiles").select("*").eq("org_id",org).single()]);
+     const bytes=await renderProfessionalDraft({client:ok(fc),caseRow:ok(fm),decision:ok(fd),today:new Date().toISOString().slice(0,10),PDFLib:window.PDFLib,counsel:ok(fp),typedSignature:typed.value});
+     const headers=await auth();if(!active||token!==epoch||org!==orgId()||!consent.checked) return;
+     const response=await fetch("/api/professional/signed-review",{method:"POST",headers:{...headers,"Content-Type":"application/pdf","x-professional-case-id":row.id,"x-professional-signature-attested":"yes","x-professional-signature-mode":"counsel_assumption_staging","x-professional-counsel-consent":"yes"},body:bytes,cache:"no-store"});
+     if(!response.ok)throw Error("Counsel signature rejected");typed.value="";await refresh();
+    });
+   }else add(card,"p","Operator verification of counsel name and Ohio registration is required before signing.");
    button("Upload signed test PDF",async()=>{
     const selected=file.files[0];if(!attested.checked||!selected||selected.size>2097152)throw Error("Signed PDF and attestation required");
     const token=epoch;const headers=await auth();if(!active||token!==epoch||org!==orgId())return;
@@ -69,7 +85,7 @@ async function refresh(){
    const rowDocs=documents.filter(x=>x.case_id===row.id);
    const rowReviews=signedReviews.filter(x=>x.case_id===row.id);
    for(const doc of rowDocs){
-    add(card,"p","PDF SHA-256: "+doc.sha256+" · "+(rowReviews.some(r=>r.document_id===doc.id)?"Reviewed":"Awaiting exact-document review"));
+    add(card,"p",(doc.signature_mode==="counsel_assumption_staging"?"Counsel assumption — not filing-ready · ":"Applicant-signed · ")+"PDF SHA-256: "+doc.sha256+" · "+(rowReviews.some(r=>r.document_id===doc.id)?"Reviewed":"Awaiting exact-document review"));
     let downloaded=false;
     button("Open private signed PDF",async()=>{
       const token=epoch;const headers=await auth();const response=await fetch("/api/professional/signed-review/"+encodeURIComponent(doc.id),{headers,cache:"no-store"});
@@ -82,7 +98,7 @@ async function refresh(){
     }
    }
    const event=document.createElement("select");event.setAttribute("aria-label","Manual status event");
-   for(const [v,t] of [["manual_filing_reported","Filing reported by attorney"],["manual_hearing_reported","Hearing reported by attorney"],["manual_order_reported","Order reported by attorney"],["manual_followup","Follow-up"]])if(v==="manual_followup"||rowReviews.length)event.append(option(v,t));
+   for(const [v,t] of [["manual_filing_reported","Filing reported by attorney"],["manual_hearing_reported","Hearing reported by attorney"],["manual_order_reported","Order reported by attorney"],["manual_followup","Follow-up"]])if(v==="manual_followup"||rowReviews.some(r=>rowDocs.some(d=>d.id===r.document_id&&d.signature_mode==="applicant_external")))event.append(option(v,t));
    const date=document.createElement("input");date.type="date";date.setAttribute("aria-label","Event date");date.value=new Date().toISOString().slice(0,10);card.append(event,date);
    button("Save manual event",async()=>{if(!date.value)throw Error("Date required");ok(await api.from("professional_case_events").insert({org_id:org,case_id:row.id,event_type:event.value,event_date:date.value}));await refresh();});
    for(const e of events.filter(x=>x.case_id===row.id))add(card,"p",e.event_date+" — "+e.event_type.replaceAll("_"," "));
