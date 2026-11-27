@@ -118,13 +118,14 @@ async function refresh(){
   add(card,"p","Reminders use attorney-entered dates. Official events require independent verification; no live docket feed or email/SMS dispatch is connected.");
   const docket=add(card,"a","Check official Wood County docket");docket.href="https://pub.clerkofcourt.co.wood.oh.us/eservices/home.page.2";docket.target="_blank";docket.rel="noopener noreferrer";
 
-  card=packetPanel.body;
+  card=reviewPanel.body;
   if(!decision){
    const label=add(card,"label","");const checked=document.createElement("input");checked.type="checkbox";label.append(checked,document.createTextNode(" I reviewed the complete docket, charge inventory, eligibility and filing requirements."));
    const decide=async value=>{if(!checked.checked)throw Error("Review required");ok(await api.from("professional_case_decisions").insert({org_id:org,case_id:row.id,decision:value,entire_case_reviewed:true}));await refresh();};
    button("Hold for review",()=>decide("hold"));
    if(row.outcome!=="mixed")button("Approve unsigned draft",()=>decide("approved_for_unsigned_draft"));
   }else if(decision.decision==="approved_for_unsigned_draft"){
+   card=packetPanel.body;
    add(card,"p","Professional preparation: included. Court fee: "+(row.outcome==="conviction"?"$100":"$0 for qualifying nonconvictions")+". File directly with the court; no payment collected here.");
    button("Generate and save review draft",async()=>{
     const token=epoch;
@@ -199,6 +200,7 @@ async function refresh(){
    button("Save manual event",async()=>{if(!date.value)throw Error("Date required");ok(await api.from("professional_case_events").insert({org_id:org,case_id:row.id,event_type:event.value,event_date:date.value}));await refresh();});
    for(const e of events.filter(x=>x.case_id===row.id))add(card,"p",e.event_date+" — "+e.event_type.replaceAll("_"," "));
   }
+  if(!decision||decision.decision!=="approved_for_unsigned_draft")add(packetPanel.body,"p","Complete eligibility review and approve the draft before preparing a packet.");
   $("cases").append(shell);
  }
  notice("Professional workspace loaded. Manual filing, case reminders and verified-event tracking; no automated court filing.");
