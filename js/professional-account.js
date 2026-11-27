@@ -5,7 +5,20 @@ const $=id=>document.getElementById(id);
 const say=t=>$("status").textContent=t;
 const ok=r=>{if(r.error)throw Error("Request failed");return r.data;};
 let api,user,factorId,epoch=0;
-function clear(){epoch++;factorId=null;user=null;for(const id of ["signed-out","mfa","request","submitted","logout","secret","verify-form","practice-link","live-billing","billing-checkout","billing-portal","billing-refresh","billing-consent-label"])$(id).hidden=true;$("secret").textContent="";$("request-form").reset();$("verify-form").reset();$("application-state").textContent="";$("billing-state").textContent="";$("billing-consent").checked=false;}
+function clearMfaSetup(){ $("mfa-qr").removeAttribute("src");$("mfa-qr").hidden=true;$("mfa-setup-details").hidden=true;$("secret").textContent="";$("secret").hidden=true; }
+function showMfaSetup(totp){
+ clearMfaSetup();
+ const qr=String(totp?.qr_code||"");
+ // Render locally as an image; never inject SVG markup or transmit the setup key to a QR service.
+ if(qr.startsWith("data:image/svg+xml,")||qr.startsWith("data:image/svg+xml;utf-8,")||qr.startsWith("data:image/svg+xml;base64,"))$("mfa-qr").src=qr;
+ else if(/^\s*<svg[\s>]/i.test(qr))$("mfa-qr").src="data:image/svg+xml,"+encodeURIComponent(qr);
+ if($("mfa-qr").hasAttribute("src"))$("mfa-qr").hidden=false;
+ $("secret").textContent=String(totp?.secret||"");$("secret").hidden=false;$("mfa-setup-details").hidden=false;
+ if($("mfa-qr").hidden)$("mfa-setup-details").querySelector("details").open=true;
+ $("mfa-code-heading").textContent="Step 2 — Enter your six-digit code";
+}
+$("mfa-qr").addEventListener("error",()=>{$("mfa-qr").hidden=true;$("mfa-setup-details").querySelector("details").open=true;});
+function clear(){epoch++;factorId=null;user=null;clearMfaSetup();$("mfa-code-heading").textContent="Enter your six-digit code";for(const id of ["signed-out","mfa","request","submitted","logout","secret","verify-form","practice-link","live-billing","billing-checkout","billing-portal","billing-refresh","billing-consent-label"])$(id).hidden=true;$("secret").textContent="";$("request-form").reset();$("verify-form").reset();$("application-state").textContent="";$("billing-state").textContent="";$("billing-consent").checked=false;}
 async function load(){
  clear();const token=epoch;
  const config=await window.RecordPathSupabase.getConfig();
@@ -58,11 +71,11 @@ $("setup").addEventListener("click",()=>action($("setup"),async()=>{
  const factors=ok(await api.auth.mfa.listFactors());
  if(factors.totp?.some(f=>f.status==="verified")){await load();return;}
  const data=ok(await api.auth.mfa.enroll({factorType:"totp",friendlyName:"RecordPathAI Professional "+Date.now()}));
- if(token!==epoch)return;factorId=data.id;$("secret").textContent="Add a time-based account manually in your authenticator using this secret: "+data.totp.secret;$("secret").hidden=false;$("verify-form").hidden=false;$("setup").hidden=true;say("Add the secret, then enter the six-digit code.");
+ if(token!==epoch)return;factorId=data.id;showMfaSetup(data.totp);$("verify-form").hidden=false;$("setup").hidden=true;say("Scan the QR code or add the setup key in your authenticator app. Then enter the six-digit code it generates.");
 }));
 $("verify-form").addEventListener("submit",e=>{e.preventDefault();action(e.currentTarget.querySelector("button"),async()=>{
  if(!factorId||!user)return;const code=String(new FormData($("verify-form")).get("code")||"");if(!/^\d{6}$/.test(code))throw Error("Invalid code");
- const challenge=ok(await api.auth.mfa.challenge({factorId}));ok(await api.auth.mfa.verify({factorId,challengeId:challenge.id,code}));$("secret").textContent="";await load();
+ const challenge=ok(await api.auth.mfa.challenge({factorId}));ok(await api.auth.mfa.verify({factorId,challengeId:challenge.id,code}));clearMfaSetup();await load();
 });});
 $("request-form").addEventListener("submit",e=>{e.preventDefault();action(e.currentTarget.querySelector("button"),async()=>{
  if(!user||!api)return;const v=Object.fromEntries(new FormData($("request-form")));if(v.verification_consent!=="on")throw Error("Consent required");
