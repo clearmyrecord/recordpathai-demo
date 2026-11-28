@@ -175,3 +175,16 @@
   font-size:14px;color:var(--muted);line-height:1.65}
 .rp-home .home-launch-note strong{color:var(--text)}
 .rp-home .home-launch-note a{font-weight:800;color:var(--blue-dark)}
+
+/* Two account paths near the top of the homepage. */
+.rp-home .account-overview {padding-top:8px}
+.rp-home .account-overview-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.rp-home .account-overview-card {display:flex;flex-direction:column;align-items:flex-start;min-width:0}
+.rp-home .account-overview-card h3 {font-size:clamp(23px,2.5vw,30px);letter-spacing:-.02em}
+.rp-home .account-overview-steps {display:grid;gap:8px;margin:4px 0 18px;padding-left:24px;color:var(--text);font-size:15px;line-height:1.5}
+.rp-home .account-overview-steps li::marker {color:var(--blue-dark);font-weight:800}
+.rp-home .account-overview-card .account-overview-details {font-size:14px;color:var(--text);font-weight:700}
+.rp-home .account-overview-card .home-note {margin-top:0;margin-bottom:18px}
+.rp-home .account-overview-card .home-btn {margin-top:auto;max-width:100%;background:#3774d7;color:#fff}
+.rp-home .account-overview-card .home-btn:hover {background:#2459b4;color:#fff}
+@media(max-width:760px){.rp-home .account-overview-grid {grid-template-columns:1fr}.rp-home .account-overview-card {padding:24px}.rp-home .account-overview-card .home-btn {width:100%}}

@@ -41,7 +41,17 @@ test("Homepage keeps the consumer funnel and links to the separate attorney suit
   assert.ok(nav);
   assert.match(nav, /<a href="professional\.html">Attorneys<\/a>/);
   assert.match(nav, /href="eligibility\.html" class="nav-cta"/);
-  assert.doesNotMatch(home, /id="professional-suite"|Grow your practice\. Not your paperwork\./);
+  assert.doesNotMatch(home, /Grow your practice\. Not your paperwork\./);
+  const hero = home.indexOf('class="home-hero"');
+  const overview = home.indexOf('id="professional-suite"');
+  const capabilities = home.indexOf('id="available-now"');
+  assert.ok(hero >= 0 && overview > hero && capabilities > overview, "Account overview follows the primary hero before other content");
+  const accountSection = home.match(/<section[^>]*id="professional-suite"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(accountSection);
+  assert.match(accountSection, /Personal Account/);
+  assert.match(accountSection, /Professional Suite/);
+  assert.match(accountSection, /href="eligibility\.html"/);
+  assert.match(accountSection, /href="professional\.html"/);
   assert.match(home, /id="available-now"/);
   assert.match(home, /id="why-seal"/);
   assert.match(read("professional.html"), /RecordPathAI Professional/);
